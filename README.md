@@ -1,5 +1,7 @@
 # Sector Control
 
+Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the unresolved browser-access issue.
+
 Local, single-player third-person territory shooter. Blue has you and four bots; Red has five bots. Capture A, B, and C to earn one point per controlled sector every five seconds. Matches last eight minutes.
 
 ## Run
