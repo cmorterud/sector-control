@@ -9,6 +9,8 @@ import {
   type Soldier,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
+const supportUpperLength = 0.42;
+const supportForearmLength = 0.46;
 type SoldierRig = {
   body: pc.Entity;
   hips: pc.Entity;
@@ -16,6 +18,7 @@ type SoldierRig = {
   legs: { hip: pc.Entity; knee: pc.Entity; ankle: pc.Entity }[];
   arms: { shoulder: pc.Entity; elbow: pc.Entity }[];
   rifle: pc.Entity;
+  supportHand: pc.Entity;
   x: number;
   z: number;
   phase: number;
@@ -235,22 +238,54 @@ export class Renderer implements CollisionWorld {
       return { hip, knee, ankle };
     });
     const arms = [-1, 1].map((side) => {
-      const shoulder = this.joint("shoulder", upper, side * 0.39, 0.41);
+      const support = side < 0;
+      const upperLength = support ? supportUpperLength : 0.3;
+      const forearmLength = support ? supportForearmLength : 0.28;
+      const shoulder = this.joint(
+        "shoulder",
+        upper,
+        support ? -0.3 : 0.39,
+        0.41,
+        support ? -0.12 : 0,
+      );
       this.cube(
         "upper arm",
         0,
-        -0.15,
+        -upperLength / 2,
         0,
         0.22,
-        0.3,
+        upperLength,
         0.24,
         shirt,
         false,
         shoulder,
       );
-      const elbow = this.joint("elbow", shoulder, 0, -0.3);
-      this.cube("forearm", 0, -0.13, 0, 0.19, 0.26, 0.21, shirt, false, elbow);
-      this.cube("hand", 0, -0.28, 0, 0.18, 0.15, 0.19, "#c1af90", false, elbow);
+      const elbow = this.joint("elbow", shoulder, 0, -upperLength);
+      this.cube(
+        "forearm",
+        0,
+        -forearmLength / 2,
+        0,
+        0.19,
+        forearmLength,
+        0.21,
+        shirt,
+        false,
+        elbow,
+      );
+      if (!support)
+        this.cube(
+          "hand",
+          0,
+          -0.28,
+          0,
+          0.18,
+          0.15,
+          0.19,
+          "#c1af90",
+          false,
+          elbow,
+        );
       return { shoulder, elbow };
     });
     const rifle = this.joint("weapon", upper, 0.32, 0.36, -0.55);
@@ -267,6 +302,38 @@ export class Renderer implements CollisionWorld {
       false,
       rifle,
     );
+    this.cube(
+      "foregrip",
+      0,
+      -0.11,
+      -0.1,
+      0.08,
+      0.2,
+      0.11,
+      "#232d2e",
+      false,
+      rifle,
+    );
+    // The hand belongs to the weapon, so gait, recoil and reload cannot detach it.
+    const supportHand = this.joint(
+      "left hand grip",
+      rifle,
+      -0.035,
+      -0.14,
+      -0.1,
+    );
+    this.cube(
+      "left hand",
+      0,
+      0,
+      0,
+      0.18,
+      0.16,
+      0.2,
+      "#c1af90",
+      false,
+      supportHand,
+    );
     this.people.push(root);
     this.soldiers.push({
       body,
@@ -275,6 +342,7 @@ export class Renderer implements CollisionWorld {
       legs,
       arms,
       rifle,
+      supportHand,
       x: p.x,
       z: p.z,
       phase: p.id * 1.7,
@@ -282,6 +350,45 @@ export class Renderer implements CollisionWorld {
       sprint: 0,
       alive: p.hp > 0,
     });
+  }
+  private attachSupportArm(rig: SoldierRig) {
+    const arm = rig.arms[0];
+    const shoulder = arm.shoulder.getLocalPosition();
+    const hand = rig.rifle
+      .getLocalTransform()
+      .transformPoint(rig.supportHand.getLocalPosition());
+    const direction = new pc.Vec3().sub2(hand, shoulder);
+    const distance = Math.max(
+      0.001,
+      Math.min(
+        direction.length(),
+        supportUpperLength + supportForearmLength - 0.001,
+      ),
+    );
+    direction.normalize();
+    // Bend the elbow down and out while keeping the wrist on the moving grip.
+    const bend = new pc.Vec3(-0.7, -1, 0.1);
+    bend.sub(direction.clone().mulScalar(bend.dot(direction))).normalize();
+    const along =
+      (supportUpperLength ** 2 - supportForearmLength ** 2 + distance ** 2) /
+      (2 * distance);
+    const height = Math.sqrt(Math.max(0, supportUpperLength ** 2 - along ** 2));
+    const elbow = shoulder
+      .clone()
+      .add(direction.mulScalar(along))
+      .add(bend.mulScalar(height));
+    const upperRotation = new pc.Quat().setFromDirections(
+      pc.Vec3.DOWN,
+      elbow.clone().sub(shoulder).normalize(),
+    );
+    const forearmRotation = new pc.Quat().setFromDirections(
+      pc.Vec3.DOWN,
+      hand.sub(elbow).normalize(),
+    );
+    arm.shoulder.setLocalRotation(upperRotation);
+    arm.elbow.setLocalRotation(
+      upperRotation.clone().invert().mul(forearmRotation),
+    );
   }
   private animateSoldier(
     p: Soldier,
@@ -351,16 +458,6 @@ export class Renderer implements CollisionWorld {
       rig.legs[i].ankle.setLocalEulerAngles(-swing * 0.25 - bend * 0.35, 0, 0);
     }
     const armSwing = stride * (ready ? 3 : 16 + 12 * rig.sprint);
-    rig.arms[0].shoulder.setLocalEulerAngles(
-      p.reloadAt ? 85 : 55 + armSwing,
-      0,
-      12,
-    );
-    rig.arms[0].elbow.setLocalEulerAngles(
-      p.reloadAt ? 100 : 45 - armSwing * 0.4,
-      0,
-      12,
-    );
     rig.arms[1].shoulder.setLocalEulerAngles(
       65 - rig.sprint * 12 - armSwing * 0.35,
       0,
@@ -377,6 +474,7 @@ export class Renderer implements CollisionWorld {
       0,
       p.reloadAt ? 12 : 0,
     );
+    this.attachSupportArm(rig);
   }
   reset(g: Game) {
     for (const e of [

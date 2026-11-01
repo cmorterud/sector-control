@@ -60,3 +60,9 @@ Two new recording pairs are archived in `playtest-artifacts/`:
 The direct run includes 69 sprint ticks and all four movement directions. Close-up consecutive video frames show changing knee/hip angles and body sway; the character returns to a standing pose through the idle portions. `walking-joints-review.jpg` preserves the frame comparison and `soldier-sprint-preview.gif` is an animated close-up. The direct video decoded without errors. Restart recreated the model, and subsequent held W movement worked. No Chrome warning/error console entries were observed. Strict TypeScript, all 20 existing tests, and the production build pass; the known engine-bundle size warning remains.
 
 This adds basic procedural animation and fuller block anatomy. It does not change hit volumes, movement speed, or other simulation rules.
+
+## Rifle support-hand fix
+
+The left hand is attached directly to the rifle foregrip. A two-bone shoulder/elbow pose follows it, including walking/sprint motion, recoil, and reload tilt. An ad hoc check executed the actual renderer method with PlayCanvas transforms across 220 poses; maximum wrist/grip separation was 1.35e-7 meters.
+
+Chrome recording `sector-control-2026-11-01T22-18-48-649Z` covers 30 seconds of 5v5 autoplay at 60 render FPS (16.8 ms p95), 14 kills, one capture, and no recorded errors or console warnings/errors. The video decoded successfully. The video/JSON, rifle-grip-review.jpg, and rifle-grip-metrics.json are archived under ignored playtest-artifacts/. Strict TypeScript, all 20 existing tests, and the production build pass.

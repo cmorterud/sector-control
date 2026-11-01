@@ -84,6 +84,10 @@ A real recorder bug was found and fixed in src/playtest.ts: resetting the captur
 
 Two further Chrome recording pairs (`sector-control-2026-11-01T22-08-45-712Z` autoplay and `...22-09-59-557Z` direct movement) plus walking-joints-review.jpg, soldier-sprint-preview.gif, and animation-review-metrics.json are in ignored playtest-artifacts/. Both run near 60 render FPS and 30 video FPS with zero recorded errors. Direct input covers walking, sprint, backward steps, strafing, and idle. Restart and subsequent movement were verified. TypeScript, all 20 tests, and production build pass. See PLAYTEST_REVIEW.md.
 
+## Rifle support-hand fix
+
+The left hand now belongs to a rifle foregrip anchor instead of the independently animated forearm. `attachSupportArm` poses the shoulder/elbow to reach the grip after each weapon transform, including sprint, recoil, and reload tilt. An ad hoc check using the actual method and PlayCanvas transforms covered 220 poses with maximum wrist/grip separation 1.35e-7 meters. A further Chrome recording (`sector-control-2026-11-01T22-18-48-649Z`) and rifle-grip-review.jpg / rifle-grip-metrics.json are in ignored playtest-artifacts/: 60 render FPS, zero errors, successful video decoding. All 20 existing tests and the production build pass.
+
 ## Next steps
 
 1. Continue direct combat/objective play using the established Chrome procedure. The manual 5v5 run completed for one minute, but the player has not yet scored a recorded manual kill or capture.
