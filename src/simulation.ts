@@ -25,6 +25,18 @@ export const idle = (): Command => ({
   fire: false,
   reload: false,
 });
+export const projectileSpeed = 32;
+export const projectileRange = 60;
+export interface Projectile extends V3 {
+  id: number;
+  actor: number;
+  team: Team;
+  vx: number;
+  vy: number;
+  vz: number;
+  remaining: number;
+  bornAt: number;
+}
 export interface Soldier extends Vec {
   id: number;
   team: Team;
@@ -71,7 +83,15 @@ export const defaultBotSettings: BotSettings = {
   burstFireTicks: 15,
 };
 export type Event = { id: number; tick: number } & (
-  | { type: "fire"; actor: number; from: V3; to: V3; hit: boolean }
+  | { type: "fire"; actor: number; projectile: number; from: V3; to: V3 }
+  | {
+      type: "impact";
+      actor: number;
+      projectile: number;
+      at: V3;
+      target: number | null;
+      hit: boolean;
+    }
   | { type: "damage"; actor: number; source: number }
   | { type: "death" | "respawn" | "reload"; actor: number }
   | { type: "capture"; sector: string; team: Team }
@@ -114,6 +134,7 @@ export function raySphere(a: V3, b: V3, c: V3, r: number): number {
     B = ox * dx + oy * dy + oz * dz,
     C = ox * ox + oy * oy + oz * oz - r * r,
     D = B * B - A * C;
+  if (C <= 0) return 0;
   if (A === 0 || D < 0) return 1;
   const t = (-B - Math.sqrt(D)) / A;
   return t >= 0 && t <= 1 ? t : 1;
@@ -149,6 +170,8 @@ export class Game {
   winner: Team | "draw" = "draw";
   scores: Record<Team, number> = { blue: 0, red: 0 };
   players: Soldier[] = [];
+  projectiles: Projectile[] = [];
+  projectileSequence = 0;
   sectors: Sector[] = sectors.map((s) => ({
     ...s,
     control: 0,
@@ -211,6 +234,8 @@ export class Game {
       winner: this.winner,
       scores: this.scores,
       players: this.players,
+      projectiles: this.projectiles,
+      projectileSequence: this.projectileSequence,
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
@@ -278,6 +303,7 @@ export class Game {
         this.tick >= p.nextShot
       )
         this.fire(p);
+    this.advanceProjectiles();
     for (const s of this.sectors) {
       const occupants = this.players.filter((p) => p.hp > 0 && dist(p, s) <= 8),
         was = s.contested;
@@ -298,6 +324,7 @@ export class Game {
     }
     if (this.tick >= this.duration) {
       this.phase = "ended";
+      this.projectiles = [];
       this.winner =
         this.scores.blue === this.scores.red
           ? "draw"
@@ -333,9 +360,9 @@ export class Game {
           }
         : pivot;
     let aim = {
-      x: camera.x + dir.x * 60,
-      y: camera.y + dir.y * 60,
-      z: camera.z + dir.z * 60,
+      x: camera.x + dir.x * projectileRange,
+      y: camera.y + dir.y * projectileRange,
+      z: camera.z + dir.z * projectileRange,
     };
     let first = this.collision.ray(camera, aim);
     for (const q of this.players)
@@ -351,43 +378,108 @@ export class Game {
       z: camera.z + (aim.z - camera.z) * first,
     };
     const from = {
-      x: p.x + Math.cos(p.yaw) * 0.32 + dir.x * 0.55,
+      x: p.x + Math.cos(p.yaw) * 0.32 + dir.x * 1.08,
       y: 1.45,
-      z: p.z + Math.sin(p.yaw) * 0.32 + dir.z * 0.55,
+      z: p.z + Math.sin(p.yaw) * 0.32 + dir.z * 1.08,
     };
-    const length = Math.hypot(aim.x - from.x, aim.y - from.y, aim.z - from.z),
-      scale = Math.min(1, 60 / Math.max(0.001, length));
-    aim = {
-      x: from.x + (aim.x - from.x) * scale,
-      y: from.y + (aim.y - from.y) * scale,
-      z: from.z + (aim.z - from.z) * scale,
+    const length = Math.max(
+      0.001,
+      Math.hypot(aim.x - from.x, aim.y - from.y, aim.z - from.z),
+    );
+    const shot: Projectile = {
+      id: ++this.projectileSequence,
+      actor: p.id,
+      team: p.team,
+      ...from,
+      vx: ((aim.x - from.x) / length) * projectileSpeed,
+      vy: ((aim.y - from.y) / length) * projectileSpeed,
+      vz: ((aim.z - from.z) / length) * projectileSpeed,
+      remaining: projectileRange,
+      bornAt: this.tick,
     };
-    const muzzleBlocked = this.collision.ray(pivot, from) < 0.99;
-    // Extend slightly to include a camera-selected surface despite floating point rounding.
-    const end = {
-      x: aim.x + (aim.x - from.x) * 0.002,
-      y: aim.y + (aim.y - from.y) * 0.002,
-      z: aim.z + (aim.z - from.z) * 0.002,
-    };
-    let nearest = muzzleBlocked ? 0 : this.collision.ray(from, end),
-      victim: Soldier | undefined;
+    this.emit({
+      type: "fire",
+      actor: p.id,
+      projectile: shot.id,
+      from,
+      to: {
+        x: from.x + (shot.vx / projectileSpeed) * projectileRange,
+        y: from.y + (shot.vy / projectileSpeed) * projectileRange,
+        z: from.z + (shot.vz / projectileSpeed) * projectileRange,
+      },
+    });
+    let obstruction = this.collision.ray(pivot, from);
+    let muzzleVictim: Soldier | undefined;
     for (const q of this.players)
       if (q !== p && q.hp > 0)
         for (const y of [0.6, 1.1, 1.6]) {
-          const t = raySphere(from, end, { x: q.x, y, z: q.z }, 0.38);
-          if (t < nearest) {
-            nearest = t;
-            victim = q;
+          const t = raySphere(pivot, from, { x: q.x, y, z: q.z }, 0.38);
+          if (t < obstruction) {
+            obstruction = t;
+            muzzleVictim = q;
           }
         }
+    if (obstruction < 1) {
+      // Do not spawn beyond cover or a soldier intersecting the barrel.
+      this.impact(
+        shot,
+        {
+          x: pivot.x + (from.x - pivot.x) * obstruction,
+          y: pivot.y + (from.y - pivot.y) * obstruction,
+          z: pivot.z + (from.z - pivot.z) * obstruction,
+        },
+        muzzleVictim,
+      );
+    } else this.projectiles.push(shot);
+  }
+  private advanceProjectiles() {
+    const active: Projectile[] = [];
+    for (const shot of this.projectiles) {
+      // A newly fired round starts at the muzzle at this tick's boundary.
+      if (shot.bornAt === this.tick) {
+        active.push(shot);
+        continue;
+      }
+      const travel = Math.min(projectileSpeed / 30, shot.remaining);
+      const from = { x: shot.x, y: shot.y, z: shot.z };
+      const to = {
+        x: from.x + (shot.vx / projectileSpeed) * travel,
+        y: from.y + (shot.vy / projectileSpeed) * travel,
+        z: from.z + (shot.vz / projectileSpeed) * travel,
+      };
+      let nearest = this.collision.ray(from, to);
+      let victim: Soldier | undefined;
+      for (const q of this.players)
+        if (q.id !== shot.actor && q.hp > 0)
+          for (const y of [0.6, 1.1, 1.6]) {
+            const t = raySphere(from, to, { x: q.x, y, z: q.z }, 0.38);
+            if (t < nearest) {
+              nearest = t;
+              victim = q;
+            }
+          }
+      shot.x = from.x + (to.x - from.x) * nearest;
+      shot.y = from.y + (to.y - from.y) * nearest;
+      shot.z = from.z + (to.z - from.z) * nearest;
+      shot.remaining = Math.max(0, shot.remaining - travel);
+      if (nearest < 1)
+        this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim);
+      else if (shot.remaining > 0) active.push(shot);
+    }
+    this.projectiles = active;
+  }
+  private impact(shot: Projectile, at: V3, victim?: Soldier) {
     const hit =
-      !!victim && victim.team !== p.team && this.tick >= victim.protectedUntil;
+      !!victim &&
+      victim.team !== shot.team &&
+      this.tick >= victim.protectedUntil;
     if (hit && victim) {
       victim.hp = Math.max(0, victim.hp - 25);
-      this.emit({ type: "damage", actor: victim.id, source: p.id });
+      this.emit({ type: "damage", actor: victim.id, source: shot.actor });
       if (!victim.hp) {
         victim.deaths++;
-        p.kills++;
+        const shooter = this.players.find((p) => p.id === shot.actor);
+        if (shooter) shooter.kills++;
         victim.respawnAt = this.tick + 150;
         victim.mode = "Respawn";
         victim.reloadAt = 0;
@@ -395,14 +487,11 @@ export class Game {
       }
     }
     this.emit({
-      type: "fire",
-      actor: p.id,
-      from,
-      to: {
-        x: from.x + (end.x - from.x) * nearest,
-        y: from.y + (end.y - from.y) * nearest,
-        z: from.z + (end.z - from.z) * nearest,
-      },
+      type: "impact",
+      actor: shot.actor,
+      projectile: shot.id,
+      at,
+      target: victim?.id ?? null,
       hit,
     });
   }
@@ -526,8 +615,48 @@ export function botCommand(g: Game, p: Soldier): Command {
     p.mode = "Engage";
     const d = dist(p, target);
     const jitter = Math.sin(g.tick * 0.29 + p.id * 7) * g.botSettings.aimError;
-    c.yaw = Math.atan2(target.x - p.x, -(target.z - p.z)) + jitter;
-    c.pitch = Math.atan2(-0.4, d) + jitter * 0.6;
+    // Lead a visible moving target by the projectile's intercept time.
+    const rx = target.x - p.x,
+      rz = target.z - p.z;
+    const a = target.vx ** 2 + target.vz ** 2 - projectileSpeed ** 2;
+    const b = 2 * (rx * target.vx + rz * target.vz);
+    const lead = clamp(
+      (-b - Math.sqrt(Math.max(0, b * b - 4 * a * d * d))) / (2 * a),
+      0,
+      projectileRange / projectileSpeed,
+    );
+    const aimX = rx + target.vx * lead,
+      aimZ = rz + target.vz * lead;
+    const aimDistance = Math.hypot(aimX, aimZ);
+    const aimYaw = Math.atan2(aimX, -aimZ);
+    let eyeHeight = 1.65,
+      shoulderOffset = 0;
+    if (p.id === 0) {
+      // The optional player driver aims through the same shoulder camera as a human.
+      const pitch = Math.atan2(1.25 - 2.5, aimDistance);
+      const f =
+        g.collision.ray(
+          { x: p.x, y: 1.65, z: p.z },
+          {
+            x:
+              p.x -
+              Math.sin(aimYaw) * Math.cos(pitch) * 2.5 +
+              Math.cos(aimYaw) * 0.65,
+            y: 2.5 - Math.sin(pitch) * 2.5,
+            z:
+              p.z +
+              Math.cos(aimYaw) * Math.cos(pitch) * 2.5 +
+              Math.sin(aimYaw) * 0.65,
+          },
+        ) * 0.95;
+      eyeHeight += 0.85 * f;
+      shoulderOffset = 0.65 * f;
+    }
+    c.yaw =
+      aimYaw -
+      Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
+      jitter;
+    c.pitch = Math.atan2(1.25 - eyeHeight, aimDistance) + jitter * 0.6;
     c.aim = true;
     c.sprint = false;
     c.fire =

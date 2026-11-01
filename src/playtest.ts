@@ -14,7 +14,7 @@ export class CaptureCadence {
 }
 
 export class PlaytestLog {
-  readonly version = 1;
+  readonly version = 2;
   readonly startedAt = new Date().toISOString();
   commands: { tick: number; command: Command }[] = [];
   events: Event[] = [];
@@ -38,10 +38,23 @@ export class PlaytestLog {
       p95FrameMs: sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0,
       slowFramesOver33ms: this.frames.filter((ms) => ms > 1000 / 30).length,
       errors: [...this.errors],
+      shots: this.events.filter((e) => e.type === "fire").length,
+      impacts: this.events.filter((e) => e.type === "impact").length,
       kills: this.events.filter((e) => e.type === "death").length,
       captures: this.events.filter((e) => e.type === "capture").length,
     };
   }
+}
+
+export function eventTimeline(events: readonly Event[]) {
+  return (
+    events
+      .map(
+        ({ id, tick, type, ...details }) =>
+          `[${(tick / 30).toFixed(3)}s / tick ${tick}] #${id} ${type} ${JSON.stringify(details)}`,
+      )
+      .join("\n") + "\n"
+  );
 }
 
 // Opt-in, game-only recording. No desktop capture, microphone, or upload.
@@ -65,6 +78,7 @@ export class PlaytestRecorder {
   constructor(
     private source: HTMLCanvasElement,
     private limitSeconds = 60,
+    recordVideo = true,
   ) {
     this.canvas.width = 1280;
     this.canvas.height = 720;
@@ -75,6 +89,10 @@ export class PlaytestRecorder {
     document.body.append(this.panel);
     window.addEventListener("error", this.onError);
     window.addEventListener("unhandledrejection", this.onRejection);
+    if (!recordVideo) {
+      this.panel.textContent = "PLAYTEST · recording diagnostics only";
+      return;
+    }
     try {
       if (typeof MediaRecorder === "undefined")
         throw new Error("MediaRecorder unavailable");
@@ -116,7 +134,7 @@ export class PlaytestRecorder {
     if (this.finished) return;
     const now = performance.now();
     if (!paused && frameMs > 0) this.log.frames.push(frameMs);
-    if (this.captureCadence.shouldCapture(now)) {
+    if (this.recorder && this.captureCadence.shouldCapture(now)) {
       const c = this.context,
         p = game.players[0];
       c.drawImage(this.source, 0, 0, 1280, 720);
@@ -127,7 +145,7 @@ export class PlaytestRecorder {
       c.font = "20px monospace";
       c.fillStyle = "#edf0e7";
       c.fillText(
-        `BLUE ${game.scores.blue} : ${game.scores.red} RED | tick ${game.tick} | ${(game.tick / 30).toFixed(1)}s | ${paused ? "PAUSED" : game.phase}`,
+        `BLUE ${game.scores.blue} : ${game.scores.red} RED | rounds ${game.projectiles.length} | tick ${game.tick} | ${(game.tick / 30).toFixed(1)}s | ${paused ? "PAUSED" : game.phase}`,
         20,
         36,
       );
@@ -195,6 +213,16 @@ export class PlaytestRecorder {
         type: "application/json",
       }),
       "json",
+    );
+    link(
+      new Blob(
+        [
+          `Sector Control event timeline · ${this.log.startedAt}\n` +
+            eventTimeline(this.log.events),
+        ],
+        { type: "text/plain" },
+      ),
+      "events.txt",
     );
   }
   dispose() {

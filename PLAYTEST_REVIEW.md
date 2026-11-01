@@ -66,3 +66,20 @@ This adds basic procedural animation and fuller block anatomy. It does not chang
 The left hand is attached directly to the rifle foregrip. A two-bone shoulder/elbow pose follows it, including walking/sprint motion, recoil, and reload tilt. An ad hoc check executed the actual renderer method with PlayCanvas transforms across 220 poses; maximum wrist/grip separation was 1.35e-7 meters.
 
 Chrome recording `sector-control-2026-11-01T22-18-48-649Z` covers 30 seconds of 5v5 autoplay at 60 render FPS (16.8 ms p95), 14 kills, one capture, and no recorded errors or console warnings/errors. The video decoded successfully. The video/JSON, rifle-grip-review.jpg, and rifle-grip-metrics.json are archived under ignored playtest-artifacts/. Strict TypeScript, all 20 existing tests, and the production build pass.
+
+## Traveling projectiles and readable event logs
+
+The rifle now shoots actual 32 m/s rounds with a 60-meter maximum travel distance. Damage and hit feedback occur at impact. Sweeps check the whole traveled segment against cover and living soldiers. Allies/protected enemies stop rounds without damage, close muzzle obstructions cannot be bypassed, and in-flight rounds can outlive the shooter. Bot aiming leads moving targets. Bright cyan/orange tracers show their flight.
+
+Event logs uncovered a pre-existing missing Ammo world: baseline files `...22-30-17-055Z` and `...22-32-12-941Z` recorded no world impacts. The standalone app now injects an explicitly initialized Ammo backend. A real-engine regression tests thin-wall hits, height clearance, and projectile collisions without stepping physics.
+
+| Verified artifact timestamp (UTC) | Run | Results |
+| --- | --- | --- |
+| 22-39-34-973Z | 20-second direct firing, video/JSON | 26 shots and 26 world impacts; 0.967 s launch-to-impact delay; 60.02 render FPS, 17.6 ms p95, zero errors, zero final active rounds |
+| 22-41-31-229Z | 40-second 5v5, log-only JSON/events.txt | 436 shots; 320 impacts, including 203 world impacts and 71 damaging impacts; 14 kills, two captures; 60.00 render FPS, 17.2 ms p95; zero errors, zero final active rounds |
+
+The log-only match finished 4/4 and restarted with fresh scores, health, and ammunition. There was no video download link, and no screenshots were used to inspect this run. `video=0` skips canvas capture and the encoder. `projectile-wall-events.txt` is a short readable direct-fire timeline; the log-only run's `.events.txt` contains the full typed event list. `projectile-review-metrics.json` records the measurements and distinguishes the pre-fix diagnostic runs. The direct video decoded successfully; projectile-flight-preview.gif is an optional short view of the flight.
+
+For example, direct round 1 launched at tick 123 (4.100 s) and hit the building at tick 152 (5.067 s), at z≈8.500 m, with zero damage to soldiers. The event IDs, projectile IDs, and timestamps make this check possible without images. The JSON also contains commands and per-second snapshots with projectile positions, velocities, and remaining range. JSON schema is version 2.
+
+Strict TypeScript, all 32 tests, and production build pass. Coverage includes delayed hits, moving targets entering/leaving a path, swept thin geometry, muzzle overlap, friendly obstruction, arrival-time protection, posthumous hits, range expiry, snapshot isolation, match cleanup, bot lead, driver camera alignment, and actual Ammo wall collision. General Firefox, full manual eight-minute acceptance, and controlled GPU/memory profiling remain outstanding.

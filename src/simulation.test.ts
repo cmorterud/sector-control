@@ -5,6 +5,8 @@ import {
   capture,
   idle,
   pathfind,
+  botCommand,
+  projectileSpeed,
   type Sector,
   type Soldier,
   type CollisionWorld,
@@ -61,7 +63,8 @@ describe("capture", () => {
 });
 describe("combat and lifecycle", () => {
   function scene() {
-    const g = new Game(empty, false);
+    const g = new Game({ ...empty, move: (p) => ({ x: p.x, z: p.z }) }, false);
+    g.botSettings.engagementRange = 0;
     g.players[0].x = 0;
     g.players[0].z = 0;
     const enemy: Soldier = {
@@ -77,9 +80,10 @@ describe("combat and lifecycle", () => {
   it("deals 25 damage and kills after four shots; restores on respawn", () => {
     const { g, p, enemy } = scene();
     for (let i = 0; i < 4; i++) {
-      g.tick += 3;
       g.fire(p);
+      advance(g, 3);
     }
+    for (let i = 0; enemy.hp > 0 && i < 30; i++) advance(g, 1);
     expect(enemy.hp).toBe(0);
     expect(p.kills).toBe(1);
     expect(enemy.deaths).toBe(1);
@@ -96,11 +100,15 @@ describe("combat and lifecycle", () => {
     const { g, p, enemy } = scene();
     enemy.team = "blue";
     g.fire(p);
+    advance(g, 15);
     expect(enemy.hp).toBe(100);
+    expect(g.projectiles).toHaveLength(0);
     enemy.team = "red";
-    enemy.protectedUntil = 60;
+    enemy.protectedUntil = g.tick + 60;
     g.fire(p);
+    advance(g, 15);
     expect(enemy.hp).toBe(100);
+    expect(g.projectiles).toHaveLength(0);
     p.protectedUntil = 60;
     g.fire(p);
     expect(p.protectedUntil).toBe(0);
@@ -110,6 +118,174 @@ describe("combat and lifecycle", () => {
     g.collision = { ...empty, ray: () => 0.05 };
     g.fire(p);
     expect(enemy.hp).toBe(100);
+  });
+  it("moves rounds at a visible finite speed and delays damage until impact", () => {
+    const { g, p, enemy } = scene();
+    g.fire(p);
+    expect(enemy.hp).toBe(100);
+    expect(g.events.some((e) => e.type === "damage")).toBe(false);
+    expect(g.projectiles).toHaveLength(1);
+    const initial = { ...g.projectiles[0] };
+    expect(Math.hypot(initial.vx, initial.vy, initial.vz)).toBeCloseTo(
+      projectileSpeed,
+    );
+    advance(g, 3);
+    expect(
+      Math.hypot(
+        g.projectiles[0].x - initial.x,
+        g.projectiles[0].y - initial.y,
+        g.projectiles[0].z - initial.z,
+      ),
+    ).toBeCloseTo(projectileSpeed / 10);
+    expect(enemy.hp).toBe(100);
+    advance(g, 12);
+    expect(enemy.hp).toBe(75);
+    expect(g.projectiles).toHaveLength(0);
+  });
+  it("starts a new round at the muzzle before it travels on the following tick", () => {
+    const g = new Game(empty, false);
+    g.step({ ...idle(), fire: true });
+    const shot = g.projectiles[0];
+    const fire = g.events.find((e) => e.type === "fire");
+    expect(fire?.type).toBe("fire");
+    if (fire?.type === "fire") {
+      expect({ x: shot.x, y: shot.y, z: shot.z }).toEqual(fire.from);
+      g.step(idle());
+      expect(
+        Math.hypot(
+          shot.x - fire.from.x,
+          shot.y - fire.from.y,
+          shot.z - fire.from.z,
+        ),
+      ).toBeCloseTo(projectileSpeed / 30);
+    }
+  });
+  it("does not spawn beyond a soldier intersecting the barrel", () => {
+    const { g, p, enemy } = scene();
+    enemy.z = -0.6;
+    g.fire(p);
+    expect(enemy.hp).toBe(75);
+    expect(g.projectiles).toHaveLength(0);
+  });
+  it("lets targets leave or enter a round's flight path after the shot", () => {
+    const first = scene();
+    first.g.fire(first.p);
+    advance(first.g, 3);
+    first.enemy.x = 3;
+    advance(first.g, 15);
+    expect(first.enemy.hp).toBe(100);
+    const second = scene();
+    second.enemy.x = 8;
+    second.g.fire(second.p);
+    advance(second.g, 3);
+    second.enemy.x = 0;
+    advance(second.g, 15);
+    expect(second.enemy.hp).toBe(75);
+  });
+  it("sweeps each step so a round cannot tunnel through a soldier", () => {
+    const { g, p, enemy } = scene();
+    enemy.z = -1.7;
+    g.fire(p);
+    advance(g, 1);
+    expect(enemy.hp).toBe(75);
+    expect(g.projectiles).toHaveLength(0);
+    expect(
+      g.events.some(
+        (e) => e.type === "impact" && e.target === enemy.id && e.hit,
+      ),
+    ).toBe(true);
+  });
+  it("hits thin walls on arrival and never spawns through nearby cover", () => {
+    const { g, p, enemy } = scene();
+    g.collision.ray = (a, b) =>
+      a.z > -5.03 && b.z <= -5.03 ? (a.z + 5.03) / (a.z - b.z) : 1;
+    g.fire(p);
+    expect(g.events.some((e) => e.type === "impact")).toBe(false);
+    let impact;
+    for (let i = 0; i < 20 && !impact; i++) {
+      advance(g, 1);
+      impact = g.events.find((e) => e.type === "impact");
+    }
+    expect(impact?.type).toBe("impact");
+    if (impact?.type === "impact") expect(impact.at.z).toBeCloseTo(-5.03);
+    expect(enemy.hp).toBe(100);
+    expect(g.projectiles).toHaveLength(0);
+    g.collision.ray = () => 0.1;
+    g.fire(p);
+    expect(g.projectiles).toHaveLength(0);
+    expect(g.events.some((e) => e.type === "impact" && !e.hit)).toBe(true);
+  });
+  it("lets allies block rounds without damage to them or the enemy behind them", () => {
+    const { g, p, enemy } = scene();
+    const ally = {
+      ...enemy,
+      id: 2,
+      team: "blue" as const,
+      z: -5,
+      command: idle(),
+    };
+    g.players.push(ally);
+    g.fire(p);
+    let blocked = false;
+    for (let i = 0; i < 20; i++) {
+      advance(g, 1);
+      blocked ||= g.events.some(
+        (e) => e.type === "impact" && e.target === ally.id && !e.hit,
+      );
+    }
+    expect(blocked).toBe(true);
+    expect(ally.hp).toBe(100);
+    expect(enemy.hp).toBe(100);
+  });
+  it("checks spawn protection at impact and preserves rounds after the shooter dies", () => {
+    const { g, p, enemy } = scene();
+    enemy.protectedUntil = 3;
+    enemy.hp = 25;
+    g.fire(p);
+    p.hp = 0;
+    p.respawnAt = 150;
+    advance(g, 15);
+    expect(enemy.hp).toBe(0);
+    expect(p.kills).toBe(1);
+    expect(p.hp).toBe(0);
+  });
+  it("expires rounds at sixty meters and clears them at match end", () => {
+    const g = new Game(empty, false);
+    g.fire(g.players[0]);
+    advance(g, 55);
+    expect(g.projectiles).toHaveLength(1);
+    advance(g, 5);
+    expect(g.projectiles).toHaveLength(0);
+    const short = new Game(empty, false, 1);
+    short.step({ ...idle(), fire: true });
+    expect(short.phase).toBe("ended");
+    expect(short.projectiles).toHaveLength(0);
+  });
+  it("gives bots lead on a moving target for the finite projectile speed", () => {
+    const { g, p, enemy } = scene();
+    enemy.z = -20;
+    enemy.vx = 4.5;
+    p.target = enemy.id;
+    p.nextThink = 100;
+    g.tick = 1;
+    const c = botCommand(g, p);
+    expect(c.yaw).toBeGreaterThan(0.1);
+    expect(c.yaw).toBeLessThan(0.3);
+  });
+  it("aligns the autoplay driver with the elevated shoulder camera", () => {
+    const { g, p, enemy } = scene();
+    enemy.z = -20;
+    p.target = enemy.id;
+    p.nextThink = 100;
+    g.tick = 1;
+    g.botSettings.aimError = 0;
+    const command = botCommand(g, p);
+    p.command = command;
+    p.yaw = command.yaw;
+    p.pitch = command.pitch;
+    g.fire(p);
+    advance(g, 25);
+    expect(enemy.hp).toBe(75);
   });
   it("fires at 600 rpm and stops at an empty magazine", () => {
     const g = new Game(empty, false);
@@ -136,7 +312,11 @@ describe("combat and lifecycle", () => {
 describe("match", () => {
   it("exports isolated JSON-safe snapshots without renderer or collision objects", () => {
     const g = new Game(empty, false);
+    g.fire(g.players[0]);
     const s = g.snapshot();
+    expect(s.projectiles).toHaveLength(1);
+    s.projectiles[0].x = 1000;
+    expect(g.projectiles[0].x).not.toBe(1000);
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
     s.players[0].hp = 0;
     expect(g.players[0].hp).toBe(100);
@@ -220,6 +400,7 @@ describe("navigation and headless portability", () => {
     const a = run(),
       b = run();
     expect(a.players.length).toBe(10);
+    expect(a.projectiles).toHaveLength(0);
     expect(a.phase).toBe("ended");
     expect(a.scores).toEqual(b.scores);
     expect(a.players.map((p) => [p.x, p.z, p.hp, p.kills])).toEqual(

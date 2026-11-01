@@ -1,5 +1,5 @@
 import * as pc from "playcanvas";
-import Ammo from "sync-ammo/dist/ammo.module.js";
+import { createPhysicsWorld } from "./physics";
 import { boxes, blocked, type Vec } from "./map";
 import {
   type CollisionWorld,
@@ -7,6 +7,9 @@ import {
   type V3,
   type Event,
   type Soldier,
+  type Team,
+  projectileRange,
+  projectileSpeed,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
 const supportUpperLength = 0.42;
@@ -36,9 +39,11 @@ export class Renderer implements CollisionWorld {
   effects: { e: pc.Entity; life: number }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
   previous: Vec[] = [];
+  private projectiles = new Map<number, pc.Entity>();
+  private previousProjectiles = new Map<number, V3>();
   constructor(public canvas: HTMLCanvasElement) {
-    (globalThis as unknown as { Ammo: unknown }).Ammo = Ammo;
     this.app = new pc.Application(canvas, {
+      physicsWorld: createPhysicsWorld(),
       graphicsDeviceOptions: {
         deviceTypes: [pc.DEVICETYPE_WEBGL2],
         antialias: true,
@@ -480,9 +485,12 @@ export class Renderer implements CollisionWorld {
     for (const e of [
       ...this.people,
       ...this.rings,
+      ...this.projectiles.values(),
       ...this.effects.map((v) => v.e),
     ])
       e.destroy();
+    this.projectiles.clear();
+    this.previousProjectiles.clear();
     this.people = [];
     this.rings = [];
     this.effects = [];
@@ -515,6 +523,9 @@ export class Renderer implements CollisionWorld {
   }
   remember(g: Game) {
     this.previous = g.players.map((p) => ({ x: p.x, z: p.z }));
+    this.previousProjectiles = new Map(
+      g.projectiles.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
+    );
   }
   draw(g: Game, alpha: number, dt: number) {
     for (const p of g.players) {
@@ -572,6 +583,7 @@ export class Renderer implements CollisionWorld {
       pos.y + dir.y * 20,
       pos.z + dir.z * 20,
     );
+    this.drawProjectiles(g, alpha);
     for (const fx of this.effects) {
       fx.life -= dt;
       fx.e.setLocalScale(fx.life * 0.7, fx.life * 0.7, fx.life * 0.7);
@@ -582,21 +594,80 @@ export class Renderer implements CollisionWorld {
       return false;
     });
   }
-  effect(e: Event) {
-    if (e.type !== "fire") return;
-    for (const p of [e.from, e.to]) {
-      const v = this.cube(
-        "spark",
-        p.x,
-        p.y,
-        p.z,
-        0.15,
-        0.15,
-        0.15,
-        e.hit ? "#ef8060" : "#ffe4a0",
-      );
-      this.effects.push({ e: v, life: 0.15 });
+  private tracerMaterial(team: Team) {
+    const key = `projectile-${team}`;
+    if (!this.materials.has(key)) {
+      const material = new pc.StandardMaterial();
+      material.diffuse = color(team === "blue" ? "#8defff" : "#ffb96d");
+      material.emissive = material.diffuse.clone();
+      material.emissiveIntensity = 2;
+      material.useLighting = false;
+      material.useFog = false;
+      material.update();
+      this.materials.set(key, material);
     }
+    return this.materials.get(key)!;
+  }
+  private drawProjectiles(g: Game, alpha: number) {
+    const active = new Set(g.projectiles.map((p) => p.id));
+    for (const [id, entity] of this.projectiles)
+      if (!active.has(id)) {
+        entity.destroy();
+        this.projectiles.delete(id);
+      }
+    for (const p of g.projectiles) {
+      let entity = this.projectiles.get(p.id);
+      if (!entity) {
+        entity = this.joint("projectile", this.app.root);
+        const tracer = this.cube(
+          "tracer",
+          0,
+          0,
+          0.6,
+          0.11,
+          0.11,
+          1.2,
+          "#ffffff",
+          false,
+          entity,
+        );
+        tracer.render!.material = this.tracerMaterial(p.team);
+        tracer.render!.castShadows = false;
+        tracer.render!.receiveShadows = false;
+        this.projectiles.set(p.id, entity);
+      }
+      const previous = this.previousProjectiles.get(p.id) ?? p;
+      const x = previous.x + (p.x - previous.x) * alpha;
+      const y = previous.y + (p.y - previous.y) * alpha;
+      const z = previous.z + (p.z - previous.z) * alpha;
+      entity.setPosition(x, y, z);
+      entity.lookAt(x + p.vx, y + p.vy, z + p.vz);
+      const trailLength = Math.min(
+        1.2,
+        Math.max(
+          0.12,
+          projectileRange - p.remaining - (projectileSpeed / 30) * (1 - alpha),
+        ),
+      );
+      const tracer = entity.children[0];
+      tracer.setLocalScale(0.11, 0.11, trailLength);
+      tracer.setLocalPosition(0, 0, trailLength / 2);
+    }
+  }
+  effect(e: Event) {
+    if (e.type !== "fire" && e.type !== "impact") return;
+    const p = e.type === "fire" ? e.from : e.at;
+    const v = this.cube(
+      "spark",
+      p.x,
+      p.y,
+      p.z,
+      0.15,
+      0.15,
+      0.15,
+      e.type === "impact" && e.hit ? "#ef8060" : "#ffe4a0",
+    );
+    this.effects.push({ e: v, life: 0.15 });
   }
   project(p: V3) {
     return this.camera.camera!.worldToScreen(new pc.Vec3(p.x, p.y, p.z));

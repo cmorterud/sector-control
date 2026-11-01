@@ -92,6 +92,7 @@ function start() {
     recording = new PlaytestRecorder(
       renderer.canvas,
       Math.max(5, Math.min(120, Number(params.get("clip") ?? 60) || 60)),
+      params.get("video") !== "0",
     );
   yaw = 0;
   pitch = 0;
@@ -121,9 +122,11 @@ function handle(e: Event) {
   if (e.type === "fire") {
     if (e.actor === 0) {
       sound(110, 0.06, 0.09);
-      if (e.hit) hitUntil = performance.now() + 150;
     } else if (dist(game.players[0], e.from) < 35) sound(90, 0.05, 0.012);
-    if (e.hit) sound(700, 0.035, 0.02);
+  }
+  if (e.type === "impact" && e.hit && e.actor === 0) {
+    hitUntil = performance.now() + 150;
+    sound(700, 0.035, 0.02);
   }
   if (e.type === "damage" && e.actor === 0) {
     damageUntil = performance.now() + 250;

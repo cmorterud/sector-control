@@ -27,11 +27,13 @@ Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-sec
 
 Open `http://localhost:5173/?playtest=1&autoplay=1&duration=60` and begin the operation. A bot drives the player through the real rendered game and collision adapter. The game records up to 60 seconds at 1280×720/30 FPS; `clip=120` raises the limit to two minutes. Omit `autoplay=1` to record manual play with normal pointer lock.
 
-The recording panel provides separate **Save webm** (or MP4 when supported) and **Save json** links when the clip finishes. Save both under `playtest-artifacts/` for review. The silent video includes a diagnostic HUD; the HTML/CSS overlay itself is not captured. JSON includes every player command, typed events, one state snapshot per simulation second, frame timings, and runtime errors. Wall-time timestamps align samples with the video. This uses canvas capture only, without desktop/microphone permissions, external upload, or a backend. Recording overhead affects frame timings; benchmark normal play separately. Unavailable video encoding falls back to diagnostics only.
+When the run finishes, the panel provides **Save events.txt** for a readable simulation-time event list, **Save json** for commands/events/state, and **Save webm** (or MP4 when supported) when video is enabled. Save the artifacts under `playtest-artifacts/` for review. The silent video includes a diagnostic HUD; the HTML/CSS overlay itself is not captured. JSON includes every player command, typed events, one state snapshot per simulation second, frame timings, and runtime errors. Wall-time timestamps align samples with the video. This uses canvas capture only, without desktop/microphone permissions, external upload, or a backend. Recording overhead affects frame timings; benchmark normal play separately. Unavailable video encoding falls back to diagnostics only.
 
 This enables repeatable autonomous navigation/combat/capture runs. It supplements tests of real keyboard/mouse input, pointer lock, menus, and subjective combat feel. Local browser-control permission is still required for an agent to launch and inspect runs; the recorder does not bypass it.
 
 Chrome direct input, native video export, a full rendered autoplay match, and restart were verified on November 1, 2026. See [PLAYTEST_REVIEW.md](PLAYTEST_REVIEW.md) for recordings, measurements, the capture-cadence correction, and remaining acceptance checks.
+
+For simulation checks without video, open `http://localhost:5173/?playtest=1&video=0&autoplay=1&duration=40`. Begin the operation, then use **Save events.txt** or **Save json** when it finishes. This skips canvas capture and MediaRecorder entirely. Omit `autoplay=1` to collect direct input instead. Events include simulation ticks/times, projectile IDs, fire/impact, damage, death/respawn, reload, capture, score, and results. JSON snapshots include all active projectile positions and velocities. The normal bounded clip limit still applies to log-only runs.
 
 ## Rules and architecture
 
@@ -39,7 +41,7 @@ All simulation uses 30 Hz ticks, plain serializable state, shared human/bot comm
 
 The map is flat and axis aligned. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
 
-Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Teammates block bullets without taking damage. Reserve ammo is finite until respawn.
+Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Rifle rounds visibly travel at 32 m/s, expire after 60 meters, and deal damage on impact. Teammates block rounds without taking damage; protection is checked when the round arrives. Reserve ammo is finite until respawn.
 
 ## Local release scope
 

@@ -36,7 +36,7 @@ npm run build
 
 The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. README originally uses 127.0.0.1 in an example; those origins have separate permissions.
 
-Latest validation: **20 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
+Latest validation: **32 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
 
 Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. A rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
 
@@ -87,6 +87,16 @@ Two further Chrome recording pairs (`sector-control-2026-11-01T22-08-45-712Z` au
 ## Rifle support-hand fix
 
 The left hand now belongs to a rifle foregrip anchor instead of the independently animated forearm. `attachSupportArm` poses the shoulder/elbow to reach the grip after each weapon transform, including sprint, recoil, and reload tilt. An ad hoc check using the actual method and PlayCanvas transforms covered 220 poses with maximum wrist/grip separation 1.35e-7 meters. A further Chrome recording (`sector-control-2026-11-01T22-18-48-649Z`) and rifle-grip-review.jpg / rifle-grip-metrics.json are in ignored playtest-artifacts/: 60 render FPS, zero errors, successful video decoding. All 20 existing tests and the production build pass.
+
+## Traveling projectile update and log-only verification
+
+User requested visibly traveling rifle rounds. Simulation now owns 32 m/s projectiles, 60-meter lifetimes, swept world/soldier hits, and impact-time damage/feedback. Bright faction-colored tracers are interpolated from simulation state. Muzzle overlap, allies, protection at arrival, shooter death, and cleanup are covered. Bots lead targets; the optional player driver compensates for its shoulder camera.
+
+This work exposed a pre-existing missing Ammo backend: native logs showed zero world hits. `src/physics.ts` now initializes AmmoPhysicsWorld explicitly and passes it to Application before static colliders are built. The new real-engine regression verifies a thin wall, rays above it, and projectile impact while physics stepping is disabled. Earlier browser observations did not prove world-ray acceptance. Simplified full-match tests remain separate from GPU/native map profiling.
+
+The user asked about verifying events without screenshots. Prefer `?playtest=1&video=0&autoplay=1&duration=40` for simulation checks: no video capture/encoder; Save json and Save events.txt provide typed events and a readable timeline. Manual input works by omitting autoplay. JSON schema is now version 2, with projectile state and fire/impact events linked by projectile ID. Times in events.txt are simulation times, distinct from snapshot wall-time alignment. Retain a brief visual check for presentation requests such as projectile visibility; avoid repeated screenshots for simulation validation.
+
+Verified artifact pairs: `sector-control-2026-11-01T22-39-34-973Z` (direct 20-second video/JSON, 26 shots / 26 wall hits at 0.97-second delay) and `...22-41-31-229Z` (40-second log-only JSON/events.txt, 436 shots / 320 impacts / 14 kills / two captures / zero errors). Both end with zero active rounds. Log-only run showed no video download link and restart worked. Readable direct timeline is playtest-artifacts/projectile-wall-events.txt; metrics are projectile-review-metrics.json and optional flight preview is projectile-flight-preview.gif. Baseline logs ...22-30-17-055Z and ...22-32-12-941Z preserve the failed pre-fix world-ray diagnosis, not acceptance evidence. TypeScript, all 32 tests, and build pass.
 
 ## Next steps
 
