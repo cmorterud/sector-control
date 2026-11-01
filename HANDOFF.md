@@ -2,9 +2,21 @@
 
 Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current status; it distinguishes verified Chrome playtests from remaining acceptance work.
 
+## Current checkpoint — start here
+
+- All requested feature work in this conversation is complete and committed. No implementation is half-finished. The working tree was clean when this handoff was refreshed.
+- Latest gameplay commit: `13d5648` — Add visible projectile combat and log-only playtests. Earlier commits: `1ef958a` — rifle foregrip attachment; `7246b89` — articulated soldier movement; `777680e` — recording cadence fix and verified Chrome playtests. A documentation-only handoff commit follows these; use `git log` for the current HEAD.
+- Last completed validation: strict TypeScript, **32 tests**, and production build passed. The handoff refresh changes documentation only; checks were not rerun for it. The known large engine/Ammo bundle warning remains.
+- Current presentation: basic articulated block soldiers with walking/sprint/backward/strafe animation, a left hand fixed to the rifle foregrip using a two-bone arm pose, and bright cyan/orange traveling rifle projectiles. The user accepted the basic character animation and requested the grip and projectile changes afterward.
+- Current combat: projectiles travel at **32 m/s**, deal damage on arrival, and expire at **60 m**. Swept collision handles walls and soldiers. `src/physics.ts` explicitly initializes Ammo; earlier code silently had no world raycast backend.
+- Prefer event logs and tests for simulation verification. The user specifically asked about checking event lists without screenshots. Use `http://localhost:5173/?playtest=1&video=0&autoplay=1&duration=40`, then **Save events.txt** and **Save json**. Video/screenshot review is for visual presentation checks, not routine event verification. Log-only mode skips canvas capture and MediaRecorder.
+- **Latest rendered acceptance is limited:** the post-physics-fix direct run verified 26 shots producing 26 wall impacts at about 0.97 seconds delay; the post-fix log-only 40-second 5v5 run verified 436 shots, 320 impacts, 14 kills, two captures, zero errors, and clean end/restart. The older eight-minute rendered autoplay result was **before** the projectile/Ammo fixes and is not an eight-minute acceptance pass for the current game.
+- Preserve user preferences: stay local; defer deployment; play/test autonomously rather than asking the user to reproduce every bug; keep tested changes committed; retain the attached left hand and visible projectile flight. Do not add the same localhost browsing exception again—it is already Always allow.
+- Next work, if continuing autonomous acceptance: direct combat/objective play with the current projectile system, a full manual eight-minute match, systematic cover/obstacle checks, Firefox, and controlled GPU/memory/restart profiling. The user has not requested another specific feature yet.
+
 ## What the user wants next
 
-The agent should **play the game itself**, record gameplay, inspect problems, fix them, and repeat without asking the user to play or describe each bug. Establish direct keyboard/mouse control in Chrome. Bot-driven runs supplement direct input testing; they do not replace it. Recording/autoplay support is already implemented.
+The agent should **play the game itself**, record gameplay, inspect problems, fix them, and repeat without asking the user to play or describe each bug. Direct Chrome keyboard/mouse control is established; continue using the supported procedure below. Bot-driven runs supplement direct input testing; they do not replace it. Recording/autoplay support is already implemented.
 
 ## Project and decisions
 
@@ -20,9 +32,10 @@ The agent should **play the game itself**, record gameplay, inspect problems, fi
 
 - `src/simulation.ts`: tick/state, commands/events, combat, objectives, scoring, respawn, waypoint A*, configurable bots, JSON-safe snapshots.
 - `src/map.ts`: geometry, spawns, objectives, movement footprint queries.
+- `src/physics.ts`, `src/physics.test.ts`: explicit Ammo backend initialization and real-engine thin-wall/projectile regression.
 - `src/rendering.ts`: PlayCanvas/Ammo adapter, procedural map/characters, camera, interpolation, effects.
 - `src/main.ts`, `src/style.css`: input/pointer lock, HUD, menus, audio, loop, recorder integration.
-- `src/playtest.ts`: bounded game-only video with diagnostic HUD and command/event/state/frame/error logs.
+- `src/playtest.ts`: optional bounded game-only video, diagnostics-only mode, readable event timelines, and command/event/state/frame/error logs.
 - `src/simulation.test.ts`, `src/playtest.test.ts`: rule and recorder-log/driver tests.
 
 ## Run and validation
@@ -34,11 +47,11 @@ npm run check
 npm run build
 ```
 
-The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. README originally uses 127.0.0.1 in an example; those origins have separate permissions.
+The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. Vite may print 127.0.0.1 because of its bind setting; continue browsing the localhost origin because permissions are origin-specific.
 
 Latest validation: **32 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
 
-Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. A rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
+Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. An earlier rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully, before the later projectile and Ammo initialization changes. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
 
 ## Existing recorded-playtest features
 
@@ -47,7 +60,7 @@ Chrome localhost inspection now works. Recorded direct-input runs verified point
 - Click Begin operation. Manual play uses pointer lock; autoplay avoids pointer lock and drives the human slot with shared commands.
 - Default clip: 60 wall-time seconds, 1280×720, 30 FPS. `clip=120` permits up to two minutes.
 - Video is silent and game-only, with a diagnostic HUD drawn into it. It does not capture the exact DOM HUD, desktop, or microphone. No upload/backend.
-- Completion exposes Save webm/MP4 and Save json links. Unsupported video falls back to JSON. Logs contain commands, typed events, one snapshot per simulation second with wall-time alignment, errors, and frame timing statistics.
+- Completion exposes Save events.txt, Save json, and (when enabled/supported) Save webm/MP4 links. `video=0` disables video while retaining diagnostics. Unsupported video falls back to diagnostics. Logs contain commands, typed events, one snapshot per simulation second with wall-time alignment, errors, and frame timing statistics.
 - Store reviewed artifacts under ignored `playtest-artifacts/`. Recording overhead affects frame timings; benchmark normal play separately.
 - Controls: WASD, mouse aim, Shift sprint, RMB aim, LMB fire, R reload, held Tab scoreboard, Escape pause. Normal play pauses on blur/hidden tabs. Other development flags: `bots=0`, `demo=1`, `duration` in seconds.
 
@@ -102,6 +115,6 @@ Verified artifact pairs: `sector-control-2026-11-01T22-39-34-973Z` (direct 20-se
 
 1. Continue direct combat/objective play using the established Chrome procedure. The manual 5v5 run completed for one minute, but the player has not yet scored a recorded manual kill or capture.
 2. Improve confidence in simultaneous aim/fire/turn controls within documented capabilities; do not substitute autoplay for direct-input testing.
-3. Complete a full manual eight-minute match and systematic cover/obstacle checks. One full rendered autoplay match and a restart are verified; long-running repeated restarts/memory remain unverified.
+3. Complete a full manual eight-minute match and systematic cover/obstacle checks. The earlier full rendered autoplay match predates projectiles/Ammo initialization. Current-projectile native verification covers a short match and restart; full-length current-system and repeated-match memory checks remain unverified.
 4. Verify Firefox and controlled 1080p GPU/frame performance separately from recording overhead.
 5. Keep work local and within MVP scope. Do not repeat the old permission advice unless a new explicit gate denial occurs.
