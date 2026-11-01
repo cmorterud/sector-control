@@ -6,12 +6,29 @@ import {
   type Game,
   type V3,
   type Event,
+  type Soldier,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
+type SoldierRig = {
+  body: pc.Entity;
+  hips: pc.Entity;
+  upper: pc.Entity;
+  legs: { hip: pc.Entity; knee: pc.Entity; ankle: pc.Entity }[];
+  arms: { shoulder: pc.Entity; elbow: pc.Entity }[];
+  rifle: pc.Entity;
+  x: number;
+  z: number;
+  phase: number;
+  motion: number;
+  sprint: number;
+  alive: boolean;
+};
+
 export class Renderer implements CollisionWorld {
   app: pc.Application;
   camera: pc.Entity;
   people: pc.Entity[] = [];
+  private soldiers: SoldierRig[] = [];
   rings: pc.Entity[] = [];
   effects: { e: pc.Entity; life: number }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
@@ -176,6 +193,191 @@ export class Renderer implements CollisionWorld {
     }
     return { x, z };
   }
+  private joint(name: string, parent: pc.Entity, x = 0, y = 0, z = 0) {
+    const joint = new pc.Entity(name);
+    parent.addChild(joint);
+    joint.setLocalPosition(x, y, z);
+    return joint;
+  }
+  private createSoldier(p: Soldier) {
+    const root = this.joint(`soldier-${p.id}`, this.app.root);
+    const body = this.joint("body", root, 0, 0.94);
+    const hips = this.joint("hips", body);
+    const upper = this.joint("upper body", body, 0, 0.08);
+    const shirt = p.team === "blue" ? "#46a9d8" : "#de6e5f";
+    const trousers = "#414e48";
+    const equipment = "#343f3c";
+    this.cube("pelvis", 0, -0.015, 0, 0.49, 0.2, 0.33, trousers, false, hips);
+    this.cube("torso", 0, 0.26, 0, 0.59, 0.5, 0.35, shirt, false, upper);
+    this.cube("vest", 0, 0.27, -0.2, 0.48, 0.4, 0.13, equipment, false, upper);
+    this.cube(
+      "backpack",
+      0,
+      0.28,
+      0.22,
+      0.4,
+      0.38,
+      0.19,
+      equipment,
+      false,
+      upper,
+    );
+    this.cube("neck", 0, 0.55, 0, 0.18, 0.16, 0.18, "#c1af90", false, upper);
+    this.cube("head", 0, 0.66, 0, 0.35, 0.35, 0.35, "#c1af90", false, upper);
+    this.cube("helmet", 0, 0.83, 0, 0.42, 0.18, 0.43, shirt, false, upper);
+    const legs = [-1, 1].map((side) => {
+      const hip = this.joint("hip", hips, side * 0.17);
+      this.cube("thigh", 0, -0.21, 0, 0.25, 0.42, 0.28, trousers, false, hip);
+      const knee = this.joint("knee", hip, 0, -0.42);
+      this.cube("shin", 0, -0.185, 0, 0.21, 0.37, 0.24, trousers, false, knee);
+      const ankle = this.joint("ankle", knee, 0, -0.4);
+      this.cube("boot", 0, 0, -0.075, 0.25, 0.14, 0.4, "#27312e", false, ankle);
+      return { hip, knee, ankle };
+    });
+    const arms = [-1, 1].map((side) => {
+      const shoulder = this.joint("shoulder", upper, side * 0.39, 0.41);
+      this.cube(
+        "upper arm",
+        0,
+        -0.15,
+        0,
+        0.22,
+        0.3,
+        0.24,
+        shirt,
+        false,
+        shoulder,
+      );
+      const elbow = this.joint("elbow", shoulder, 0, -0.3);
+      this.cube("forearm", 0, -0.13, 0, 0.19, 0.26, 0.21, shirt, false, elbow);
+      this.cube("hand", 0, -0.28, 0, 0.18, 0.15, 0.19, "#c1af90", false, elbow);
+      return { shoulder, elbow };
+    });
+    const rifle = this.joint("weapon", upper, 0.32, 0.36, -0.55);
+    this.cube("rifle", 0, 0, 0, 0.14, 0.16, 0.76, "#232d2e", false, rifle);
+    this.cube(
+      "barrel",
+      0,
+      0.025,
+      -0.45,
+      0.07,
+      0.08,
+      0.25,
+      "#232d2e",
+      false,
+      rifle,
+    );
+    this.people.push(root);
+    this.soldiers.push({
+      body,
+      hips,
+      upper,
+      legs,
+      arms,
+      rifle,
+      x: p.x,
+      z: p.z,
+      phase: p.id * 1.7,
+      motion: 0,
+      sprint: 0,
+      alive: p.hp > 0,
+    });
+  }
+  private animateSoldier(
+    p: Soldier,
+    x: number,
+    z: number,
+    dt: number,
+    tick: number,
+  ) {
+    const rig = this.soldiers[p.id];
+    const dx = x - rig.x,
+      dz = z - rig.z;
+    const distance = Math.hypot(dx, dz);
+    // Animate actual travel, not requested velocity against a wall or a respawn jump.
+    const moved = p.hp > 0 && rig.alive && distance < 2 ? distance : 0;
+    const speed = moved / Math.max(dt, 0.001);
+    const blend = 1 - Math.exp(-12 * dt);
+    const forward =
+      speed > 0.05
+        ? (dx * Math.sin(p.yaw) - dz * Math.cos(p.yaw)) /
+          Math.max(distance, 0.001)
+        : 0;
+    const sideways =
+      speed > 0.05
+        ? (dx * Math.cos(p.yaw) + dz * Math.sin(p.yaw)) /
+          Math.max(distance, 0.001)
+        : 0;
+    rig.x = x;
+    rig.z = z;
+    rig.alive = p.hp > 0;
+    rig.motion = rig.alive
+      ? rig.motion + (Math.min(1, speed / 4.5) - rig.motion) * blend
+      : 0;
+    const sprint =
+      p.command.sprint && !p.command.aim
+        ? Math.max(0, Math.min(1, (speed - 4) / 3))
+        : 0;
+    rig.sprint = rig.alive ? rig.sprint + (sprint - rig.sprint) * blend : 0;
+    rig.phase =
+      (rig.phase +
+        moved * (2.5 - rig.sprint * 0.35) * (forward < -0.15 ? -1 : 1)) %
+      (Math.PI * 2);
+    const stride = Math.sin(rig.phase) * rig.motion;
+    const ready = p.command.aim || p.command.fire || p.reloadAt > 0;
+    rig.body.setLocalPosition(
+      0,
+      0.94 + (Math.cos(rig.phase * 2) - 1) * 0.022 * rig.motion,
+      0,
+    );
+    rig.body.setLocalEulerAngles(
+      -forward * rig.motion * (2 + 8 * rig.sprint),
+      0,
+      -sideways * rig.motion * 4,
+    );
+    rig.hips.setLocalEulerAngles(
+      0,
+      -Math.atan2(sideways, Math.abs(forward) + 0.001) * 40 * rig.motion,
+      0,
+    );
+    rig.upper.setLocalEulerAngles(0, stride * (ready ? 1.5 : 4), -stride * 1.5);
+    for (let i = 0; i < rig.legs.length; i++) {
+      const phase = rig.phase + i * Math.PI;
+      const swing = Math.sin(phase) * (30 + 18 * rig.sprint) * rig.motion;
+      const bend =
+        -Math.max(0, -Math.sin(phase)) * (38 + 24 * rig.sprint) * rig.motion;
+      rig.legs[i].hip.setLocalEulerAngles(swing, 0, 0);
+      rig.legs[i].knee.setLocalEulerAngles(bend, 0, 0);
+      rig.legs[i].ankle.setLocalEulerAngles(-swing * 0.25 - bend * 0.35, 0, 0);
+    }
+    const armSwing = stride * (ready ? 3 : 16 + 12 * rig.sprint);
+    rig.arms[0].shoulder.setLocalEulerAngles(
+      p.reloadAt ? 85 : 55 + armSwing,
+      0,
+      12,
+    );
+    rig.arms[0].elbow.setLocalEulerAngles(
+      p.reloadAt ? 100 : 45 - armSwing * 0.4,
+      0,
+      12,
+    );
+    rig.arms[1].shoulder.setLocalEulerAngles(
+      65 - rig.sprint * 12 - armSwing * 0.35,
+      0,
+      -8,
+    );
+    rig.arms[1].elbow.setLocalEulerAngles(25 + rig.sprint * 10, 0, 0);
+    rig.rifle.setLocalPosition(
+      0.32,
+      0.36 - rig.sprint * 0.08,
+      -0.55 + (p.nextShot > tick ? 0.08 : 0),
+    );
+    rig.rifle.setLocalEulerAngles(
+      -rig.sprint * 20 + stride * 2,
+      0,
+      p.reloadAt ? 12 : 0,
+    );
+  }
   reset(g: Game) {
     for (const e of [
       ...this.people,
@@ -187,54 +389,8 @@ export class Renderer implements CollisionWorld {
     this.rings = [];
     this.effects = [];
     this.remember(g);
-    for (const p of g.players) {
-      const e = new pc.Entity(`soldier-${p.id}`);
-      this.app.root.addChild(e);
-      const c = p.team === "blue" ? "#46a9d8" : "#de6e5f";
-      this.cube("torso", 0, 1.1, 0, 0.62, 0.65, 0.38, c, false, e);
-      this.cube("vest", 0, 1.15, -0.23, 0.48, 0.45, 0.13, "#343f3c", false, e);
-      this.cube("head", 0, 1.68, 0, 0.38, 0.38, 0.38, "#c1af90", false, e);
-      this.cube("helmet", 0, 1.85, 0, 0.44, 0.18, 0.45, c, false, e);
-      this.cube(
-        "left leg",
-        -0.18,
-        0.4,
-        0,
-        0.23,
-        0.8,
-        0.25,
-        "#414e48",
-        false,
-        e,
-      );
-      this.cube(
-        "right leg",
-        0.18,
-        0.4,
-        0,
-        0.23,
-        0.8,
-        0.25,
-        "#414e48",
-        false,
-        e,
-      );
-      this.cube("arm", -0.4, 1.15, -0.1, 0.2, 0.56, 0.23, c, false, e);
-      this.cube("arm", 0.4, 1.25, -0.2, 0.2, 0.4, 0.23, c, false, e);
-      this.cube(
-        "rifle",
-        0.32,
-        1.4,
-        -0.55,
-        0.14,
-        0.16,
-        0.9,
-        "#232d2e",
-        false,
-        e,
-      );
-      this.people.push(e);
-    }
+    this.soldiers = [];
+    for (const p of g.players) this.createSoldier(p);
     for (const s of g.sectors) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
@@ -273,25 +429,11 @@ export class Renderer implements CollisionWorld {
         teleported ? p.z : previous.z + (p.z - previous.z) * alpha,
       );
       e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
+      const position = e.getPosition();
+      this.animateSoldier(p, position.x, position.z, dt, g.tick);
       if (p.hp <= 0) {
         e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 85);
         e.setPosition(p.x, 0.25, p.z);
-      } else {
-        const swing =
-          Math.sin((g.tick + alpha) * (p.command.sprint ? 0.55 : 0.38)) *
-          Math.min(0.35, Math.hypot(p.vx, p.vz) * 0.07);
-        e.children[4].setLocalEulerAngles(swing * 60, 0, 0);
-        e.children[5].setLocalEulerAngles(-swing * 60, 0, 0);
-        e.children[7].setLocalEulerAngles(
-          p.reloadAt ? -45 : p.command.aim ? -20 : 0,
-          0,
-          0,
-        );
-        e.children[8].setLocalPosition(
-          0.32,
-          1.4,
-          -0.55 + (p.nextShot > g.tick ? 0.08 : 0),
-        );
       }
     }
     for (let i = 0; i < g.sectors.length; i++) {

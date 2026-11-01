@@ -1,6 +1,6 @@
 # Sector Control — continuation handoff
 
-Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current blocker; it distinguishes verified Chrome playtests from remaining acceptance work.
+Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current status; it distinguishes verified Chrome playtests from remaining acceptance work.
 
 ## What the user wants next
 
@@ -74,9 +74,15 @@ Read PLAYTEST_REVIEW.md for the working supported APIs and their limitations. Us
 
 Normal Save-link clicks successfully download blob video/JSON into ~/Downloads. `downloadMedia` rejects blob URLs; waiting for a download event hung despite a successful download. Do not repeat that wait; click and inspect the resulting files.
 
-Four reviewed recording pairs are archived under ignored playtest-artifacts/, plus contact sheets, review-metrics.json, and full-match-results.txt. The last clip (`sector-control-2026-11-01T21-59-37-988Z`) verifies the recorder fix: 29.93 encoded FPS, 60.01 render FPS, 17.3 ms render p95, and zero errors over 30 seconds of direct input.
+The initial four reviewed recording pairs are archived under ignored playtest-artifacts/, plus contact sheets, review-metrics.json, and full-match-results.txt. The last clip (`sector-control-2026-11-01T21-59-37-988Z`) verifies the recorder fix: 29.93 encoded FPS, 60.01 render FPS, 17.3 ms render p95, and zero errors over 30 seconds of direct input.
 
 A real recorder bug was found and fixed in src/playtest.ts: resetting the capture timestamp to each render timestamp discarded timing remainder, producing about 23 encoded FPS at a 60 Hz render loop. CaptureCadence now advances a fixed deadline and recovers after stalls. New cadence regressions bring the suite to 20 passing tests; strict TypeScript and production build pass. No gameplay rules were changed. Build still reports the known large engine/Ammo bundle warning.
+
+## Soldier movement update
+
+`src/rendering.ts` now creates named articulated soldier rigs with hip/knee/ankle and shoulder/elbow pivots, pelvis, boots, and backpack. Actual interpolated travel drives foot/leg cycles, arm swing, body sway, and sprint lean; backward motion reverses the gait and strafing rotates the hips. Stops blend to standing, aim/fire stabilize the arms, and respawn jumps are excluded. Rig state resets on restart. Simulation rules and hit volumes are unchanged.
+
+Two further Chrome recording pairs (`sector-control-2026-11-01T22-08-45-712Z` autoplay and `...22-09-59-557Z` direct movement) plus walking-joints-review.jpg, soldier-sprint-preview.gif, and animation-review-metrics.json are in ignored playtest-artifacts/. Both run near 60 render FPS and 30 video FPS with zero recorded errors. Direct input covers walking, sprint, backward steps, strafing, and idle. Restart and subsequent movement were verified. TypeScript, all 20 tests, and production build pass. See PLAYTEST_REVIEW.md.
 
 ## Next steps
 

@@ -43,6 +43,6 @@ Capture requires ten seconds from neutral to ownership; enemy sectors require te
 
 ## Local release scope
 
-Primitive art, procedural animation, synthesized audio, one map, one weapon. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
+Primitive art, articulated block soldiers with bending knees/elbows, walking and sprinting motion, synthesized audio, one map, one weapon. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
 
 Use a WebGL 2 desktop browser. Manual release verification should include Chrome and Firefox, an eight-minute match, restarts, pointer-lock loss, movement against every obstacle, close-cover shooting, and 1080p frame/memory profiling on the target machine. Passing unit tests does not establish a GPU performance guarantee.

@@ -45,3 +45,18 @@ The previous capture gate set its last timestamp to the current render timestamp
 ## Remaining acceptance
 
 Full manual eight-minute gameplay, reliable simultaneous aim/fire/mouse turning, comprehensive cover and obstacle checks, Firefox, subjective weapon/bot tuning, controlled 1080p GPU benchmarking, and repeated-match memory profiling remain unverified. No claim of general performance acceptance is made from the short recording statistics.
+
+## Basic soldier movement update
+
+The block soldiers now have articulated hips, knees, ankles, shoulders, and elbows, plus boots and a pelvis. Movement produces alternating steps and knee lift, arm swing, torso sway, and a stronger sprint lean. The gait follows actual interpolated travel rather than requested velocity, and settles to standing when movement stops. Backward travel reverses the cycle, strafing turns the hips, and aiming/firing reduces arm swing. The camera stays independent of body bob.
+
+Two new recording pairs are archived in `playtest-artifacts/`:
+
+| Timestamp (UTC), same filename prefix as above | Verification | Render FPS / p95 | Encoded FPS | Errors |
+| --- | --- | --- | --- | --- |
+| 22-08-45-712Z | 30-second 5v5 autoplay; 14 kills and one capture | 60.00 / 16.8 ms | 30.00 | 0 |
+| 22-09-59-557Z | 40-second direct walk, sprint, backward, strafe, and standing test | 60.01 / 17.4 ms | 29.97 | 0 |
+
+The direct run includes 69 sprint ticks and all four movement directions. Close-up consecutive video frames show changing knee/hip angles and body sway; the character returns to a standing pose through the idle portions. `walking-joints-review.jpg` preserves the frame comparison and `soldier-sprint-preview.gif` is an animated close-up. The direct video decoded without errors. Restart recreated the model, and subsequent held W movement worked. No Chrome warning/error console entries were observed. Strict TypeScript, all 20 existing tests, and the production build pass; the known engine-bundle size warning remains.
+
+This adds basic procedural animation and fuller block anatomy. It does not change hit volumes, movement speed, or other simulation rules.
