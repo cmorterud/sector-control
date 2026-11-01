@@ -8,13 +8,15 @@ The project implements the five local milestones: environment/controller, combat
 - Repeatable full eight-minute headless 5v5 runs assert combat, captures, valid state, and completion.
 - Chrome initialization, pointer-lock start, rendered map/characters/HUD, and a short match with bot sector scoring were observed during development.
 - Dependency audit reported zero vulnerabilities after updating Vitest.
-- Subsequent browser inspection was denied by the browser origin approval gate; no alternative browser automation route was used.
+- Chrome localhost access now works. Native input verified pointer lock, held movement/sprint, mouse turning, aim/fire, reload, and death/respawn in recorded direct-input runs.
+- A full rendered eight-minute autoplay match completed Blue 89 / Red 97, followed by a successful restart. This is separate from full manual acceptance.
+- Native VP8 video and JSON export were saved and reviewed. A measured capture-cadence issue was corrected: encoded output improved from about 23 to 29.93 FPS while rendering remained near 60 FPS. See PLAYTEST_REVIEW.md.
 
 ## Remaining manual acceptance
 
 Full human playthrough, Firefox checks, target-machine GPU profiling, long-running restart/memory profiling, and subjective weapon/bot tuning remain unverified. Do not treat headless simulation throughput as GPU performance evidence.
 
-Opt-in recorded playtests now provide a shared-command autonomous driver, bounded game-only video clips with diagnostic HUD, command/event/state logs, runtime errors, and frame statistics. See the README for the playtest URL. Log/driver tests and the production build validate the integration; native MediaRecorder output has not yet been verified in a live browser. Browser access must be granted before automated recording review can run end to end.
+Opt-in recorded playtests now provide a shared-command autonomous driver, bounded game-only video clips with diagnostic HUD, command/event/state logs, runtime errors, and frame statistics. See the README for the playtest URL. Log/driver and capture-cadence tests, native Chrome recordings, and the production build validate the integration. Strict TypeScript and all 20 tests pass. Artifacts live under ignored playtest-artifacts/.
 
 ## Deliberate implementation choices
 

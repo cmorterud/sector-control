@@ -1,5 +1,18 @@
 import type { Command, Event, Game } from "./simulation";
 
+// Keep a fixed deadline so render timing jitter does not lower the capture rate.
+export class CaptureCadence {
+  private nextFrame = 0;
+  shouldCapture(now: number) {
+    const interval = 1000 / 30;
+    if (now < this.nextFrame) return false;
+    this.nextFrame += interval;
+    // After a long stall, resume normally instead of bursting through old frames.
+    if (this.nextFrame < now - interval) this.nextFrame = now + interval;
+    return true;
+  }
+}
+
 export class PlaytestLog {
   readonly version = 1;
   readonly startedAt = new Date().toISOString();
@@ -41,7 +54,7 @@ export class PlaytestRecorder {
   private chunks: Blob[] = [];
   private panel: HTMLDivElement;
   private started = performance.now();
-  private lastFrame = 0;
+  private captureCadence = new CaptureCadence();
   private finished = false;
   private published = false;
   private urls: string[] = [];
@@ -103,8 +116,7 @@ export class PlaytestRecorder {
     if (this.finished) return;
     const now = performance.now();
     if (!paused && frameMs > 0) this.log.frames.push(frameMs);
-    if (now - this.lastFrame >= 1000 / 30) {
-      this.lastFrame = now;
+    if (this.captureCadence.shouldCapture(now)) {
       const c = this.context,
         p = game.players[0];
       c.drawImage(this.source, 0, 0, 1280, 720);

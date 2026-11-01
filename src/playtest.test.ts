@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 import { Game, TestCollision, idle, botCommand } from "./simulation";
-import { PlaytestLog } from "./playtest";
+import { CaptureCadence, PlaytestLog } from "./playtest";
 
 it("records isolated commands, timestamped snapshots and correct frame statistics", () => {
   const game = new Game(new TestCollision(), false);
@@ -27,4 +27,28 @@ it("allows an unattended driver to move the player using the shared command inte
   expect(
     Math.hypot(game.players[0].x - start.x, game.players[0].z - start.z),
   ).toBeGreaterThan(5);
+});
+
+it("maintains thirty captures per second across jittery render rates", () => {
+  for (const renderFps of [30, 60, 120, 144]) {
+    const cadence = new CaptureCadence();
+    let frames = 0;
+    for (let i = 0; i < renderFps * 60; i++) {
+      const jitter = [0, 0.2, -0.1, 0.1][i % 4];
+      if (cadence.shouldCapture((i * 1000) / renderFps + jitter)) frames++;
+    }
+    expect(frames).toBeGreaterThanOrEqual(1799);
+    expect(frames).toBeLessThanOrEqual(1801);
+  }
+});
+
+it("resumes capture after a stall without a catch-up burst", () => {
+  const cadence = new CaptureCadence();
+  expect(cadence.shouldCapture(0)).toBe(true);
+  expect(cadence.shouldCapture(16)).toBe(false);
+  expect(cadence.shouldCapture(34)).toBe(true);
+  expect(cadence.shouldCapture(5000)).toBe(true);
+  expect(cadence.shouldCapture(5001)).toBe(false);
+  expect(cadence.shouldCapture(5016)).toBe(false);
+  expect(cadence.shouldCapture(5034)).toBe(true);
 });

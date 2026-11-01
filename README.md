@@ -1,6 +1,6 @@
 # Sector Control
 
-Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the unresolved browser-access issue.
+Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
 Local, single-player third-person territory shooter. Blue has you and four bots; Red has five bots. Capture A, B, and C to earn one point per controlled sector every five seconds. Matches last eight minutes.
 
@@ -25,11 +25,13 @@ Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-sec
 
 ## Recorded playtests
 
-Open `http://127.0.0.1:5173/?playtest=1&autoplay=1&duration=60` and begin the operation. A bot drives the player through the real rendered game and collision adapter. The game records up to 60 seconds at 1280×720/30 FPS; `clip=120` raises the limit to two minutes. Omit `autoplay=1` to record manual play with normal pointer lock.
+Open `http://localhost:5173/?playtest=1&autoplay=1&duration=60` and begin the operation. A bot drives the player through the real rendered game and collision adapter. The game records up to 60 seconds at 1280×720/30 FPS; `clip=120` raises the limit to two minutes. Omit `autoplay=1` to record manual play with normal pointer lock.
 
 The recording panel provides separate **Save webm** (or MP4 when supported) and **Save json** links when the clip finishes. Save both under `playtest-artifacts/` for review. The silent video includes a diagnostic HUD; the HTML/CSS overlay itself is not captured. JSON includes every player command, typed events, one state snapshot per simulation second, frame timings, and runtime errors. Wall-time timestamps align samples with the video. This uses canvas capture only, without desktop/microphone permissions, external upload, or a backend. Recording overhead affects frame timings; benchmark normal play separately. Unavailable video encoding falls back to diagnostics only.
 
 This enables repeatable autonomous navigation/combat/capture runs. It supplements tests of real keyboard/mouse input, pointer lock, menus, and subjective combat feel. Local browser-control permission is still required for an agent to launch and inspect runs; the recorder does not bypass it.
+
+Chrome direct input, native video export, a full rendered autoplay match, and restart were verified on November 1, 2026. See [PLAYTEST_REVIEW.md](PLAYTEST_REVIEW.md) for recordings, measurements, the capture-cadence correction, and remaining acceptance checks.
 
 ## Rules and architecture
 

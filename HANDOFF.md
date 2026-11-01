@@ -1,6 +1,6 @@
 # Sector Control — continuation handoff
 
-Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current blocker; it does not establish browser acceptance.
+Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current blocker; it distinguishes verified Chrome playtests from remaining acceptance work.
 
 ## What the user wants next
 
@@ -36,9 +36,9 @@ npm run build
 
 The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. README originally uses 127.0.0.1 in an example; those origins have separate permissions.
 
-Latest validation: **18 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
+Latest validation: **20 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
 
-Observed early in Chrome: start screen, pointer-lock start, map/soldiers/HUD, short bot match with scoring. Pointer-lock reacquisition later failed. Unverified: full human-like playthrough, native video output, Firefox, GPU/frame/memory profiling, and restart stability. Headless tests include repeatable eight-minute 5v5 matches with kills and captures; do not confuse these with rendered acceptance.
+Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. A rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
 
 ## Existing recorded-playtest features
 
@@ -51,7 +51,7 @@ Observed early in Chrome: start screen, pointer-lock start, map/soldiers/HUD, sh
 - Store reviewed artifacts under ignored `playtest-artifacts/`. Recording overhead affects frame timings; benchmark normal play separately.
 - Controls: WASD, mouse aim, Shift sprint, RMB aim, LMB fire, R reload, held Tab scoreboard, Escape pause. Normal play pauses on blur/hidden tabs. Other development flags: `bots=0`, `demo=1`, `duration` in seconds.
 
-## Browser blocker — avoid repeating the same advice
+## Previous browser blocker — historical context
 
 1. Later browser calls were rejected for both 127.0.0.1:5173 and localhost:5173. Messages included “The user declined permission” and “A saved permission or managed policy denies access.”
 2. **User says no approval prompt appeared.** Do not assert that the user deliberately declined.
@@ -66,10 +66,22 @@ In a new session, read the browser tool documentation and locate the current Chr
 
 Official guidance: https://learn.chatgpt.com/docs/chrome-extension — allowed/blocked websites and troubleshooting. Earlier Settings → Browser advice concerned the built-in browser; Chrome uses Settings → Computer Use → Chrome → Manage.
 
+## Current Chrome control and recording status
+
+The fresh November 1 session successfully inspected the exact localhost origin using the existing Always allow browsing exception. The cause of earlier origin denials remains unknown; do not present stale session state as a confirmed diagnosis. No raw CDP, alternate browser, or security-setting change was needed.
+
+Read PLAYTEST_REVIEW.md for the working supported APIs and their limitations. Use native Chrome clicks to acquire pointer lock, wait for acquisition before keys, and use timed held keys. `tab.drag` delivers relative look but also fires. Native timed coordinate clicks verify LMB/RMB. Native screenshots use different Retina coordinates from tab screenshots. Focus must stay on the game for normal play; switching tabs pauses it. Pure mouse movement and arbitrary simultaneous button control are not exposed by the documented surface.
+
+Normal Save-link clicks successfully download blob video/JSON into ~/Downloads. `downloadMedia` rejects blob URLs; waiting for a download event hung despite a successful download. Do not repeat that wait; click and inspect the resulting files.
+
+Four reviewed recording pairs are archived under ignored playtest-artifacts/, plus contact sheets, review-metrics.json, and full-match-results.txt. The last clip (`sector-control-2026-11-01T21-59-37-988Z`) verifies the recorder fix: 29.93 encoded FPS, 60.01 render FPS, 17.3 ms render p95, and zero errors over 30 seconds of direct input.
+
+A real recorder bug was found and fixed in src/playtest.ts: resetting the capture timestamp to each render timestamp discarded timing remainder, producing about 23 encoded FPS at a 60 Hz render loop. CaptureCadence now advances a fixed deadline and recovers after stalls. New cadence regressions bring the suite to 20 passing tests; strict TypeScript and production build pass. No gameplay rules were changed. Build still reports the known large engine/Ammo bundle warning.
+
 ## Next steps
 
-1. Verify supported Chrome inspection in the new session. If still blocked, diagnose prompt/permission handling; do not label it a game bug.
-2. Establish sustained keyboard movement and relative mouse aim under pointer lock using documented tool capabilities. Continuous FPS-style input has not yet been proven.
-3. Record a short direct-play session, save video/JSON, inspect frames/events, and fix reproducible problems. Use existing autoplay for supplemental repeatable coverage.
-4. Run affected tests/build, then a full match and restart check. Separate observations from unverified performance/subjective claims.
-5. Keep work local and within MVP scope; update this handoff as progress changes.
+1. Continue direct combat/objective play using the established Chrome procedure. The manual 5v5 run completed for one minute, but the player has not yet scored a recorded manual kill or capture.
+2. Improve confidence in simultaneous aim/fire/turn controls within documented capabilities; do not substitute autoplay for direct-input testing.
+3. Complete a full manual eight-minute match and systematic cover/obstacle checks. One full rendered autoplay match and a restart are verified; long-running repeated restarts/memory remain unverified.
+4. Verify Firefox and controlled 1080p GPU/frame performance separately from recording overhead.
+5. Keep work local and within MVP scope. Do not repeat the old permission advice unless a new explicit gate denial occurs.
