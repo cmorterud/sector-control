@@ -190,6 +190,7 @@ export interface Soldier extends Vec {
   vz: number;
   reloadAt: number;
   nextShot: number;
+  aimBloom: number;
   respawnAt: number;
   protectedUntil: number;
   kills: number;
@@ -412,7 +413,7 @@ export class Game {
     this.botSettings = {
       ...defaultBotSettings,
       ...(this.map.terrain?.firingPositions
-        ? { engagementRange: 59, aimError: 0.01 }
+        ? { engagementRange: 59, aimError: 0.02 }
         : {}),
       ...botSettings,
     };
@@ -454,6 +455,7 @@ export class Game {
         vz: 0,
         reloadAt: 0,
         nextShot: 0,
+        aimBloom: 0,
         respawnAt: 0,
         protectedUntil: 0,
         kills: 0,
@@ -530,6 +532,7 @@ export class Game {
     p.vx = 0;
     p.vz = 0;
     p.nextShot = this.tick;
+    p.aimBloom = 0;
     p.protectedUntil = this.tick + 60;
     p.path = [];
     p.target = -1;
@@ -549,6 +552,14 @@ export class Game {
       }
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
+      if (
+        !c.fire ||
+        p.reloadAt ||
+        p.mantle ||
+        p.ammo <= 0 ||
+        this.tick < p.throwUntil
+      )
+        p.aimBloom = Math.max(0, p.aimBloom - 1 / 18);
       p.yaw = c.yaw;
       p.pitch = clamp(c.pitch, -1.1, 1.1);
       if (
@@ -761,6 +772,8 @@ export class Game {
   fire(p: Soldier) {
     p.ammo--;
     p.nextShot = this.tick + 3;
+    // Only botCommand uses this spread; human shot direction stays unchanged.
+    p.aimBloom = Math.min(1, p.aimBloom + 0.25);
     p.protectedUntil = 0;
     const dir = {
       x: Math.sin(p.yaw) * Math.cos(p.pitch),
@@ -1236,6 +1249,27 @@ export function pathfind(
   }
   return [];
 }
+export function botAimOffset(p: Soldier, tick: number, baseSpread: number) {
+  const sample = (index: number) => {
+    let seed =
+      (Math.imul(index + 1, 374761393) + Math.imul(p.id + 1, 668265263)) >>> 0;
+    seed = Math.imul(seed ^ (seed >>> 13), 1274126177) >>> 0;
+    const angle = (seed / 4294967296) * Math.PI * 2;
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const radius = Math.sqrt(seed / 4294967296);
+    return { yaw: Math.cos(angle) * radius, pitch: Math.sin(angle) * radius };
+  };
+  const time = (tick + p.id * 7) / 30;
+  const index = Math.floor(time);
+  const blend = smooth(time - index);
+  const a = sample(index),
+    b = sample(index + 1);
+  const spread = baseSpread * (1 + 0.75 * p.aimBloom);
+  return {
+    yaw: (a.yaw + (b.yaw - a.yaw) * blend) * spread,
+    pitch: (a.pitch + (b.pitch - a.pitch) * blend) * spread,
+  };
+}
 export function botCommand(g: Game, p: Soldier): Command {
   const c = idle();
   c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
@@ -1313,7 +1347,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   if (target) {
     p.mode = "Engage";
     const d = dist(p, target);
-    const jitter = Math.sin(g.tick * 0.29 + p.id * 7) * g.botSettings.aimError;
+    const error = botAimOffset(p, g.tick, g.botSettings.aimError);
     // Lead a visible moving target by the projectile's intercept time.
     const rx = target.x - p.x,
       rz = target.z - p.z;
@@ -1357,10 +1391,10 @@ export function botCommand(g: Game, p: Soldier): Command {
     c.yaw =
       aimYaw -
       Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
-      jitter;
+      error.yaw;
     c.pitch =
       Math.atan2(target.y + exposedAimHeight(g.map) - eyeHeight, aimDistance) +
-      jitter * 0.6;
+      error.pitch;
     c.aim = true;
     c.sprint = false;
     c.fire =

@@ -273,6 +273,7 @@ describe("combat and lifecycle", () => {
   });
   it("gives bots lead on a moving target for the finite projectile speed", () => {
     const { g, p, enemy } = scene();
+    g.botSettings.aimError = 0;
     enemy.z = -20;
     enemy.vx = 4.5;
     p.target = enemy.id;

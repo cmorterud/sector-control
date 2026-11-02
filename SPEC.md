@@ -17,7 +17,7 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 - A/B/C use eight-meter horizontal radii. Neutral capture takes ten seconds. Enemy objectives take ten seconds to neutralize plus ten seconds to capture. Extra occupants do not accelerate progress.
 - Both factions contest and pause progress. Empty sectors retain progress. Opposing occupancy reverses progress, including defenders restoring neutralization. Ownership is retained until neutralization completes.
 - Bots share commands, combat rules, and movement. They select objectives with assignment penalties, navigate a waypoint graph with A*, avoid obstacles, separate locally, acquire visible enemies, delay reactions, fire inaccurate bursts, reposition, reload, die, and respawn.
-- Reaction delay, aim error, engagement range, and burst timing are configurable in `BotSettings`.
+- Reaction delay, aim error, engagement range, and burst timing are configurable in `BotSettings`. Bot aim uses separate smoothly interpolated yaw/pitch offsets within a disk. Each actual shot adds 0.25 bloom (capped at 1), multiplying base error by 1–1.75; stopping fire recovers 1/18 bloom per tick. Trench base error is 0.02 rad, giving approximately 0.8–1.4 m maximum spread at 40 m. Industrial retains its 0.035 rad base. Player rifle trajectories are unaffected, respawn resets bloom, and zero custom aim error remains perfect.
 
 ## World and presentation
 

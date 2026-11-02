@@ -96,3 +96,11 @@ A radial explosion measures body-center distance, tests three body-height cover 
 Rendering interpolates/spins the shell, briefly animates the throwing arm, and creates a fading flash, expanding radius disc and nine rising smoke puffs. Per-explosion materials/entities are destroyed after four seconds and on restart. Smoke is cosmetic. Bots receive inventory but do not auto-throw in this first player-controlled version.
 
 Validation: 65 tests including inventory/cooldown, aimed arc/fuse, thin-wall and real Ammo terrain sweeps, close-panel release, cover/falloff, friendly/protected/self damage, scoring, death/respawn/end cleanup and isolated event logs. Native keyboard recordings verify HUD inventory, throwing, bounces, smoke, full-roster combat and restart; exact artifacts/metrics are in PLAYTEST_REVIEW.md.
+
+## Bot aim bloom
+
+The approved accuracy adjustment replaces fast correlated sine jitter with independent yaw/pitch samples in a unit disk, smoothly interpolated over one-second intervals. Samples are deterministic per soldier/tick and do not advance gameplay RNG. Trench base aim error rises from 0.01 to 0.02 rad. Industrial retains its existing 0.035 rad base; both use the same bloom behavior. Custom BotSettings, including zero aim error, still apply.
+
+Each actual rifle shot adds 0.25 normalized aimBloom up to 1. Bot aim scales by 1 + 0.75 × bloom, so trench spread grows from about 0.8 to 1.4 m at 40 m. Non-firing ticks (also reload/mantle/empty magazine/grenade action) recover 1/18 per tick, reaching baseline after 0.6 seconds from full bloom. Respawn resets it and soldier snapshots serialize it. Human rifle direction never uses this aim offset; matching human command streams produce identical projectile trajectories regardless of bloom state.
+
+Regression coverage exercises actual burst buildup/recovery, respawn, angular bounds and smoothness, reduced exposed-head projectile hits, unchanged firing cadence, zero aim error, and unchanged human trajectories. The full eight-minute headless duel still shoots and kills in its final minute. Exact before/after and native results are in PLAYTEST_REVIEW.md.
