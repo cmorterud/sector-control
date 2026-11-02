@@ -4,6 +4,12 @@ Updated November 2, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.
 
 ## Current checkpoint — start here
 
+- Latest map change: **four zigzag trench lines, two per team**, with spawns on open ground immediately behind the first/rear line at x = ±67 m. Broad 10 m entry ramps fit every spawn row. Three communication trenches lead to each side's second/front line. The old dug spawn pocket and straight rear line are gone.
+- Center is open **no man's land**: two short 0.65 m sandbag remnants, two small wire patches near the ends, and cosmetic shell scars. Central cover occupies under 15 m²; no cover box lies within 10 m of A/B/C. Bunkers remain behind the rear trenches. Depth, firing steps, hop/mantle, 25v25 roster, and normal match rules remain.
+- Current suite: **50 tests**, strict TypeScript/build. New checks count four dug bands, verify every spawn is behind its first line and can enter by moving forward, and preserve all-spawn routes. Hop tests now use explicit floor positions rather than assuming spawn elevation is zero. Native map/route evidence is recorded in PLAYTEST_REVIEW.md.
+- Latest native evidence: `sector-control-2026-11-02T17-35-26-211Z` (60-second overhead 25v25, 130 deaths, one capture, 59.32 FPS / 16.8 ms p95, zero errors) plus direct 25-second shoulder-camera traversal from spawn through both friendly lines and a recorded B capture. All 50 tests/build pass; restart verified. Artifact names and metrics are in PLAYTEST_REVIEW.md and four-trench-review-metrics.json.
+- Optional development observer: add `overview=1&autoplay=1` to view the map from above. Normal play is still **http://localhost:5173/?map=trenches** with the shoulder camera.
+
 - Latest movement update: **Space hops when no valid mantle is available**, including on walkable ramps. Hop peaks about 0.45 m, lasts about half a second, stops at ceilings, and cannot be repeated midair. It retains normal horizontal wall/bank collision. New `hop` start/land events and serialized height/velocity support log-only verification.
 - Mantles now take **1.2 seconds** and use approach/reach/pull/crouched-cross/stand motion. The right hand braces on a fixed ledge target; the left stays attached to the tucked rifle. Lean, knee lift, foot clearance, landing compression, and frame interpolation replace the old static climbing pose. Mantle direction is held during the action.
 - Final 25v25 movement run `sector-control-2026-11-02T17-13-44-526Z`: 1,800 ticks, 39/36 mantle starts/completions, 12/12 hop starts/landings, 121 deaths, one capture, 59.79 FPS / 16.8 ms p95, zero errors; restart verified. Other mantles were interrupted by combat.
@@ -19,7 +25,7 @@ Updated November 2, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.
 - Prefer logs for simulation verification: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`, then Save events.txt / Save json. Normal recording is capped at 60 wall seconds; `clip=120` permits 120. Video/screenshot review is for presentation, not routine event verification.
 - Native direct mantle testing used `demo=1` to avoid pointer capture/focus contention, with actual held keyboard/Space input through Chrome. Normal pointer lock remains unchanged and was verified in earlier runs. Do not claim a new full manual eight-minute pass or controlled 1080p/memory benchmark.
 - Preserve user preferences: local first, no deployment/push, play/test autonomously, keep tested changes committed, maintain HANDOFF. The localhost browsing exception is already Always allow; do not repeat permission-configuration advice.
-- Next sensible work: tune trench combat/route balance (balance remains unmeasured; the latest short run ended Blue 4 / Red 0), refine mantle/camera feel and step approach, full eight-minute native acceptance, Firefox, and controlled GPU/memory/restart profiling. Historical rifles/uniforms, artillery, crouching, and unrestricted jump traversal are not implemented.
+- Next sensible work: tune trench combat/route balance (balance remains unmeasured; the latest four-line 25v25 run ended Blue 0 / Red 2), refine mantle/camera feel and step approach, full eight-minute native acceptance, Firefox, and controlled GPU/memory/restart profiling. Historical rifles/uniforms, artillery, crouching, and unrestricted jump traversal are not implemented.
 
 ## What the user wants next
 
@@ -58,7 +64,7 @@ npm run build
 
 The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. Vite may print 127.0.0.1 because of its bind setting; continue browsing the localhost origin because permissions are origin-specific.
 
-Current validation: **49 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
+Current validation: **50 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
 
 Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. An earlier rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully, before the later projectile and Ammo initialization changes. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
 

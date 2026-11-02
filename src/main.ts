@@ -327,7 +327,7 @@ function frame(now: number) {
         if (paused) break;
       }
     }
-    renderer.draw(game, accumulator * 30, dt);
+    renderer.draw(game, accumulator * 30, dt, params.has("overview"));
     if (now - uiTime > 50) {
       hud(now);
       uiTime = now;
@@ -344,7 +344,7 @@ try {
   menu(
     map.id === "trenches" ? "Trench front" : "Sector Control",
     map.id === "trenches"
-      ? `Lead Blue through the communication trenches and ramps into no man’s land. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · three sectors · eight minutes.`
+      ? `Advance through two trench lines, then cross the exposed no man’s land toward the enemy’s two lines. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · three sectors · eight minutes.`
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,

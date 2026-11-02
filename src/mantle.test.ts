@@ -57,7 +57,7 @@ describe("terrain mantle", () => {
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
     game.respawn(p);
     expect(p.mantle).toBeNull();
-    expect(p.y).toBe(0);
+    expect(p.y).toBe(groundHeight(p.x, p.z, trenchMap));
   });
 
   it("rejects distant banks, solid cover, and an obstructed head/torso sweep", () => {

@@ -114,3 +114,14 @@ Automated validation now includes 49 tests and strict TypeScript/build: ballisti
 
 
 Final 60-second log-only 25v25 artifact `sector-control-2026-11-02T17-13-44-526Z` completed 1,800 ticks: 2,533 shots, 1,344 impacts, 121 deaths, one capture, Blue 4 / Red 0. It logged 39 mantle starts / 36 completions (others interrupted by combat) and 12 hop starts / 12 landings. Average FPS 59.79, p95 16.8 ms, one frame above 33.33 ms, zero errors. Restart reset the timer, roster, and scores. JSON/events.txt and hop-mantle-25v25-metrics.json are archived. This supersedes the earlier short-run faction result as the latest observation, without establishing balance.
+
+
+## Four trench lines, rear-ground spawns, exposed center — November 2, 2026
+
+The battlefield now has four zigzag lines, two per faction, with open-ground spawns at x = ±67 m immediately behind each rear line. Broad rear entry ramps accommodate all 25 spawn slots, three communication routes lead to the front line, and the middle is exposed no man's land. Central cover is only two 0.65 m sandbag remnants and two small wire patches near the ends (under 15 m² total footprint, no cover within 10 m of objectives). Bunkers stay behind the rear lines. Depth, firing steps, hops, and mantles remain intact.
+
+Overhead video/JSON/events artifact `sector-control-2026-11-02T17-35-26-211Z` (`map=trenches&overview=1&autoplay=1&playtest=1&duration=60&clip=120`) confirms all four lines and both 25-soldier spawn groups. All 1,800 ticks completed: 3,060 shots, 1,687 impacts, 130 deaths, one capture, Blue 0 / Red 2. Average render FPS 59.32, p95 16.8 ms, two frames above 33.33 ms, zero errors. `four-trench-overview.jpg` is an early rendered layout frame. This overview intentionally renders the entire map with an orthographic camera and no fog; it is an optional development observer, not the normal gameplay camera.
+
+Direct shoulder-camera recording `sector-control-2026-11-02T17-40-53-732Z` (`map=trenches&bots=0&demo=1&playtest=1&duration=25`) uses held Shift+W for 8.5 seconds from spawn. It descends into the rear line, passes the front line, exits into no man's land, and captures B. All 750 ticks completed, Blue 2 / Red 0, one player capture, 59.92 render FPS, 17.6 ms p95, zero errors. Restart reset the map state. It tests direct input without pointer capture; normal pointer-lock behavior is unchanged. Metrics and sampled route positions are in four-trench-review-metrics.json. Artifacts remain ignored/local.
+
+Validation: strict TypeScript, all 50 tests, production build (known engine/Ammo bundle warning), four-band geometry, sparse cover, every spawn's height/side/straight entry, all 50 spawn-to-objective paths, six clear communication corridors, full headless 25v25 combat/capture, and existing Ammo/animation/hop/mantle regressions. These short runs do not establish full eight-minute manual acceptance, faction balance, or controlled GPU/memory performance.

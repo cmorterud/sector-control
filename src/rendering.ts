@@ -804,7 +804,7 @@ export class Renderer implements CollisionWorld {
       g.projectiles.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
     );
   }
-  draw(g: Game, alpha: number, dt: number) {
+  draw(g: Game, alpha: number, dt: number, overview = false) {
     for (const p of g.players) {
       const e = this.people[p.id],
         previous = this.previous[p.id] ?? p,
@@ -860,6 +860,14 @@ export class Renderer implements CollisionWorld {
       pos.y + dir.y * 20,
       pos.z + dir.z * 20,
     );
+    if (overview) {
+      // Opt-in observer view for reviewing whole-map layouts and bot routes.
+      this.camera.camera!.projection = pc.PROJECTION_ORTHOGRAPHIC;
+      this.camera.camera!.orthoHeight = this.map.depth / 2 + 5;
+      this.camera.setPosition(0, 100, 0);
+      this.camera.setEulerAngles(-90, 0, 0);
+      this.app.scene.fog.type = "none";
+    }
     this.drawProjectiles(g, alpha);
     for (const fx of this.effects) {
       fx.life -= dt;

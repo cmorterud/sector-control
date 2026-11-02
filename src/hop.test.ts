@@ -3,10 +3,18 @@ import { Game, idle, TestCollision } from "./simulation";
 import { groundHeight, mantleLanding } from "./map";
 import { trenchMap } from "./trench-map";
 
-const scene = () =>
-  new Game(new TestCollision(trenchMap), false, 600, 12345, undefined, {
-    map: trenchMap,
-  });
+const scene = () => {
+  const game = new Game(
+    new TestCollision(trenchMap),
+    false,
+    600,
+    12345,
+    undefined,
+    { map: trenchMap },
+  );
+  Object.assign(game.players[0], { x: -21, y: 0, z: -27 });
+  return game;
+};
 
 describe("Space hop fallback", () => {
   it("takes a short ballistic hop, keeps moving, lands, and logs both phases", () => {
@@ -54,7 +62,7 @@ describe("Space hop fallback", () => {
     expect(p.hop).not.toBeNull();
     game.respawn(p);
     expect(p.hop).toBeNull();
-    expect(p.y).toBe(0);
+    expect(p.y).toBe(groundHeight(p.x, p.z, trenchMap));
   });
 
   it("stops upward movement at a low ceiling and lands cleanly", () => {
@@ -71,7 +79,7 @@ describe("Space hop fallback", () => {
     expect(peak).toBeGreaterThan(0.1);
     expect(peak).toBeLessThanOrEqual(0.25);
     expect(p.hop).toBeNull();
-    expect(p.y).toBe(0);
+    expect(p.y).toBe(groundHeight(p.x, p.z, trenchMap));
   });
 
   it("prefers a valid mantle but hops on walkable ramps", () => {

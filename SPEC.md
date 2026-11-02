@@ -35,7 +35,7 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 ## Approved trench experiment
 
 - Selectable `map=trenches`, 160 × 128 meters; 25 soldiers per faction (human + 24 Blue bots, 25 Red bots). Industrial remains the default 5v5 option.
-- Zigzag front trenches, rear support and communication routes, earth banks, ramps, timber lining, sandbags, wire, bunkers, and shell scars. Three sectors in no man's land; normal scoring and eight-minute match duration.
+- Four zigzag trench lines (rear and front for each faction), linked by three communication routes per side. Teams spawn on open ground immediately behind their first/rear line, aligned with broad entry ramps. Exposed central no man's land has two low sandbag remnants and two small wire patches; bunkers stay behind the rear lines. Earth banks, firing steps, timber lining, and shell scars remain. Three sectors in no man's land; normal scoring and eight-minute match duration.
 - Trench floor at 0 m, land at 2.4 m, firing steps at 1.05 m. Center-trench standing hit volumes are below the parapet; raised steps expose soldiers and allow firing. Openings and ramps do not provide full enclosure.
 - Space mantles nearby terrain edges up/down, maximum 2.5-meter change, 1.2-second action plus half-second cooldown. Stable landing and world sweep required. No firing or capturing during the climb; bullets can still hit exposed climbing soldiers. Death/respawn clears the action.
 - Current rifle, projectile speed, faction colors, and articulated soldiers are retained for the prototype. Historical equipment/art and tuned faction balance are future work.
@@ -43,3 +43,5 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 
 - Space fallback hop: initial vertical speed 3.8 m/s, gravity 16 m/s², peak about 0.45 m, roughly 0.47 s airborne, eight-tick landing cooldown. Preserve conservative horizontal walking collision; sweep upward for ceilings. Hop state resets on death/respawn and emits takeoff/landing events.
 - Mantles use approach/reach/pull/crouched-cross/stand root motion. A free right hand braces on the ledge while the left stays attached to the tucked rifle. Knees lift to clear the parapet, then extend into landing; feet/torso/head sweeps use the matching tucked-foot clearance.
+
+- Four-line layout acceptance: four separate dug bands at representative firing-line cross sections; all 50 spawn positions are on ground behind their first line, can move directly down an entrance, and retain a route to every objective. Central cover footprint is under 15 m², all at most 0.65 m tall, with no cover boxes within 10 m of a sector.

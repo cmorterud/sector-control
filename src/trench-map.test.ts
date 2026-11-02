@@ -16,7 +16,7 @@ const createGame = (seconds = 60) =>
   });
 
 describe("trench prototype", () => {
-  it("spawns 25 soldiers on each side in clear rear assembly areas", () => {
+  it("spawns 25 soldiers on each side in clear ground behind their first trench", () => {
     const game = createGame();
     expect(game.players).toHaveLength(50);
     expect(game.snapshot()).toMatchObject({ mapId: "trenches", teamSize: 25 });
@@ -26,10 +26,46 @@ describe("trench prototype", () => {
       expect(new Set(soldiers.map((p) => p.teamIndex)).size).toBe(25);
       expect(new Set(soldiers.map((p) => `${p.x},${p.z}`)).size).toBe(25);
       for (const p of soldiers) {
-        expect(p.y).toBe(0);
+        expect(p.y).toBeCloseTo(2.4);
+        expect(Math.abs(p.x)).toBeGreaterThan(62);
+        expect(p.team === "blue" ? p.x < 0 : p.x > 0).toBe(true);
         expect(blocked(p.x, p.z, 0.7, trenchMap)).toBe(false);
+        const entrance = moveOnMap(
+          p,
+          { x: p.team === "blue" ? 24 : -24, z: 0 },
+          trenchMap,
+        );
+        expect(groundHeight(entrance.x, entrance.z, trenchMap)).toBe(0);
+        expect(Math.abs(entrance.x)).toBeLessThan(53);
       }
     }
+  });
+
+  it("has four separate trench lines and an exposed central no man's land", () => {
+    for (const z of [-49, -17, 15, 47]) {
+      let bands = 0,
+        inTrench = false;
+      for (let x = -77; x <= 77; x += 0.5) {
+        const dug = groundHeight(x, z, trenchMap) < 1.5;
+        if (dug && !inTrench) bands++;
+        inTrench = dug;
+      }
+      expect(bands).toBe(4);
+      for (const x of [-57, -29, 29, 57])
+        expect(groundHeight(x, z, trenchMap)).toBeLessThan(1.1);
+    }
+    for (let x = -9; x <= 9; x += 2)
+      for (let z = -50; z <= 50; z += 5)
+        expect(groundHeight(x, z, trenchMap)).toBeCloseTo(2.4);
+    const centerCover = trenchMap.boxes.filter((box) => Math.abs(box.x) < 18);
+    expect(centerCover.filter((box) => box.kind === "sandbag")).toHaveLength(2);
+    expect(
+      centerCover.every((box) => box.h <= 0.65 && box.kind !== "bunker"),
+    ).toBe(true);
+    const coverArea = centerCover.reduce((sum, box) => sum + box.w * box.d, 0);
+    expect(coverArea).toBeLessThan(15);
+    for (const sector of trenchMap.sectors)
+      expect(trenchMap.boxes.some((box) => dist(box, sector) < 10)).toBe(false);
   });
 
   it("connects every spawn to every objective with traversable waypoints", () => {
@@ -55,13 +91,13 @@ describe("trench prototype", () => {
         for (const offset of [-2, 0, 2]) {
           expect(
             walkSegment(
-              { x: side * 49, z: z + offset },
+              { x: side * 63, z: z + offset },
               { x: side * 19, z: z + offset },
               trenchMap,
             ),
           ).toBe(true);
           for (const wall of walls)
-            if (Math.abs(wall.x) >= 19 && Math.abs(wall.x) <= 49)
+            if (Math.abs(wall.x) >= 19 && Math.abs(wall.x) <= 63)
               expect(Math.abs(wall.z - z - offset)).toBeGreaterThanOrEqual(
                 wall.d / 2 + 0.15,
               );

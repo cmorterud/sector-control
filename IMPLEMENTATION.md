@@ -66,3 +66,12 @@ The Space command first tries a valid abrupt terrain ledge. Walkable ramps are e
 Mantle state stores the ledge and approach direction. Eased root phases approach, reach, pull, cross with tucked feet, and stand. Simulation clearance follows the raised feet during the crouched crossing. The rendered rig leans, raises its knees, tucks the rifle in its left hand, and solves the free right arm toward a fixed world ledge point during the pull. Interpolated simulation time drives the poses; hops and landings have distinct leg compression. A transform-only test runs the real rig/IK code and verifies right-wrist ledge contact, left-wrist foregrip attachment, and feet above the bank.
 
 Validation: 49 tests, strict TypeScript, production build, real Ammo mantle integration, and recorded direct Chrome hop/up/down inputs. The 30-second direct recording ran at 59.87 render FPS with zero errors; see PLAYTEST_REVIEW.md for artifacts and the final 25v25 run. This remains primitive procedural animation rather than a motion-captured character rig.
+
+
+## Four-line battlefield and open no man's land
+
+Both factions now have two zigzag trench lines (front x offsets 21/29 m, rear offsets 49/57 m). The old dug spawn pocket and straight rear trench are replaced by open-ground spawns at x = ±67 m and matching zigzag rear lines. Ten-meter-wide rear entry ramps align with the full 5 × 5 roster. Three communication corridors connect each rear/front pair. Front exits, 2.4 m bank depth, 1.05 m firing steps, mantle/hop mechanics, and sector rules remain.
+
+Central sandbag fortifications were reduced from twelve walls to two 0.65 m remnants; two small wire patches sit near the ends. All central cover occupies less than 15 m² and stays at least 10 m from sectors. Bunkers moved behind the rear lines. Existing height-clipped timber lining keeps new junctions clear. Optional `overview=1` uses an orthographic observer camera without fog to review the four lines and real bot traversal.
+
+All 50 tests pass, including four-band layout checks, spawn height/side/straight-entry checks for all 50 soldiers, all-spawn reachability, low/sparse central cover, full 60-second headless 25v25 combat and captures, and existing hop/mantle/Ammo/rig tests. Native observations and recording evidence are in PLAYTEST_REVIEW.md.

@@ -18,36 +18,44 @@ const platforms: TerrainRect[] = [];
 const ramps: Ramp[] = [];
 const liningCandidates: (Vec & { w: number; d: number })[] = [];
 const cover: Box[] = [];
+// Four independent zigzag lines: rear and front for each faction. Three narrow
+// communication routes connect each pair without extending into no man's land.
 for (const side of [-1, 1] as const) {
-  // Broad rear assembly area, support trench, and three communication routes.
-  floors.push(
-    { x: side * 65, z: -1, w: 14, d: 14 },
-    { x: side * 49, z: -1, w: 8, d: 112 },
-    { x: side * 57, z: -1, w: 18, d: 6 },
-  );
-  for (let i = 0; i < 7; i++) {
-    const x = side * (i % 2 ? 21 : 29),
-      z = -49 + i * 16;
-    floors.push({ x, z, w: 6, d: 16 });
-    if (i < 6) floors.push({ x: side * 25, z: z + 8, w: 14, d: 6 });
-    for (const edge of [-1, 1])
-      liningCandidates.push({ x: x + edge * 3.06, z, w: 0.12, d: 9 });
-    // Raised firing steps have their own short approach ramps.
-    if (i % 2 === 0) {
-      platforms.push({ x: x - side * 2, z, w: 2, d: 6, h: 1.05 });
-      ramps.push({
-        x,
-        z,
-        w: 2,
-        d: 6,
-        low: 0,
-        high: 1.05,
-        direction: side === -1 ? 1 : -1,
-      });
+  for (const line of ["rear", "front"] as const) {
+    const near = line === "rear" ? 49 : 21;
+    for (let i = 0; i < 7; i++) {
+      const x = side * (near + (i % 2 ? 0 : 8)),
+        z = -49 + i * 16;
+      floors.push({ x, z, w: 6, d: 16 });
+      if (i < 6) floors.push({ x: side * (near + 4), z: z + 8, w: 14, d: 6 });
+      for (const edge of [-1, 1])
+        liningCandidates.push({ x: x + edge * 3.06, z, w: 0.12, d: 9 });
+      if (i % 2 === 0) {
+        platforms.push({ x: x - side * 2, z, w: 2, d: 6, h: 1.05 });
+        ramps.push({
+          x,
+          z,
+          w: 2,
+          d: 6,
+          low: 0,
+          high: 1.05,
+          direction: side === -1 ? 1 : -1,
+        });
+      }
     }
   }
   for (const z of [-33, -1, 31]) {
     floors.push({ x: side * 35, z, w: 30, d: 6 });
+    // Spawn on the land immediately behind the rear line, then descend into it.
+    ramps.push({
+      x: side * 57,
+      z,
+      w: 10,
+      d: 10,
+      low: 0,
+      high: bankHeight,
+      direction: side,
+    });
     ramps.push({
       x: side * 14,
       z,
@@ -58,47 +66,38 @@ for (const side of [-1, 1] as const) {
       direction: side === -1 ? 1 : -1,
     });
   }
-  for (const z of [-32, 0, 32]) {
+  for (const z of [-21, 21])
     cover.push({
-      x: side * 8,
-      z: z + 6,
-      w: 6,
-      d: 1.2,
-      h: 1.05,
-      baseY: bankHeight,
-      kind: "sandbag",
-    });
-    cover.push({
-      x: side * 12,
-      z: z - 7,
-      w: 1.2,
-      d: 4,
-      h: 0.9,
-      baseY: bankHeight,
-      kind: "sandbag",
-    });
-  }
-  for (const z of [-13, 11])
-    cover.push({
-      x: side * 65,
+      x: side * 70,
       z,
-      w: 10,
+      w: 8,
       d: 3,
-      h: 2,
+      h: 1.8,
       baseY: bankHeight,
       kind: "bunker",
     });
 }
-for (const z of [-16, 16])
+// Sparse, low remnants leave the central crossing exposed. No objective fortresses.
+for (const side of [-1, 1] as const) {
   cover.push({
-    x: 0,
-    z,
-    w: 14,
+    x: side * 4,
+    z: side * 18,
+    w: 3.2,
+    d: 0.8,
+    h: 0.65,
+    baseY: bankHeight,
+    kind: "sandbag",
+  });
+  cover.push({
+    x: side * 4,
+    z: side * 48,
+    w: 6,
     d: 0.7,
-    h: 0.75,
+    h: 0.65,
     baseY: bankHeight,
     kind: "wire",
   });
+}
 const inside = (x: number, z: number, r: Vec & { w: number; d: number }) =>
   Math.abs(x - r.x) < r.w / 2 && Math.abs(z - r.z) < r.d / 2;
 const heights = new Float32Array(columns * rows);
@@ -149,7 +148,7 @@ export const trenchMap: MapDefinition = {
   width,
   depth,
   navSpacing: 4,
-  spawn: { blue: { x: -65, z: -1 }, red: { x: 65, z: -1 } },
+  spawn: { blue: { x: -67, z: -1 }, red: { x: 67, z: -1 } },
   sectors: [
     { id: "A", x: 0, z: -32 },
     { id: "B", x: 0, z: 0 },
