@@ -47,6 +47,30 @@ describe("trench prototype", () => {
       }
   });
 
+  it("keeps all six communication-trench junctions clear of timber panels and posts", () => {
+    const walls = trenchMap.terrain!.lining;
+    expect(walls.length).toBeGreaterThan(0);
+    for (const side of [-1, 1])
+      for (const z of [-33, -1, 31])
+        for (const offset of [-2, 0, 2]) {
+          expect(
+            walkSegment(
+              { x: side * 49, z: z + offset },
+              { x: side * 19, z: z + offset },
+              trenchMap,
+            ),
+          ).toBe(true);
+          for (const wall of walls)
+            if (Math.abs(wall.x) >= 19 && Math.abs(wall.x) <= 49)
+              expect(Math.abs(wall.z - z - offset)).toBeGreaterThanOrEqual(
+                wall.d / 2 + 0.15,
+              );
+        }
+    // Real lined earth faces still stop walking; junctions need no invisible wall.
+    const stopped = moveOnMap({ x: -31, z: -49 }, { x: -3, z: 0 }, trenchMap);
+    expect(stopped.x).toBeGreaterThanOrEqual(-32.01);
+  });
+
   it("blocks walking up banks but follows ramps and follows their continuous slope", () => {
     expect(groundHeight(-21, -33, trenchMap)).toBe(0);
     expect(groundHeight(0, -32, trenchMap)).toBeCloseTo(2.4);

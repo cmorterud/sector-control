@@ -279,15 +279,6 @@ export class Renderer implements CollisionWorld {
       );
     }
     for (const wall of terrain.lining) {
-      if (
-        terrain.ramps.some(
-          (r) =>
-            r.high === terrain.bankHeight &&
-            Math.abs(r.x - wall.x) < r.w / 2 + 0.2 &&
-            Math.abs(r.z - wall.z) < r.d / 2 + 4.5,
-        )
-      )
-        continue;
       this.cube(
         "timber trench lining",
         wall.x,
@@ -298,7 +289,9 @@ export class Renderer implements CollisionWorld {
         wall.d,
         "#65513d",
       );
-      for (const dz of [-3, 0, 3])
+      const postOffsets = [-wall.d / 2 + 0.15, wall.d / 2 - 0.15];
+      if (wall.d > 3) postOffsets.push(0);
+      for (const dz of postOffsets)
         this.cube(
           "trench post",
           wall.x,

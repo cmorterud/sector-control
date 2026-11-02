@@ -97,3 +97,10 @@ Current automated validation: 43 tests plus strict TypeScript/build, including r
 
 
 The **final-code** 60-second native log (`sector-control-2026-11-02T03-50-54-880Z`, JSON/events.txt; metrics in trench-final-metrics.json) completed all 1,800 ticks with 50 soldiers, 2,416 shots, 1,286 impacts including 441 world impacts, **117 distinct deaths**, one capture, and Blue 0 / Red 8. It logged 100 mantle starts / 85 completions, with other climbs interrupted by combat. Average render FPS **59.77**, p95 **16.9 ms**, one frame over 33.33 ms, **zero errors**. This includes the final foot-clearance sweep and health recheck. The normal eight-minute trench start screen was then left ready in Chrome. All 43 tests and the final production build pass; the existing engine/Ammo bundle-size warning remains.
+
+
+## Pass-through wooden panel — November 2, 2026
+
+Reproduced the user's spawn-route report with direct held movement in `?map=trenches&bots=0&demo=1&playtest=1&duration=20`. Intermediate artifact `sector-control-2026-11-02T14-20-14-245Z` shows a tall timber panel spanning the open center communication route; continuing forward passes through it. It was a decorative lining placement error, not intentional cover behavior.
+
+Fixed panels now follow actual terrain bank boundaries and leave all six communication junctions open. Post placement respects the trimmed panel lengths. The final direct recording `sector-control-2026-11-02T14-34-14-654Z` repeats the approach and traversal: 600 ticks, 60.00 render FPS average, 17.5 ms p95, zero recorded errors. JSON/video and trench-lining-review-metrics.json are archived under ignored playtest-artifacts/. The view is visibly open before crossing. All 44 tests, strict TypeScript, and the production build pass; existing engine/Ammo chunk-size warning remains.

@@ -1,8 +1,10 @@
 # Sector Control — continuation handoff
 
-Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current status; it distinguishes verified Chrome playtests from remaining acceptance work.
+Updated November 2, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md. This preserves the project decisions and current status; it distinguishes verified Chrome playtests from remaining acceptance work.
 
 ## Current checkpoint — start here
+
+- Latest fix: timber lining incorrectly spanned open communication-trench junctions, allowing visible pass-through. Panels now follow actual earth boundaries, and posts fit within each trimmed segment. Both factions' three junctions have regression coverage; direct recorded Chrome traversal confirms the corrected opening. Current suite: **44 tests**, strict TypeScript/build pass.
 
 - Latest work: **selectable playable WW1-style trench prototype, 25 soldiers per side**, followed by the user's requested **deeper trenches, firing steps, and a mantle mechanic**. All source and documentation belong to this change; see the latest git log for its commit. Earlier projectile checkpoint: `13d5648`; handoff refresh: `b325a00`.
 - Play: **http://localhost:5173/?map=trenches**. Blue = human + 24 bots; Red = 25 bots. Start screen has Industrial / Trench front choices. Industrial remains default 5v5. Keep the current rifle, articulated movement, glued support hand, and visible 32 m/s projectiles.
@@ -50,7 +52,7 @@ npm run build
 
 The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. Vite may print 127.0.0.1 because of its bind setting; continue browsing the localhost origin because permissions are origin-specific.
 
-Current validation: **43 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
+Current validation: **44 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
 
 Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. An earlier rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully, before the later projectile and Ammo initialization changes. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
 

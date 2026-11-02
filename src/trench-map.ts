@@ -1,4 +1,11 @@
-import type { MapDefinition, Ramp, TerrainRect, Vec, Box } from "./map";
+import {
+  groundHeight,
+  type MapDefinition,
+  type Ramp,
+  type TerrainRect,
+  type Vec,
+  type Box,
+} from "./map";
 
 const bankHeight = 2.4;
 const width = 160,
@@ -9,7 +16,7 @@ const columns = width / cellSize,
 const floors: (Vec & { w: number; d: number })[] = [];
 const platforms: TerrainRect[] = [];
 const ramps: Ramp[] = [];
-const lining: (Vec & { w: number; d: number })[] = [];
+const liningCandidates: (Vec & { w: number; d: number })[] = [];
 const cover: Box[] = [];
 for (const side of [-1, 1] as const) {
   // Broad rear assembly area, support trench, and three communication routes.
@@ -24,7 +31,7 @@ for (const side of [-1, 1] as const) {
     floors.push({ x, z, w: 6, d: 16 });
     if (i < 6) floors.push({ x: side * 25, z: z + 8, w: 14, d: 6 });
     for (const edge of [-1, 1])
-      lining.push({ x: x + edge * 3.06, z, w: 0.12, d: 9 });
+      liningCandidates.push({ x: x + edge * 3.06, z, w: 0.12, d: 9 });
     // Raised firing steps have their own short approach ramps.
     if (i % 2 === 0) {
       platforms.push({ x: x - side * 2, z, w: 2, d: 6, h: 1.05 });
@@ -157,7 +164,7 @@ export const trenchMap: MapDefinition = {
     heights,
     rectangles,
     ramps,
-    lining,
+    lining: [],
     craters: [
       { x: -4, z: -48, radius: 3.6 },
       { x: 9, z: -25, radius: 3 },
@@ -168,3 +175,31 @@ export const trenchMap: MapDefinition = {
     ],
   },
 };
+
+// Timber belongs against solid earth, never across a communication trench or ramp.
+// Clip each decorative panel to the actual terrain boundary so its visible shape
+// agrees with the earth collision, including the six mirrored trench junctions.
+for (const wall of liningCandidates) {
+  const end = wall.z + wall.d / 2;
+  let start: number | null = null;
+  const addPanel = (to: number) => {
+    if (start === null) return;
+    trenchMap.terrain!.lining.push({
+      ...wall,
+      z: (start + to) / 2,
+      d: to - start,
+    });
+    start = null;
+  };
+  for (let z = wall.z - wall.d / 2; z < end; z += 0.5) {
+    const middle = (z + Math.min(z + 0.5, end)) / 2;
+    const left = groundHeight(wall.x - 0.2, middle, trenchMap);
+    const right = groundHeight(wall.x + 0.2, middle, trenchMap);
+    const againstEarth =
+      Math.max(left, right) >= bankHeight - 0.05 &&
+      Math.abs(left - right) > 0.3;
+    if (againstEarth) start ??= z;
+    else addPanel(z);
+  }
+  addPanel(end);
+}
