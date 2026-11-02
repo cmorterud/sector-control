@@ -2,7 +2,7 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local, single-player third-person territory shooter. Blue has you and four bots; Red has five bots. Capture A, B, and C to earn one point per controlled sector every five seconds. Matches last eight minutes.
+Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front is a 25v25 elimination duel fought from firing steps. Matches last eight minutes.
 
 ## Run
 
@@ -27,11 +27,15 @@ Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-sec
 
 Choose **Trench front** on the start screen, or open [the 25v25 trench map](http://localhost:5173/?map=trenches). Blue has you plus 24 bots; Red has 25 bots. Industrial remains the default 5v5 map.
 
-The 160 × 128-meter battlefield has **four zigzag trench lines: two per team**. Each team spawns on open ground just behind its first (rear) line, with broad entry ramps. Three communication trenches lead to its second (front) line. The center is exposed no man's land with three objectives, only two short low sandbag remnants, two small wire patches, and decorative shell scars. Bunkers stay behind the rear lines; objectives have no nearby cover walls. Trenches are **2.4 meters deep**: a standing soldier in the center stays below the bank. **1.05-meter firing steps** raise the rifle above the parapet. Ramps and exposed openings remain vulnerable to fire.
+The 160 × 128-meter battlefield has **four zigzag trench lines: two per team**. Each team enters its rear line from open-ground spawns, then follows communication trenches into its front line. **The front parapets are continuous: there are no ramps or walk-through exits into no man's land.** Rear entry ramps remain.
 
-Walk near an edge and press **Space** to mantle up or down. The prompt appears when facing a nearby ledge; movement direction takes priority while walking. A climb takes 1.2 seconds: approach, reach with the free right hand, pull up, cross with tucked knees, and stand on the ledge. The left hand stays on the tucked rifle. Foot/torso/head clearance and a stable landing are checked; firing/capturing pauses during the climb. When there is no valid mantle, Space gives a small hop (about 0.45 m high, half a second airborne), with a knee tuck and soft landing. Upward motion stops at ceilings; airborne presses do not trigger another hop. Hops retain normal horizontal collision, so they do not bypass banks or solid cover. Mantling climbs terrain banks rather than buildings or solid cover. Bots can mantle too. The prototype retains the current assault rifle and visible traveling rounds; historical weapons are a separate design pass.
+Trenches are **2.4 m deep**, with **0.85 m firing steps** along the front edges. The floor conceals a standing soldier from the opposing trench. On a step, the head/helmet and raised rifle clear the parapet while the torso stays behind earth. Walk back off the step to shelter. Cover and visibility come from the actual world geometry; shots aimed below the parapet strike the bank.
 
-For a log-only 50-soldier test: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`. Snapshots include map ID, team size, elevation, and active mantle state; `mantle` events record start/end and both endpoints; `hop` events record takeoff/landing, and snapshots include active hop height/velocity. A death can interrupt a climb. `teamSize=1..25` changes the roster for experiments.
+Bots take individual firing positions inside their own front trench, aim at exposed heads, and do not autonomously assault across the center. Trench scoring awards one point per enemy elimination; the highest score at timeout wins. Its HUD/results show eliminations rather than capture objectives. Industrial retains A/B/C territory scoring. No man's land remains sparsely covered with two short sandbag remnants, wire patches, and shell scars.
+
+Walk near an edge and press **Space** to mantle up or down. The prompt appears when facing a nearby ledge; movement direction takes priority while walking. A climb takes 1.2 seconds: approach, reach with the free right hand, pull up, cross with tucked knees, and stand on the ledge. The left hand stays on the tucked rifle. Foot/torso/head clearance and a stable landing are checked; firing/capturing pauses during the climb. When there is no valid mantle, Space gives a small hop (about 0.45 m high, half a second airborne), with a knee tuck and soft landing. Upward motion stops at ceilings; airborne presses do not trigger another hop. Hops retain normal horizontal collision, so they do not bypass banks or solid cover. Mantling climbs terrain banks rather than buildings or solid cover. Manual mantling still lets you deliberately go over the top, fully exposed; trench bots stay at their firing posts. The prototype retains the current assault rifle and visible traveling rounds; historical weapons are a separate design pass.
+
+For a log-only 50-soldier test: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`. Snapshots include map ID, scoring mode, team size, elevation, and active mantle state; `mantle` events record start/end and both endpoints; `hop` events record takeoff/landing, and snapshots include active hop height/velocity. A death can interrupt a climb. `teamSize=1..25` changes the roster for experiments.
 
 ## Recorded playtests
 

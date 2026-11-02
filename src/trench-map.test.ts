@@ -7,6 +7,8 @@ import {
   TestCollision,
   botCommand,
   mantlePosition,
+  firingPosition,
+  rifleHeight,
 } from "./simulation";
 
 const createGame = (seconds = 60) =>
@@ -68,19 +70,20 @@ describe("trench prototype", () => {
       expect(trenchMap.boxes.some((box) => dist(box, sector) < 10)).toBe(false);
   });
 
-  it("connects every spawn to every objective with traversable waypoints", () => {
+  it("connects every spawn to its own firing station inside the front trench", () => {
     const game = createGame();
-    for (const p of game.players)
-      for (const sector of trenchMap.sectors) {
-        const path = pathfind(p, sector, trenchMap);
-        expect(path.length, `${p.id} -> ${sector.id}`).toBeGreaterThan(0);
-        let previous = p;
-        for (const waypoint of path) {
-          expect(walkSegment(previous, waypoint, trenchMap)).toBe(true);
-          previous = { ...p, ...waypoint };
-        }
-        expect(dist(path.at(-1)!, sector)).toBe(0);
+    for (const p of game.players) {
+      const station = firingPosition(game, p)!;
+      const path = pathfind(p, station, trenchMap);
+      expect(path.length, `soldier ${p.id}`).toBeGreaterThan(0);
+      expect(groundHeight(station.x, station.z, trenchMap)).toBeCloseTo(0.85);
+      let previous = p;
+      for (const waypoint of path) {
+        expect(walkSegment(previous, waypoint, trenchMap)).toBe(true);
+        previous = { ...p, ...waypoint };
       }
+      expect(dist(path.at(-1)!, station)).toBe(0);
+    }
   });
 
   it("keeps all six communication-trench junctions clear of timber panels and posts", () => {
@@ -107,19 +110,28 @@ describe("trench prototype", () => {
     expect(stopped.x).toBeGreaterThanOrEqual(-32.01);
   });
 
-  it("blocks walking up banks but follows ramps and follows their continuous slope", () => {
-    expect(groundHeight(-21, -33, trenchMap)).toBe(0);
-    expect(groundHeight(0, -32, trenchMap)).toBeCloseTo(2.4);
-    const stopped = moveOnMap({ x: -21, z: -30 }, { x: 10, z: 0 }, trenchMap);
-    expect(stopped.x).toBeLessThan(-17.9);
-    const ramp = moveOnMap({ x: -21, z: -33 }, { x: 12, z: 0 }, trenchMap);
-    expect(ramp.x).toBeCloseTo(-9);
-    expect(groundHeight(ramp.x, ramp.z, trenchMap)).toBeCloseTo(2.4);
-    expect(groundHeight(-14, -33, trenchMap)).toBeCloseTo(1.2);
-    const back = moveOnMap(ramp, { x: -12, z: 0 }, trenchMap);
-    expect(back.x).toBeCloseTo(-21);
-    expect(groundHeight(back.x, back.z, trenchMap)).toBe(0);
-    expect(groundHeight(-27, -49, trenchMap)).toBeCloseTo(1.05);
+  it("keeps every front parapet closed, with ramps only behind the lines and onto firing steps", () => {
+    for (const side of [-1, 1])
+      for (const z of [-33, -1, 31]) {
+        const stopped = moveOnMap(
+          { x: side * 23, z },
+          { x: -side * 14, z: 0 },
+          trenchMap,
+        );
+        expect(Math.abs(stopped.x)).toBeGreaterThanOrEqual(17.99);
+        expect(groundHeight(stopped.x, stopped.z, trenchMap)).toBeCloseTo(0.85);
+        expect(groundHeight(side * 14, z, trenchMap)).toBeCloseTo(2.4);
+        expect(
+          walkSegment({ x: side * 23, z }, { x: side * 10, z }, trenchMap),
+        ).toBe(false);
+      }
+    expect(
+      trenchMap
+        .terrain!.ramps.filter((r) => r.high === 2.4)
+        .every((r) => Math.abs(r.x) > 50),
+    ).toBe(true);
+    expect(groundHeight(-57, -1, trenchMap)).toBeCloseTo(1.2);
+    expect(groundHeight(-27, -49, trenchMap)).toBeCloseTo(0.85);
     expect(walkSegment({ x: -30, z: -49 }, { x: -27, z: -49 }, trenchMap)).toBe(
       true,
     );
@@ -150,11 +162,11 @@ describe("trench prototype", () => {
     game.tick = 1;
     botCommand(game, p);
     expect(p.target).toBe(-1);
-    Object.assign(p, { x: -27, y: 1.05, z: -49 });
+    Object.assign(p, { x: -27, y: 0.85, z: -49 });
     Object.assign(enemy, { x: 0, y: 2.4, z: -49 });
     expect(
       collision.ray(
-        { x: p.x, y: p.y + 1.45, z: p.z },
+        { x: p.x, y: p.y + rifleHeight(trenchMap), z: p.z },
         { x: enemy.x, y: enemy.y + 1.25, z: enemy.z },
       ),
     ).toBe(1);
@@ -162,7 +174,7 @@ describe("trench prototype", () => {
     expect(p.target).toBe(enemy.id);
   });
 
-  it("runs a 50-soldier match with combat, objectives, valid heights, and cleanup", () => {
+  it("runs a 50-soldier match with combat from its own firing steps, valid heights, and cleanup", () => {
     const game = createGame();
     const counts: Record<string, number> = {};
     let maxProjectiles = 0;
@@ -180,14 +192,16 @@ describe("trench prototype", () => {
               : groundHeight(p.x, p.z, trenchMap) + (p.hop?.height ?? 0),
           );
           expect(blocked(p.x, p.z, 0.44, trenchMap)).toBe(false);
+          expect(p.team === "blue" ? p.x < -18 : p.x > 18).toBe(true);
         }
     }
     expect(maxProjectiles).toBeLessThan(1000);
-    expect(counts.mantle).toBeGreaterThan(0);
+    expect(counts.mantle ?? 0).toBe(0);
     expect(counts.fire).toBeGreaterThan(100);
     expect(counts.damage).toBeGreaterThan(0);
     expect(counts.death).toBeGreaterThan(0);
-    expect(counts.capture).toBeGreaterThan(0);
+    expect(counts.capture ?? 0).toBe(0);
+    expect(game.scores.blue + game.scores.red).toBe(counts.death);
     expect(counts.end).toBe(1);
     expect(game.projectiles).toHaveLength(0);
   }, 15000);

@@ -1,6 +1,13 @@
 import "./style.css";
 import { Renderer } from "./rendering";
-import { Game, idle, botCommand, type Command, type Event } from "./simulation";
+import {
+  Game,
+  idle,
+  botCommand,
+  type Command,
+  type Event,
+  type Soldier,
+} from "./simulation";
 import { PlaytestRecorder } from "./playtest";
 import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
 import { trenchMap } from "./trench-map";
@@ -160,7 +167,7 @@ function handle(e: Event) {
       e.winner === "draw" ? "Draw" : e.winner === "blue" ? "Victory" : "Defeat";
     menu(
       result,
-      `Operation complete · Blue ${game.scores.blue} / Red ${game.scores.red}`,
+      `Operation complete · ${game.scoring === "eliminations" ? "Eliminations · " : ""}Blue ${game.scores.blue} / Red ${game.scores.red}`,
       "Deploy again",
       start,
       table(),
@@ -168,20 +175,19 @@ function handle(e: Event) {
   }
 }
 function table() {
+  const capture = game.scoring === "sectors";
+  const style = capture ? "" : ' style="grid-template-columns:1fr 35px 35px"';
+  const header = `<div class="row"${style}><span>SOLDIER</span><span>K</span><span>D</span>${capture ? "<span>CAP</span>" : ""}</div>`;
+  const row = (p: Soldier) =>
+    `<div class="row ${p.team}"${style}><span>${p.id === 0 ? "YOU" : `${p.team.toUpperCase()} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span>${capture ? `<span>${p.captures}</span>` : ""}</div>`;
   if (game.teamSize > 8)
     return `<div class="rosters">${(["blue", "red"] as const)
-      .map(
-        (team) =>
-          `<div class="table"><b class="${team}">${team.toUpperCase()} · ${game.players.filter((p) => p.team === team).length}</b><div class="row"><span>SOLDIER</span><span>K</span><span>D</span><span>CAP</span></div>${game.players
-            .filter((p) => p.team === team)
-            .map(
-              (p) =>
-                `<div class="row ${team}"><span>${p.id === 0 ? "YOU" : `${team.toUpperCase()} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.captures}</span></div>`,
-            )
-            .join("")}</div>`,
-      )
+      .map((team) => {
+        const players = game.players.filter((p) => p.team === team);
+        return `<div class="table"><b class="${team}">${team.toUpperCase()} · ${players.length}</b>${header}${players.map(row).join("")}</div>`;
+      })
       .join("")}</div>`;
-  return `<div class="table"><div class="row"><span>SOLDIER</span><span>K</span><span>D</span><span>CAP</span></div>${game.players.map((p) => `<div class="row ${p.team}"><span>${p.id === 0 ? "YOU" : `${p.team.toUpperCase()} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.captures}</span></div>`).join("")}</div>`;
+  return `<div class="table">${header}${game.players.map(row).join("")}</div>`;
 }
 function hud(now: number) {
   const p = game.players[0];
@@ -191,17 +197,23 @@ function hud(now: number) {
   el("clock").textContent = `${Math.floor(t / 60)
     .toString()
     .padStart(2, "0")}:${(t % 60).toString().padStart(2, "0")}`;
-  el("sectors").innerHTML = game.sectors
-    .map(
-      (s) =>
-        `<span class="sector ${s.contested ? "contested" : (s.owner ?? "")}">${s.id}</span>`,
-    )
-    .join("");
+  el("sectors").innerHTML =
+    game.scoring === "eliminations"
+      ? '<span class="sector">TRENCH DUEL · ELIMINATIONS</span>'
+      : game.sectors
+          .map(
+            (s) =>
+              `<span class="sector ${s.contested ? "contested" : (s.owner ?? "")}">${s.id}</span>`,
+          )
+          .join("");
   el("health").innerHTML =
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   el("ammo").innerHTML =
     `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small>`;
-  const sector = game.sectors.find((s) => dist(s, p) <= 8);
+  const sector =
+    game.scoring === "sectors"
+      ? game.sectors.find((s) => dist(s, p) <= 8)
+      : undefined;
   if (sector)
     el("health").innerHTML +=
       `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : (sector.owner?.toUpperCase() ?? "NEUTRAL")}</small>`;
@@ -219,7 +231,9 @@ function hud(now: number) {
           ? "<small>SPACE · MANTLE TRENCH EDGE</small>"
           : sector
             ? `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
-            : "";
+            : game.scoring === "eliminations" && map.terrain
+              ? `<small>${Math.abs(p.y - 0.85) < 0.03 ? "FIRING STEP · HEAD EXPOSED" : p.y + 1.94 < map.terrain.bankHeight ? "BELOW THE PARAPET" : "ABOVE THE TRENCH · EXPOSED"}</small>`
+              : "";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
   if (keys.has("Tab")) {
@@ -227,18 +241,21 @@ function hud(now: number) {
     el("scoreboard").innerHTML =
       `<section class="panel"><div class="eyebrow">LIVE OPERATION</div><h2>Scoreboard</h2>${table()}</section>`;
   } else el("scoreboard").classList.add("hidden");
-  el("labels").innerHTML = game.sectors
-    .map((s) => {
-      const v = renderer.project({
-        x: s.x,
-        y: groundHeight(s.x, s.z, map) + 4,
-        z: s.z,
-      });
-      return v.z > 0
-        ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")}" style="left:${v.x}px;top:${v.y}px">${s.id}<small>${s.contested ? "CONTESTED" : Math.round(dist(p, s)) + "m"}</small><div class="bar"><i class="${s.control < 0 ? "redbar" : ""}" style="width:${Math.abs(s.control) * 100}%"></i></div></div>`
-        : "";
-    })
-    .join("");
+  el("labels").innerHTML =
+    game.scoring === "eliminations"
+      ? ""
+      : game.sectors
+          .map((s) => {
+            const v = renderer.project({
+              x: s.x,
+              y: groundHeight(s.x, s.z, map) + 4,
+              z: s.z,
+            });
+            return v.z > 0
+              ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")}" style="left:${v.x}px;top:${v.y}px">${s.id}<small>${s.contested ? "CONTESTED" : Math.round(dist(p, s)) + "m"}</small><div class="bar"><i class="${s.control < 0 ? "redbar" : ""}" style="width:${Math.abs(s.control) * 100}%"></i></div></div>`
+              : "";
+          })
+          .join("");
 }
 function command(): Command {
   const c = idle();
@@ -344,11 +361,11 @@ try {
   menu(
     map.id === "trenches" ? "Trench front" : "Sector Control",
     map.id === "trenches"
-      ? `Advance through two trench lines, then cross the exposed no man’s land toward the enemy’s two lines. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · three sectors · eight minutes.`
+      ? `Hold your trench. Use the firing step to see and shoot over the parapet; step down to shelter. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · eliminations · eight minutes.`
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / CAPTURE</b><p>Hold sectors A, B, and C to earn points.</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

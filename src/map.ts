@@ -44,11 +44,13 @@ export interface MapDefinition {
   width: number;
   depth: number;
   navSpacing: number;
+  scoring?: "sectors" | "eliminations";
   spawn: Record<"blue" | "red", Vec>;
   sectors: (Vec & { id: string })[];
   boxes: Box[];
   terrain?: {
     bankHeight: number;
+    firingPositions?: (Vec & { team: "blue" | "red" })[];
     cellSize: number;
     columns: number;
     rows: number;

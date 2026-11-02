@@ -18,6 +18,7 @@ const platforms: TerrainRect[] = [];
 const ramps: Ramp[] = [];
 const liningCandidates: (Vec & { w: number; d: number })[] = [];
 const cover: Box[] = [];
+const firingPositions: (Vec & { team: "blue" | "red" })[] = [];
 // Four independent zigzag lines: rear and front for each faction. Three narrow
 // communication routes connect each pair without extending into no man's land.
 for (const side of [-1, 1] as const) {
@@ -30,15 +31,15 @@ for (const side of [-1, 1] as const) {
       if (i < 6) floors.push({ x: side * (near + 4), z: z + 8, w: 14, d: 6 });
       for (const edge of [-1, 1])
         liningCandidates.push({ x: x + edge * 3.06, z, w: 0.12, d: 9 });
-      if (i % 2 === 0) {
-        platforms.push({ x: x - side * 2, z, w: 2, d: 6, h: 1.05 });
+      if (line === "front" || i % 2 === 0) {
+        platforms.push({ x: x - side * 2, z, w: 2, d: 6, h: 0.85 });
         ramps.push({
           x,
           z,
           w: 2,
           d: 6,
           low: 0,
-          high: 1.05,
+          high: 0.85,
           direction: side === -1 ? 1 : -1,
         });
       }
@@ -56,14 +57,14 @@ for (const side of [-1, 1] as const) {
       high: bankHeight,
       direction: side,
     });
-    ramps.push({
-      x: side * 14,
-      z,
-      w: 8,
-      d: 6,
-      low: 0,
-      high: bankHeight,
-      direction: side === -1 ? 1 : -1,
+  }
+  for (let index = 0; index < 25; index++) {
+    const segment = index % 7,
+      row = Math.floor(index / 7);
+    firingPositions.push({
+      team: side === -1 ? "blue" : "red",
+      x: side * (21 + (segment % 2 ? 0 : 8) - 2),
+      z: -49 + segment * 16 + (row - 1.5) * 1.2,
     });
   }
   for (const z of [-21, 21])
@@ -148,6 +149,7 @@ export const trenchMap: MapDefinition = {
   width,
   depth,
   navSpacing: 4,
+  scoring: "eliminations",
   spawn: { blue: { x: -67, z: -1 }, red: { x: 67, z: -1 } },
   sectors: [
     { id: "A", x: 0, z: -32 },
@@ -157,6 +159,7 @@ export const trenchMap: MapDefinition = {
   boxes: cover,
   terrain: {
     bankHeight,
+    firingPositions,
     cellSize,
     columns,
     rows,

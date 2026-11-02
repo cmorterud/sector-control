@@ -20,6 +20,7 @@ import {
   smooth,
   hopSpeed,
   hopGravity,
+  rifleHeight,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
 const supportUpperLength = 0.42;
@@ -677,7 +678,7 @@ export class Renderer implements CollisionWorld {
     rig.arms[1].elbow.setLocalEulerAngles(25 + rig.sprint * 10, 0, 0);
     rig.rifle.setLocalPosition(
       0.32,
-      0.36 - rig.sprint * 0.08,
+      0.36 - rig.sprint * 0.08 + rifleHeight(this.map) - 1.45,
       -0.55 + (p.nextShot > tick ? 0.08 : 0),
     );
     rig.rifle.setLocalEulerAngles(
@@ -753,6 +754,12 @@ export class Renderer implements CollisionWorld {
         .transformPoint(worldHand);
       this.poseArm(rig, 1, hand, 0.3, 0.28, contact);
     }
+    if (this.map.terrain && !p.mantle) {
+      const trigger = rig.rifle
+        .getLocalTransform()
+        .transformPoint(new pc.Vec3(0, -0.03, 0.14));
+      this.poseArm(rig, 1, trigger, 0.3, 0.28);
+    }
     this.attachSupportArm(rig);
   }
   reset(g: Game) {
@@ -774,7 +781,7 @@ export class Renderer implements CollisionWorld {
     for (const p of g.players) this.createSoldier(p);
     this.batchGroup = -1;
     this.app.batcher!.generate([this.actorBatch]);
-    for (const s of g.sectors) {
+    for (const s of g.scoring === "sectors" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
       ring.setPosition(s.x, groundHeight(s.x, s.z, this.map) + 0.04, s.z);
@@ -822,7 +829,7 @@ export class Renderer implements CollisionWorld {
         e.setPosition(p.x, p.y + 0.25, p.z);
       }
     }
-    for (let i = 0; i < g.sectors.length; i++) {
+    for (let i = 0; i < this.rings.length; i++) {
       const s = g.sectors[i],
         c = s.contested
           ? "#edc76d"

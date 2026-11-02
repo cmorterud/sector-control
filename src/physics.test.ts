@@ -118,9 +118,17 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
         ray({ x: 0, y: 3.85, z: -27 }, { x: -21, y: height, z: -27 }),
       ).toBeLessThan(1);
     expect(ray({ x: -27, y: 2.5, z: -49 }, { x: 0, y: 3.65, z: -49 })).toBe(1);
+    // Opposing steps expose only the high head volume; torso and floor stay screened.
+    expect(ray({ x: -19, y: 2.5, z: -1 }, { x: 19, y: 2.5, z: -1 })).toBe(1);
+    expect(
+      ray({ x: -19, y: 2.5, z: -1 }, { x: 19, y: 1.95, z: -1 }),
+    ).toBeLessThan(1);
+    expect(
+      ray({ x: -19, y: 2.5, z: -1 }, { x: 23, y: 1.65, z: -1 }),
+    ).toBeLessThan(1);
     const rampHit = world.raycastFirst(
-      new Vec3(-14, 5, -33),
-      new Vec3(-14, -1, -33),
+      new Vec3(-57, 5, -1),
+      new Vec3(-57, -1, -1),
     );
     expect(rampHit?.point.y).toBeCloseTo(1.2, 2);
     const game = new Game(

@@ -155,12 +155,14 @@ export class PlaytestRecorder {
         695,
       );
       c.fillText(
-        game.sectors
-          .map(
-            (s) =>
-              `${s.id}: ${s.contested ? "CONTESTED" : (s.owner ?? "neutral")} ${Math.round(Math.abs(s.control) * 100)}%`,
-          )
-          .join(" | "),
+        game.scoring === "eliminations"
+          ? "TRENCH DUEL | ELIMINATIONS"
+          : game.sectors
+              .map(
+                (s) =>
+                  `${s.id}: ${s.contested ? "CONTESTED" : (s.owner ?? "neutral")} ${Math.round(Math.abs(s.control) * 100)}%`,
+              )
+              .join(" | "),
         20,
         640,
       );

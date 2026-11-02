@@ -75,3 +75,14 @@ Both factions now have two zigzag trench lines (front x offsets 21/29 m, rear of
 Central sandbag fortifications were reduced from twelve walls to two 0.65 m remnants; two small wire patches sit near the ends. All central cover occupies less than 15 m² and stays at least 10 m from sectors. Bunkers moved behind the rear lines. Existing height-clipped timber lining keeps new junctions clear. Optional `overview=1` uses an orthographic observer camera without fog to review the four lines and real bot traversal.
 
 All 50 tests pass, including four-band layout checks, spawn height/side/straight-entry checks for all 50 soldiers, all-spawn reachability, low/sparse central cover, full 60-second headless 25v25 combat and captures, and existing hop/mantle/Ammo/rig tests. Native observations and recording evidence are in PLAYTEST_REVIEW.md.
+
+
+## Closed parapets and firing-step duels
+
+Front exit ramps were removed; all high entry ramps are behind the rear lines. The complete front parapet now stops walking at every communication route. Front firing steps cover all seven zigzag sections and are 0.85 m high. World-space tests of the real rig keep torso/vest/backpack/pelvis below the 2.4 m bank while the helmet and raised barrel clear it. Actual Ammo rays distinguish an exposed head from the concealed torso/floor.
+
+The map provides 25 firing stations per side. Trench bots route to their own station, settle there, aim at exposed heads and fire across the gap. They do not strafe off posts or auto-mantle out. Default trench aim/range are tuned for head-sized targets (0.01 radians, 59 m); explicit BotSettings overrides remain honored. Short ramp anchors supplement the navigation lattice so both mirrored firing steps are reachable. Industrial keeps its objective doctrine.
+
+Map-selected scoring distinguishes sectors from eliminations. Trench kills award one faction point; capture logic and objective rendering/UI are disabled there. Industrial scoring is unchanged. Typed snapshots include scoring mode. The recording overlay reflects trench elimination scoring. A HUD cue distinguishes being below the parapet from having one's head exposed on the firing step. Manual hop/mantle remain available.
+
+Validation: 55 tests, including all 50 firing-station routes, closed exits, exposed-head projectile damage, concealed targets, one-point kill scoring, real Ammo rays, actual rig bounds/IK, and an eight-minute headless duel with shots and deaths still occurring in its final minute. Recorded 60-second Chrome combat and direct step-up/step-down checks pass; exact metrics are in PLAYTEST_REVIEW.md.

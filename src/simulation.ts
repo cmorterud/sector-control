@@ -40,6 +40,15 @@ export const idle = (): Command => ({
 });
 export const projectileSpeed = 32;
 export const projectileRange = 60;
+export const rifleHeight = (map: MapDefinition) => (map.terrain ? 1.65 : 1.45);
+export const exposedAimHeight = (map: MapDefinition) =>
+  map.terrain ? 1.65 : 1.25;
+export function firingPosition(g: Game, p: Soldier): Vec | undefined {
+  const positions = g.map.terrain?.firingPositions?.filter(
+    (position) => position.team === p.team,
+  );
+  return positions?.[p.teamIndex % positions.length];
+}
 export interface Projectile extends V3 {
   id: number;
   actor: number;
@@ -309,6 +318,8 @@ export class Game {
   projectileSequence = 0;
   sectors: Sector[];
   readonly map: MapDefinition;
+  readonly scoring: "sectors" | "eliminations";
+  botSettings: BotSettings;
   readonly teamSize: number;
   events: Event[] = [];
   sequence = 0;
@@ -318,10 +329,18 @@ export class Game {
     public bots = true,
     duration = 14400,
     seed = 12345,
-    public botSettings: BotSettings = { ...defaultBotSettings },
+    botSettings?: BotSettings,
     options: { map?: MapDefinition; teamSize?: number } = {},
   ) {
     this.map = options.map ?? industrialMap;
+    this.scoring = this.map.scoring ?? "sectors";
+    this.botSettings = {
+      ...defaultBotSettings,
+      ...(this.map.terrain?.firingPositions
+        ? { engagementRange: 59, aimError: 0.01 }
+        : {}),
+      ...botSettings,
+    };
     const requested = options.teamSize ?? 5;
     this.teamSize = bots
       ? clamp(Number.isFinite(requested) ? Math.round(requested) : 5, 1, 25)
@@ -381,6 +400,7 @@ export class Game {
     return structuredClone({
       tick: this.tick,
       mapId: this.map.id,
+      scoring: this.scoring,
       teamSize: this.teamSize,
       duration: this.duration,
       phase: this.phase,
@@ -513,7 +533,7 @@ export class Game {
       )
         this.fire(p);
     this.advanceProjectiles();
-    for (const s of this.sectors) {
+    for (const s of this.scoring === "sectors" ? this.sectors : []) {
       const occupants = this.players.filter(
           (p) => p.hp > 0 && !p.mantle && dist(p, s) <= 8,
         ),
@@ -529,7 +549,7 @@ export class Game {
         this.emit({ type: "capture", sector: s.id, team });
       }
     }
-    if (this.tick % 150 === 0) {
+    if (this.scoring === "sectors" && this.tick % 150 === 0) {
       for (const s of this.sectors) if (s.owner) this.scores[s.owner]++;
       this.emit({ type: "score" });
     }
@@ -689,7 +709,7 @@ export class Game {
     };
     const from = {
       x: p.x + Math.cos(p.yaw) * 0.32 + dir.x * 1.08,
-      y: p.y + 1.45,
+      y: p.y + rifleHeight(this.map),
       z: p.z + Math.sin(p.yaw) * 0.32 + dir.z * 1.08,
     };
     const length = Math.max(
@@ -818,6 +838,10 @@ export class Game {
         victim.deaths++;
         const shooter = this.players.find((p) => p.id === shot.actor);
         if (shooter) shooter.kills++;
+        if (this.scoring === "eliminations") {
+          this.scores[shot.team]++;
+          this.emit({ type: "score" });
+        }
         victim.respawnAt = this.tick + 150;
         victim.mode = "Respawn";
         victim.reloadAt = 0;
@@ -846,23 +870,44 @@ function graph(map: MapDefinition) {
   const cached = navigation.get(map);
   if (cached) return cached;
   const step = map.navSpacing,
-    nodes: Vec[] = [],
-    lookup = new Map<string, number>();
+    nodes: Vec[] = [];
+  const unique = new Set<string>();
+  const add = (x: number, z: number) => {
+    const key = `${x},${z}`;
+    if (!unique.has(key) && !blocked(x, z, 0.7, map)) {
+      unique.add(key);
+      nodes.push({ x, z });
+    }
+  };
   for (let x = -map.width / 2 + step; x <= map.width / 2 - step; x += step)
     for (let z = -map.depth / 2 + step; z <= map.depth / 2 - step; z += step)
-      if (!blocked(x, z, 0.7, map)) {
-        lookup.set(`${x},${z}`, nodes.length);
-        nodes.push({ x, z });
-      }
-  const edges = nodes.map((a) => {
+      add(x, z);
+  // Include the actual ends/middle of narrow ramps. A regular lattice alone can
+  // strand one mirrored firing step when a node falls exactly on a bank edge.
+  for (const r of map.terrain?.ramps ?? [])
+    for (const x of [r.x - r.w / 2, r.x, r.x + r.w / 2])
+      for (const z of [r.z - r.d / 2 + 0.8, r.z, r.z + r.d / 2 - 0.8])
+        add(x, z);
+  const buckets = new Map<string, number[]>();
+  nodes.forEach((p, i) => {
+    const key = `${Math.floor(p.x / step)},${Math.floor(p.z / step)}`;
+    const list = buckets.get(key);
+    if (list) list.push(i);
+    else buckets.set(key, [i]);
+  });
+  const edges = nodes.map((a, i) => {
     const result: number[] = [];
-    for (const dx of [-step, 0, step])
-      for (const dz of [-step, 0, step]) {
-        if (!dx && !dz) continue;
-        const index = lookup.get(`${a.x + dx},${a.z + dz}`);
-        if (index !== undefined && walkSegment(a, nodes[index], map))
-          result.push(index);
-      }
+    const cx = Math.floor(a.x / step),
+      cz = Math.floor(a.z / step);
+    for (let x = cx - 1; x <= cx + 1; x++)
+      for (let z = cz - 1; z <= cz + 1; z++)
+        for (const j of buckets.get(`${x},${z}`) ?? [])
+          if (
+            j !== i &&
+            dist(a, nodes[j]) <= step * 1.45 &&
+            walkSegment(a, nodes[j], map)
+          )
+            result.push(j);
     return result;
   });
   const result = { nodes, edges };
@@ -922,44 +967,44 @@ export function botCommand(g: Game, p: Soldier): Command {
   const c = idle();
   c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
   c.yaw = p.yaw;
+  const station = firingPosition(g, p);
   if (g.tick >= p.nextThink) {
     p.nextThink = g.tick + 30;
-    const ranks = g.sectors.map((s, i) => ({
-      i,
-      weight:
-        dist(p, s) +
-        (s.owner === p.team ? 32 : 0) +
-        (s.contested ? -10 : 0) +
-        g.players.filter(
-          (q) => q !== p && q.team === p.team && q.objective === i,
-        ).length *
-          14,
-    }));
-    ranks.sort((a, b) => a.weight - b.weight);
-    const current = ranks.find((rank) => rank.i === p.objective)!;
-    if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
-    p.path = pathfind(p, g.sectors[p.objective], g.map);
+    if (station) p.path = pathfind(p, station, g.map);
+    else {
+      const ranks = g.sectors.map((s, i) => ({
+        i,
+        weight:
+          dist(p, s) +
+          (s.owner === p.team ? 32 : 0) +
+          (s.contested ? -10 : 0) +
+          g.players.filter(
+            (q) => q !== p && q.team === p.team && q.objective === i,
+          ).length *
+            14,
+      }));
+      ranks.sort((a, b) => a.weight - b.weight);
+      const current = ranks.find((rank) => rank.i === p.objective)!;
+      if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
+      p.path = pathfind(p, g.sectors[p.objective], g.map);
+    }
   }
+  const range = Math.min(projectileRange - 1, g.botSettings.engagementRange);
   if (g.tick % 3 === p.id % 3) {
     const visible = (q: Soldier) =>
       q.team !== p.team &&
       q.hp > 0 &&
-      dist(q, p) < g.botSettings.engagementRange &&
+      dist(q, p) < range &&
       g.collision.ray(
-        { x: p.x, y: p.y + 1.45, z: p.z },
-        { x: q.x, y: q.y + 1.25, z: q.z },
+        { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
+        { x: q.x, y: q.y + exposedAimHeight(g.map), z: q.z },
       ) > 0.99;
     const existing = g.players.find((q) => q.id === p.target);
     const target =
       existing && visible(existing)
         ? existing
         : g.players
-            .filter(
-              (q) =>
-                q.team !== p.team &&
-                q.hp > 0 &&
-                dist(q, p) < g.botSettings.engagementRange,
-            )
+            .filter((q) => q.team !== p.team && q.hp > 0 && dist(q, p) < range)
             .sort((a, b) => dist(a, p) - dist(b, p))
             .slice(0, 6)
             .find(visible);
@@ -969,18 +1014,25 @@ export function botCommand(g: Game, p: Soldier): Command {
     }
   }
   const target = g.players.find((q) => q.id === p.target && q.hp > 0);
-  const objective = g.sectors[p.objective];
-  while (p.path.length && dist(p, p.path[0]) < 1) p.path.shift();
+  const objective = station ?? g.sectors[p.objective];
+  while (
+    p.path.length &&
+    dist(p, p.path[0]) < (station ? (p.path.length === 1 ? 0.15 : 0.6) : 1)
+  )
+    p.path.shift();
   const dest = p.path[0];
-  if (dest && dist(p, objective) > 4) {
+  if (dest && dist(p, objective) > (station ? 0.15 : 4)) {
     const d = dist(p, dest);
     c.x = (dest.x - p.x) / Math.max(0.1, d);
     c.z = (dest.z - p.z) / Math.max(0.1, d);
     c.sprint = !target;
     p.mode = "Navigate";
-  } else p.mode = "Capture";
+  } else {
+    p.mode = station ? "Firing step" : "Capture";
+    if (station) c.yaw = p.team === "blue" ? Math.PI / 2 : -Math.PI / 2;
+  }
   for (const q of g.players)
-    if (q !== p && q.hp > 0 && dist(p, q) < 1.4) {
+    if (q !== p && q.hp > 0 && dist(p, q) < (station ? 0.75 : 1.4)) {
       const d = Math.max(0.1, dist(p, q));
       c.x += ((p.x - q.x) / d) * 0.7;
       c.z += ((p.z - q.z) / d) * 0.7;
@@ -1007,7 +1059,10 @@ export function botCommand(g: Game, p: Soldier): Command {
       shoulderOffset = 0;
     if (p.id === 0) {
       // The optional player driver aims through the same shoulder camera as a human.
-      const pitch = Math.atan2(target.y + 1.25 - (p.y + 2.5), aimDistance);
+      const pitch = Math.atan2(
+        target.y + exposedAimHeight(g.map) - (p.y + 2.5),
+        aimDistance,
+      );
       const f =
         g.collision.ray(
           { x: p.x, y: p.y + 1.65, z: p.z },
@@ -1031,7 +1086,8 @@ export function botCommand(g: Game, p: Soldier): Command {
       Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
       jitter;
     c.pitch =
-      Math.atan2(target.y + 1.25 - eyeHeight, aimDistance) + jitter * 0.6;
+      Math.atan2(target.y + exposedAimHeight(g.map) - eyeHeight, aimDistance) +
+      jitter * 0.6;
     c.aim = true;
     c.sprint = false;
     c.fire =
@@ -1039,7 +1095,7 @@ export function botCommand(g: Game, p: Soldier): Command {
       g.tick % g.botSettings.burstPeriodTicks < g.botSettings.burstFireTicks;
     c.x *= 0.2;
     c.z *= 0.2;
-    if (g.tick % 90 < 30) {
+    if (!station && g.tick % 90 < 30) {
       c.x += Math.cos(c.yaw) * 0.5;
       c.z += Math.sin(c.yaw) * 0.5;
       p.mode = "Reposition";
@@ -1047,6 +1103,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   } else if (Math.hypot(c.x, c.z) > 0.1) c.yaw = Math.atan2(c.x, -c.z);
   if (
     g.map.terrain &&
+    !station &&
     !p.mantle &&
     g.tick >= p.nextMantle &&
     Math.abs(p.x) < 34 &&

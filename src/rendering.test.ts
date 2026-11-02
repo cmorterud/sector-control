@@ -21,6 +21,7 @@ type Rig = {
 };
 type Harness = {
   app: { root: Entity };
+  map: typeof trenchMap;
   people: Entity[];
   soldiers: Rig[];
   cube: Renderer["cube"];
@@ -36,6 +37,7 @@ type Harness = {
 function rigFor(p: Soldier) {
   const renderer = Object.create(Renderer.prototype) as Harness;
   renderer.app = { root: new Entity("test world") };
+  renderer.map = trenchMap;
   renderer.people = [];
   renderer.soldiers = [];
   renderer.cube = (
@@ -105,4 +107,44 @@ it("braces the free hand on the bank, keeps the support hand on the rifle, and c
         expect(leg.ankle.getPosition().y - 0.07).toBeGreaterThan(m.to.y - 0.01);
     }
   }
+});
+
+it("exposes the helmet and rifle while keeping the torso below the firing-step parapet", () => {
+  const game = new Game(
+    new TestCollision(trenchMap),
+    false,
+    600,
+    12345,
+    undefined,
+    { map: trenchMap },
+  );
+  const p = game.players[0];
+  Object.assign(p, {
+    x: -19,
+    y: 0.85,
+    z: -1,
+    yaw: Math.PI / 2,
+    command: { ...idle(), aim: true },
+  });
+  const r = rigFor(p);
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 10);
+  const nodes = new Map<string, Entity>();
+  const visit = (e: Entity) => {
+    nodes.set(e.name, e);
+    for (const child of e.children) visit(child as Entity);
+  };
+  visit(r.people[0]);
+  const bounds = (name: string) => {
+    const e = nodes.get(name)!;
+    const ys = [];
+    for (const x of [-0.5, 0.5])
+      for (const y of [-0.5, 0.5])
+        for (const z of [-0.5, 0.5])
+          ys.push(e.getWorldTransform().transformPoint(new Vec3(x, y, z)).y);
+    return { min: Math.min(...ys), max: Math.max(...ys) };
+  };
+  for (const name of ["torso", "vest", "backpack", "pelvis"])
+    expect(bounds(name).max).toBeLessThan(2.4);
+  expect(bounds("helmet").max).toBeGreaterThan(2.65);
+  expect(bounds("barrel").min).toBeGreaterThan(2.4);
 });
