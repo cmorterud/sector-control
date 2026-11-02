@@ -4,15 +4,15 @@ Updated November 1, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.
 
 ## Current checkpoint — start here
 
-- All requested feature work in this conversation is complete and committed. No implementation is half-finished. The working tree was clean when this handoff was refreshed.
-- Latest gameplay commit: `13d5648` — Add visible projectile combat and log-only playtests. Earlier commits: `1ef958a` — rifle foregrip attachment; `7246b89` — articulated soldier movement; `777680e` — recording cadence fix and verified Chrome playtests. A documentation-only handoff commit follows these; use `git log` for the current HEAD.
-- Last completed validation: strict TypeScript, **32 tests**, and production build passed. The handoff refresh changes documentation only; checks were not rerun for it. The known large engine/Ammo bundle warning remains.
-- Current presentation: basic articulated block soldiers with walking/sprint/backward/strafe animation, a left hand fixed to the rifle foregrip using a two-bone arm pose, and bright cyan/orange traveling rifle projectiles. The user accepted the basic character animation and requested the grip and projectile changes afterward.
-- Current combat: projectiles travel at **32 m/s**, deal damage on arrival, and expire at **60 m**. Swept collision handles walls and soldiers. `src/physics.ts` explicitly initializes Ammo; earlier code silently had no world raycast backend.
-- Prefer event logs and tests for simulation verification. The user specifically asked about checking event lists without screenshots. Use `http://localhost:5173/?playtest=1&video=0&autoplay=1&duration=40`, then **Save events.txt** and **Save json**. Video/screenshot review is for visual presentation checks, not routine event verification. Log-only mode skips canvas capture and MediaRecorder.
-- **Latest rendered acceptance is limited:** the post-physics-fix direct run verified 26 shots producing 26 wall impacts at about 0.97 seconds delay; the post-fix log-only 40-second 5v5 run verified 436 shots, 320 impacts, 14 kills, two captures, zero errors, and clean end/restart. The older eight-minute rendered autoplay result was **before** the projectile/Ammo fixes and is not an eight-minute acceptance pass for the current game.
-- Preserve user preferences: stay local; defer deployment; play/test autonomously rather than asking the user to reproduce every bug; keep tested changes committed; retain the attached left hand and visible projectile flight. Do not add the same localhost browsing exception again—it is already Always allow.
-- Next work, if continuing autonomous acceptance: direct combat/objective play with the current projectile system, a full manual eight-minute match, systematic cover/obstacle checks, Firefox, and controlled GPU/memory/restart profiling. The user has not requested another specific feature yet.
+- Latest work: **selectable playable WW1-style trench prototype, 25 soldiers per side**, followed by the user's requested **deeper trenches, firing steps, and a mantle mechanic**. All source and documentation belong to this change; see the latest git log for its commit. Earlier projectile checkpoint: `13d5648`; handoff refresh: `b325a00`.
+- Play: **http://localhost:5173/?map=trenches**. Blue = human + 24 bots; Red = 25 bots. Start screen has Industrial / Trench front choices. Industrial remains default 5v5. Keep the current rifle, articulated movement, glued support hand, and visible 32 m/s projectiles.
+- Terrain: 160 × 128 m, zigzag trenches, rear support/communication routes, ramps, timber lining, sandbags, wire, bunkers, shell scars, and three open-ground objectives. Floor 0 m, land **2.4 m**, firing steps **1.05 m**. Center-trench standing soldiers are below the bank; openings/ramps remain exposed.
+- **Space** near an edge mantles up or down. Movement direction takes priority; otherwise face the edge. One-second lift/cross/settle, half-second cooldown, stable landing, feet/torso/head world sweeps, no firing/capturing while climbing. Bots use it too. This is contextual terrain mantling, not free jumping or climbing buildings. Start/end events and active mantle state are logged; death can interrupt the action.
+- Validation: strict TypeScript, **43 tests**, production build; new real Ammo tests verify earth protection, step firing lines, ramp height, and mantling. All 50 spawn locations can navigate to all three objectives. Native direct recording verifies climbing up/down; 25v25 Chrome runs verify combat, captures, results, and restart near 60 FPS with no recorded errors. Final-code native artifact `sector-control-2026-11-02T03-50-54-880Z`: 1,800 ticks, 2,416 shots, 117 deaths, one capture, 59.77 FPS / 16.9 ms p95, zero errors. Exact artifacts/metrics and limits are in PLAYTEST_REVIEW.md.
+- Prefer logs for simulation verification: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`, then Save events.txt / Save json. Normal recording is capped at 60 wall seconds; `clip=120` permits 120. Video/screenshot review is for presentation, not routine event verification.
+- Native direct mantle testing used `demo=1` to avoid pointer capture/focus contention, with actual held keyboard/Space input through Chrome. Normal pointer lock remains unchanged and was verified in earlier runs. Do not claim a new full manual eight-minute pass or controlled 1080p/memory benchmark.
+- Preserve user preferences: local first, no deployment/push, play/test autonomously, keep tested changes committed, maintain HANDOFF. The localhost browsing exception is already Always allow; do not repeat permission-configuration advice.
+- Next sensible work: tune trench combat/route balance (short autoplay runs favored Red), refine mantle/camera feel and step approach, full eight-minute native acceptance, Firefox, and controlled GPU/memory/restart profiling. Historical rifles/uniforms, artillery, crouching, and free jump physics are not implemented.
 
 ## What the user wants next
 
@@ -24,14 +24,15 @@ The agent should **play the game itself**, record gameplay, inspect problems, fi
 - Git branch `main`; initial commit `67e0bd6`, `Build Sector Control local MVP with recorded playtests`. Includes the recording feature.
 - Standalone PlayCanvas, strict TypeScript, Vite, Vitest, Ammo world raycasts, HTML/CSS UI. No React, backend, networking, or hosted editor.
 - User explicitly chose **local first; defer public deployment**.
-- Eight-minute 5v5: human plus four Blue bots versus five Red bots. Three sectors, one industrial map, one rifle, respawn, scoring, results, and restart. See SPEC.md for gameplay constants.
+- Default eight-minute 5v5 industrial match, plus the approved 25v25 trench prototype. Three sectors, one current rifle, respawn, scoring, results, and restart. See SPEC.md for gameplay constants.
 - Defenders reverse partial neutralization at the same rate. Enemy sectors need ten seconds to neutralize plus ten to capture. Empty progress persists; contests pause it.
 - Simulation and bots are engine independent. Headless collision is simplified and does not establish Ammo equivalence or GPU performance.
 
 ## Source map
 
 - `src/simulation.ts`: tick/state, commands/events, combat, objectives, scoring, respawn, waypoint A*, configurable bots, JSON-safe snapshots.
-- `src/map.ts`: geometry, spawns, objectives, movement footprint queries.
+- `src/map.ts`, `src/trench-map.ts`: map definitions, height fields/ramps, geometry, spawns, objectives, walking and mantle-landing queries.
+- `src/trench-map.test.ts`, `src/mantle.test.ts`: 50-soldier routes/match, deep cover/steps, mantle lifecycle and blocked actions.
 - `src/physics.ts`, `src/physics.test.ts`: explicit Ammo backend initialization and real-engine thin-wall/projectile regression.
 - `src/rendering.ts`: PlayCanvas/Ammo adapter, procedural map/characters, camera, interpolation, effects.
 - `src/main.ts`, `src/style.css`: input/pointer lock, HUD, menus, audio, loop, recorder integration.
@@ -49,7 +50,7 @@ npm run build
 
 The dev server previously ran on port 5173; check before starting another instance. Prefer **http://localhost:5173**, matching the user's explicit browsing permission exception. Vite may print 127.0.0.1 because of its bind setting; continue browsing the localhost origin because permissions are origin-specific.
 
-Latest validation: **32 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
+Current validation: **43 tests pass**, strict TypeScript passes, production build succeeds, dependency audit reported zero vulnerabilities. Vite warns about a large engine/Ammo bundle (roughly 4 MB raw / 973 KB gzip).
 
 Chrome localhost inspection now works. Recorded direct-input runs verified pointer lock/reacquisition with native Chrome clicks, held movement/sprint, mouse aim, automatic fire, reload, and death/respawn. Native video and JSON were saved and reviewed. An earlier rendered eight-minute autoplay match completed Blue 89 / Red 97 and restarted successfully, before the later projectile and Ammo initialization changes. Full manual eight-minute gameplay, Firefox, controlled GPU/frame profiling, and repeated-match memory stability remain unverified. See PLAYTEST_REVIEW.md for evidence and exact control limitations.
 

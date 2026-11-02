@@ -2,7 +2,8 @@ import "./style.css";
 import { Renderer } from "./rendering";
 import { Game, idle, botCommand, type Command, type Event } from "./simulation";
 import { PlaytestRecorder } from "./playtest";
-import { dist } from "./map";
+import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
+import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD</div><div id="ammo"></div></footer><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -20,7 +21,8 @@ let renderer: Renderer,
 const keys = new Set<string>();
 let fire = false,
   aim = false,
-  reload = false;
+  reload = false,
+  mantle = false;
 let audio: AudioContext | undefined;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
@@ -29,6 +31,19 @@ const params = new URLSearchParams(location.search),
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
 const duration = Number(params.get("duration") ?? 480);
+const map = params.get("map") === "trenches" ? trenchMap : industrialMap;
+const requestedTeamSize = Number(
+  params.get("teamSize") ?? (map.id === "trenches" ? 25 : 5),
+);
+if (map.terrain)
+  document.querySelector(".controls")!.textContent += "　 SPACE MANTLE";
+const teamSize = Math.max(
+  1,
+  Math.min(
+    25,
+    Math.round(requestedTeamSize) || (map.id === "trenches" ? 25 : 5),
+  ),
+);
 function sound(freq: number, length = 0.08, volume = 0.04) {
   if (!audio) return;
   const o = audio.createOscillator(),
@@ -51,6 +66,7 @@ function clear() {
   fire = false;
   aim = false;
   reload = false;
+  mantle = false;
 }
 function menu(
   title: string,
@@ -61,7 +77,7 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / INDUSTRIAL DISTRICT</div><h1>${title}</h1><p>${subtitle}</p>${extra}<button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
   el("primary").onclick = action;
 }
 function resume() {
@@ -86,6 +102,9 @@ function start() {
     Math.round(
       (Number.isFinite(duration) && duration > 0 ? duration : 480) * 30,
     ),
+    12345,
+    undefined,
+    { map, teamSize },
   );
   renderer.reset(game);
   if (params.has("playtest"))
@@ -94,7 +113,7 @@ function start() {
       Math.max(5, Math.min(120, Number(params.get("clip") ?? 60) || 60)),
       params.get("video") !== "0",
     );
-  yaw = 0;
+  yaw = game.players[0].yaw;
   pitch = 0;
   started = true;
   hitUntil = damageUntil = 0;
@@ -150,7 +169,20 @@ function handle(e: Event) {
   }
 }
 function table() {
-  return `<div class="table"><div class="row"><span>SOLDIER</span><span>K</span><span>D</span><span>CAP</span></div>${game.players.map((p) => `<div class="row ${p.team}"><span>${p.id === 0 ? "YOU" : `${p.team.toUpperCase()} ${p.id < 5 ? p.id + 1 : p.id - 4}`}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.captures}</span></div>`).join("")}</div>`;
+  if (game.teamSize > 8)
+    return `<div class="rosters">${(["blue", "red"] as const)
+      .map(
+        (team) =>
+          `<div class="table"><b class="${team}">${team.toUpperCase()} · ${game.players.filter((p) => p.team === team).length}</b><div class="row"><span>SOLDIER</span><span>K</span><span>D</span><span>CAP</span></div>${game.players
+            .filter((p) => p.team === team)
+            .map(
+              (p) =>
+                `<div class="row ${team}"><span>${p.id === 0 ? "YOU" : `${team.toUpperCase()} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.captures}</span></div>`,
+            )
+            .join("")}</div>`,
+      )
+      .join("")}</div>`;
+  return `<div class="table"><div class="row"><span>SOLDIER</span><span>K</span><span>D</span><span>CAP</span></div>${game.players.map((p) => `<div class="row ${p.team}"><span>${p.id === 0 ? "YOU" : `${p.team.toUpperCase()} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.captures}</span></div>`).join("")}</div>`;
 }
 function hud(now: number) {
   const p = game.players[0];
@@ -174,12 +206,20 @@ function hud(now: number) {
   if (sector)
     el("health").innerHTML +=
       `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : (sector.owner?.toUpperCase() ?? "NEUTRAL")}</small>`;
+  const ledge =
+    map.terrain &&
+    !p.mantle &&
+    mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, map);
   el("capture").innerHTML =
     p.hp <= 0
       ? `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
-      : sector
-        ? `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
-        : "";
+      : p.mantle
+        ? "<small>CLIMBING TRENCH EDGE</small>"
+        : ledge
+          ? "<small>SPACE · MANTLE TRENCH EDGE</small>"
+          : sector
+            ? `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
+            : "";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
   if (keys.has("Tab")) {
@@ -189,7 +229,11 @@ function hud(now: number) {
   } else el("scoreboard").classList.add("hidden");
   el("labels").innerHTML = game.sectors
     .map((s) => {
-      const v = renderer.project({ x: s.x, y: 4, z: s.z });
+      const v = renderer.project({
+        x: s.x,
+        y: groundHeight(s.x, s.z, map) + 4,
+        z: s.z,
+      });
       return v.z > 0
         ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")}" style="left:${v.x}px;top:${v.y}px">${s.id}<small>${s.contested ? "CONTESTED" : Math.round(dist(p, s)) + "m"}</small><div class="bar"><i class="${s.control < 0 ? "redbar" : ""}" style="width:${Math.abs(s.control) * 100}%"></i></div></div>`
         : "";
@@ -208,7 +252,9 @@ function command(): Command {
   c.fire = fire;
   c.aim = aim;
   c.reload = reload;
+  c.mantle = mantle;
   reload = false;
+  mantle = false;
   return c;
 }
 window.addEventListener("keydown", (e) => {
@@ -217,6 +263,7 @@ window.addEventListener("keydown", (e) => {
   if (paused) return;
   keys.add(e.code);
   if (e.code === "KeyR") reload = true;
+  if (e.code === "Space" && !e.repeat) mantle = true;
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 window.addEventListener("mousemove", (e) => {
@@ -289,17 +336,19 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 try {
-  renderer = new Renderer(document.querySelector("#game")!);
+  renderer = new Renderer(document.querySelector("#game")!, map);
   // Copy the WebGL surface while its drawing buffer is still available.
   renderer.app.on("postrender", () => {
     if (started) recording?.frame(game, rawFrameMs, paused);
   });
   menu(
-    "Sector Control",
-    "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
+    map.id === "trenches" ? "Trench front" : "Sector Control",
+    map.id === "trenches"
+      ? `Lead Blue through the communication trenches and ramps into no man’s land. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · three sectors · eight minutes.`
+      : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    '<div class="brief"><b>01 / CAPTURE</b><p>Hold sectors A, B, and C to earn points.</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>',
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / CAPTURE</b><p>Hold sectors A, B, and C to earn points.</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.${map.terrain ? " Press Space near a bank to climb up or down. Use raised firing steps to shoot from cover." : ""}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

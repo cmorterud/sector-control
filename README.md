@@ -23,6 +23,16 @@ npm run preview
 
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock. These do not change normal gameplay defaults.
 
+## Trench front prototype
+
+Choose **Trench front** on the start screen, or open [the 25v25 trench map](http://localhost:5173/?map=trenches). Blue has you plus 24 bots; Red has 25 bots. Industrial remains the default 5v5 map.
+
+The 160 × 128-meter battlefield has opposing zigzag front trenches, rear support trenches, communication routes, ramps, sandbags, wire, shell scars, and three objectives in no man's land. Trenches are **2.4 meters deep**: a standing soldier in the center stays below the bank. **1.05-meter firing steps** raise the rifle above the parapet. Ramps and exposed openings remain vulnerable to fire.
+
+Walk near an edge and press **Space** to mantle up or down. The prompt appears when facing a nearby ledge; movement direction takes priority while walking. A climb takes one second, checks foot/torso/head clearance and a stable landing, and pauses firing/capturing. It climbs terrain banks rather than buildings or solid cover. Bots can mantle too. The prototype retains the current assault rifle and visible traveling rounds; historical weapons are a separate design pass.
+
+For a log-only 50-soldier test: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`. Snapshots include map ID, team size, elevation, and active mantle state; `mantle` events record start/end and both endpoints. A death can interrupt a climb. `teamSize=1..25` changes the roster for experiments.
+
 ## Recorded playtests
 
 Open `http://localhost:5173/?playtest=1&autoplay=1&duration=60` and begin the operation. A bot drives the player through the real rendered game and collision adapter. The game records up to 60 seconds at 1280×720/30 FPS; `clip=120` raises the limit to two minutes. Omit `autoplay=1` to record manual play with normal pointer lock.
@@ -39,12 +49,12 @@ For simulation checks without video, open `http://localhost:5173/?playtest=1&vid
 
 All simulation uses 30 Hz ticks, plain serializable state, shared human/bot commands, typed events, and an injected collision boundary. `simulation.ts` runs in Node without PlayCanvas or a DOM. `map.ts` is the shared geometry and objective definition. `rendering.ts` adapts PlayCanvas/Ammo and procedural models. `main.ts` owns browser input, menus, audio, and the frame accumulator.
 
-The map is flat and axis aligned. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
+Industrial uses flat axis-aligned geometry. The trench map adds a shared height field, recessed floors, firing steps, and inclined ramps. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
 
 Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Rifle rounds visibly travel at 32 m/s, expire after 60 meters, and deal damage on impact. Teammates block rounds without taking damage; protection is checked when the round arrives. Reserve ammo is finite until respawn.
 
 ## Local release scope
 
-Primitive art, articulated block soldiers with bending knees/elbows, walking and sprinting motion, synthesized audio, one map, one weapon. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
+Primitive art, articulated block soldiers with bending knees/elbows, walking and sprinting motion, synthesized audio, two selectable maps, one weapon. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
 
 Use a WebGL 2 desktop browser. Manual release verification should include Chrome and Firefox, an eight-minute match, restarts, pointer-lock loss, movement against every obstacle, close-cover shooting, and 1080p frame/memory profiling on the target machine. Passing unit tests does not establish a GPU performance guarantee.

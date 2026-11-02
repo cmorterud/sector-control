@@ -1,6 +1,12 @@
 import * as pc from "playcanvas";
 import { createPhysicsWorld } from "./physics";
-import { boxes, blocked, type Vec } from "./map";
+import {
+  industrialMap,
+  groundHeight,
+  moveOnMap,
+  type MapDefinition,
+  type Vec,
+} from "./map";
 import {
   type CollisionWorld,
   type Game,
@@ -38,10 +44,16 @@ export class Renderer implements CollisionWorld {
   rings: pc.Entity[] = [];
   effects: { e: pc.Entity; life: number }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
-  previous: Vec[] = [];
+  previous: V3[] = [];
+  private mapBatch = -1;
+  private actorBatch = -1;
+  private batchGroup = -1;
   private projectiles = new Map<number, pc.Entity>();
   private previousProjectiles = new Map<number, V3>();
-  constructor(public canvas: HTMLCanvasElement) {
+  constructor(
+    public canvas: HTMLCanvasElement,
+    public map: MapDefinition = industrialMap,
+  ) {
     this.app = new pc.Application(canvas, {
       physicsWorld: createPhysicsWorld(),
       graphicsDeviceOptions: {
@@ -49,43 +61,127 @@ export class Renderer implements CollisionWorld {
         antialias: true,
       },
     });
+    this.mapBatch = this.app.batcher!.addGroup("static map", false, 200).id;
+    this.actorBatch = this.app.batcher!.addGroup(
+      "articulated soldiers",
+      true,
+      200,
+    ).id;
+    this.batchGroup = this.mapBatch;
+    const trenches = map.id === "trenches";
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
-    this.app.scene.ambientLight = color("#899294");
+    this.app.scene.ambientLight = color(trenches ? "#8b8c7e" : "#899294");
     this.app.scene.fog.type = "linear";
-    this.app.scene.fog.color = color("#9ca6a5");
+    this.app.scene.fog.color = color(trenches ? "#a2a18c" : "#9ca6a5");
     this.app.scene.fog.start = 35;
-    this.app.scene.fog.end = 115;
+    this.app.scene.fog.end = trenches ? 140 : 115;
     this.camera = new pc.Entity("camera");
     this.camera.addComponent("camera", {
-      clearColor: color("#9ca6a5"),
+      clearColor: color(trenches ? "#a2a18c" : "#9ca6a5"),
       fov: 70,
       nearClip: 0.08,
-      farClip: 180,
+      farClip: trenches ? 210 : 180,
     });
     this.app.root.addChild(this.camera);
     const sun = new pc.Entity("sun");
     sun.addComponent("light", {
       type: "directional",
       color: color("#ffdfa8"),
-      intensity: 1.5,
+      intensity: trenches ? 1.2 : 1.5,
       castShadows: true,
-      shadowDistance: 65,
+      shadowDistance: trenches ? 50 : 65,
       shadowResolution: 2048,
       shadowBias: 0.25,
       normalOffsetBias: 0.05,
     });
     sun.setEulerAngles(45, -35, 0);
     this.app.root.addChild(sun);
-    this.cube("ground", 0, -0.3, 0, 100, 0.6, 100, "#777d73", true);
-    for (const b of boxes) {
+    this.cube(
+      "ground",
+      0,
+      -0.3,
+      0,
+      map.width,
+      0.6,
+      map.depth,
+      trenches ? "#514330" : "#777d73",
+      true,
+    );
+    if (map.terrain) this.buildTrenchTerrain();
+    for (const b of map.boxes) {
       const c =
         b.kind === "building"
           ? "#707a79"
           : b.kind === "container"
             ? "#657b7b"
-            : "#aaa58d";
-      this.cube(b.kind, b.x, b.h / 2, b.z, b.w, b.h, b.d, c, true);
+            : b.kind === "bunker"
+              ? "#5c5040"
+              : trenches
+                ? "#9a8c6a"
+                : "#aaa58d";
+      const base = b.baseY ?? 0;
+      const obstacle = this.cube(
+        b.kind,
+        b.x,
+        base + b.h / 2,
+        b.z,
+        b.w,
+        b.h,
+        b.d,
+        c,
+        true,
+      );
+      if (b.kind === "wire") {
+        obstacle.render!.enabled = false;
+        for (let x = -b.w / 2; x <= b.w / 2; x += 2)
+          this.cube(
+            "wire stake",
+            b.x + x,
+            base + 0.45,
+            b.z,
+            0.12,
+            0.9,
+            0.12,
+            "#3e3930",
+          );
+        for (const y of [0.3, 0.65])
+          this.cube(
+            "wire strand",
+            b.x,
+            base + y,
+            b.z,
+            b.w,
+            0.04,
+            0.04,
+            "#474138",
+          );
+        for (let x = -b.w / 2 + 1; x < b.w / 2; x += 2) {
+          const barb = this.cube(
+            "barbed wire",
+            b.x + x,
+            base + 0.45,
+            b.z,
+            1.6,
+            0.04,
+            0.04,
+            "#474138",
+          );
+          barb.setEulerAngles(0, 0, x % 4 ? 24 : -24);
+        }
+      }
+      if (b.kind === "sandbag")
+        for (let x = -b.w / 2 + 1; x < b.w / 2; x += 1.2)
+          this.cube(
+            "bag seam",
+            b.x + x,
+            base + b.h / 2,
+            b.z - 0.01,
+            0.05,
+            b.h + 0.02,
+            b.d + 0.03,
+            "#807252",
+          );
       if (b.kind === "building") {
         this.cube(
           "roof",
@@ -123,20 +219,122 @@ export class Renderer implements CollisionWorld {
           );
     }
     for (const [x, z, w, d] of [
-      [0, -50, 101, 1],
-      [0, 50, 101, 1],
-      [-50, 0, 1, 100],
-      [50, 0, 1, 100],
+      [0, -map.depth / 2, map.width + 1, 1],
+      [0, map.depth / 2, map.width + 1, 1],
+      [-map.width / 2, 0, 1, map.depth],
+      [map.width / 2, 0, 1, map.depth],
     ])
-      this.cube("perimeter", x, 2, z, w, 4, d, "#666e69", true);
-    for (let i = -45; i < 50; i += 10) {
-      this.cube("road marking", i, 0.015, -1, 3, 0.02, 0.12, "#b8b29b");
-      this.cube("road marking", 1, 0.015, i, 0.12, 0.02, 3, "#b8b29b");
-    }
+      this.cube(
+        "perimeter",
+        x,
+        2,
+        z,
+        w,
+        4,
+        d,
+        trenches ? "#716650" : "#666e69",
+        true,
+      );
+    if (!trenches)
+      for (let i = -45; i < 50; i += 10) {
+        this.cube("road marking", i, 0.015, -1, 3, 0.02, 0.12, "#b8b29b");
+        this.cube("road marking", 1, 0.015, i, 0.12, 0.02, 3, "#b8b29b");
+      }
+    this.batchGroup = -1;
+    this.app.batcher!.generate([this.mapBatch]);
     window.addEventListener("resize", () => this.app.resizeCanvas());
     // Simulation calls collision queries synchronously; no automatic physics advancement.
     this.app.systems.rigidbody!.timeScale = 0;
     this.app.start();
+  }
+  private buildTrenchTerrain() {
+    const terrain = this.map.terrain!;
+    for (const patch of terrain.rectangles)
+      this.cube(
+        "earth bank",
+        patch.x,
+        patch.h / 2,
+        patch.z,
+        patch.w,
+        patch.h,
+        patch.d,
+        patch.h < terrain.bankHeight - 0.1 ? "#65513b" : "#736548",
+        true,
+      );
+    for (const ramp of terrain.ramps) {
+      const angle = Math.atan2(ramp.high - ramp.low, ramp.w);
+      const length = Math.hypot(ramp.w, ramp.high - ramp.low) + 0.12;
+      this.cube(
+        "trench ramp",
+        ramp.x,
+        (ramp.low + ramp.high) / 2 - 0.1 / Math.cos(angle),
+        ramp.z,
+        length,
+        0.2,
+        ramp.d,
+        ramp.high < terrain.bankHeight - 0.1 ? "#6b563c" : "#65533b",
+        true,
+        undefined,
+        (ramp.direction * angle * 180) / Math.PI,
+      );
+    }
+    for (const wall of terrain.lining) {
+      if (
+        terrain.ramps.some(
+          (r) =>
+            r.high === terrain.bankHeight &&
+            Math.abs(r.x - wall.x) < r.w / 2 + 0.2 &&
+            Math.abs(r.z - wall.z) < r.d / 2 + 4.5,
+        )
+      )
+        continue;
+      this.cube(
+        "timber trench lining",
+        wall.x,
+        terrain.bankHeight / 2,
+        wall.z,
+        wall.w,
+        terrain.bankHeight - 0.1,
+        wall.d,
+        "#65513d",
+      );
+      for (const dz of [-3, 0, 3])
+        this.cube(
+          "trench post",
+          wall.x,
+          terrain.bankHeight / 2,
+          wall.z + dz,
+          0.2,
+          terrain.bankHeight,
+          0.2,
+          "#493d2f",
+        );
+    }
+    for (const crater of terrain.craters) {
+      const disk = new pc.Entity("shell scar");
+      disk.addComponent("render", {
+        type: "cylinder",
+        material: this.material("#44392b"),
+        castShadows: false,
+        batchGroupId: this.mapBatch,
+      });
+      disk.setLocalScale(crater.radius * 2, 0.025, crater.radius * 2);
+      disk.setLocalPosition(crater.x, terrain.bankHeight + 0.015, crater.z);
+      this.app.root.addChild(disk);
+      for (let i = 0; i < 5; i++) {
+        const angle = (i * Math.PI * 2) / 5;
+        this.cube(
+          "crater rubble",
+          crater.x + Math.sin(angle) * crater.radius,
+          terrain.bankHeight + 0.16,
+          crater.z + Math.cos(angle) * crater.radius,
+          0.7,
+          0.32,
+          0.65,
+          "#807052",
+        );
+      }
+    }
   }
   material(c: string) {
     if (!this.materials.has(c)) {
@@ -159,6 +357,7 @@ export class Renderer implements CollisionWorld {
     c: string,
     solid = false,
     parent?: pc.Entity,
+    rotationZ = 0,
   ) {
     const e = new pc.Entity(name);
     e.addComponent("render", {
@@ -166,9 +365,11 @@ export class Renderer implements CollisionWorld {
       material: this.material(c),
       castShadows: true,
       receiveShadows: true,
+      batchGroupId: this.batchGroup,
     });
     e.setLocalPosition(x, y, z);
     e.setLocalScale(w, h, d);
+    e.setLocalEulerAngles(0, 0, rotationZ);
     (parent ?? this.app.root).addChild(e);
     if (solid) {
       e.addComponent("collision", {
@@ -190,16 +391,7 @@ export class Renderer implements CollisionWorld {
       : 1;
   }
   move(p: Vec, d: Vec) {
-    // Flat, axis-aligned map: conservative capsule footprint swept in short substeps.
-    // The same map colliders are registered with PlayCanvas/Ammo for rays and camera queries.
-    const n = Math.max(1, Math.ceil(Math.hypot(d.x, d.z) / 0.15));
-    let x = p.x,
-      z = p.z;
-    for (let i = 0; i < n; i++) {
-      if (!blocked(x + d.x / n, z, 0.45)) x += d.x / n;
-      if (!blocked(x, z + d.z / n, 0.45)) z += d.z / n;
-    }
-    return { x, z };
+    return moveOnMap(p, d, this.map);
   }
   private joint(name: string, parent: pc.Entity, x = 0, y = 0, z = 0) {
     const joint = new pc.Entity(name);
@@ -209,6 +401,8 @@ export class Renderer implements CollisionWorld {
   }
   private createSoldier(p: Soldier) {
     const root = this.joint(`soldier-${p.id}`, this.app.root);
+    root.setPosition(p.x, p.y, p.z);
+    root.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
     const body = this.joint("body", root, 0, 0.94);
     const hips = this.joint("hips", body);
     const upper = this.joint("upper body", body, 0, 0.08);
@@ -479,6 +673,15 @@ export class Renderer implements CollisionWorld {
       0,
       p.reloadAt ? 12 : 0,
     );
+    if (p.mantle) {
+      rig.body.setLocalEulerAngles(-22, 0, 0);
+      rig.hips.setLocalEulerAngles(0, 0, 0);
+      rig.legs[0].hip.setLocalEulerAngles(65, 0, 0);
+      rig.legs[0].knee.setLocalEulerAngles(-85, 0, 0);
+      rig.legs[1].hip.setLocalEulerAngles(25, 0, 0);
+      rig.legs[1].knee.setLocalEulerAngles(-50, 0, 0);
+      rig.rifle.setLocalEulerAngles(-25, 0, 0);
+    }
     this.attachSupportArm(rig);
   }
   reset(g: Game) {
@@ -496,11 +699,14 @@ export class Renderer implements CollisionWorld {
     this.effects = [];
     this.remember(g);
     this.soldiers = [];
+    this.batchGroup = this.actorBatch;
     for (const p of g.players) this.createSoldier(p);
+    this.batchGroup = -1;
+    this.app.batcher!.generate([this.actorBatch]);
     for (const s of g.sectors) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
-      ring.setPosition(s.x, 0.04, s.z);
+      ring.setPosition(s.x, groundHeight(s.x, s.z, this.map) + 0.04, s.z);
       for (let i = 0; i < 64; i++) {
         const a = (i / 64) * Math.PI * 2;
         const e = this.cube(
@@ -522,7 +728,7 @@ export class Renderer implements CollisionWorld {
     }
   }
   remember(g: Game) {
-    this.previous = g.players.map((p) => ({ x: p.x, z: p.z }));
+    this.previous = g.players.map((p) => ({ x: p.x, y: p.y, z: p.z }));
     this.previousProjectiles = new Map(
       g.projectiles.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
     );
@@ -534,7 +740,7 @@ export class Renderer implements CollisionWorld {
         teleported = Math.hypot(previous.x - p.x, previous.z - p.z) > 2;
       e.setPosition(
         teleported ? p.x : previous.x + (p.x - previous.x) * alpha,
-        0,
+        teleported ? p.y : previous.y + (p.y - previous.y) * alpha,
         teleported ? p.z : previous.z + (p.z - previous.z) * alpha,
       );
       e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
@@ -542,7 +748,7 @@ export class Renderer implements CollisionWorld {
       this.animateSoldier(p, position.x, position.z, dt, g.tick);
       if (p.hp <= 0) {
         e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 85);
-        e.setPosition(p.x, 0.25, p.z);
+        e.setPosition(p.x, p.y + 0.25, p.z);
       }
     }
     for (let i = 0; i < g.sectors.length; i++) {
@@ -565,10 +771,10 @@ export class Renderer implements CollisionWorld {
         z: -Math.cos(p.yaw) * Math.cos(p.pitch),
       };
     const visual = this.people[0].getPosition();
-    const pivot = { x: visual.x, y: 1.65, z: visual.z },
+    const pivot = { x: visual.x, y: visual.y + 1.65, z: visual.z },
       desired = {
         x: visual.x - dir.x * d + Math.cos(p.yaw) * 0.65,
-        y: 2.5 - dir.y * d,
+        y: visual.y + 2.5 - dir.y * d,
         z: visual.z - dir.z * d + Math.sin(p.yaw) * 0.65,
       },
       f = this.ray(pivot, desired) * 0.95;

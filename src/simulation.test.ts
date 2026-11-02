@@ -96,6 +96,16 @@ describe("combat and lifecycle", () => {
     expect(enemy.ammo).toBe(30);
     expect(enemy.protectedUntil).toBe(g.tick + 60);
   });
+  it("counts a single death when several traveling rounds arrive on the same tick", () => {
+    const { g, p, enemy } = scene();
+    enemy.hp = 25;
+    g.fire(p);
+    g.fire(p);
+    advance(g, 15);
+    expect(enemy.hp).toBe(0);
+    expect(enemy.deaths).toBe(1);
+    expect(p.kills).toBe(1);
+  });
   it("blocks friendly fire and damage during protection", () => {
     const { g, p, enemy } = scene();
     enemy.team = "blue";

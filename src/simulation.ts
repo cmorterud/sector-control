@@ -1,4 +1,14 @@
-import { blocked, dist, sectors, spawn, type Vec } from "./map";
+import {
+  blocked,
+  dist,
+  industrialMap,
+  groundHeight,
+  moveOnMap,
+  mantleLanding,
+  walkSegment,
+  type Vec,
+  type MapDefinition,
+} from "./map";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
@@ -14,6 +24,7 @@ export interface Command {
   aim: boolean;
   fire: boolean;
   reload: boolean;
+  mantle: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -24,6 +35,7 @@ export const idle = (): Command => ({
   aim: false,
   fire: false,
   reload: false,
+  mantle: false,
 });
 export const projectileSpeed = 32;
 export const projectileRange = 60;
@@ -37,7 +49,39 @@ export interface Projectile extends V3 {
   remaining: number;
   bornAt: number;
 }
+export interface Mantle {
+  from: V3;
+  to: V3;
+  startTick: number;
+  endTick: number;
+}
+export function mantlePosition(m: Mantle, tick: number): V3 {
+  const t = Math.max(
+    0,
+    Math.min(1, (tick - m.startTick) / (m.endTick - m.startTick)),
+  );
+  const up = m.to.y > m.from.y;
+  const riseEnd = up ? 0.4 : 0.1,
+    crossEnd = up ? 0.8 : 0.6;
+  const top = Math.max(m.from.y, m.to.y) + 0.12;
+  const cross = Math.max(0, Math.min(1, (t - riseEnd) / (crossEnd - riseEnd)));
+  const y =
+    t < riseEnd
+      ? m.from.y + ((top - m.from.y) * t) / riseEnd
+      : t < crossEnd
+        ? top
+        : top + ((m.to.y - top) * (t - crossEnd)) / (1 - crossEnd);
+  return {
+    x: m.from.x + (m.to.x - m.from.x) * cross,
+    y,
+    z: m.from.z + (m.to.z - m.from.z) * cross,
+  };
+}
 export interface Soldier extends Vec {
+  y: number;
+  teamIndex: number;
+  mantle: Mantle | null;
+  nextMantle: number;
   id: number;
   team: Team;
   hp: number;
@@ -94,6 +138,7 @@ export type Event = { id: number; tick: number } & (
     }
   | { type: "damage"; actor: number; source: number }
   | { type: "death" | "respawn" | "reload"; actor: number }
+  | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
   | { type: "contested"; sector: string }
   | { type: "score" }
@@ -105,18 +150,39 @@ type EventInput = Event extends infer E
     : never
   : never;
 export class TestCollision implements CollisionWorld {
+  constructor(public map: MapDefinition = industrialMap) {}
   move(p: Vec, d: Vec): Vec {
+    if (this.map.terrain) return moveOnMap(p, d, this.map);
     let x = p.x,
       z = p.z;
-    if (!blocked(x + d.x, z)) x += d.x;
-    if (!blocked(x, z + d.z)) z += d.z;
+    if (!blocked(x + d.x, z, 0.5, this.map)) x += d.x;
+    if (!blocked(x, z + d.z, 0.5, this.map)) z += d.z;
     return { x, z };
   }
   ray(a: V3, b: V3): number {
-    const n = Math.ceil(dist(a, b) * 5);
+    const n = Math.max(
+      1,
+      Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) * 5),
+    );
     for (let i = 1; i <= n; i++) {
-      const t = i / n;
-      if (blocked(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, 0)) return t;
+      const t = i / n,
+        x = a.x + (b.x - a.x) * t,
+        y = a.y + (b.y - a.y) * t,
+        z = a.z + (b.z - a.z) * t;
+      if (
+        y < groundHeight(x, z, this.map) ||
+        (y < 4 &&
+          (Math.abs(x) > this.map.width / 2 - 0.5 ||
+            Math.abs(z) > this.map.depth / 2 - 0.5)) ||
+        this.map.boxes.some(
+          (box) =>
+            y >= (box.baseY ?? 0) &&
+            y <= (box.baseY ?? 0) + box.h &&
+            Math.abs(x - box.x) < box.w / 2 &&
+            Math.abs(z - box.z) < box.d / 2,
+        )
+      )
+        return t;
     }
     return 1;
   }
@@ -172,12 +238,9 @@ export class Game {
   players: Soldier[] = [];
   projectiles: Projectile[] = [];
   projectileSequence = 0;
-  sectors: Sector[] = sectors.map((s) => ({
-    ...s,
-    control: 0,
-    owner: null,
-    contested: false,
-  }));
+  sectors: Sector[];
+  readonly map: MapDefinition;
+  readonly teamSize: number;
   events: Event[] = [];
   sequence = 0;
   seed: number;
@@ -187,14 +250,30 @@ export class Game {
     duration = 14400,
     seed = 12345,
     public botSettings: BotSettings = { ...defaultBotSettings },
+    options: { map?: MapDefinition; teamSize?: number } = {},
   ) {
+    this.map = options.map ?? industrialMap;
+    const requested = options.teamSize ?? 5;
+    this.teamSize = bots
+      ? clamp(Number.isFinite(requested) ? Math.round(requested) : 5, 1, 25)
+      : 1;
+    this.sectors = this.map.sectors.map((s) => ({
+      ...s,
+      control: 0,
+      owner: null,
+      contested: false,
+    }));
     this.duration = duration;
     this.seed = seed;
-    for (let i = 0; i < (bots ? 10 : 1); i++) {
-      const team: Team = i < 5 ? "blue" : "red";
+    for (let i = 0; i < (bots ? this.teamSize * 2 : 1); i++) {
+      const team: Team = i < this.teamSize ? "blue" : "red";
       this.players.push({
         id: i,
         team,
+        teamIndex: i % this.teamSize,
+        mantle: null,
+        nextMantle: 0,
+        y: 0,
         x: 0,
         z: 0,
         hp: 100,
@@ -229,6 +308,8 @@ export class Game {
   snapshot() {
     return structuredClone({
       tick: this.tick,
+      mapId: this.map.id,
+      teamSize: this.teamSize,
       duration: this.duration,
       phase: this.phase,
       winner: this.winner,
@@ -245,13 +326,29 @@ export class Game {
     this.events.push({ ...e, id: ++this.sequence, tick: this.tick } as Event);
   }
   respawn(p: Soldier) {
-    const s = spawn[p.team];
-    p.x = s.x + ((p.id % 5) - 2) * 1.8;
-    p.z = s.z;
+    const s = this.map.spawn[p.team];
+    if (this.teamSize <= 5 && !this.map.terrain) {
+      p.x = s.x + (p.teamIndex - 2) * 1.8;
+      p.z = s.z;
+    } else {
+      const columns = Math.ceil(Math.sqrt(this.teamSize));
+      const rows = Math.ceil(this.teamSize / columns);
+      p.x = s.x + ((p.teamIndex % columns) - (columns - 1) / 2) * 1.8;
+      p.z = s.z + (Math.floor(p.teamIndex / columns) - (rows - 1) / 2) * 1.8;
+    }
+    p.y = groundHeight(p.x, p.z, this.map);
+    p.yaw =
+      this.map.id === "trenches"
+        ? p.team === "blue"
+          ? Math.PI / 2
+          : -Math.PI / 2
+        : 0;
     p.hp = 100;
     p.ammo = 30;
     p.reserve = 120;
     p.reloadAt = 0;
+    p.mantle = null;
+    p.nextMantle = this.tick;
     p.vx = 0;
     p.vz = 0;
     p.nextShot = this.tick;
@@ -259,7 +356,7 @@ export class Game {
     p.path = [];
     p.target = -1;
     p.mode = "Navigate";
-    p.nextThink = 0;
+    p.nextThink = this.tick + (p.teamIndex % 30);
     p.command = idle();
     this.emit({ type: "respawn", actor: p.id });
   }
@@ -276,20 +373,45 @@ export class Game {
       const c = p.command;
       p.yaw = c.yaw;
       p.pitch = clamp(c.pitch, -1.1, 1.1);
-      const len = Math.max(1, Math.hypot(c.x, c.z)),
-        speed = c.sprint && !c.aim ? 7 : 4.5;
-      p.vx += ((c.x / len) * speed - p.vx) * 0.24;
-      p.vz += ((c.z / len) * speed - p.vz) * 0.24;
-      const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
-      p.x = pos.x;
-      p.z = pos.z;
+      if (c.mantle && !p.mantle) this.startMantle(p, c);
+      if (p.mantle) {
+        const m = p.mantle;
+        Object.assign(p, mantlePosition(m, this.tick));
+        p.vx = p.vz = 0;
+        p.mode = "Mantle";
+        if (this.tick >= m.endTick) {
+          p.mantle = null;
+          this.emit({
+            type: "mantle",
+            actor: p.id,
+            phase: "end",
+            from: m.from,
+            to: m.to,
+          });
+        }
+      } else {
+        const len = Math.max(1, Math.hypot(c.x, c.z)),
+          speed = c.sprint && !c.aim ? 7 : 4.5;
+        p.vx += ((c.x / len) * speed - p.vx) * 0.24;
+        p.vz += ((c.z / len) * speed - p.vz) * 0.24;
+        const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
+        p.x = pos.x;
+        p.z = pos.z;
+        p.y = groundHeight(p.x, p.z, this.map);
+      }
       if (p.reloadAt && this.tick >= p.reloadAt) {
         const n = Math.min(30 - p.ammo, p.reserve);
         p.ammo += n;
         p.reserve -= n;
         p.reloadAt = 0;
       }
-      if (c.reload && !p.reloadAt && p.ammo < 30 && p.reserve > 0) {
+      if (
+        c.reload &&
+        !p.mantle &&
+        !p.reloadAt &&
+        p.ammo < 30 &&
+        p.reserve > 0
+      ) {
         p.reloadAt = this.tick + 60;
         this.emit({ type: "reload", actor: p.id });
       }
@@ -297,6 +419,7 @@ export class Game {
     for (const p of this.players)
       if (
         p.hp > 0 &&
+        !p.mantle &&
         p.command.fire &&
         !p.reloadAt &&
         p.ammo > 0 &&
@@ -305,7 +428,9 @@ export class Game {
         this.fire(p);
     this.advanceProjectiles();
     for (const s of this.sectors) {
-      const occupants = this.players.filter((p) => p.hp > 0 && dist(p, s) <= 8),
+      const occupants = this.players.filter(
+          (p) => p.hp > 0 && !p.mantle && dist(p, s) <= 8,
+        ),
         was = s.contested;
       const team = capture(
         s,
@@ -334,6 +459,45 @@ export class Game {
       this.emit({ type: "end", winner: this.winner });
     }
   }
+  private startMantle(p: Soldier, c: Command) {
+    if (this.tick < p.nextMantle) return;
+    const direction =
+      Math.hypot(c.x, c.z) > 0.1
+        ? c
+        : { x: Math.sin(c.yaw), z: -Math.cos(c.yaw) };
+    const landing = mantleLanding(p, direction, this.map);
+    if (!landing) return;
+    const m: Mantle = {
+      from: { x: p.x, y: p.y, z: p.z },
+      to: { ...landing, y: groundHeight(landing.x, landing.z, this.map) },
+      startTick: this.tick,
+      endTick: this.tick + 30,
+    };
+    let previous = m.from;
+    // Sweep feet, torso, and head through the climb before accepting the action.
+    for (let i = 1; i <= 20; i++) {
+      const next = mantlePosition(m, this.tick + i * 1.5);
+      for (const height of [0.1, 0.8, 1.8])
+        if (
+          this.collision.ray(
+            { ...previous, y: previous.y + height },
+            { ...next, y: next.y + height },
+          ) < 0.99
+        )
+          return;
+      previous = next;
+    }
+    p.mantle = m;
+    p.nextMantle = m.endTick + 15;
+    p.vx = p.vz = 0;
+    this.emit({
+      type: "mantle",
+      actor: p.id,
+      phase: "start",
+      from: m.from,
+      to: m.to,
+    });
+  }
   fire(p: Soldier) {
     p.ammo--;
     p.nextShot = this.tick + 3;
@@ -343,11 +507,11 @@ export class Game {
       y: Math.sin(p.pitch),
       z: -Math.cos(p.yaw) * Math.cos(p.pitch),
     };
-    const pivot = { x: p.x, y: 1.65, z: p.z },
+    const pivot = { x: p.x, y: p.y + 1.65, z: p.z },
       distance = p.command.aim ? 2.5 : 4;
     const desired = {
       x: p.x - dir.x * distance + Math.cos(p.yaw) * 0.65,
-      y: 2.5 - dir.y * distance,
+      y: p.y + 2.5 - dir.y * distance,
       z: p.z - dir.z * distance + Math.sin(p.yaw) * 0.65,
     };
     const f = this.collision.ray(pivot, desired) * 0.95;
@@ -370,7 +534,7 @@ export class Game {
         for (const y of [0.6, 1.1, 1.6])
           first = Math.min(
             first,
-            raySphere(camera, aim, { x: q.x, y, z: q.z }, 0.38),
+            raySphere(camera, aim, { x: q.x, y: q.y + y, z: q.z }, 0.38),
           );
     aim = {
       x: camera.x + (aim.x - camera.x) * first,
@@ -379,7 +543,7 @@ export class Game {
     };
     const from = {
       x: p.x + Math.cos(p.yaw) * 0.32 + dir.x * 1.08,
-      y: 1.45,
+      y: p.y + 1.45,
       z: p.z + Math.sin(p.yaw) * 0.32 + dir.z * 1.08,
     };
     const length = Math.max(
@@ -413,7 +577,12 @@ export class Game {
     for (const q of this.players)
       if (q !== p && q.hp > 0)
         for (const y of [0.6, 1.1, 1.6]) {
-          const t = raySphere(pivot, from, { x: q.x, y, z: q.z }, 0.38);
+          const t = raySphere(
+            pivot,
+            from,
+            { x: q.x, y: q.y + y, z: q.z },
+            0.38,
+          );
           if (t < obstruction) {
             obstruction = t;
             muzzleVictim = q;
@@ -434,6 +603,14 @@ export class Game {
   }
   private advanceProjectiles() {
     const active: Projectile[] = [];
+    const cells = new Map<string, Soldier[]>();
+    for (const p of this.players)
+      if (p.hp > 0) {
+        const key = `${Math.floor(p.x / 4)},${Math.floor(p.z / 4)}`;
+        const list = cells.get(key);
+        if (list) list.push(p);
+        else cells.set(key, [p]);
+      }
     for (const shot of this.projectiles) {
       // A newly fired round starts at the muzzle at this tick's boundary.
       if (shot.bornAt === this.tick) {
@@ -449,15 +626,30 @@ export class Game {
       };
       let nearest = this.collision.ray(from, to);
       let victim: Soldier | undefined;
-      for (const q of this.players)
-        if (q.id !== shot.actor && q.hp > 0)
-          for (const y of [0.6, 1.1, 1.6]) {
-            const t = raySphere(from, to, { x: q.x, y, z: q.z }, 0.38);
-            if (t < nearest) {
-              nearest = t;
-              victim = q;
-            }
-          }
+      for (
+        let cx = Math.floor((Math.min(from.x, to.x) - 0.38) / 4);
+        cx <= Math.floor((Math.max(from.x, to.x) + 0.38) / 4);
+        cx++
+      )
+        for (
+          let cz = Math.floor((Math.min(from.z, to.z) - 0.38) / 4);
+          cz <= Math.floor((Math.max(from.z, to.z) + 0.38) / 4);
+          cz++
+        )
+          for (const q of cells.get(`${cx},${cz}`) ?? [])
+            if (q.id !== shot.actor && q.hp > 0)
+              for (const y of [0.6, 1.1, 1.6]) {
+                const t = raySphere(
+                  from,
+                  to,
+                  { x: q.x, y: q.y + y, z: q.z },
+                  0.38,
+                );
+                if (t < nearest) {
+                  nearest = t;
+                  victim = q;
+                }
+              }
       shot.x = from.x + (to.x - from.x) * nearest;
       shot.y = from.y + (to.y - from.y) * nearest;
       shot.z = from.z + (to.z - from.z) * nearest;
@@ -483,6 +675,8 @@ export class Game {
         victim.respawnAt = this.tick + 150;
         victim.mode = "Respawn";
         victim.reloadAt = 0;
+        victim.mantle = null;
+        victim.y = groundHeight(victim.x, victim.z, this.map);
         this.emit({ type: "death", actor: victim.id });
       }
     }
@@ -496,31 +690,51 @@ export class Game {
     });
   }
 }
-// A fixed waypoint lattice forms a graph; edges are checked against expanded obstacles.
-const nodes: Vec[] = [];
-for (let x = -45; x <= 45; x += 5)
-  for (let z = -45; z <= 45; z += 5)
-    if (!blocked(x, z, 0.7)) nodes.push({ x, z });
-function clear(a: Vec, b: Vec) {
-  const n = Math.ceil(dist(a, b) / 0.4);
-  for (let i = 0; i <= n; i++)
-    if (blocked(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n, 0.6))
-      return false;
-  return true;
+// Each map owns a cached height-aware navigation graph.
+const navigation = new WeakMap<
+  MapDefinition,
+  { nodes: Vec[]; edges: number[][] }
+>();
+function graph(map: MapDefinition) {
+  const cached = navigation.get(map);
+  if (cached) return cached;
+  const step = map.navSpacing,
+    nodes: Vec[] = [],
+    lookup = new Map<string, number>();
+  for (let x = -map.width / 2 + step; x <= map.width / 2 - step; x += step)
+    for (let z = -map.depth / 2 + step; z <= map.depth / 2 - step; z += step)
+      if (!blocked(x, z, 0.7, map)) {
+        lookup.set(`${x},${z}`, nodes.length);
+        nodes.push({ x, z });
+      }
+  const edges = nodes.map((a) => {
+    const result: number[] = [];
+    for (const dx of [-step, 0, step])
+      for (const dz of [-step, 0, step]) {
+        if (!dx && !dz) continue;
+        const index = lookup.get(`${a.x + dx},${a.z + dz}`);
+        if (index !== undefined && walkSegment(a, nodes[index], map))
+          result.push(index);
+      }
+    return result;
+  });
+  const result = { nodes, edges };
+  navigation.set(map, result);
+  return result;
 }
-const edges = nodes.map((a) =>
-  nodes
-    .map((b, i) => ({ b, i }))
-    .filter(({ b }) => dist(a, b) > 0 && dist(a, b) < 7.2 && clear(a, b))
-    .map(({ i }) => i),
-);
-export function pathfind(a: Vec, b: Vec): Vec[] {
-  if (clear(a, b)) return [{ ...b }];
+export function pathfind(
+  a: Vec,
+  b: Vec,
+  map: MapDefinition = industrialMap,
+): Vec[] {
+  if (walkSegment(a, b, map)) return [{ ...b }];
+  const { nodes, edges } = graph(map);
   const closest = (p: Vec) =>
     nodes
       .map((n, i) => ({ i, d: dist(n, p) }))
-      .filter(({ i }) => clear(p, nodes[i]))
-      .sort((x, y) => x.d - y.d)[0]?.i;
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 48)
+      .find(({ i }) => walkSegment(p, nodes[i], map))?.i;
   const start = closest(a),
     goal = closest(b);
   if (start === undefined || goal === undefined) return [];
@@ -528,27 +742,29 @@ export function pathfind(a: Vec, b: Vec): Vec[] {
     came = new Map<number, number>(),
     cost = new Map([[start, 0]]);
   while (open.size) {
-    const u = [...open].sort(
-      (x, y) =>
-        cost.get(x)! +
-        dist(nodes[x], nodes[goal]) -
-        (cost.get(y)! + dist(nodes[y], nodes[goal])),
-    )[0];
+    let u = -1,
+      best = Infinity;
+    for (const index of open) {
+      const score = cost.get(index)! + dist(nodes[index], nodes[goal]);
+      if (score < best) {
+        best = score;
+        u = index;
+      }
+    }
     if (u === goal) {
       const out = [{ ...b }, nodes[u]];
-      let k = u;
-      while (came.has(k)) {
-        k = came.get(k)!;
-        out.push(nodes[k]);
+      while (came.has(u)) {
+        u = came.get(u)!;
+        out.push(nodes[u]);
       }
       return out.reverse();
     }
     open.delete(u);
     for (const v of edges[u]) {
-      const g = cost.get(u)! + dist(nodes[u], nodes[v]);
-      if (g < (cost.get(v) ?? Infinity)) {
+      const next = cost.get(u)! + dist(nodes[u], nodes[v]);
+      if (next < (cost.get(v) ?? Infinity)) {
         came.set(v, u);
-        cost.set(v, g);
+        cost.set(v, next);
         open.add(v);
       }
     }
@@ -573,22 +789,33 @@ export function botCommand(g: Game, p: Soldier): Command {
           14,
     }));
     ranks.sort((a, b) => a.weight - b.weight);
-    p.objective = ranks[0].i;
-    p.path = pathfind(p, g.sectors[p.objective]);
+    const current = ranks.find((rank) => rank.i === p.objective)!;
+    if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
+    p.path = pathfind(p, g.sectors[p.objective], g.map);
   }
   if (g.tick % 3 === p.id % 3) {
-    const target = g.players
-      .filter(
-        (q) =>
-          q.team !== p.team &&
-          q.hp > 0 &&
-          dist(q, p) < g.botSettings.engagementRange &&
-          g.collision.ray(
-            { x: p.x, y: 1.6, z: p.z },
-            { x: q.x, y: 1.2, z: q.z },
-          ) > 0.99,
-      )
-      .sort((a, b) => dist(a, p) - dist(b, p))[0];
+    const visible = (q: Soldier) =>
+      q.team !== p.team &&
+      q.hp > 0 &&
+      dist(q, p) < g.botSettings.engagementRange &&
+      g.collision.ray(
+        { x: p.x, y: p.y + 1.45, z: p.z },
+        { x: q.x, y: q.y + 1.25, z: q.z },
+      ) > 0.99;
+    const existing = g.players.find((q) => q.id === p.target);
+    const target =
+      existing && visible(existing)
+        ? existing
+        : g.players
+            .filter(
+              (q) =>
+                q.team !== p.team &&
+                q.hp > 0 &&
+                dist(q, p) < g.botSettings.engagementRange,
+            )
+            .sort((a, b) => dist(a, p) - dist(b, p))
+            .slice(0, 6)
+            .find(visible);
     if ((target?.id ?? -1) !== p.target) {
       p.target = target?.id ?? -1;
       p.spottedAt = g.tick;
@@ -629,20 +856,20 @@ export function botCommand(g: Game, p: Soldier): Command {
       aimZ = rz + target.vz * lead;
     const aimDistance = Math.hypot(aimX, aimZ);
     const aimYaw = Math.atan2(aimX, -aimZ);
-    let eyeHeight = 1.65,
+    let eyeHeight = p.y + 1.65,
       shoulderOffset = 0;
     if (p.id === 0) {
       // The optional player driver aims through the same shoulder camera as a human.
-      const pitch = Math.atan2(1.25 - 2.5, aimDistance);
+      const pitch = Math.atan2(target.y + 1.25 - (p.y + 2.5), aimDistance);
       const f =
         g.collision.ray(
-          { x: p.x, y: 1.65, z: p.z },
+          { x: p.x, y: p.y + 1.65, z: p.z },
           {
             x:
               p.x -
               Math.sin(aimYaw) * Math.cos(pitch) * 2.5 +
               Math.cos(aimYaw) * 0.65,
-            y: 2.5 - Math.sin(pitch) * 2.5,
+            y: p.y + 2.5 - Math.sin(pitch) * 2.5,
             z:
               p.z +
               Math.cos(aimYaw) * Math.cos(pitch) * 2.5 +
@@ -656,7 +883,8 @@ export function botCommand(g: Game, p: Soldier): Command {
       aimYaw -
       Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
       jitter;
-    c.pitch = Math.atan2(1.25 - eyeHeight, aimDistance) + jitter * 0.6;
+    c.pitch =
+      Math.atan2(target.y + 1.25 - eyeHeight, aimDistance) + jitter * 0.6;
     c.aim = true;
     c.sprint = false;
     c.fire =
@@ -670,5 +898,15 @@ export function botCommand(g: Game, p: Soldier): Command {
       p.mode = "Reposition";
     }
   } else if (Math.hypot(c.x, c.z) > 0.1) c.yaw = Math.atan2(c.x, -c.z);
+  if (
+    g.map.terrain &&
+    !p.mantle &&
+    g.tick >= p.nextMantle &&
+    Math.abs(p.x) < 34 &&
+    g.tick % 6 === p.id % 6
+  ) {
+    const landing = mantleLanding(p, c, g.map);
+    c.mantle = !!landing && dist(landing, objective) + 0.3 < dist(p, objective);
+  }
   return c;
 }
