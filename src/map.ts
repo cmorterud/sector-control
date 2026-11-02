@@ -150,23 +150,28 @@ export function walkSegment(
 export const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.z - b.z);
 
 // Mantles apply to terrain ledges. Solid cover is never treated as a climbable bank.
-export function mantleLanding(
+export function mantleRoute(
   p: Vec,
   direction: Vec,
   map: MapDefinition,
-): Vec | null {
+): { landing: Vec; edge: Vec } | null {
   if (!map.terrain) return null;
   const length = Math.hypot(direction.x, direction.z);
   if (length < 0.1) return null;
   const dx = direction.x / length,
     dz = direction.z / length;
   const fromHeight = groundHeight(p.x, p.z, map);
+  let previousHeight = fromHeight;
   for (let distance = 0.15; distance <= 1.35; distance += 0.15) {
     const x = p.x + dx * distance,
       z = p.z + dz * distance;
     if (blocked(x, z, 0.45, map)) return null;
-    const rise = groundHeight(x, z, map) - fromHeight;
-    if (Math.abs(rise) < 0.3) continue;
+    const nextHeight = groundHeight(x, z, map);
+    const step = nextHeight - previousHeight;
+    previousHeight = nextHeight;
+    const rise = nextHeight - fromHeight;
+    // Walkable slopes are not ledges; Space on a ramp should hop normally.
+    if (Math.abs(step) < 0.3) continue;
     if (Math.abs(rise) > 2.5) return null;
     const landing = { x: x + dx * 0.85, z: z + dz * 0.85 };
     const height = groundHeight(landing.x, landing.z, map);
@@ -185,7 +190,15 @@ export function mantleLanding(
           0.12
       )
         return null;
-    return landing;
+    return { landing, edge: { x, z } };
   }
   return null;
+}
+
+export function mantleLanding(
+  p: Vec,
+  direction: Vec,
+  map: MapDefinition,
+): Vec | null {
+  return mantleRoute(p, direction, map)?.landing ?? null;
 }

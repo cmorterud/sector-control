@@ -35,8 +35,7 @@ const map = params.get("map") === "trenches" ? trenchMap : industrialMap;
 const requestedTeamSize = Number(
   params.get("teamSize") ?? (map.id === "trenches" ? 25 : 5),
 );
-if (map.terrain)
-  document.querySelector(".controls")!.textContent += "　 SPACE MANTLE";
+document.querySelector(".controls")!.textContent += "　 SPACE HOP / MANTLE";
 const teamSize = Math.max(
   1,
   Math.min(
@@ -209,6 +208,7 @@ function hud(now: number) {
   const ledge =
     map.terrain &&
     !p.mantle &&
+    !p.hop &&
     mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, map);
   el("capture").innerHTML =
     p.hp <= 0
@@ -348,7 +348,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / CAPTURE</b><p>Hold sectors A, B, and C to earn points.</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.${map.terrain ? " Press Space near a bank to climb up or down. Use raised firing steps to shoot from cover." : ""}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / CAPTURE</b><p>Hold sectors A, B, and C to earn points.</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

@@ -141,7 +141,7 @@ describe("trench prototype", () => {
           expect(p.y).toBeCloseTo(
             p.mantle
               ? mantlePosition(p.mantle, game.tick).y
-              : groundHeight(p.x, p.z, trenchMap),
+              : groundHeight(p.x, p.z, trenchMap) + (p.hop?.height ?? 0),
           );
           expect(blocked(p.x, p.z, 0.44, trenchMap)).toBe(false);
         }

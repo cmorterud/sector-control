@@ -16,6 +16,10 @@ import {
   type Team,
   projectileRange,
   projectileSpeed,
+  mantleProgress,
+  smooth,
+  hopSpeed,
+  hopGravity,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
 const supportUpperLength = 0.42;
@@ -543,44 +547,56 @@ export class Renderer implements CollisionWorld {
       alive: p.hp > 0,
     });
   }
-  private attachSupportArm(rig: SoldierRig) {
-    const arm = rig.arms[0];
+  private poseArm(
+    rig: SoldierRig,
+    index: number,
+    target: pc.Vec3,
+    upperLength: number,
+    forearmLength: number,
+    weight = 1,
+  ) {
+    const arm = rig.arms[index];
     const shoulder = arm.shoulder.getLocalPosition();
-    const hand = rig.rifle
-      .getLocalTransform()
-      .transformPoint(rig.supportHand.getLocalPosition());
-    const direction = new pc.Vec3().sub2(hand, shoulder);
+    const direction = new pc.Vec3().sub2(target, shoulder);
     const distance = Math.max(
       0.001,
-      Math.min(
-        direction.length(),
-        supportUpperLength + supportForearmLength - 0.001,
-      ),
+      Math.min(direction.length(), upperLength + forearmLength - 0.001),
     );
     direction.normalize();
-    // Bend the elbow down and out while keeping the wrist on the moving grip.
-    const bend = new pc.Vec3(-0.7, -1, 0.1);
+    const hand = shoulder.clone().add(direction.clone().mulScalar(distance));
+    const bend = new pc.Vec3(index === 0 ? -0.7 : 0.7, -1, 0.1);
     bend.sub(direction.clone().mulScalar(bend.dot(direction))).normalize();
     const along =
-      (supportUpperLength ** 2 - supportForearmLength ** 2 + distance ** 2) /
-      (2 * distance);
-    const height = Math.sqrt(Math.max(0, supportUpperLength ** 2 - along ** 2));
+      (upperLength ** 2 - forearmLength ** 2 + distance ** 2) / (2 * distance);
+    const height = Math.sqrt(Math.max(0, upperLength ** 2 - along ** 2));
     const elbow = shoulder
       .clone()
       .add(direction.mulScalar(along))
       .add(bend.mulScalar(height));
-    const upperRotation = new pc.Quat().setFromDirections(
+    const upper = new pc.Quat().setFromDirections(
       pc.Vec3.DOWN,
       elbow.clone().sub(shoulder).normalize(),
     );
-    const forearmRotation = new pc.Quat().setFromDirections(
+    const forearm = new pc.Quat().setFromDirections(
       pc.Vec3.DOWN,
       hand.sub(elbow).normalize(),
     );
-    arm.shoulder.setLocalRotation(upperRotation);
-    arm.elbow.setLocalRotation(
-      upperRotation.clone().invert().mul(forearmRotation),
+    arm.shoulder.setLocalRotation(
+      new pc.Quat().slerp(arm.shoulder.getLocalRotation(), upper, weight),
     );
+    arm.elbow.setLocalRotation(
+      new pc.Quat().slerp(
+        arm.elbow.getLocalRotation(),
+        upper.clone().invert().mul(forearm),
+        weight,
+      ),
+    );
+  }
+  private attachSupportArm(rig: SoldierRig) {
+    const hand = rig.rifle
+      .getLocalTransform()
+      .transformPoint(rig.supportHand.getLocalPosition());
+    this.poseArm(rig, 0, hand, supportUpperLength, supportForearmLength);
   }
   private animateSoldier(
     p: Soldier,
@@ -594,7 +610,10 @@ export class Renderer implements CollisionWorld {
       dz = z - rig.z;
     const distance = Math.hypot(dx, dz);
     // Animate actual travel, not requested velocity against a wall or a respawn jump.
-    const moved = p.hp > 0 && rig.alive && distance < 2 ? distance : 0;
+    const moved =
+      p.hp > 0 && rig.alive && !p.mantle && !p.hop && distance < 2
+        ? distance
+        : 0;
     const speed = moved / Math.max(dt, 0.001);
     const blend = 1 - Math.exp(-12 * dt);
     const forward =
@@ -666,14 +685,73 @@ export class Renderer implements CollisionWorld {
       0,
       p.reloadAt ? 12 : 0,
     );
-    if (p.mantle) {
-      rig.body.setLocalEulerAngles(-22, 0, 0);
+    const landing = Math.max(0, Math.min(1, 1 - (tick - p.landedAt) / 7));
+    if (p.hop || landing > 0) {
+      const flight = p.hop
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              (tick - p.hop.startTick) / ((30 * 2 * hopSpeed) / hopGravity),
+            ),
+          )
+        : 0;
+      const tuck = p.hop
+        ? Math.sin(flight * Math.PI)
+        : Math.sin(landing * Math.PI) * 0.55;
+      rig.body.setLocalPosition(0, 0.94 - (p.hop ? 0.025 : 0.1) * tuck, 0);
+      rig.body.setLocalEulerAngles(-7 * tuck, 0, 0);
       rig.hips.setLocalEulerAngles(0, 0, 0);
-      rig.legs[0].hip.setLocalEulerAngles(65, 0, 0);
-      rig.legs[0].knee.setLocalEulerAngles(-85, 0, 0);
-      rig.legs[1].hip.setLocalEulerAngles(25, 0, 0);
-      rig.legs[1].knee.setLocalEulerAngles(-50, 0, 0);
-      rig.rifle.setLocalEulerAngles(-25, 0, 0);
+      for (let i = 0; i < 2; i++) {
+        rig.legs[i].hip.setLocalEulerAngles((i === 0 ? 38 : 28) * tuck, 0, 0);
+        rig.legs[i].knee.setLocalEulerAngles(
+          (i === 0 ? -70 : -55) * tuck,
+          0,
+          0,
+        );
+        rig.legs[i].ankle.setLocalEulerAngles(30 * tuck, 0, 0);
+      }
+    }
+    if (p.mantle) {
+      const m = p.mantle,
+        t = mantleProgress(m, tick),
+        up = m.to.y > m.from.y;
+      const effort = smooth(t / 0.2) * (1 - smooth((t - 0.82) / 0.18));
+      const tuck = up
+        ? smooth((t - 0.3) / 0.32) * (1 - smooth((t - 0.82) / 0.18))
+        : smooth(t / 0.2) * (1 - smooth((t - 0.45) / 0.4));
+      rig.body.setLocalPosition(0, 0.94 - 0.12 * effort, 0);
+      rig.body.setLocalEulerAngles(-(up ? 35 : 20) * effort, 0, 0);
+      rig.upper.setLocalEulerAngles(10 * effort, 0, -5 * effort);
+      rig.hips.setLocalEulerAngles(0, 0, 0);
+      for (let i = 0; i < 2; i++) {
+        const hip = (i === 0 ? 90 : 100) * tuck + 25 * effort * (1 - tuck);
+        const knee = (i === 0 ? -130 : -140) * tuck - 50 * effort * (1 - tuck);
+        rig.legs[i].hip.setLocalEulerAngles(hip, 0, 0);
+        rig.legs[i].knee.setLocalEulerAngles(knee, 0, 0);
+        rig.legs[i].ankle.setLocalEulerAngles(35 * effort - hip - knee, 0, 0);
+      }
+      // Keep the rifle in the left hand; the free right hand braces against the ledge.
+      rig.rifle.setLocalPosition(
+        0.32 - 0.16 * effort,
+        0.36 - 0.18 * effort,
+        -0.55 + 0.3 * effort,
+      );
+      rig.rifle.setLocalEulerAngles(-40 * effort, 0, 25 * effort);
+      const contact = up
+        ? smooth((t - 0.16) / 0.18) * (1 - smooth((t - 0.5) / 0.14))
+        : smooth((t - 0.42) / 0.16) * (1 - smooth((t - 0.75) / 0.12));
+      const worldHand = new pc.Vec3(
+        m.edge.x + Math.cos(m.yaw) * 0.32,
+        m.edge.y + 0.04,
+        m.edge.z + Math.sin(m.yaw) * 0.32,
+      );
+      const hand = rig.upper
+        .getWorldTransform()
+        .clone()
+        .invert()
+        .transformPoint(worldHand);
+      this.poseArm(rig, 1, hand, 0.3, 0.28, contact);
     }
     this.attachSupportArm(rig);
   }
@@ -738,7 +816,7 @@ export class Renderer implements CollisionWorld {
       );
       e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
       const position = e.getPosition();
-      this.animateSoldier(p, position.x, position.z, dt, g.tick);
+      this.animateSoldier(p, position.x, position.z, dt, g.tick - 1 + alpha);
       if (p.hp <= 0) {
         e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 85);
         e.setPosition(p.x, p.y + 0.25, p.z);

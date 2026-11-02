@@ -104,3 +104,13 @@ The **final-code** 60-second native log (`sector-control-2026-11-02T03-50-54-880
 Reproduced the user's spawn-route report with direct held movement in `?map=trenches&bots=0&demo=1&playtest=1&duration=20`. Intermediate artifact `sector-control-2026-11-02T14-20-14-245Z` shows a tall timber panel spanning the open center communication route; continuing forward passes through it. It was a decorative lining placement error, not intentional cover behavior.
 
 Fixed panels now follow actual terrain bank boundaries and leave all six communication junctions open. Post placement respects the trimmed panel lengths. The final direct recording `sector-control-2026-11-02T14-34-14-654Z` repeats the approach and traversal: 600 ticks, 60.00 render FPS average, 17.5 ms p95, zero recorded errors. JSON/video and trench-lining-review-metrics.json are archived under ignored playtest-artifacts/. The view is visibly open before crossing. All 44 tests, strict TypeScript, and the production build pass; existing engine/Ammo chunk-size warning remains.
+
+
+## Hop fallback and mantle animation — November 2, 2026
+
+Direct Chrome held-key recording `sector-control-2026-11-02T17-04-11-010Z` (`map=trenches&bots=0&demo=1&playtest=1&duration=30`) verifies a Space hop in open space (tick 6 takeoff / tick 20 landing), climb up (ticks 133–169), and climb down (ticks 220–256). All 900 ticks completed with 59.87 average render FPS, 17 ms p95, one frame over 33.33 ms, and zero errors. JSON/video/events.txt are archived; video fully decoded. mantle-phases-review.jpg shows the approach/reach/pull/crouched-cross/stand sequence, mantle-natural-preview.gif is a short user-facing preview, and hop-mantle-metrics.json preserves events and frame metrics.
+
+Automated validation now includes 49 tests and strict TypeScript/build: ballistic hop height/landing, retained movement, anti-air-jump, bank collision, ceilings, mantle priority, ramp fallback, lifecycle reset, real Ammo mantle clearance, and a real transform rig test for bracing wrist / rifle support wrist / feet above the bank. This remains short native acceptance rather than a new full manual eight-minute match or controlled GPU/memory profile.
+
+
+Final 60-second log-only 25v25 artifact `sector-control-2026-11-02T17-13-44-526Z` completed 1,800 ticks: 2,533 shots, 1,344 impacts, 121 deaths, one capture, Blue 4 / Red 0. It logged 39 mantle starts / 36 completions (others interrupted by combat) and 12 hop starts / 12 landings. Average FPS 59.79, p95 16.8 ms, one frame above 33.33 ms, zero errors. Restart reset the timer, roster, and scores. JSON/events.txt and hop-mantle-25v25-metrics.json are archived. This supersedes the earlier short-run faction result as the latest observation, without establishing balance.

@@ -5,6 +5,7 @@ import {
   groundHeight,
   moveOnMap,
   mantleLanding,
+  mantleRoute,
   walkSegment,
   type Vec,
   type MapDefinition,
@@ -52,35 +53,102 @@ export interface Projectile extends V3 {
 export interface Mantle {
   from: V3;
   to: V3;
+  edge: V3;
+  yaw: number;
   startTick: number;
   endTick: number;
 }
+export interface Hop {
+  startTick: number;
+  height: number;
+  velocity: number;
+}
+export const hopSpeed = 3.8;
+export const hopGravity = 16;
+export const smooth = (t: number) => {
+  const u = Math.max(0, Math.min(1, t));
+  return u * u * (3 - 2 * u);
+};
+export const mantleProgress = (m: Mantle, tick: number) =>
+  Math.max(0, Math.min(1, (tick - m.startTick) / (m.endTick - m.startTick)));
+// Root height represents a standing base. Tucked legs lift the actual feet while crossing.
+export function mantleFootLift(m: Mantle, tick: number): number {
+  const t = mantleProgress(m, tick);
+  return m.to.y > m.from.y
+    ? 0.45 * smooth((t - 0.34) / 0.28) * (1 - smooth((t - 0.82) / 0.18))
+    : 0.45 * smooth(t / 0.2) * (1 - smooth((t - 0.45) / 0.37));
+}
 export function mantlePosition(m: Mantle, tick: number): V3 {
-  const t = Math.max(
-    0,
-    Math.min(1, (tick - m.startTick) / (m.endTick - m.startTick)),
-  );
+  const t = mantleProgress(m, tick);
+  const length = Math.hypot(m.to.x - m.from.x, m.to.z - m.from.z);
+  const dx = (m.to.x - m.from.x) / Math.max(length, 0.001);
+  const dz = (m.to.z - m.from.z) / Math.max(length, 0.001);
   const up = m.to.y > m.from.y;
-  const riseEnd = up ? 0.4 : 0.1,
-    crossEnd = up ? 0.8 : 0.6;
-  const top = Math.max(m.from.y, m.to.y) + 0.12;
-  const cross = Math.max(0, Math.min(1, (t - riseEnd) / (crossEnd - riseEnd)));
-  const y =
-    t < riseEnd
-      ? m.from.y + ((top - m.from.y) * t) / riseEnd
-      : t < crossEnd
-        ? top
-        : top + ((m.to.y - top) * (t - crossEnd)) / (1 - crossEnd);
-  return {
-    x: m.from.x + (m.to.x - m.from.x) * cross,
-    y,
-    z: m.from.z + (m.to.z - m.from.z) * cross,
-  };
+  const approach = { x: m.edge.x - dx * 0.34, z: m.edge.z - dz * 0.34 };
+  const points: { t: number; p: V3 }[] = up
+    ? [
+        { t: 0, p: m.from },
+        { t: 0.16, p: { ...approach, y: m.from.y } },
+        {
+          t: 0.34,
+          p: {
+            ...approach,
+            y: m.from.y + Math.min(0.55, (m.to.y - m.from.y) * 0.45),
+          },
+        },
+        {
+          t: 0.62,
+          p: {
+            x: m.edge.x - dx * 0.18,
+            z: m.edge.z - dz * 0.18,
+            y: m.to.y - 0.25,
+          },
+        },
+        {
+          t: 0.82,
+          p: {
+            x: m.edge.x + dx * 0.5,
+            z: m.edge.z + dz * 0.5,
+            y: m.to.y - 0.25,
+          },
+        },
+        { t: 1, p: m.to },
+      ]
+    : [
+        { t: 0, p: m.from },
+        { t: 0.2, p: { ...approach, y: m.from.y - 0.2 } },
+        {
+          t: 0.45,
+          p: {
+            x: m.edge.x + dx * 0.5,
+            z: m.edge.z + dz * 0.5,
+            y: m.from.y - 0.25,
+          },
+        },
+        { t: 0.82, p: { ...m.to, y: m.to.y + 0.06 } },
+        { t: 1, p: m.to },
+      ];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1],
+      b = points[i];
+    if (t <= b.t) {
+      const blend = smooth((t - a.t) / (b.t - a.t));
+      return {
+        x: a.p.x + (b.p.x - a.p.x) * blend,
+        y: a.p.y + (b.p.y - a.p.y) * blend,
+        z: a.p.z + (b.p.z - a.p.z) * blend,
+      };
+    }
+  }
+  return { ...m.to };
 }
 export interface Soldier extends Vec {
   y: number;
   teamIndex: number;
   mantle: Mantle | null;
+  hop: Hop | null;
+  nextHop: number;
+  landedAt: number;
   nextMantle: number;
   id: number;
   team: Team;
@@ -138,6 +206,7 @@ export type Event = { id: number; tick: number } & (
     }
   | { type: "damage"; actor: number; source: number }
   | { type: "death" | "respawn" | "reload"; actor: number }
+  | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
   | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
   | { type: "contested"; sector: string }
@@ -272,6 +341,9 @@ export class Game {
         team,
         teamIndex: i % this.teamSize,
         mantle: null,
+        hop: null,
+        nextHop: 0,
+        landedAt: -1000,
         nextMantle: 0,
         y: 0,
         x: 0,
@@ -348,6 +420,9 @@ export class Game {
     p.reserve = 120;
     p.reloadAt = 0;
     p.mantle = null;
+    p.hop = null;
+    p.nextHop = this.tick;
+    p.landedAt = -1000;
     p.nextMantle = this.tick;
     p.vx = 0;
     p.vz = 0;
@@ -373,14 +448,24 @@ export class Game {
       const c = p.command;
       p.yaw = c.yaw;
       p.pitch = clamp(c.pitch, -1.1, 1.1);
-      if (c.mantle && !p.mantle) this.startMantle(p, c);
+      if (
+        c.mantle &&
+        !p.mantle &&
+        !p.hop &&
+        this.tick >= p.nextMantle &&
+        this.tick >= p.nextHop
+      ) {
+        if (!this.startMantle(p, c)) this.startHop(p);
+      }
       if (p.mantle) {
         const m = p.mantle;
+        p.yaw = m.yaw;
         Object.assign(p, mantlePosition(m, this.tick));
         p.vx = p.vz = 0;
         p.mode = "Mantle";
         if (this.tick >= m.endTick) {
           p.mantle = null;
+          p.landedAt = this.tick;
           this.emit({
             type: "mantle",
             actor: p.id,
@@ -398,6 +483,7 @@ export class Game {
         p.x = pos.x;
         p.z = pos.z;
         p.y = groundHeight(p.x, p.z, this.map);
+        if (p.hop) this.advanceHop(p);
       }
       if (p.reloadAt && this.tick >= p.reloadAt) {
         const n = Math.min(30 - p.ammo, p.reserve);
@@ -459,33 +545,92 @@ export class Game {
       this.emit({ type: "end", winner: this.winner });
     }
   }
-  private startMantle(p: Soldier, c: Command) {
-    if (this.tick < p.nextMantle) return;
+  private startHop(p: Soldier) {
+    if (
+      this.collision.ray(
+        { x: p.x, y: p.y + 1.9, z: p.z },
+        { x: p.x, y: p.y + 2.05, z: p.z },
+      ) < 0.99
+    )
+      return;
+    p.hop = { startTick: this.tick, height: 0, velocity: hopSpeed };
+    p.mode = "Hop";
+    this.emit({
+      type: "hop",
+      actor: p.id,
+      phase: "start",
+      at: { x: p.x, y: p.y, z: p.z },
+    });
+  }
+  private advanceHop(p: Soldier) {
+    const h = p.hop!;
+    const next = h.height + h.velocity / 30 - hopGravity / (2 * 30 * 30);
+    h.velocity -= hopGravity / 30;
+    let height = Math.max(0, next);
+    if (height > h.height) {
+      const from = { x: p.x, y: p.y + h.height + 1.9, z: p.z };
+      const to = { ...from, y: p.y + height + 1.9 };
+      const fraction = this.collision.ray(from, to);
+      if (fraction < 1) {
+        height = Math.max(
+          h.height,
+          h.height + (height - h.height) * fraction - 0.01,
+        );
+        h.velocity = Math.min(0, h.velocity);
+      }
+    }
+    h.height = height;
+    p.y += height;
+    p.mode = "Hop";
+    if (next <= 0 && h.velocity < 0) {
+      p.hop = null;
+      p.nextHop = this.tick + 8;
+      p.landedAt = this.tick;
+      this.emit({
+        type: "hop",
+        actor: p.id,
+        phase: "land",
+        at: { x: p.x, y: p.y, z: p.z },
+      });
+    }
+  }
+  private startMantle(p: Soldier, c: Command): boolean {
     const direction =
       Math.hypot(c.x, c.z) > 0.1
         ? c
         : { x: Math.sin(c.yaw), z: -Math.cos(c.yaw) };
-    const landing = mantleLanding(p, direction, this.map);
-    if (!landing) return;
+    const route = mantleRoute(p, direction, this.map);
+    if (!route) return false;
+    const to = {
+      ...route.landing,
+      y: groundHeight(route.landing.x, route.landing.z, this.map),
+    };
     const m: Mantle = {
       from: { x: p.x, y: p.y, z: p.z },
-      to: { ...landing, y: groundHeight(landing.x, landing.z, this.map) },
+      to,
+      edge: { ...route.edge, y: Math.max(p.y, to.y) },
+      yaw: Math.atan2(to.x - p.x, -(to.z - p.z)),
       startTick: this.tick,
-      endTick: this.tick + 30,
+      endTick: this.tick + 36,
     };
     let previous = m.from;
-    // Sweep feet, torso, and head through the climb before accepting the action.
-    for (let i = 1; i <= 20; i++) {
-      const next = mantlePosition(m, this.tick + i * 1.5);
+    let previousLift = 0;
+    for (let i = 1; i <= 36; i++) {
+      const next = mantlePosition(m, this.tick + i);
+      const lift = mantleFootLift(m, this.tick + i);
       for (const height of [0.1, 0.8, 1.8])
         if (
           this.collision.ray(
-            { ...previous, y: previous.y + height },
-            { ...next, y: next.y + height },
+            {
+              ...previous,
+              y: previous.y + height + (height < 0.2 ? previousLift : 0),
+            },
+            { ...next, y: next.y + height + (height < 0.2 ? lift : 0) },
           ) < 0.99
         )
-          return;
+          return false;
       previous = next;
+      previousLift = lift;
     }
     p.mantle = m;
     p.nextMantle = m.endTick + 15;
@@ -497,6 +642,7 @@ export class Game {
       from: m.from,
       to: m.to,
     });
+    return true;
   }
   fire(p: Soldier) {
     p.ammo--;
@@ -676,6 +822,7 @@ export class Game {
         victim.mode = "Respawn";
         victim.reloadAt = 0;
         victim.mantle = null;
+        victim.hop = null;
         victim.y = groundHeight(victim.x, victim.z, this.map);
         this.emit({ type: "death", actor: victim.id });
       }

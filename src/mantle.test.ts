@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mantleLanding, groundHeight } from "./map";
-import { Game, idle, TestCollision } from "./simulation";
+import { Game, idle, TestCollision, mantleFootLift } from "./simulation";
 import { trenchMap } from "./trench-map";
 
 function scene() {
@@ -25,12 +25,13 @@ describe("terrain mantle", () => {
     expect(p.mantle).not.toBeNull();
     expect(p.ammo).toBe(30);
     expect(p.y).toBe(0);
-    for (let i = 0; i < 30; i++) {
+    const endTick = p.mantle!.endTick;
+    while (game.tick < endTick) {
       game.step({ ...idle(), fire: true });
       events.push(...game.events);
-      expect(p.y).toBeGreaterThanOrEqual(
-        groundHeight(p.x, p.z, trenchMap) - 0.001,
-      );
+      expect(
+        p.y + (p.mantle ? mantleFootLift(p.mantle, game.tick) : 0),
+      ).toBeGreaterThanOrEqual(groundHeight(p.x, p.z, trenchMap) - 0.001);
     }
     expect(p.mantle).toBeNull();
     expect(p.x).toBeGreaterThan(-18);
@@ -38,18 +39,18 @@ describe("terrain mantle", () => {
     expect(
       events.filter((e) => e.type === "mantle").map((e) => e.phase),
     ).toEqual(["start", "end"]);
-    expect(events.filter((e) => e.type === "fire" && e.tick < 31)).toHaveLength(
-      0,
-    );
+    expect(
+      events.filter((e) => e.type === "fire" && e.tick < endTick),
+    ).toHaveLength(0);
   });
 
   it("can climb down after its cooldown and resets climbing state on respawn", () => {
     const { game, p } = scene();
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
-    for (let i = 0; i < 44; i++) game.step(idle());
+    while (game.tick < p.nextMantle) game.step(idle());
     game.step({ ...idle(), yaw: -Math.PI / 2, mantle: true });
     expect(p.mantle?.to.y).toBe(0);
-    for (let i = 0; i < 30; i++) game.step(idle());
+    while (p.mantle) game.step(idle());
     expect(p.mantle).toBeNull();
     expect(p.x).toBeLessThan(-18);
     expect(p.y).toBe(0);

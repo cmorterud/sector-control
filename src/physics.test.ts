@@ -134,7 +134,7 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
     Object.assign(game.players[0], { x: -18.5, y: 0, z: -27 });
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
     expect(game.players[0].mantle).not.toBeNull();
-    for (let i = 0; i < 30; i++) game.step(idle());
+    while (game.players[0].mantle) game.step(idle());
     expect(game.players[0].mantle).toBeNull();
     expect(game.players[0].y).toBeCloseTo(2.4);
   } finally {
