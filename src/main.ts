@@ -231,9 +231,7 @@ function hud(now: number) {
           ? "<small>SPACE · MANTLE TRENCH EDGE</small>"
           : sector
             ? `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
-            : game.scoring === "eliminations" && map.terrain
-              ? `<small>${Math.abs(p.y - 0.85) < 0.03 ? "FIRING STEP · HEAD EXPOSED" : p.y + 1.94 < map.terrain.bankHeight ? "BELOW THE PARAPET" : "ABOVE THE TRENCH · EXPOSED"}</small>`
-              : "";
+            : "";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
   if (keys.has("Tab")) {

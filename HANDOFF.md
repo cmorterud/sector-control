@@ -4,6 +4,7 @@ Updated November 2, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.
 
 ## Current checkpoint — start here
 
+- Latest follow-up: removed the persistent exposed/below-parapet status line at the user's request. Contextual mantle prompts remain.
 - Latest request: use the supplied trench reference images to fight **from inside opposing trenches**, with no open exit ramps into the center and only exposed heads/raised rifles visible from firing steps.
 - Implemented: four zigzag lines (two per team), spawns on land behind the rear lines at x = ±67 m, rear entry ramps at ±57 m, communication corridors, and **continuous front parapets**. The previous ±14 m ramps into no man's land are gone.
 - Floor 0 m, bank/land **2.4 m**, firing steps **0.85 m**. The actual rendered torso stays below the bank; head/helmet and raised rifle clear it. World collision blocks torso/floor shots. Trench rifle/vision height is 1.65 m above feet; bots aim at exposed heads. Left hand remains on the rifle grip.
