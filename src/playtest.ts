@@ -42,6 +42,11 @@ export class PlaytestLog {
       impacts: this.events.filter((e) => e.type === "impact").length,
       kills: this.events.filter((e) => e.type === "death").length,
       captures: this.events.filter((e) => e.type === "capture").length,
+      grenadesThrown: this.events.filter((e) => e.type === "grenadeThrow")
+        .length,
+      grenadeExplosions: this.events.filter(
+        (e) => e.type === "grenadeExplosion",
+      ).length,
     };
   }
 }
@@ -150,7 +155,7 @@ export class PlaytestRecorder {
         36,
       );
       c.fillText(
-        `HP ${p.hp} | ammo ${p.ammo}/${p.reserve} | ${p.mode} | pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}`,
+        `HP ${p.hp} | ammo ${p.ammo}/${p.reserve} | grenades ${p.grenades} | ${p.mode} | pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}`,
         20,
         695,
       );

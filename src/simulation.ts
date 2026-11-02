@@ -26,6 +26,7 @@ export interface Command {
   fire: boolean;
   reload: boolean;
   mantle: boolean;
+  grenade: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -37,7 +38,23 @@ export const idle = (): Command => ({
   fire: false,
   reload: false,
   mantle: false,
+  grenade: false,
 });
+export const grenadeFuseTicks = 90;
+export const grenadeBlastRadius = 7;
+export const grenadeRadius = 0.12;
+export const grenadeSpeed = 20;
+export const grenadeGravity = 10;
+export interface Grenade extends V3 {
+  id: number;
+  actor: number;
+  team: Team;
+  vx: number;
+  vy: number;
+  vz: number;
+  bornAt: number;
+  explodeAt: number;
+}
 export const projectileSpeed = 32;
 export const projectileRange = 60;
 export const rifleHeight = (map: MapDefinition) => (map.terrain ? 1.65 : 1.45);
@@ -164,6 +181,9 @@ export interface Soldier extends Vec {
   hp: number;
   ammo: number;
   reserve: number;
+  grenades: number;
+  throwUntil: number;
+  nextGrenade: number;
   yaw: number;
   pitch: number;
   vx: number;
@@ -204,6 +224,23 @@ export const defaultBotSettings: BotSettings = {
   burstFireTicks: 15,
 };
 export type Event = { id: number; tick: number } & (
+  | {
+      type: "grenadeThrow";
+      actor: number;
+      grenade: number;
+      from: V3;
+      velocity: V3;
+      explodeAt: number;
+    }
+  | { type: "grenadeBounce"; actor: number; grenade: number; at: V3 }
+  | {
+      type: "grenadeExplosion";
+      actor: number;
+      grenade: number;
+      at: V3;
+      radius: number;
+      hits: { target: number; damage: number }[];
+    }
   | { type: "fire"; actor: number; projectile: number; from: V3; to: V3 }
   | {
       type: "impact";
@@ -238,31 +275,65 @@ export class TestCollision implements CollisionWorld {
     return { x, z };
   }
   ray(a: V3, b: V3): number {
+    let nearest = 1;
+    // Exact slabs matter for short grenade sweeps and very thin timber panels.
+    for (const box of this.map.boxes) {
+      let entry = 0,
+        exit = 1;
+      const low = {
+        x: box.x - box.w / 2,
+        y: box.baseY ?? 0,
+        z: box.z - box.d / 2,
+      };
+      const high = {
+        x: box.x + box.w / 2,
+        y: (box.baseY ?? 0) + box.h,
+        z: box.z + box.d / 2,
+      };
+      for (const axis of ["x", "y", "z"] as const) {
+        const delta = b[axis] - a[axis];
+        if (Math.abs(delta) < 1e-10) {
+          if (a[axis] < low[axis] || a[axis] > high[axis]) {
+            entry = 2;
+            break;
+          }
+        } else {
+          const t1 = (low[axis] - a[axis]) / delta,
+            t2 = (high[axis] - a[axis]) / delta;
+          entry = Math.max(entry, Math.min(t1, t2));
+          exit = Math.min(exit, Math.max(t1, t2));
+        }
+      }
+      if (entry <= exit) nearest = Math.min(nearest, entry);
+    }
     const n = Math.max(
       1,
       Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) * 5),
     );
-    for (let i = 1; i <= n; i++) {
-      const t = i / n,
-        x = a.x + (b.x - a.x) * t,
+    const terrainHit = (t: number) => {
+      const x = a.x + (b.x - a.x) * t,
         y = a.y + (b.y - a.y) * t,
         z = a.z + (b.z - a.z) * t;
-      if (
+      return (
         y < groundHeight(x, z, this.map) ||
         (y < 4 &&
           (Math.abs(x) > this.map.width / 2 - 0.5 ||
-            Math.abs(z) > this.map.depth / 2 - 0.5)) ||
-        this.map.boxes.some(
-          (box) =>
-            y >= (box.baseY ?? 0) &&
-            y <= (box.baseY ?? 0) + box.h &&
-            Math.abs(x - box.x) < box.w / 2 &&
-            Math.abs(z - box.z) < box.d / 2,
-        )
-      )
-        return t;
+            Math.abs(z) > this.map.depth / 2 - 0.5))
+      );
+    };
+    for (let i = 1; i <= n; i++) {
+      if (terrainHit(i / n)) {
+        let low = (i - 1) / n,
+          high = i / n;
+        for (let j = 0; j < 12; j++) {
+          const middle = (low + high) / 2;
+          if (terrainHit(middle)) high = middle;
+          else low = middle;
+        }
+        return Math.min(nearest, high);
+      }
     }
-    return 1;
+    return nearest;
   }
 }
 export const clamp = (v: number, a: number, b: number) =>
@@ -315,10 +386,13 @@ export class Game {
   scores: Record<Team, number> = { blue: 0, red: 0 };
   players: Soldier[] = [];
   projectiles: Projectile[] = [];
+  grenades: Grenade[] = [];
+  grenadeSequence = 0;
   projectileSequence = 0;
   sectors: Sector[];
   readonly map: MapDefinition;
   readonly scoring: "sectors" | "eliminations";
+  private grenadeCollision: TestCollision;
   botSettings: BotSettings;
   readonly teamSize: number;
   events: Event[] = [];
@@ -333,6 +407,7 @@ export class Game {
     options: { map?: MapDefinition; teamSize?: number } = {},
   ) {
     this.map = options.map ?? industrialMap;
+    this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
     this.botSettings = {
       ...defaultBotSettings,
@@ -370,6 +445,9 @@ export class Game {
         hp: 100,
         ammo: 30,
         reserve: 120,
+        grenades: 3,
+        throwUntil: 0,
+        nextGrenade: 0,
         yaw: 0,
         pitch: 0,
         vx: 0,
@@ -409,6 +487,8 @@ export class Game {
       players: this.players,
       projectiles: this.projectiles,
       projectileSequence: this.projectileSequence,
+      grenades: this.grenades,
+      grenadeSequence: this.grenadeSequence,
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
@@ -438,6 +518,9 @@ export class Game {
     p.hp = 100;
     p.ammo = 30;
     p.reserve = 120;
+    p.grenades = 3;
+    p.throwUntil = 0;
+    p.nextGrenade = this.tick;
     p.reloadAt = 0;
     p.mantle = null;
     p.hop = null;
@@ -468,6 +551,14 @@ export class Game {
       const c = p.command;
       p.yaw = c.yaw;
       p.pitch = clamp(c.pitch, -1.1, 1.1);
+      if (
+        c.grenade &&
+        !p.mantle &&
+        !p.reloadAt &&
+        p.grenades > 0 &&
+        this.tick >= p.nextGrenade
+      )
+        this.throwGrenade(p);
       if (
         c.mantle &&
         !p.mantle &&
@@ -526,6 +617,7 @@ export class Game {
       if (
         p.hp > 0 &&
         !p.mantle &&
+        this.tick >= p.throwUntil &&
         p.command.fire &&
         !p.reloadAt &&
         p.ammo > 0 &&
@@ -533,6 +625,7 @@ export class Game {
       )
         this.fire(p);
     this.advanceProjectiles();
+    this.advanceGrenades();
     for (const s of this.scoring === "sectors" ? this.sectors : []) {
       const occupants = this.players.filter(
           (p) => p.hp > 0 && !p.mantle && dist(p, s) <= 8,
@@ -556,6 +649,7 @@ export class Game {
     if (this.tick >= this.duration) {
       this.phase = "ended";
       this.projectiles = [];
+      this.grenades = [];
       this.winner =
         this.scores.blue === this.scores.red
           ? "draw"
@@ -826,31 +920,35 @@ export class Game {
     }
     this.projectiles = active;
   }
+  private damage(victim: Soldier, amount: number, source: number, team: Team) {
+    victim.hp = Math.max(0, victim.hp - amount);
+    this.emit({ type: "damage", actor: victim.id, source });
+    if (!victim.hp) {
+      victim.deaths++;
+      const shooter = this.players.find((p) => p.id === source);
+      if (victim.team !== team) {
+        if (shooter) shooter.kills++;
+        if (this.scoring === "eliminations") {
+          this.scores[team]++;
+          this.emit({ type: "score" });
+        }
+      }
+      victim.respawnAt = this.tick + 150;
+      victim.mode = "Respawn";
+      victim.reloadAt = 0;
+      victim.throwUntil = 0;
+      victim.mantle = null;
+      victim.hop = null;
+      victim.y = groundHeight(victim.x, victim.z, this.map);
+      this.emit({ type: "death", actor: victim.id });
+    }
+  }
   private impact(shot: Projectile, at: V3, victim?: Soldier) {
     const hit =
       !!victim &&
       victim.team !== shot.team &&
       this.tick >= victim.protectedUntil;
-    if (hit && victim) {
-      victim.hp = Math.max(0, victim.hp - 25);
-      this.emit({ type: "damage", actor: victim.id, source: shot.actor });
-      if (!victim.hp) {
-        victim.deaths++;
-        const shooter = this.players.find((p) => p.id === shot.actor);
-        if (shooter) shooter.kills++;
-        if (this.scoring === "eliminations") {
-          this.scores[shot.team]++;
-          this.emit({ type: "score" });
-        }
-        victim.respawnAt = this.tick + 150;
-        victim.mode = "Respawn";
-        victim.reloadAt = 0;
-        victim.mantle = null;
-        victim.hop = null;
-        victim.y = groundHeight(victim.x, victim.z, this.map);
-        this.emit({ type: "death", actor: victim.id });
-      }
-    }
+    if (hit && victim) this.damage(victim, 25, shot.actor, shot.team);
     this.emit({
       type: "impact",
       actor: shot.actor,
@@ -858,6 +956,181 @@ export class Game {
       at,
       target: victim?.id ?? null,
       hit,
+    });
+  }
+  // Sweep the center and six points on the grenade shell, including during release.
+  private grenadeSweep(from: V3, to: V3) {
+    let fraction = 1;
+    for (const offset of [
+      { x: 0, y: 0, z: 0 },
+      ...(["x", "y", "z"] as const).flatMap((axis) =>
+        [-grenadeRadius, grenadeRadius].map((sign) => ({
+          x: 0,
+          y: 0,
+          z: 0,
+          [axis]: sign,
+        })),
+      ),
+    ])
+      fraction = Math.min(
+        fraction,
+        this.collision.ray(
+          { x: from.x + offset.x, y: from.y + offset.y, z: from.z + offset.z },
+          { x: to.x + offset.x, y: to.y + offset.y, z: to.z + offset.z },
+        ),
+        // Keep tiny sweeps outside the authoritative height field even when
+        // the engine's short ray begins within a collider's contact tolerance.
+        this.grenadeCollision.ray(
+          { x: from.x + offset.x, y: from.y + offset.y, z: from.z + offset.z },
+          { x: to.x + offset.x, y: to.y + offset.y, z: to.z + offset.z },
+        ),
+      );
+    return fraction;
+  }
+  private throwGrenade(p: Soldier) {
+    const elevation = clamp(p.pitch + 0.65, 0.15, 1.25);
+    // Timber can extend slightly beyond the height-field bank. Find clearance
+    // within the soldier's footprint before releasing; never start inside it.
+    const origin = { x: p.x, y: p.y + 1.8, z: p.z };
+    const from = [
+      origin,
+      {
+        ...origin,
+        x: origin.x - Math.sin(p.yaw) * 0.35,
+        z: origin.z + Math.cos(p.yaw) * 0.35,
+      },
+      {
+        ...origin,
+        x: origin.x + Math.sin(p.yaw) * 0.35,
+        z: origin.z - Math.cos(p.yaw) * 0.35,
+      },
+      { ...origin, y: origin.y + 0.4 },
+    ].find((candidate) =>
+      (["x", "y", "z"] as const).every((axis) =>
+        [-1, 1].every((sign) => {
+          const edge = {
+            ...candidate,
+            [axis]: candidate[axis] + sign * (grenadeRadius + 0.02),
+          };
+          return (
+            this.collision.ray(candidate, edge) >= 1 &&
+            this.collision.ray(edge, candidate) >= 1 &&
+            this.grenadeCollision.ray(candidate, edge) >= 1 &&
+            this.grenadeCollision.ray(edge, candidate) >= 1
+          );
+        }),
+      ),
+    );
+    if (!from) return;
+    const desired = {
+      x: from.x + Math.sin(p.yaw) * 0.55,
+      y: from.y + 0.15,
+      z: from.z - Math.cos(p.yaw) * 0.55,
+    };
+    const f = Math.max(0, this.grenadeSweep(from, desired) - 0.03);
+    const grenade: Grenade = {
+      id: ++this.grenadeSequence,
+      actor: p.id,
+      team: p.team,
+      x: from.x + (desired.x - from.x) * f,
+      y: from.y + (desired.y - from.y) * f,
+      z: from.z + (desired.z - from.z) * f,
+      vx: Math.sin(p.yaw) * Math.cos(elevation) * grenadeSpeed,
+      vy: Math.sin(elevation) * grenadeSpeed,
+      vz: -Math.cos(p.yaw) * Math.cos(elevation) * grenadeSpeed,
+      bornAt: this.tick,
+      explodeAt: this.tick + grenadeFuseTicks,
+    };
+    p.grenades--;
+    p.protectedUntil = 0;
+    p.throwUntil = this.tick + 15;
+    p.nextGrenade = this.tick + 24;
+    this.grenades.push(grenade);
+    this.emit({
+      type: "grenadeThrow",
+      actor: p.id,
+      grenade: grenade.id,
+      from: { x: grenade.x, y: grenade.y, z: grenade.z },
+      velocity: { x: grenade.vx, y: grenade.vy, z: grenade.vz },
+      explodeAt: grenade.explodeAt,
+    });
+  }
+  private advanceGrenades() {
+    const active: Grenade[] = [];
+    for (const g of this.grenades) {
+      if (this.tick >= g.explodeAt) {
+        this.explodeGrenade(g);
+        continue;
+      }
+      if (g.bornAt < this.tick) {
+        let bounced = false;
+        // Short, axis-separated sweeps give banks/walls a deterministic bounce.
+        for (let substep = 0; substep < 4; substep++) {
+          const dt = 1 / 120;
+          g.vy -= grenadeGravity * dt;
+          for (const [axis, velocity] of [
+            ["x", "vx"],
+            ["z", "vz"],
+            ["y", "vy"],
+          ] as const) {
+            const delta = g[velocity] * dt;
+            if (Math.abs(delta) < 1e-8) continue;
+            const from = { x: g.x, y: g.y, z: g.z };
+            const to = { ...from, [axis]: from[axis] + delta };
+            const f = this.grenadeSweep(from, to);
+            g[axis] +=
+              delta * (f < 1 ? Math.max(0, f - 0.003 / Math.abs(delta)) : 1);
+            if (f < 1) {
+              if (Math.abs(g[velocity]) > 1.5) bounced = true;
+              g[velocity] *= -0.38;
+              if (axis === "y") {
+                g.vx *= 0.7;
+                g.vz *= 0.7;
+                if (Math.abs(g.vy) < 0.6) g.vy = 0;
+              }
+            }
+          }
+        }
+        if (bounced)
+          this.emit({
+            type: "grenadeBounce",
+            actor: g.actor,
+            grenade: g.id,
+            at: { x: g.x, y: g.y, z: g.z },
+          });
+      }
+      active.push(g);
+    }
+    this.grenades = active;
+  }
+  private explodeGrenade(g: Grenade) {
+    const at = { x: g.x, y: g.y, z: g.z };
+    const hits: { target: number; damage: number }[] = [];
+    for (const p of this.players) {
+      if (
+        p.hp <= 0 ||
+        (p.team === g.team && p.id !== g.actor) ||
+        this.tick < p.protectedUntil
+      )
+        continue;
+      const distance = Math.hypot(p.x - g.x, p.y + 0.9 - g.y, p.z - g.z);
+      if (distance >= grenadeBlastRadius) continue;
+      const visible = [0.6, 1.1, 1.6].some(
+        (height) =>
+          this.collision.ray(at, { x: p.x, y: p.y + height, z: p.z }) >= 0.999,
+      );
+      if (!visible) continue;
+      const damage = Math.ceil(140 * (1 - distance / grenadeBlastRadius));
+      hits.push({ target: p.id, damage });
+      this.damage(p, damage, g.actor, g.team);
+    }
+    this.emit({
+      type: "grenadeExplosion",
+      actor: g.actor,
+      grenade: g.id,
+      at,
+      radius: grenadeBlastRadius,
+      hits,
     });
   }
 }

@@ -49,6 +49,21 @@ it("initializes real Ammo wall raycasts and stops a traveling round without step
     }
     expect(wallImpact).toBe(true);
     expect(game.projectiles).toHaveLength(0);
+    // Grenade shell sweeps must also catch this 10 cm Ammo wall.
+    game.step({ ...idle(), grenade: true, pitch: -1 });
+    const grenade = game.grenades[0];
+    for (let i = 0; i < 10; i++) game.step(idle());
+    expect(grenade.z).toBeGreaterThan(0.17);
+    expect(grenade.vz).toBeGreaterThan(0);
+    let explosions = 0;
+    for (let i = 0; i < 80; i++) {
+      game.step(idle());
+      explosions += game.events.filter(
+        (e) => e.type === "grenadeExplosion",
+      ).length;
+    }
+    expect(explosions).toBe(1);
+    expect(game.grenades).toHaveLength(0);
   } finally {
     world.removeBody(body);
     world.destroyBody(body);
@@ -60,7 +75,7 @@ it("initializes real Ammo wall raycasts and stops a traveling round without step
 
 it("uses real Ammo earth banks for trench protection, firing steps, ramps, and mantling", async () => {
   const { trenchMap } = await import("./trench-map");
-  const { moveOnMap } = await import("./map");
+  const { moveOnMap, groundHeight } = await import("./map");
   const world = createPhysicsWorld();
   const bodies: ReturnType<typeof world.createBody>[] = [];
   const shapes: ReturnType<typeof world.createShape>[] = [];
@@ -93,6 +108,7 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
     entities.push(entity);
   };
   try {
+    addBox(0, -0.3, 0, trenchMap.width, 0.6, trenchMap.depth);
     for (const p of trenchMap.terrain!.rectangles)
       addBox(p.x, p.h / 2, p.z, p.w, p.h, p.d);
     for (const r of trenchMap.terrain!.ramps) {
@@ -139,12 +155,38 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
       undefined,
       { map: trenchMap },
     );
+    expect(
+      ray({ x: 24, y: 0.1, z: -1 }, { x: 24, y: -0.1, z: -1 }),
+    ).toBeLessThan(1);
     Object.assign(game.players[0], { x: -18.5, y: 0, z: -27 });
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
     expect(game.players[0].mantle).not.toBeNull();
     while (game.players[0].mantle) game.step(idle());
     expect(game.players[0].mantle).toBeNull();
     expect(game.players[0].y).toBeCloseTo(2.4);
+    Object.assign(game.players[0], { x: -18, y: 0.85, z: -1 });
+    game.botSettings.engagementRange = 0;
+    const target = {
+      ...game.players[0],
+      id: 1,
+      team: "red" as const,
+      x: 23,
+      y: 0,
+      nextThink: 1e9,
+      protectedUntil: 0,
+    };
+    game.players.push(target);
+    game.step({ ...idle(), yaw: Math.PI / 2, grenade: true });
+    for (let i = 0; i < 89; i++) {
+      game.step(idle());
+      const grenade = game.grenades[0];
+      expect(grenade.y, JSON.stringify(grenade)).toBeGreaterThanOrEqual(
+        groundHeight(grenade.x, grenade.z, trenchMap) + 0.11,
+      );
+    }
+    game.step(idle());
+    expect(target.hp).toBeLessThan(100);
+    expect(game.events.some((e) => e.type === "grenadeExplosion")).toBe(true);
   } finally {
     for (const body of bodies) {
       world.removeBody(body);

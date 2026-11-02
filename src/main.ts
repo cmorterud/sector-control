@@ -29,7 +29,8 @@ const keys = new Set<string>();
 let fire = false,
   aim = false,
   reload = false,
-  mantle = false;
+  mantle = false,
+  grenade = false;
 let audio: AudioContext | undefined;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
@@ -42,7 +43,8 @@ const map = params.get("map") === "trenches" ? trenchMap : industrialMap;
 const requestedTeamSize = Number(
   params.get("teamSize") ?? (map.id === "trenches" ? 25 : 5),
 );
-document.querySelector(".controls")!.textContent += "　 SPACE HOP / MANTLE";
+document.querySelector(".controls")!.textContent +=
+  "　 G GRENADE　 SPACE HOP / MANTLE";
 const teamSize = Math.max(
   1,
   Math.min(
@@ -73,6 +75,7 @@ function clear() {
   aim = false;
   reload = false;
   mantle = false;
+  grenade = false;
 }
 function menu(
   title: string,
@@ -144,6 +147,15 @@ function pause() {
 }
 function handle(e: Event) {
   renderer.effect(e);
+  if (e.type === "grenadeThrow" && e.actor === 0) sound(320, 0.12, 0.035);
+  if (e.type === "grenadeBounce" && dist(game.players[0], e.at) < 25)
+    sound(180, 0.04, 0.025);
+  if (e.type === "grenadeExplosion") {
+    const distance = dist(game.players[0], e.at);
+    if (distance < 65) sound(85, 0.65, 0.22 * (1 - distance / 65));
+    if (e.actor === 0 && e.hits.some((hit) => hit.target !== 0))
+      hitUntil = performance.now() + 200;
+  }
   if (e.type === "fire") {
     if (e.actor === 0) {
       sound(110, 0.06, 0.09);
@@ -209,7 +221,7 @@ function hud(now: number) {
   el("health").innerHTML =
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   el("ammo").innerHTML =
-    `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small>`;
+    `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small><small>G · GRENADES ${p.grenades}</small>`;
   const sector =
     game.scoring === "sectors"
       ? game.sectors.find((s) => dist(s, p) <= 8)
@@ -268,8 +280,10 @@ function command(): Command {
   c.aim = aim;
   c.reload = reload;
   c.mantle = mantle;
+  c.grenade = grenade;
   reload = false;
   mantle = false;
+  grenade = false;
   return c;
 }
 window.addEventListener("keydown", (e) => {
@@ -279,6 +293,7 @@ window.addEventListener("keydown", (e) => {
   keys.add(e.code);
   if (e.code === "KeyR") reload = true;
   if (e.code === "Space" && !e.repeat) mantle = true;
+  if (e.code === "KeyG" && !e.repeat) grenade = true;
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 window.addEventListener("mousemove", (e) => {
@@ -363,7 +378,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

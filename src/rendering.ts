@@ -23,6 +23,7 @@ import {
   rifleHeight,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const supportUpperLength = 0.42;
 const supportForearmLength = 0.46;
 type SoldierRig = {
@@ -55,6 +56,17 @@ export class Renderer implements CollisionWorld {
   private batchGroup = -1;
   private projectiles = new Map<number, pc.Entity>();
   private previousProjectiles = new Map<number, V3>();
+  private grenades = new Map<number, pc.Entity>();
+  private previousGrenades = new Map<number, V3>();
+  private blasts: {
+    root: pc.Entity;
+    age: number;
+    radius: number;
+    flash: pc.Entity;
+    wave: pc.Entity;
+    smoke: pc.Entity[];
+    materials: pc.StandardMaterial[];
+  }[] = [];
   constructor(
     public canvas: HTMLCanvasElement,
     public map: MapDefinition = industrialMap,
@@ -760,6 +772,12 @@ export class Renderer implements CollisionWorld {
         .transformPoint(new pc.Vec3(0, -0.03, 0.14));
       this.poseArm(rig, 1, trigger, 0.3, 0.28);
     }
+    if (p.throwUntil > tick && !p.mantle) {
+      const t = clamp01(1 - (p.throwUntil - tick) / 15);
+      rig.rifle.setLocalEulerAngles(-30, 0, 15);
+      rig.arms[1].shoulder.setLocalEulerAngles(150 - 110 * smooth(t), 0, -15);
+      rig.arms[1].elbow.setLocalEulerAngles(55 * (1 - t), 0, 0);
+    }
     this.attachSupportArm(rig);
   }
   reset(g: Game) {
@@ -767,11 +785,19 @@ export class Renderer implements CollisionWorld {
       ...this.people,
       ...this.rings,
       ...this.projectiles.values(),
+      ...this.grenades.values(),
       ...this.effects.map((v) => v.e),
     ])
       e.destroy();
     this.projectiles.clear();
     this.previousProjectiles.clear();
+    this.grenades.clear();
+    this.previousGrenades.clear();
+    for (const blast of this.blasts) {
+      blast.root.destroy();
+      for (const material of blast.materials) material.destroy();
+    }
+    this.blasts = [];
     this.people = [];
     this.rings = [];
     this.effects = [];
@@ -809,6 +835,9 @@ export class Renderer implements CollisionWorld {
     this.previous = g.players.map((p) => ({ x: p.x, y: p.y, z: p.z }));
     this.previousProjectiles = new Map(
       g.projectiles.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
+    );
+    this.previousGrenades = new Map(
+      g.grenades.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
     );
   }
   draw(g: Game, alpha: number, dt: number, overview = false) {
@@ -876,6 +905,8 @@ export class Renderer implements CollisionWorld {
       this.app.scene.fog.type = "none";
     }
     this.drawProjectiles(g, alpha);
+    this.drawGrenades(g, alpha);
+    this.drawBlasts(dt);
     for (const fx of this.effects) {
       fx.life -= dt;
       fx.e.setLocalScale(fx.life * 0.7, fx.life * 0.7, fx.life * 0.7);
@@ -884,6 +915,127 @@ export class Renderer implements CollisionWorld {
       if (fx.life > 0) return true;
       fx.e.destroy();
       return false;
+    });
+  }
+  private drawGrenades(g: Game, alpha: number) {
+    const active = new Set(g.grenades.map((p) => p.id));
+    for (const [id, entity] of this.grenades)
+      if (!active.has(id)) {
+        entity.destroy();
+        this.grenades.delete(id);
+      }
+    for (const grenade of g.grenades) {
+      let entity = this.grenades.get(grenade.id);
+      if (!entity) {
+        entity = this.joint("grenade", this.app.root);
+        const shell = new pc.Entity("grenade shell");
+        shell.addComponent("render", {
+          type: "sphere",
+          material: this.material("#414d29"),
+        });
+        shell.setLocalScale(0.24, 0.28, 0.24);
+        entity.addChild(shell);
+        this.cube(
+          "grenade fuse",
+          0,
+          0.15,
+          0,
+          0.07,
+          0.06,
+          0.07,
+          "#ebc77a",
+          false,
+          entity,
+        );
+        this.grenades.set(grenade.id, entity);
+      }
+      const previous = this.previousGrenades.get(grenade.id) ?? grenade;
+      entity.setPosition(
+        previous.x + (grenade.x - previous.x) * alpha,
+        previous.y + (grenade.y - previous.y) * alpha,
+        previous.z + (grenade.z - previous.z) * alpha,
+      );
+      const spin = (g.tick - grenade.bornAt + alpha) * 14;
+      entity.setEulerAngles(spin, spin * 0.6, 0);
+    }
+  }
+  private blastEffect(at: V3, radius: number) {
+    const root = this.joint("grenade blast", this.app.root);
+    root.setPosition(at.x, at.y, at.z);
+    const material = (hex: string, emissive = false) => {
+      const m = new pc.StandardMaterial();
+      m.diffuse = color(hex);
+      m.opacity = 0.7;
+      m.blendType = pc.BLEND_NORMAL;
+      m.depthWrite = false;
+      if (emissive) {
+        m.emissive = color(hex);
+        m.useLighting = false;
+      }
+      m.update();
+      return m;
+    };
+    const materials = [
+      material("#ffc46a", true),
+      material("#c9ad79", true),
+      material("#68675f"),
+    ];
+    const particle = (
+      name: string,
+      type: "sphere" | "cylinder",
+      m: pc.StandardMaterial,
+    ) => {
+      const e = this.joint(name, root);
+      e.addComponent("render", {
+        type,
+        material: m,
+        castShadows: false,
+        receiveShadows: false,
+      });
+      return e;
+    };
+    const flash = particle("blast flash", "sphere", materials[0]);
+    const wave = particle("blast radius", "cylinder", materials[1]);
+    const smoke = Array.from({ length: 9 }, (_, i) => {
+      const e = particle("blast smoke", "sphere", materials[2]);
+      const angle = (i / 9) * Math.PI * 2;
+      e.setLocalPosition(Math.sin(angle) * 0.3, 0.1, Math.cos(angle) * 0.3);
+      return e;
+    });
+    this.blasts.push({ root, age: 0, radius, flash, wave, smoke, materials });
+    this.drawBlasts(0);
+  }
+  private drawBlasts(dt: number) {
+    this.blasts = this.blasts.filter((blast) => {
+      blast.age += dt;
+      const t = blast.age;
+      if (t >= 4) {
+        blast.root.destroy();
+        for (const material of blast.materials) material.destroy();
+        return false;
+      }
+      blast.flash.enabled = t < 0.25;
+      blast.flash.setLocalScale(0.4 + t * 12, 0.4 + t * 12, 0.4 + t * 12);
+      blast.materials[0].opacity = Math.max(0, 0.9 * (1 - t / 0.25));
+      blast.wave.enabled = t < 0.6;
+      const diameter = blast.radius * 2 * Math.min(1, t / 0.4);
+      blast.wave.setLocalPosition(0, 0.04, 0);
+      blast.wave.setLocalScale(diameter, 0.035, diameter);
+      blast.materials[1].opacity = Math.max(0, 0.2 * (1 - t / 0.6));
+      blast.materials[2].opacity = Math.min(0.6, t * 4) * (1 - t / 4);
+      for (let i = 0; i < blast.smoke.length; i++) {
+        const angle = (i / blast.smoke.length) * Math.PI * 2;
+        const spread = 0.25 + t * (0.55 + (i % 3) * 0.15);
+        blast.smoke[i].setLocalPosition(
+          Math.sin(angle) * spread,
+          t * (0.5 + (i % 3) * 0.22),
+          Math.cos(angle) * spread,
+        );
+        const scale = 0.3 + Math.sqrt(t) * (1.2 + (i % 3) * 0.25);
+        blast.smoke[i].setLocalScale(scale, scale * 0.85, scale);
+      }
+      for (const material of blast.materials) material.update();
+      return true;
     });
   }
   private tracerMaterial(team: Team) {
@@ -947,6 +1099,10 @@ export class Renderer implements CollisionWorld {
     }
   }
   effect(e: Event) {
+    if (e.type === "grenadeExplosion") {
+      this.blastEffect(e.at, e.radius);
+      return;
+    }
     if (e.type !== "fire" && e.type !== "impact") return;
     const p = e.type === "fire" ? e.from : e.at;
     const v = this.cube(

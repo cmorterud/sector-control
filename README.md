@@ -23,6 +23,8 @@ npm run preview
 
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
 
+Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Grenades arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. Aim up/down to change the arc. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. Smoke is visual rather than an AI visibility barrier. Bots carry their inventory but still use rifles automatically; grenade throws are player-controlled in this version.
+
 ## Trench front prototype
 
 Choose **Trench front** on the start screen, or open [the 25v25 trench map](http://localhost:5173/?map=trenches). Blue has you plus 24 bots; Red has 25 bots. Industrial remains the default 5v5 map.
@@ -59,6 +61,6 @@ Capture requires ten seconds from neutral to ownership; enemy sectors require te
 
 ## Local release scope
 
-Primitive art, articulated block soldiers with bending knees/elbows, walking and sprinting motion, synthesized audio, two selectable maps, one weapon. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
+Primitive art, articulated block soldiers with bending knees/elbows, walking and sprinting motion, synthesized audio, two selectable maps, one rifle and throwable grenades. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
 
 Use a WebGL 2 desktop browser. Manual release verification should include Chrome and Firefox, an eight-minute match, restarts, pointer-lock loss, movement against every obstacle, close-cover shooting, and 1080p frame/memory profiling on the target machine. Passing unit tests does not establish a GPU performance guarantee.
