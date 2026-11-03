@@ -13,6 +13,7 @@ import {
   artilleryAim,
   requestArtillery,
   artilleryThreat,
+  botArtilleryTarget,
 } from "./artillery";
 import { artilleryExplosionProfile } from "./destruction";
 import { groundHeight, industrialMap, type MapDefinition } from "./map";
@@ -257,6 +258,75 @@ describe("artillery damage and bots", () => {
     botCommand(g, p);
     expect(p.artilleryEvade).toBeNull();
     expect(p.path.length).toBeGreaterThan(0);
+  });
+  it.each(["blue", "red"] as const)(
+    "reserves %s artillery for its human even while dead, and rejects bot requests in the simulation",
+    (team) => {
+      const humanId = team === "blue" ? 0 : 2;
+      const g = new Game(
+        new TestCollision(open),
+        true,
+        5000,
+        12345,
+        undefined,
+        {
+          map: open,
+          teamSize: 2,
+          humanPlayerIds: [humanId],
+        },
+      );
+      g.players.forEach((p) =>
+        Object.assign(p, {
+          x: p.team === "blue" ? -25 : 25,
+          z: 0,
+          y: 0,
+          protectedUntil: 0,
+        }),
+      );
+      const human = g.players[humanId],
+        teammate = g.players[humanId + 1];
+      const enemy = g.players.find((p) => p.team !== team)!;
+      g.tick = 900 + teammate.id;
+      expect(botArtilleryTarget(g, teammate)).toBeNull();
+      expect(requestArtillery(g, teammate, enemy)).toBe(false);
+      expect(g.artillery.readyAt[team]).toBe(900);
+      human.hp = 0;
+      expect(requestArtillery(g, teammate, enemy)).toBe(false);
+      expect(botArtilleryTarget(g, teammate)).toBeNull();
+      expect(botArtilleryTarget(g, human)).toBeNull();
+      human.hp = 100;
+      expect(requestArtillery(g, human, enemy)).toBe(true);
+      expect(
+        g.events.filter((e) => e.type === "artilleryCall").map((e) => e.actor),
+      ).toEqual([humanId]);
+      expect(g.snapshot().humanPlayerIds).toEqual([humanId]);
+      g.tick = 930 + enemy.id;
+      expect(botArtilleryTarget(g, enemy)).not.toBeNull();
+      expect(requestArtillery(g, enemy, human)).toBe(true);
+    },
+  );
+  it("lets either team and slot zero call automatically when no humans are playing", () => {
+    const g = new Game(new TestCollision(open), true, 5000, 12345, undefined, {
+      map: open,
+      teamSize: 2,
+      humanPlayerIds: [],
+    });
+    g.players.forEach((p) =>
+      Object.assign(p, {
+        x: p.team === "blue" ? -25 : 25,
+        z: 0,
+        y: 0,
+        protectedUntil: 0,
+      }),
+    );
+    for (const p of [g.players[0], g.players[2]]) {
+      g.tick = 900 + p.id;
+      const marker = botArtilleryTarget(g, p);
+      expect(marker).not.toBeNull();
+      expect(requestArtillery(g, p, marker!)).toBe(true);
+    }
+    expect(g.events.filter((e) => e.type === "artilleryCall")).toHaveLength(2);
+    expect(g.snapshot().humanPlayerIds).toEqual([]);
   });
   it("relocates firing posts whose steps are excavated, and lets horizon/downward aim select ground", () => {
     const g = scene(trenchMap),

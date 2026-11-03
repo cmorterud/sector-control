@@ -458,6 +458,7 @@ export class Game {
   private grenadeCollision: TestCollision;
   botSettings: BotSettings;
   readonly teamSize: number;
+  readonly humanPlayerIds: readonly number[];
   events: Event[] = [];
   sequence = 0;
   seed: number;
@@ -467,8 +468,13 @@ export class Game {
     duration = 14400,
     seed = 12345,
     botSettings?: BotSettings,
-    options: { map?: MapDefinition; teamSize?: number } = {},
+    options: {
+      map?: MapDefinition;
+      teamSize?: number;
+      humanPlayerIds?: readonly number[];
+    } = {},
   ) {
+    this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
     this.map = runtimeMap(options.map ?? industrialMap);
     this.collision.setMap?.(this.map);
     this.grenadeCollision = new TestCollision(this.map);
@@ -546,6 +552,7 @@ export class Game {
       mapId: this.map.id,
       scoring: this.scoring,
       teamSize: this.teamSize,
+      humanPlayerIds: this.humanPlayerIds,
       duration: this.duration,
       phase: this.phase,
       winner: this.winner,

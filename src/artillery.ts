@@ -71,6 +71,11 @@ export function createArtilleryState(): ArtilleryState {
     shellSequence: 0,
   };
 }
+function teamHasHuman(g: Game, p: Soldier): boolean {
+  return g.players.some(
+    (q) => q.team === p.team && g.humanPlayerIds.includes(q.id),
+  );
+}
 export function artilleryTargetReason(
   g: Game,
   p: Soldier,
@@ -78,6 +83,8 @@ export function artilleryTargetReason(
 ): string | null {
   if (!g.artillery.enabled || g.phase !== "playing")
     return "Artillery unavailable";
+  if (teamHasHuman(g, p) && !g.humanPlayerIds.includes(p.id))
+    return "Artillery is reserved for your team's human player";
   if (p.hp <= 0 || p.mantle || p.hop) return "Stand on solid ground to spot";
   if (!Number.isFinite(target.x) || !Number.isFinite(target.z))
     return "Choose a target";
@@ -257,7 +264,7 @@ export function artilleryThreat(g: Game, p: Vec): FireMission | undefined {
 export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
   if (
     !g.artillery.enabled ||
-    (p.team === "blue" && p.id !== 0) ||
+    teamHasHuman(g, p) ||
     g.tick < g.artillery.readyAt[p.team] ||
     g.tick % 30 !== p.id % 30
   )

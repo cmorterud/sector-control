@@ -123,7 +123,7 @@ function start() {
     ),
     12345,
     undefined,
-    { map, teamSize },
+    { map, teamSize, humanPlayerIds: autoplay ? [] : [0] },
   );
   renderer.reset(game);
   if (params.has("playtest"))
