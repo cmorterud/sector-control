@@ -1,5 +1,11 @@
 import * as pc from "playcanvas";
-import { createPhysicsWorld } from "./physics";
+import { createPhysicsWorld, TerrainPhysics } from "./physics";
+import {
+  runtimeMap,
+  type Destructible,
+  type DestructionChange,
+} from "./destruction";
+import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
 import {
   industrialMap,
   groundHeight,
@@ -48,11 +54,12 @@ export class Renderer implements CollisionWorld {
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
   rings: pc.Entity[] = [];
-  effects: { e: pc.Entity; life: number }[] = [];
+  effects: { e: pc.Entity; life: number; velocity?: V3; size?: number }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
   previous: V3[] = [];
   private mapBatch = -1;
   private actorBatch = -1;
+  private coverBatch = -1;
   private batchGroup = -1;
   private projectiles = new Map<number, pc.Entity>();
   private previousProjectiles = new Map<number, V3>();
@@ -67,10 +74,25 @@ export class Renderer implements CollisionWorld {
     smoke: pc.Entity[];
     materials: pc.StandardMaterial[];
   }[] = [];
+  private mapRoot!: pc.Entity;
+  private worldParent?: pc.Entity;
+  private terrainPhysics = new TerrainPhysics();
+  private terrainPatches = new Map<
+    string,
+    { entity: pc.Entity; mesh: pc.Mesh }
+  >();
+  private objectVisuals = new Map<string, pc.Entity>();
+  private groundDecor: {
+    root: pc.Entity;
+    x: number;
+    z: number;
+    radius: number;
+  }[] = [];
   constructor(
     public canvas: HTMLCanvasElement,
     public map: MapDefinition = industrialMap,
   ) {
+    map = this.map = runtimeMap(map);
     this.app = new pc.Application(canvas, {
       physicsWorld: createPhysicsWorld(),
       graphicsDeviceOptions: {
@@ -79,6 +101,11 @@ export class Renderer implements CollisionWorld {
       },
     });
     this.mapBatch = this.app.batcher!.addGroup("static map", false, 200).id;
+    this.coverBatch = this.app.batcher!.addGroup(
+      "destructible cover",
+      false,
+      200,
+    ).id;
     this.actorBatch = this.app.batcher!.addGroup(
       "articulated soldiers",
       true,
@@ -114,19 +141,22 @@ export class Renderer implements CollisionWorld {
     });
     sun.setEulerAngles(45, -35, 0);
     this.app.root.addChild(sun);
-    this.cube(
-      "ground",
-      0,
-      -0.3,
-      0,
-      map.width,
-      0.6,
-      map.depth,
-      trenches ? "#514330" : "#777d73",
-      true,
-    );
+    this.buildMap();
+    window.addEventListener("resize", () => this.app.resizeCanvas());
+    // Simulation calls collision queries synchronously; no automatic physics advancement.
+    this.app.systems.rigidbody!.timeScale = 0;
+    this.app.start();
+  }
+  private buildMap() {
+    const map = this.map;
+    const trenches = map.id === "trenches";
+    this.mapRoot = this.joint("battlefield", this.app.root);
+    this.worldParent = this.mapRoot;
+    this.batchGroup = this.mapBatch;
+    for (const key of terrainPatchKeys(map)) this.rebuildTerrainPatch(key);
     if (map.terrain) this.buildTrenchTerrain();
     for (const b of map.boxes) {
+      if (map.destruction?.objects[b.id!]) continue;
       const c =
         b.kind === "building"
           ? "#707a79"
@@ -235,6 +265,8 @@ export class Renderer implements CollisionWorld {
             "#465f61",
           );
     }
+    for (const object of Object.values(map.destruction!.objects))
+      this.buildDestructible(object);
     for (const [x, z, w, d] of [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
@@ -258,79 +290,27 @@ export class Renderer implements CollisionWorld {
         this.cube("road marking", 1, 0.015, i, 0.12, 0.02, 3, "#b8b29b");
       }
     this.batchGroup = -1;
-    this.app.batcher!.generate([this.mapBatch]);
-    window.addEventListener("resize", () => this.app.resizeCanvas());
-    // Simulation calls collision queries synchronously; no automatic physics advancement.
-    this.app.systems.rigidbody!.timeScale = 0;
-    this.app.start();
+    this.app.batcher!.generate([this.mapBatch, this.coverBatch]);
+    this.worldParent = undefined;
   }
   private buildTrenchTerrain() {
     const terrain = this.map.terrain!;
-    for (const patch of terrain.rectangles)
-      this.cube(
-        "earth bank",
-        patch.x,
-        patch.h / 2,
-        patch.z,
-        patch.w,
-        patch.h,
-        patch.d,
-        patch.h < terrain.bankHeight - 0.1 ? "#65513b" : "#736548",
-        true,
-      );
-    for (const ramp of terrain.ramps) {
-      const angle = Math.atan2(ramp.high - ramp.low, ramp.w);
-      const length = Math.hypot(ramp.w, ramp.high - ramp.low) + 0.12;
-      this.cube(
-        "trench ramp",
-        ramp.x,
-        (ramp.low + ramp.high) / 2 - 0.1 / Math.cos(angle),
-        ramp.z,
-        length,
-        0.2,
-        ramp.d,
-        ramp.high < terrain.bankHeight - 0.1 ? "#6b563c" : "#65533b",
-        true,
-        undefined,
-        (ramp.direction * angle * 180) / Math.PI,
-      );
-    }
-    for (const wall of terrain.lining) {
-      this.cube(
-        "timber trench lining",
-        wall.x,
-        terrain.bankHeight / 2,
-        wall.z,
-        wall.w,
-        terrain.bankHeight - 0.1,
-        wall.d,
-        "#65513d",
-      );
-      const postOffsets = [-wall.d / 2 + 0.15, wall.d / 2 - 0.15];
-      if (wall.d > 3) postOffsets.push(0);
-      for (const dz of postOffsets)
-        this.cube(
-          "trench post",
-          wall.x,
-          terrain.bankHeight / 2,
-          wall.z + dz,
-          0.2,
-          terrain.bankHeight,
-          0.2,
-          "#493d2f",
-        );
-    }
+    const previousBatch = this.batchGroup;
+    this.batchGroup = -1;
     for (const crater of terrain.craters) {
+      const root = this.joint("old shell scar", this.mapRoot);
+      this.groundDecor.push({ root, ...crater });
+      this.worldParent = root;
       const disk = new pc.Entity("shell scar");
       disk.addComponent("render", {
         type: "cylinder",
         material: this.material("#44392b"),
         castShadows: false,
-        batchGroupId: this.mapBatch,
+        batchGroupId: -1,
       });
       disk.setLocalScale(crater.radius * 2, 0.025, crater.radius * 2);
       disk.setLocalPosition(crater.x, terrain.bankHeight + 0.015, crater.z);
-      this.app.root.addChild(disk);
+      root.addChild(disk);
       for (let i = 0; i < 5; i++) {
         const angle = (i * Math.PI * 2) / 5;
         this.cube(
@@ -345,6 +325,123 @@ export class Renderer implements CollisionWorld {
         );
       }
     }
+    this.worldParent = this.mapRoot;
+    this.batchGroup = previousBatch;
+  }
+  setMap(map: MapDefinition) {
+    const restore = !!this.map.destruction?.revision || this.map.id !== map.id;
+    this.map = map;
+    if (!restore) return;
+    this.terrainPhysics.destroy();
+    for (const patch of this.terrainPatches.values()) {
+      patch.entity.destroy();
+      patch.mesh.destroy();
+    }
+    this.terrainPatches.clear();
+    this.objectVisuals.clear();
+    this.groundDecor = [];
+    this.mapRoot.destroy();
+    this.terrainPhysics = new TerrainPhysics();
+    this.buildMap();
+  }
+  private rebuildTerrainPatch(key: string) {
+    const data = terrainGeometry(this.map, key);
+    if (!data.indices.length) return;
+    const old = this.terrainPatches.get(key);
+    const entity = this.joint(`terrain ${key}`, this.mapRoot);
+    const mesh = new pc.Mesh(this.app.graphicsDevice);
+    mesh.setPositions(data.positions);
+    mesh.setNormals(pc.calculateNormals(data.positions, data.indices));
+    mesh.setColors(data.colors);
+    mesh.setIndices(data.indices);
+    mesh.update(pc.PRIMITIVE_TRIANGLES);
+    const material = this.material("#ffffff");
+    material.diffuseVertexColor = true;
+    material.update();
+    const instance = new pc.MeshInstance(mesh, material, entity);
+    instance.castShadow = true;
+    entity.addComponent("render", { meshInstances: [instance] });
+    this.terrainPhysics.setPatch(key, data, entity);
+    if (old) {
+      old.entity.destroy();
+      old.mesh.destroy();
+    }
+    this.terrainPatches.set(key, { entity, mesh });
+  }
+  private buildDestructible(object: Destructible) {
+    this.objectVisuals.get(object.id)?.destroy();
+    this.objectVisuals.delete(object.id);
+    if (object.stage === 2) return;
+    const previousBatch = this.batchGroup;
+    this.batchGroup = this.coverBatch;
+    const root = this.joint(object.id, this.mapRoot);
+    const b = object.original;
+    const h = b.h * (object.stage === 1 ? 0.6 : 1),
+      base = b.baseY ?? 0;
+    const tint =
+      b.kind === "wood"
+        ? object.stage === 1
+          ? "#493624"
+          : "#756044"
+        : object.stage === 1
+          ? "#756951"
+          : "#9a8c6a";
+    this.cube(
+      b.kind,
+      b.x,
+      base + h / 2,
+      b.z,
+      b.w,
+      h,
+      b.d,
+      tint,
+      !object.lining,
+      root,
+    );
+    if (b.kind === "wood") {
+      for (const dz of [-b.d / 2 + 0.08, b.d / 2 - 0.08])
+        this.cube(
+          "wood post",
+          b.x,
+          base + (h + 0.06) / 2,
+          b.z + dz,
+          b.w + 0.05,
+          h + 0.06,
+          0.12,
+          "#493d2f",
+          false,
+          root,
+        );
+    } else {
+      for (let x = b.x - b.w / 2 + 0.4; x < b.x + b.w / 2; x += 0.8)
+        this.cube(
+          "sandbag seam",
+          x,
+          base + h * 0.55,
+          b.z,
+          0.025,
+          0.025,
+          b.d + 0.01,
+          "#655c46",
+          false,
+          root,
+        );
+    }
+    this.objectVisuals.set(object.id, root);
+    this.batchGroup = previousBatch;
+  }
+  updateWorld(change: DestructionChange) {
+    for (const key of change.patches) this.rebuildTerrainPatch(key);
+    for (const changed of change.objects)
+      this.buildDestructible(this.map.destruction!.objects[changed.id]);
+    if (change.objects.length) this.app.batcher!.generate([this.coverBatch]);
+    if (change.crater)
+      for (const decor of this.groundDecor)
+        if (
+          Math.hypot(decor.x - change.at.x, decor.z - change.at.z) <
+          decor.radius + change.crater.radius
+        )
+          decor.root.enabled = false;
   }
   material(c: string) {
     if (!this.materials.has(c)) {
@@ -380,7 +477,7 @@ export class Renderer implements CollisionWorld {
     e.setLocalPosition(x, y, z);
     e.setLocalScale(w, h, d);
     e.setLocalEulerAngles(0, 0, rotationZ);
-    (parent ?? this.app.root).addChild(e);
+    (parent ?? this.worldParent ?? this.app.root).addChild(e);
     if (solid) {
       e.addComponent("collision", {
         type: "box",
@@ -395,10 +492,7 @@ export class Renderer implements CollisionWorld {
       new pc.Vec3(a.x, a.y, a.z),
       new pc.Vec3(b.x, b.y, b.z),
     );
-    return hit
-      ? hit.point.distance(new pc.Vec3(a.x, a.y, a.z)) /
-          Math.max(0.001, Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z))
-      : 1;
+    return Math.min(hit?.hitFraction ?? 1, this.terrainPhysics.ray(a, b));
   }
   move(p: Vec, d: Vec) {
     return moveOnMap(p, d, this.map);
@@ -909,7 +1003,20 @@ export class Renderer implements CollisionWorld {
     this.drawBlasts(dt);
     for (const fx of this.effects) {
       fx.life -= dt;
-      fx.e.setLocalScale(fx.life * 0.7, fx.life * 0.7, fx.life * 0.7);
+      const size = fx.life * (fx.size ?? 0.7);
+      fx.e.setLocalScale(size, size, size);
+      if (fx.velocity) {
+        const position = fx.e.getPosition();
+        fx.velocity.y -= 10 * dt;
+        fx.e.setPosition(
+          position.x + fx.velocity.x * dt,
+          Math.max(
+            groundHeight(position.x, position.z, this.map) + 0.05,
+            position.y + fx.velocity.y * dt,
+          ),
+          position.z + fx.velocity.z * dt,
+        );
+      }
     }
     this.effects = this.effects.filter((fx) => {
       if (fx.life > 0) return true;
@@ -1099,6 +1206,36 @@ export class Renderer implements CollisionWorld {
     }
   }
   effect(e: Event) {
+    if (e.type === "destruction") {
+      const count = Math.min(
+        16,
+        6 + e.change.objects.length * 2 + (e.change.crater ? 4 : 0),
+      );
+      for (let i = 0; i < count; i++) {
+        const angle = i * 2.4;
+        const fragment = this.cube(
+          "earth and cover debris",
+          e.change.at.x,
+          e.change.at.y + 0.1,
+          e.change.at.z,
+          0.12,
+          0.12,
+          0.12,
+          i % 3 ? "#6b5438" : "#9b8661",
+        );
+        this.effects.push({
+          e: fragment,
+          life: 1 + (i % 3) * 0.15,
+          size: 0.16,
+          velocity: {
+            x: Math.cos(angle) * (2 + (i % 3)),
+            y: 2 + (i % 4),
+            z: Math.sin(angle) * (2 + (i % 3)),
+          },
+        });
+      }
+      return;
+    }
     if (e.type === "grenadeExplosion") {
       this.blastEffect(e.at, e.radius);
       return;

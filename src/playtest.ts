@@ -47,6 +47,14 @@ export class PlaytestLog {
       grenadeExplosions: this.events.filter(
         (e) => e.type === "grenadeExplosion",
       ).length,
+      destructionEvents: this.events.filter((e) => e.type === "destruction")
+        .length,
+      craters: this.events.filter(
+        (e) => e.type === "destruction" && e.change.crater,
+      ).length,
+      destroyedCover: this.events
+        .flatMap((e) => (e.type === "destruction" ? e.change.objects : []))
+        .filter((object) => object.stage === 2).length,
     };
   }
 }

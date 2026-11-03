@@ -78,6 +78,18 @@ for (const side of [-1, 1] as const) {
       kind: "bunker",
     });
 }
+// Light rear-line screens sit away from entry ramps and can be blown apart.
+for (const side of [-1, 1])
+  cover.push({
+    id: `rear-wood-${side}`,
+    x: side * 63,
+    z: side * 9,
+    w: 0.25,
+    d: 2.5,
+    h: 1.2,
+    baseY: bankHeight,
+    kind: "wood",
+  });
 // Sparse, low remnants leave the central crossing exposed. No objective fortresses.
 for (const side of [-1, 1] as const) {
   cover.push({

@@ -233,7 +233,7 @@ function hud(now: number) {
     map.terrain &&
     !p.mantle &&
     !p.hop &&
-    mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, map);
+    mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, game.map);
   el("capture").innerHTML =
     p.hp <= 0
       ? `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
@@ -258,7 +258,7 @@ function hud(now: number) {
           .map((s) => {
             const v = renderer.project({
               x: s.x,
-              y: groundHeight(s.x, s.z, map) + 4,
+              y: groundHeight(s.x, s.z, game.map) + 4,
               z: s.z,
             });
             return v.z > 0

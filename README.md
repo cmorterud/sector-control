@@ -25,6 +25,14 @@ Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-sec
 
 Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Grenades arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. Aim up/down to change the arc. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. Smoke is visual rather than an AI visibility barrier. Bots carry their inventory but still use rifles automatically; grenade throws are player-controlled in this version.
 
+## Destruction prototype
+
+Grenades now excavate persistent craters and damage wooden obstacles, trench lining, and sandbags in both maps. A ground-level grenade can dig roughly 0.3 m at its center across an initial 2.4 m footprint; airbursts dig less. Repeated hits deepen and widen the bowl, with a lowest floor of −0.9 m. Craters affect walking height, cover, bullets, camera collision, and bot routes. Parapet crests can be chipped, and repeated concentrated hits can create a breach. Wooden lining can break away while the earth behind it remains solid. Sandbags lose height before disappearing. Two light wooden screens behind the trench lines provide additional destructible cover.
+
+Buildings, bunkers, containers, and concrete barriers stay solid and protect their foundations. Dust, smoke, and flying fragments accompany destruction; fragments are cosmetic. Changes last for the match and reset on restart. This is a height-field prototype without tunnels, overhangs, or structural building collapse. Explosion profiles separate soldier damage, structural damage, and excavation settings for future artillery; artillery itself is not included yet.
+
+Destruction events record the source, world revision, object health/stage, changed terrain samples and rebuilt patches. JSON snapshots include the accumulated world state. The renderer replaces only affected local terrain meshes/colliders and refreshes damaged cover; bots recalculate routes after changes.
+
 ## Trench front prototype
 
 Choose **Trench front** on the start screen, or open [the 25v25 trench map](http://localhost:5173/?map=trenches). Blue has you plus 24 bots; Red has 25 bots. Industrial remains the default 5v5 map.
@@ -55,7 +63,7 @@ For simulation checks without video, open `http://localhost:5173/?playtest=1&vid
 
 All simulation uses 30 Hz ticks, plain serializable state, shared human/bot commands, typed events, and an injected collision boundary. `simulation.ts` runs in Node without PlayCanvas or a DOM. `map.ts` is the shared geometry and objective definition. `rendering.ts` adapts PlayCanvas/Ammo and procedural models. `main.ts` owns browser input, menus, audio, and the frame accumulator.
 
-Industrial uses flat axis-aligned geometry. The trench map adds a shared height field, recessed floors, firing steps, and inclined ramps. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
+Industrial starts on flat ground with axis-aligned obstacles. Both maps support runtime grenade excavation. The trench map adds a shared height field, recessed floors, firing steps, and inclined ramps. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
 
 Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Rifle rounds visibly travel at 32 m/s, expire after 60 meters, and deal damage on impact. Teammates block rounds without taking damage; protection is checked when the round arrives. Reserve ammo is finite until respawn.
 

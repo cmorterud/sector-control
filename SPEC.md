@@ -50,3 +50,12 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 - Fifty firing stations: 25 per faction distributed along seven front-line step sections. Bots hold these positions, acquire exposed heads with up to 59 m engagement range, and do not mantle into no man's land. Industrial AI remains objective-driven.
 - Trench rifle muzzle/LOS height is 1.65 m above the feet; bot aim targets head height rather than the concealed torso. Articulated arm poses raise and support the weapon without detaching the left hand.
 - One point per enemy elimination; no sector capture awards, sector rings, or objective labels in trench mode. Faction scores track total opposing deaths. Manual over-the-top mantling is retained; there is no automatic exit route.
+
+## Destruction prototype
+
+- Runtime world state is isolated per match: sparse 0.25 m excavation samples, stable cover IDs/health/stages, crater records and monotonically increasing revisions. Authored maps remain pristine.
+- Grenade explosion profile: soldier radius/damage 7 m / 140; structural radius/damage 4 m / 100; crater radius/depth 1.2 m / 0.36 m; excavation attenuates with standoff up to 3 m and respects pre-explosion cover.
+- Wood has 40 HP; sandbags have 160 HP. Damaged cover at half health retains 60% height; destroyed cover removes its collision. Timber lining is segmented and exposes retained earth when destroyed. Fixed buildings/bunkers/containers/concrete barriers are indestructible and protect foundations.
+- Repeated excavation accumulates, spreading outward to keep continuous surfaces navigable; minimum world height −0.9 m. Original trench walls remain until actually excavated. Soldier damage is evaluated before cover removal from that explosion. Unrelated mantles continue; changed endpoints invalidate a climb.
+- Ground meshes and actual Ammo terrain collision share the same sampled surface. Eight-meter patches refine only affected two-meter cells; unaffected geometry stays coarse. Camera/projectile/LOS queries include dynamic terrain. Navigation caches and bot paths refresh after changes. Full restart restores pristine geometry and releases the terrain physics world's cached triangle data.
+- Destruction produces transient cosmetic fragments alongside grenade flash/smoke/audio. No tunnels, overhangs, persistent physics debris, building collapse, or artillery firing UI in this prototype. Future explosion profiles use the same damage/deformation entry point.

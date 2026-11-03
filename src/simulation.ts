@@ -10,9 +10,18 @@ import {
   type Vec,
   type MapDefinition,
 } from "./map";
+import {
+  runtimeMap,
+  deformExplosion,
+  grenadeExplosionProfile,
+  type DestructionChange,
+  type ExplosionProfile,
+} from "./destruction";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
+  setMap?(map: MapDefinition): void;
+  updateWorld?(change: DestructionChange): void;
   move(from: Vec, delta: Vec): Vec;
   ray(from: V3, to: V3): number; // nearest world obstruction, fraction [0,1]
 }
@@ -41,7 +50,7 @@ export const idle = (): Command => ({
   grenade: false,
 });
 export const grenadeFuseTicks = 90;
-export const grenadeBlastRadius = 7;
+export const grenadeBlastRadius = grenadeExplosionProfile.radius;
 export const grenadeRadius = 0.12;
 export const grenadeSpeed = 20;
 export const grenadeGravity = 10;
@@ -225,6 +234,7 @@ export const defaultBotSettings: BotSettings = {
   burstFireTicks: 15,
 };
 export type Event = { id: number; tick: number } & (
+  | { type: "destruction"; actor: number; change: DestructionChange }
   | {
       type: "grenadeThrow";
       actor: number;
@@ -267,6 +277,9 @@ type EventInput = Event extends infer E
   : never;
 export class TestCollision implements CollisionWorld {
   constructor(public map: MapDefinition = industrialMap) {}
+  setMap(map: MapDefinition) {
+    this.map = map;
+  }
   move(p: Vec, d: Vec): Vec {
     if (this.map.terrain) return moveOnMap(p, d, this.map);
     let x = p.x,
@@ -407,7 +420,8 @@ export class Game {
     botSettings?: BotSettings,
     options: { map?: MapDefinition; teamSize?: number } = {},
   ) {
-    this.map = options.map ?? industrialMap;
+    this.map = runtimeMap(options.map ?? industrialMap);
+    this.collision.setMap?.(this.map);
     this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
     this.botSettings = {
@@ -494,6 +508,7 @@ export class Game {
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
+      world: this.map.destruction,
     });
   }
   emit(e: EventInput) {
@@ -1118,25 +1133,7 @@ export class Game {
   }
   private explodeGrenade(g: Grenade) {
     const at = { x: g.x, y: g.y, z: g.z };
-    const hits: { target: number; damage: number }[] = [];
-    for (const p of this.players) {
-      if (
-        p.hp <= 0 ||
-        (p.team === g.team && p.id !== g.actor) ||
-        this.tick < p.protectedUntil
-      )
-        continue;
-      const distance = Math.hypot(p.x - g.x, p.y + 0.9 - g.y, p.z - g.z);
-      if (distance >= grenadeBlastRadius) continue;
-      const visible = [0.6, 1.1, 1.6].some(
-        (height) =>
-          this.collision.ray(at, { x: p.x, y: p.y + height, z: p.z }) >= 0.999,
-      );
-      if (!visible) continue;
-      const damage = Math.ceil(140 * (1 - distance / grenadeBlastRadius));
-      hits.push({ target: p.id, damage });
-      this.damage(p, damage, g.actor, g.team);
-    }
+    const hits = this.explode(at, g.actor, g.team, grenadeExplosionProfile);
     this.emit({
       type: "grenadeExplosion",
       actor: g.actor,
@@ -1145,6 +1142,54 @@ export class Game {
       radius: grenadeBlastRadius,
       hits,
     });
+  }
+  explode(at: V3, actor: number, team: Team, profile: ExplosionProfile) {
+    const hits: { target: number; damage: number }[] = [];
+    for (const p of this.players) {
+      if (
+        p.hp <= 0 ||
+        (p.team === team && p.id !== actor) ||
+        this.tick < p.protectedUntil
+      )
+        continue;
+      const distance = Math.hypot(p.x - at.x, p.y + 0.9 - at.y, p.z - at.z);
+      if (distance >= profile.radius) continue;
+      const visible = [0.6, 1.1, 1.6].some(
+        (height) =>
+          this.collision.ray(at, { x: p.x, y: p.y + height, z: p.z }) >= 0.999,
+      );
+      if (!visible) continue;
+      const damage = Math.ceil(
+        profile.damage * (1 - distance / profile.radius),
+      );
+      hits.push({ target: p.id, damage });
+      this.damage(p, damage, actor, team);
+    }
+    const change = deformExplosion(this.map, at, profile, (a, b) =>
+      this.collision.ray(a, b),
+    );
+    if (change) {
+      navigation.delete(this.map);
+      this.collision.updateWorld?.(change);
+      for (const p of this.players) {
+        p.path = [];
+        p.nextThink = this.tick + (p.id % 30);
+        if (p.mantle) {
+          const m = p.mantle;
+          if (
+            Math.abs(groundHeight(m.from.x, m.from.z, this.map) - m.from.y) <
+              0.02 &&
+            Math.abs(groundHeight(m.to.x, m.to.z, this.map) - m.to.y) < 0.02
+          )
+            continue;
+          p.mantle = null;
+          p.landedAt = this.tick;
+        }
+        p.y = groundHeight(p.x, p.z, this.map) + (p.hop?.height ?? 0);
+      }
+      this.emit({ type: "destruction", actor, change });
+    }
+    return hits;
   }
 }
 // Each map owns a cached height-aware navigation graph.
@@ -1174,6 +1219,15 @@ function graph(map: MapDefinition) {
     for (const x of [r.x - r.w / 2, r.x, r.x + r.w / 2])
       for (const z of [r.z - r.d / 2 + 0.8, r.z, r.z + r.d / 2 - 0.8])
         add(x, z);
+  for (const crater of map.destruction?.craters ?? [])
+    for (const [dx, dz] of [
+      [0, 0],
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ])
+      add(crater.x + dx * crater.radius, crater.z + dz * crater.radius);
   const buckets = new Map<string, number[]>();
   nodes.forEach((p, i) => {
     const key = `${Math.floor(p.x / step)},${Math.floor(p.z / step)}`;

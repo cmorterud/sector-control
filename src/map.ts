@@ -1,9 +1,20 @@
+import type { DestructionState } from "./destruction";
+export const terrainResolution = 0.25;
+export const terrainPatchSize = 8;
 export type Vec = { x: number; z: number };
 export type Box = Vec & {
+  id?: string;
   w: number;
   d: number;
   h: number;
-  kind: "building" | "container" | "barrier" | "sandbag" | "wire" | "bunker";
+  kind:
+    | "building"
+    | "container"
+    | "barrier"
+    | "sandbag"
+    | "wire"
+    | "bunker"
+    | "wood";
   baseY?: number;
 };
 export const sectors = [
@@ -48,6 +59,7 @@ export interface MapDefinition {
   spawn: Record<"blue" | "red", Vec>;
   sectors: (Vec & { id: string })[];
   boxes: Box[];
+  destruction?: DestructionState;
   terrain?: {
     bankHeight: number;
     firingPositions?: (Vec & { team: "blue" | "red" })[];
@@ -71,7 +83,7 @@ export const industrialMap: MapDefinition = {
   sectors,
   boxes,
 };
-export function groundHeight(
+export function baseGroundHeight(
   x: number,
   z: number,
   map: MapDefinition = industrialMap,
@@ -94,6 +106,36 @@ export function groundHeight(
   if (col < 0 || col >= terrain.columns || row < 0 || row >= terrain.rows)
     return terrain.bankHeight;
   return terrain.heights[row * terrain.columns + col];
+}
+export function groundHeight(
+  x: number,
+  z: number,
+  map: MapDefinition = industrialMap,
+): number {
+  return Math.max(-0.9, baseGroundHeight(x, z, map) - terrainCut(x, z, map));
+}
+export function terrainCut(x: number, z: number, map: MapDefinition): number {
+  const state = map.destruction;
+  if (!state || !state.revision) return 0;
+  if (
+    !state.patches[
+      `${Math.floor(x / terrainPatchSize)},${Math.floor(z / terrainPatchSize)}`
+    ]
+  )
+    return 0;
+  const gx = x / terrainResolution,
+    gz = z / terrainResolution;
+  const ix = Math.floor(gx),
+    iz = Math.floor(gz);
+  const tx = gx - ix,
+    tz = gz - iz;
+  const a = state.cuts[`${ix},${iz}`] ?? 0,
+    b = state.cuts[`${ix + 1},${iz}`] ?? 0;
+  const c = state.cuts[`${ix},${iz + 1}`] ?? 0,
+    d = state.cuts[`${ix + 1},${iz + 1}`] ?? 0;
+  return tx <= tz
+    ? a + (d - c) * tx + (c - a) * tz
+    : a + (b - a) * tx + (d - b) * tz;
 }
 export function blocked(
   x: number,

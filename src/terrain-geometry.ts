@@ -1,0 +1,123 @@
+import { groundHeight, terrainCut, type MapDefinition } from "./map";
+import { terrainPatchSize, terrainResolution } from "./destruction";
+
+export interface TerrainGeometry {
+  positions: number[];
+  indices: number[];
+  colors: number[];
+}
+export function terrainPatchKeys(map: MapDefinition) {
+  const keys: string[] = [];
+  for (
+    let x = Math.floor(-map.width / 2 / terrainPatchSize);
+    x < map.width / 2 / terrainPatchSize;
+    x++
+  )
+    for (
+      let z = Math.floor(-map.depth / 2 / terrainPatchSize);
+      z < map.depth / 2 / terrainPatchSize;
+      z++
+    )
+      keys.push(`${x},${z}`);
+  return keys;
+}
+export function terrainGeometry(
+  map: MapDefinition,
+  key: string,
+): TerrainGeometry {
+  const [ix, iz] = key.split(",").map(Number);
+  const x0 = Math.max(-map.width / 2, ix * terrainPatchSize),
+    x1 = Math.min(map.width / 2, (ix + 1) * terrainPatchSize);
+  const z0 = Math.max(-map.depth / 2, iz * terrainPatchSize),
+    z1 = Math.min(map.depth / 2, (iz + 1) * terrainPatchSize);
+  const positions: number[] = [],
+    indices: number[] = [],
+    colors: number[] = [];
+  const quad = (points: number[][], dark = false) => {
+    const start = positions.length / 3;
+    for (const [x, y, z] of points) {
+      positions.push(x, y, z);
+      const shade =
+        Math.max(0.45, 1 - terrainCut(x, z, map) * 1.5) * (dark ? 0.7 : 1);
+      const soil = map.terrain
+        ? y > 1
+          ? [0.45, 0.4, 0.28]
+          : [0.32, 0.26, 0.19]
+        : [0.46, 0.49, 0.43];
+      colors.push(
+        (soil[0] * shade) ** 2.2,
+        (soil[1] * shade) ** 2.2,
+        (soil[2] * shade) ** 2.2,
+        1,
+      );
+    }
+    indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+  };
+  const epsilon = 0.00001;
+  // Refine only the two-meter cells touched by excavation, not the whole patch.
+  const refined = new Set<string>();
+  if (map.destruction?.patches[key])
+    for (const cutKey of Object.keys(map.destruction.cuts)) {
+      const [gx, gz] = cutKey.split(",").map(Number);
+      const wx = gx * terrainResolution,
+        wz = gz * terrainResolution;
+      if (wx < x0 || wx > x1 || wz < z0 || wz > z1) continue;
+      for (const dx of [0, -epsilon])
+        for (const dz of [0, -epsilon])
+          refined.add(
+            `${Math.floor((wx - x0 + dx) / 2)},${Math.floor((wz - z0 + dz) / 2)}`,
+          );
+    }
+  for (let cellX = x0; cellX < x1; cellX += 2)
+    for (let cellZ = z0; cellZ < z1; cellZ += 2) {
+      const step = refined.has(
+        `${Math.floor((cellX - x0) / 2)},${Math.floor((cellZ - z0) / 2)}`,
+      )
+        ? terrainResolution
+        : 2;
+      for (let x = cellX; x < Math.min(x1, cellX + 2) - epsilon; x += step)
+        for (let z = cellZ; z < Math.min(z1, cellZ + 2) - epsilon; z += step) {
+          const right = Math.min(x1, cellX + 2, x + step),
+            back = Math.min(z1, cellZ + 2, z + step);
+          const a = [x, groundHeight(x + epsilon, z + epsilon, map), z];
+          const b = [x, groundHeight(x + epsilon, back - epsilon, map), back];
+          const c = [
+            right,
+            groundHeight(right - epsilon, back - epsilon, map),
+            back,
+          ];
+          const d = [right, groundHeight(right - epsilon, z + epsilon, map), z];
+          quad([a, b, c, d]);
+          const sides = [
+            [
+              a,
+              d,
+              groundHeight(x + epsilon, z - epsilon, map),
+              groundHeight(right - epsilon, z - epsilon, map),
+            ],
+            [
+              d,
+              c,
+              groundHeight(right + epsilon, z + epsilon, map),
+              groundHeight(right + epsilon, back - epsilon, map),
+            ],
+            [
+              c,
+              b,
+              groundHeight(right - epsilon, back + epsilon, map),
+              groundHeight(x + epsilon, back + epsilon, map),
+            ],
+            [
+              b,
+              a,
+              groundHeight(x - epsilon, back - epsilon, map),
+              groundHeight(x - epsilon, z + epsilon, map),
+            ],
+          ] as const;
+          for (const [p, q, lowP, lowQ] of sides)
+            if ((p[1] + q[1]) / 2 > (lowP + lowQ) / 2 + 0.001)
+              quad([p, q, [q[0], lowQ, q[2]], [p[0], lowP, p[2]]], true);
+        }
+    }
+  return { positions, indices, colors };
+}
