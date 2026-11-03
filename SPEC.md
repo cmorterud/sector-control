@@ -54,7 +54,7 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 ## Destruction prototype
 
 - Runtime world state is isolated per match: sparse 0.25 m excavation samples, stable cover IDs/health/stages, crater records and monotonically increasing revisions. Authored maps remain pristine.
-- Grenade explosion profile: soldier radius/damage 7 m / 140; structural radius/damage 4 m / 100; crater radius/depth 1.2 m / 0.36 m; excavation attenuates with standoff up to 3 m and respects pre-explosion cover.
+- Grenade explosion profile: soldier radius/damage 7 m / 140; structural radius/damage 4 m / 100; crater radius/depth 1.75 m / 0.55 m; excavation uses a rounded radial bowl, attenuates with standoff up to 3 m and respects pre-explosion cover.
 - Wood has 40 HP; sandbags have 160 HP. Damaged cover at half health retains 60% height; destroyed cover removes its collision. Timber lining is segmented and exposes retained earth when destroyed. Fixed buildings/bunkers/containers/concrete barriers are indestructible and protect foundations.
 - Repeated excavation accumulates, spreading outward to keep continuous surfaces navigable; minimum world height −0.9 m. Original trench walls remain until actually excavated. Soldier damage is evaluated before cover removal from that explosion. Unrelated mantles continue; changed endpoints invalidate a climb.
 - Ground meshes and actual Ammo terrain collision share the same sampled surface. Eight-meter patches refine only affected two-meter cells; unaffected geometry stays coarse. Camera/projectile/LOS queries include dynamic terrain. Navigation caches and bot paths refresh after changes. Full restart restores pristine geometry and releases the terrain physics world's cached triangle data.

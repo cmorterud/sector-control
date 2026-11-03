@@ -68,7 +68,7 @@ it("accumulates excavation, widens deep bowls to keep them walkable, and bounds 
   blast(game, 0, 0);
   const first = groundHeight(0, 0, game.map);
   expect(original - first).toBeGreaterThan(0.25);
-  expect(original - first).toBeLessThanOrEqual(0.36);
+  expect(original - first).toBeLessThanOrEqual(grenade.craterDepth);
   blast(game, 0, 0);
   expect(groundHeight(0, 0, game.map)).toBeLessThan(first);
   for (let i = 0; i < 20; i++) blast(game, 0, 0);
@@ -91,8 +91,8 @@ it("deforms trench floors and parapet tops without erasing the adjacent bank in 
   expect(groundHeight(23, -1, game.map)).toBeLessThan(-0.25);
   expect(groundHeight(17, -1, game.map)).toBeCloseTo(2.4);
   blast(game, 17, -1);
-  expect(groundHeight(17, -1, game.map)).toBeGreaterThan(2);
-  expect(groundHeight(17, -1, game.map)).toBeLessThan(2.15);
+  expect(groundHeight(17, -1, game.map)).toBeGreaterThan(1.8);
+  expect(groundHeight(17, -1, game.map)).toBeLessThan(2.05);
   expect(
     game.collision.ray({ x: 15, y: 1.5, z: -1 }, { x: 23, y: 1.5, z: -1 }),
   ).toBeLessThan(1);
@@ -327,4 +327,17 @@ it("keeps timber facing surfaces clear of earth to prevent coplanar wall flicker
       map.terrain!.bankHeight - 0.05,
     );
   }
+});
+
+it("cuts a wider rounded bowl with a soft center and a broad middle rather than a pointed dent", () => {
+  const game = gameFor();
+  blast(game, 0, 0);
+  const depth = (x: number, z = 0) => -groundHeight(x, z, game.map);
+  expect(depth(0)).toBeGreaterThan(0.5);
+  expect(depth(1.25)).toBeGreaterThan(0.1);
+  expect(depth(0) - depth(0.25)).toBeLessThan(0.04);
+  expect(depth(0.75)).toBeCloseTo(depth(-0.75), 6);
+  expect(depth(0.75)).toBeCloseTo(depth(0, 0.75), 6);
+  expect(depth(2.25)).toBeCloseTo(0);
+  expect(walkSegment({ x: -3, z: 0 }, { x: 3, z: 0 }, game.map)).toBe(true);
 });

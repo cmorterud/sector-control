@@ -25,8 +25,8 @@ export const grenadeExplosionProfile: ExplosionProfile = {
   damage: 140,
   structuralRadius: 4,
   structuralDamage: 100,
-  craterRadius: 1.2,
-  craterDepth: 0.36,
+  craterRadius: 1.75,
+  craterDepth: 0.55,
   terrainReach: 3,
 };
 export { terrainResolution, terrainPatchSize } from "./map";
@@ -212,7 +212,7 @@ export function deformExplosion(
         const depth =
           profile.craterDepth *
           (1 - standoff / profile.terrainReach) *
-          (1 - distance / r) ** 2;
+          (1 - (distance / r) ** 2) ** 2;
         lower(x, z, read(x, z) + depth);
       }
   // Relax the bowl outward as repeated hits deepen it. Preserve existing steep
