@@ -146,10 +146,40 @@ export function groundHeight(
 ): number {
   return Math.max(-0.9, baseGroundHeight(x, z, map) - terrainCut(x, z, map));
 }
+// Numeric lookup keeps repeated movement/ray queries cheap after large barrages.
+// Sparse, serializable cuts remain authoritative; the cache expires per revision.
+const runtimeCutGrids = new WeakMap<
+  DestructionState,
+  { revision: number; relief: TerrainRelief }
+>();
 export function terrainCut(x: number, z: number, map: MapDefinition): number {
   const state = map.destruction;
   if (!state || !state.revision) return 0;
-  return sampleTerrainCuts(x, z, state);
+  let cached = runtimeCutGrids.get(state);
+  if (!cached || cached.revision !== state.revision) {
+    const originX = Math.floor(-map.width / 2 / terrainResolution) - 1;
+    const originZ = Math.floor(-map.depth / 2 / terrainResolution) - 1;
+    const columns = Math.ceil(map.width / terrainResolution) + 3;
+    const rows = Math.ceil(map.depth / terrainResolution) + 3;
+    const values = new Float32Array(columns * rows);
+    for (const [key, depth] of Object.entries(state.cuts)) {
+      const [ix, iz] = key.split(",").map(Number);
+      const col = ix - originX,
+        row = iz - originZ;
+      if (col >= 0 && col < columns && row >= 0 && row < rows)
+        values[row * columns + col] = depth;
+    }
+    cached = {
+      revision: state.revision,
+      relief: {
+        cuts: state.cuts,
+        patches: state.patches,
+        grid: { originX, originZ, columns, rows, values },
+      },
+    };
+    runtimeCutGrids.set(state, cached);
+  }
+  return sampleTerrainCuts(x, z, cached.relief);
 }
 function sampleTerrainCuts(
   x: number,

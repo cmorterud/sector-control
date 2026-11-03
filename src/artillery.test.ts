@@ -1,0 +1,274 @@
+import { describe, expect, it } from "vitest";
+import {
+  Game,
+  TestCollision,
+  idle,
+  botCommand,
+  firingPosition,
+  type Event,
+} from "./simulation";
+import {
+  artilleryRules,
+  artilleryTargetReason,
+  artilleryAim,
+  requestArtillery,
+  artilleryThreat,
+} from "./artillery";
+import { artilleryExplosionProfile } from "./destruction";
+import { groundHeight, industrialMap, type MapDefinition } from "./map";
+import { trenchMap } from "./trench-map";
+import { PlaytestLog, eventTimeline } from "./playtest";
+const open: MapDefinition = {
+  ...industrialMap,
+  boxes: [],
+  spawn: { blue: { x: -25, z: 0 }, red: { x: 25, z: 0 } },
+  scoring: "eliminations",
+};
+function scene(map = open) {
+  const g = new Game(new TestCollision(map), false, 5000, 12345, undefined, {
+    map,
+  });
+  Object.assign(g.players[0], {
+    x: -25,
+    z: 0,
+    y: groundHeight(-25, 0, g.map),
+    protectedUntil: 0,
+  });
+  g.artillery.readyAt.red = 1e9;
+  return g;
+}
+function advance(g: Game, n: number) {
+  const events: Event[] = [];
+  for (let i = 0; i < n; i++) {
+    g.step(idle());
+    events.push(...g.events);
+  }
+  return events;
+}
+const target = { x: 10, z: 0 };
+function ready(g: Game) {
+  g.tick = artilleryRules.initialDelay;
+  return g.players[0];
+}
+
+describe("artillery missions", () => {
+  it("starts locked, spends a shared team charge once, and preserves cooldown through respawn", () => {
+    const g = scene(),
+      p = g.players[0];
+    expect(requestArtillery(g, p, target)).toBe(false);
+    ready(g);
+    expect(requestArtillery(g, p, target)).toBe(true);
+    const cooldown = g.artillery.readyAt.blue;
+    expect(cooldown).toBe(g.tick + 2700);
+    expect(requestArtillery(g, { ...p, id: 1 }, target)).toBe(false);
+    g.respawn(p);
+    expect(g.artillery.readyAt.blue).toBe(cooldown);
+    expect(g.events.filter((e) => e.type === "artilleryCall")).toHaveLength(1);
+    expect(scene().artillery.readyAt.blue).toBe(900);
+  });
+  it("rejects hidden, blocked, airborne, dead, out-of-range and invalid markers without spending a charge", () => {
+    const g = scene(trenchMap),
+      p = ready(g);
+    Object.assign(p, { x: -23, z: -1, y: 0 });
+    expect(artilleryTargetReason(g, p, { x: 19, z: -1 })).toContain(
+      "firing step",
+    );
+    Object.assign(p, { x: -19, y: 0.85 });
+    expect(artilleryTargetReason(g, p, { x: 19, z: -1 })).toBeNull();
+    const invalid = [
+      { x: -18, z: -1 },
+      { x: 70, z: -1 },
+      { x: NaN, z: 0 },
+      { x: 19, z: Infinity },
+    ];
+    for (const marker of invalid)
+      expect(requestArtillery(g, p, marker)).toBe(false);
+    p.hp = 0;
+    expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
+    p.hp = 100;
+    p.hop = { startTick: g.tick, height: 0.1, velocity: 1 };
+    expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
+    p.hop = null;
+    g.map.boxes.push({ x: 0, z: -1, w: 3, d: 20, h: 10, kind: "building" });
+    expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
+    expect(g.artillery.readyAt.blue).toBe(900);
+    expect(g.artillery.missions).toHaveLength(0);
+  });
+  it("warns before damage, sends five moving shells at one-second intervals, and clears the mission", () => {
+    const g = scene();
+    ready(g);
+    g.step({ ...idle(), artillery: target });
+    const mission = structuredClone(g.artillery.missions[0]);
+    const events = advance(g, 149);
+    expect(g.artillery.shells).toHaveLength(0);
+    g.step(idle());
+    expect(g.artillery.shells).toHaveLength(1);
+    const shell = { ...g.artillery.shells[0] };
+    g.step(idle());
+    expect(g.artillery.shells[0].y).toBeLessThan(shell.y);
+    expect(Math.abs(g.artillery.shells[0].x - shell.x)).toBeGreaterThan(0.3);
+    events.push(...advance(g, 179));
+    const impacts = events.filter((e) => e.type === "artilleryImpact");
+    expect(impacts).toHaveLength(5);
+    expect(impacts[0].tick).toBe(mission.firstImpactAt);
+    impacts.forEach((e, i) =>
+      expect(e.tick).toBe(mission.firstImpactAt + i * 30),
+    );
+    expect(g.artillery.shells).toHaveLength(0);
+    expect(g.artillery.missions).toHaveLength(0);
+    expect(g.map.destruction!.craters).toHaveLength(5);
+  });
+  it("keeps a confirmed barrage after caller death, serializes isolated state, and logs the complete lifecycle", () => {
+    const g = scene();
+    ready(g);
+    g.step({ ...idle(), artillery: target });
+    const log = new PlaytestLog();
+    log.recordTick(g, idle(), 0);
+    const snapshot = g.snapshot();
+    snapshot.artillery.missions[0].target.x = 99;
+    expect(g.artillery.missions[0].target.x).toBe(10);
+    g.players[0].hp = 0;
+    g.players[0].respawnAt = 1e9;
+    for (let i = 0; i < 331; i++) {
+      g.step(idle());
+      log.recordTick(g, idle(), i / 30);
+    }
+    expect(log.summary().artilleryCalls).toBe(1);
+    expect(log.summary().artilleryImpacts).toBe(5);
+    expect(eventTimeline(log.events)).toContain("artilleryEnd");
+    expect(g.artillery.missions).toHaveLength(0);
+  });
+  it("ends cleanly with shells still airborne and starts a new game without old missions or damage", () => {
+    const g = scene();
+    ready(g);
+    requestArtillery(g, g.players[0], target);
+    advance(g, 151);
+    expect(g.artillery.shells).toHaveLength(1);
+    g.duration = g.tick + 1;
+    g.step(idle());
+    expect(g.artillery.missions).toHaveLength(0);
+    expect(g.artillery.shells).toHaveLength(0);
+    const fresh = scene();
+    expect(fresh.snapshot().world!.revision).toBe(0);
+    expect(fresh.artillery.missions).toHaveLength(0);
+  });
+  it("is deterministic and sweeps shells into roofs instead of the protected ground underneath", () => {
+    const run = () => {
+      const g = scene();
+      ready(g);
+      requestArtillery(g, g.players[0], target);
+      return advance(g, 332).filter((e) => e.type === "artilleryImpact");
+    };
+    expect(run()).toEqual(run());
+    const roof = {
+      ...open,
+      boxes: [{ x: 10, z: 0, w: 24, d: 24, h: 5, kind: "bunker" as const }],
+    };
+    const g = scene(roof);
+    ready(g);
+    requestArtillery(g, g.players[0], { x: -5, z: 0 });
+    // Aim validation remains ground/LOS based; force this mission's scatter onto a roof to verify collision.
+    g.artillery.missions[0].impacts = Array.from({ length: 5 }, () => ({
+      x: 10,
+      z: 0,
+    }));
+    const impacts = advance(g, 332).filter((e) => e.type === "artilleryImpact");
+    expect(impacts).toHaveLength(5);
+    for (const hit of impacts) expect(hit.at.y).toBeGreaterThanOrEqual(5);
+    expect(g.map.boxes[0].h).toBe(5);
+    expect(groundHeight(10, 0, g.map)).toBe(0);
+  });
+});
+
+describe("artillery damage and bots", () => {
+  it("excavates a broad rounded bowl, destroys light cover, respects fixed foundations and grenade friendly protection", () => {
+    const g = scene();
+    const p = g.players[0];
+    Object.assign(p, { x: 0, z: 0, y: 0 });
+    const friend = { ...p, id: 1 },
+      enemy = { ...p, id: 2, team: "red" as const };
+    g.players.push(friend, enemy);
+    // Use a fresh runtime map so cover health is authored at construction.
+    const cover = scene({
+      ...open,
+      boxes: [{ x: 10, z: 0, w: 1, d: 1, h: 1, kind: "wood" }],
+    });
+    cover.explode(
+      { x: 9, y: 0.05, z: 0 },
+      0,
+      "blue",
+      artilleryExplosionProfile,
+    );
+    expect(cover.map.boxes).toHaveLength(0);
+    g.explode({ x: 0, y: 0.05, z: 0 }, 0, "blue", artilleryExplosionProfile);
+    expect(friend.hp).toBe(100);
+    expect(p.hp).toBe(0);
+    expect(enemy.hp).toBe(0);
+    expect(groundHeight(0, 0, g.map)).toBeCloseTo(-0.9, 3);
+    expect(groundHeight(2, 0, g.map)).toBeLessThan(-0.35);
+    expect(groundHeight(4, 0, g.map)).toBeCloseTo(0, 3);
+  });
+  it("reserves Blue's charge for the player, lets Red coordinate, and returns bots to firing positions after retreating", () => {
+    const g = new Game(
+      new TestCollision(trenchMap),
+      true,
+      5000,
+      12345,
+      undefined,
+      { map: trenchMap, teamSize: 25 },
+    );
+    g.tick = 900;
+    const p = g.players[1],
+      red = g.players[25];
+    const station = firingPosition(g, p)!;
+    Object.assign(p, { ...station, y: 0.85, protectedUntil: 0 });
+    const redStation = firingPosition(g, red)!;
+    Object.assign(red, { ...redStation, y: 0.85, protectedUntil: 0 });
+    g.tick = 925;
+    expect(botCommand(g, p).artillery).toBeUndefined();
+    expect(botCommand(g, red).artillery).toBeDefined();
+    const original = { x: p.x, z: p.z };
+    g.artillery.readyAt.red = 900;
+    expect(requestArtillery(g, red, original)).toBe(true);
+    const c = botCommand(g, p);
+    expect(c.sprint).toBe(true);
+    expect(c.fire).toBe(false);
+    expect(p.artilleryEvade).not.toBeNull();
+    expect(artilleryThreat(g, p.artilleryEvade!.destination)).toBeUndefined();
+    const destination = p.artilleryEvade!.destination;
+    for (let i = 0; i < 300; i++) {
+      g.tick++;
+      const c = botCommand(g, p);
+      const pos = g.collision.move(p, { x: (c.x * 7) / 30, z: (c.z * 7) / 30 });
+      Object.assign(p, pos, { y: groundHeight(pos.x, pos.z, g.map) });
+    }
+    expect(Math.hypot(p.x - original.x, p.z - original.z)).toBeGreaterThan(3);
+    expect(
+      Math.hypot(p.x - destination.x, p.z - destination.z),
+      JSON.stringify({
+        original,
+        destination,
+        at: { x: p.x, z: p.z },
+        path: p.path,
+      }),
+    ).toBeLessThan(1);
+    g.tick = g.artillery.missions[0].endsAt + 1;
+    g.artillery.missions = [];
+    botCommand(g, p);
+    expect(p.artilleryEvade).toBeNull();
+    expect(p.path.length).toBeGreaterThan(0);
+  });
+  it("relocates firing posts whose steps are excavated, and lets horizon/downward aim select ground", () => {
+    const g = scene(trenchMap),
+      p = g.players[0];
+    const original = firingPosition(g, p)!;
+    g.explode({ ...original, y: 0.9 }, 0, "blue", artilleryExplosionProfile);
+    expect(firingPosition(g, p)).not.toEqual(original);
+    const flat = scene(),
+      soldier = flat.players[0];
+    expect(artilleryAim(flat, soldier, Math.PI / 2, 0).x).toBeCloseTo(20);
+    expect(artilleryAim(flat, soldier, Math.PI / 2, -0.05).x).toBeGreaterThan(
+      -10,
+    );
+  });
+});

@@ -29,9 +29,21 @@ Press **G** to throw a grenade in the direction you're looking. Each soldier get
 
 Grenades now excavate persistent craters and damage wooden obstacles, trench lining, and sandbags in both maps. A ground-level grenade can dig roughly 0.5 m at its center across an initial 3.5 m footprint, with a smooth rounded bowl; airbursts dig less. Repeated hits deepen and widen the bowl, with a lowest floor of −0.9 m. Craters affect walking height, cover, bullets, camera collision, and bot routes. Parapet crests can be chipped, and repeated concentrated hits can create a breach. Wooden lining can break away while the earth behind it remains solid. Sandbags lose height before disappearing. Two light wooden screens behind the trench lines provide additional destructible cover.
 
-Buildings, bunkers, containers, and concrete barriers stay solid and protect their foundations. Dust, smoke, and flying fragments accompany destruction; fragments are cosmetic. Changes last for the match and reset on restart. This is a height-field prototype without tunnels, overhangs, or structural building collapse. Explosion profiles separate soldier damage, structural damage, and excavation settings for future artillery; artillery itself is not included yet.
+Buildings, bunkers, containers, and concrete barriers stay solid and protect their foundations. Dust, smoke, and flying fragments accompany destruction; fragments are cosmetic. Changes last for the match and reset on restart. This is a height-field prototype without tunnels, overhangs, or structural building collapse. Explosion profiles separate soldier damage, structural damage, and excavation settings and artillery fire missions.
 
 Destruction events record the source, world revision, object health/stage, changed terrain samples and rebuilt patches. JSON snapshots include the accumulated world state. The renderer replaces only affected local terrain meshes/colliders and refreshes damaged cover; bots recalculate routes after changes.
+
+## Artillery prototype
+
+**Hold Q** to mark ground, **left-click while holding Q** to confirm, or release Q to cancel an unconfirmed marker. A green marker is valid; orange explains what blocks the call. Looking level marks ground about 45 m ahead; looking downward traces a precise surface point. Calls need a clear view, 15–70 m range, and enough room for shell scatter. In trenches, use a firing step or stand above the parapet to spot. Rifle fire is suppressed while marking.
+
+Each team has one shared charge: first available **30 seconds** into the match, then **90 seconds** after each confirmed call. Death does not replenish it or cancel an ordered barrage. Blue's charge belongs to the player; Red bots coordinate their own calls. Autoplay lets the player bot call for Blue.
+
+An incoming ground marker and local warning give roughly **six seconds** before a **five-shell barrage**, with shells one second apart, scattered within 10 m of the target. Descending visible shells whistle and burst on solid surfaces, including bunker roofs. Each shell has a 12 m damage radius, cover-aware falloff, larger dust/smoke, flying debris, and a nominal **7 m crater footprint / 1 m depth** (less for elevated bursts, capped by the existing −0.9 m floor). Light cover breaks; fixed buildings/bunkers remain. The marked danger area includes scatter and blast reach. Self damage applies; teammates and protected spawns retain grenade protection. Smoke remains cosmetic.
+
+Bots leave threatened firing posts, seek a safe point in their own trench, and return after the barrage. Destroyed firing steps send them to nearby intact stations. This is a balance prototype: no artillery guns, ammunition types, creeping barrages, suppression system or structural building collapse yet.
+
+Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` and `artilleryEnd` events link mission/shell IDs; snapshots include team cooldowns, missions, shells and retreat state. Recorder summaries count calls, impacts and retreats. Runtime terrain cuts remain sparse/serializable with a revision-based numeric lookup cache for movement and rays.
 
 ## Trench front prototype
 

@@ -47,6 +47,12 @@ export class PlaytestLog {
       grenadeExplosions: this.events.filter(
         (e) => e.type === "grenadeExplosion",
       ).length,
+      artilleryCalls: this.events.filter((e) => e.type === "artilleryCall")
+        .length,
+      artilleryImpacts: this.events.filter((e) => e.type === "artilleryImpact")
+        .length,
+      artilleryEvades: this.events.filter((e) => e.type === "artilleryEvade")
+        .length,
       destructionEvents: this.events.filter((e) => e.type === "destruction")
         .length,
       craters: this.events.filter(

@@ -1,3 +1,4 @@
+import { artilleryRules } from "./artillery";
 import * as pc from "playcanvas";
 import { createPhysicsWorld, TerrainPhysics } from "./physics";
 import {
@@ -65,10 +66,15 @@ export class Renderer implements CollisionWorld {
   private previousProjectiles = new Map<number, V3>();
   private grenades = new Map<number, pc.Entity>();
   private previousGrenades = new Map<number, V3>();
+  artilleryPreview: { target: Vec; valid: boolean } | null = null;
+  private artilleryMarkers = new Map<number, pc.Entity>();
+  private shells = new Map<number, pc.Entity>();
+  private previousShells = new Map<number, V3>();
   private blasts: {
     root: pc.Entity;
     age: number;
     radius: number;
+    power: number;
     flash: pc.Entity;
     wave: pc.Entity;
     smoke: pc.Entity[];
@@ -884,12 +890,18 @@ export class Renderer implements CollisionWorld {
       ...this.rings,
       ...this.projectiles.values(),
       ...this.grenades.values(),
+      ...this.shells.values(),
+      ...this.artilleryMarkers.values(),
       ...this.effects.map((v) => v.e),
     ])
       e.destroy();
     this.projectiles.clear();
     this.previousProjectiles.clear();
     this.grenades.clear();
+    this.shells.clear();
+    this.previousShells.clear();
+    this.artilleryMarkers.clear();
+    this.artilleryPreview = null;
     this.previousGrenades.clear();
     for (const blast of this.blasts) {
       blast.root.destroy();
@@ -930,6 +942,9 @@ export class Renderer implements CollisionWorld {
     }
   }
   remember(g: Game) {
+    this.previousShells = new Map(
+      g.artillery.shells.map((s) => [s.id, { x: s.x, y: s.y, z: s.z }]),
+    );
     this.previous = g.players.map((p) => ({ x: p.x, y: p.y, z: p.z }));
     this.previousProjectiles = new Map(
       g.projectiles.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
@@ -1004,6 +1019,7 @@ export class Renderer implements CollisionWorld {
     }
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);
+    this.drawArtillery(g, alpha);
     this.drawBlasts(dt);
     for (const fx of this.effects) {
       fx.life -= dt;
@@ -1070,7 +1086,121 @@ export class Renderer implements CollisionWorld {
       entity.setEulerAngles(spin, spin * 0.6, 0);
     }
   }
-  private blastEffect(at: V3, radius: number) {
+  private drawArtillery(g: Game, alpha: number) {
+    const markers = g.artillery.missions.map((m) => ({
+      id: m.id,
+      target: m.target,
+      radius: artilleryRules.dangerRadius,
+      color: m.team === "blue" ? "#e9bb69" : "#ee795c",
+    }));
+    if (this.artilleryPreview)
+      markers.push({
+        id: -1,
+        target: this.artilleryPreview.target,
+        radius: artilleryRules.scatterRadius,
+        color: this.artilleryPreview.valid ? "#8cdaa4" : "#db875d",
+      });
+    const active = new Set(markers.map((m) => m.id));
+    for (const [id, entity] of this.artilleryMarkers)
+      if (!active.has(id)) {
+        entity.destroy();
+        this.artilleryMarkers.delete(id);
+      }
+    for (const marker of markers) {
+      let root = this.artilleryMarkers.get(marker.id);
+      if (!root) {
+        root = this.joint("artillery ground marker", this.app.root);
+        for (let i = 0; i < 40; i++)
+          this.cube(
+            "warning dash",
+            0,
+            0,
+            0,
+            0.2,
+            0.06,
+            1.2,
+            marker.color,
+            false,
+            root,
+          );
+        this.cube(
+          "target beacon",
+          0,
+          0,
+          0,
+          0.16,
+          4,
+          0.16,
+          marker.color,
+          false,
+          root,
+        );
+        this.artilleryMarkers.set(marker.id, root);
+      }
+      root.enabled = marker.id === -1 || Math.sin(g.tick * 0.12) > -0.5;
+      for (let i = 0; i < 40; i++) {
+        const angle = (i / 40) * Math.PI * 2,
+          x = marker.target.x + Math.sin(angle) * marker.radius,
+          z = marker.target.z + Math.cos(angle) * marker.radius;
+        const dash = root.children[i] as pc.Entity;
+        dash.setPosition(x, groundHeight(x, z, this.map) + 0.1, z);
+        dash.setEulerAngles(0, (angle * 180) / Math.PI, 0);
+        dash.render!.material = this.material(marker.color);
+      }
+      const beacon = root.children[40] as pc.Entity;
+      beacon.setPosition(
+        marker.target.x,
+        groundHeight(marker.target.x, marker.target.z, this.map) + 2,
+        marker.target.z,
+      );
+      beacon.render!.material = this.material(marker.color);
+    }
+    const shells = new Set(g.artillery.shells.map((s) => s.id));
+    for (const [id, entity] of this.shells)
+      if (!shells.has(id)) {
+        entity.destroy();
+        this.shells.delete(id);
+      }
+    for (const shell of g.artillery.shells) {
+      let root = this.shells.get(shell.id);
+      if (!root) {
+        root = this.joint("incoming artillery shell", this.app.root);
+        this.cube(
+          "shell body",
+          0,
+          0,
+          0,
+          0.28,
+          0.28,
+          0.8,
+          "#443d2a",
+          false,
+          root,
+        );
+        const trail = this.cube(
+          "shell hot trail",
+          0,
+          0,
+          1.5,
+          0.16,
+          0.16,
+          2.4,
+          "#ffc874",
+          false,
+          root,
+        );
+        trail.render!.material = this.tracerMaterial("red");
+        this.shells.set(shell.id, root);
+      }
+      const previous = this.previousShells.get(shell.id) ?? shell;
+      const x = previous.x + (shell.x - previous.x) * alpha,
+        y = previous.y + (shell.y - previous.y) * alpha,
+        z = previous.z + (shell.z - previous.z) * alpha;
+      root.setPosition(x, y, z);
+      root.lookAt(x + shell.vx, y + shell.vy, z + shell.vz);
+    }
+  }
+  private blastEffect(at: V3, radius: number, power = 1) {
     const root = this.joint("grenade blast", this.app.root);
     root.setPosition(at.x, at.y, at.z);
     const material = (hex: string, emissive = false) => {
@@ -1113,36 +1243,48 @@ export class Renderer implements CollisionWorld {
       e.setLocalPosition(Math.sin(angle) * 0.3, 0.1, Math.cos(angle) * 0.3);
       return e;
     });
-    this.blasts.push({ root, age: 0, radius, flash, wave, smoke, materials });
+    this.blasts.push({
+      root,
+      age: 0,
+      radius,
+      power,
+      flash,
+      wave,
+      smoke,
+      materials,
+    });
     this.drawBlasts(0);
   }
   private drawBlasts(dt: number) {
     this.blasts = this.blasts.filter((blast) => {
       blast.age += dt;
       const t = blast.age;
-      if (t >= 4) {
+      const life = 4 * blast.power;
+      if (t >= life) {
         blast.root.destroy();
         for (const material of blast.materials) material.destroy();
         return false;
       }
       blast.flash.enabled = t < 0.25;
-      blast.flash.setLocalScale(0.4 + t * 12, 0.4 + t * 12, 0.4 + t * 12);
+      const flashSize = (0.4 + t * 12) * blast.power;
+      blast.flash.setLocalScale(flashSize, flashSize, flashSize);
       blast.materials[0].opacity = Math.max(0, 0.9 * (1 - t / 0.25));
       blast.wave.enabled = t < 0.6;
       const diameter = blast.radius * 2 * Math.min(1, t / 0.4);
       blast.wave.setLocalPosition(0, 0.04, 0);
       blast.wave.setLocalScale(diameter, 0.035, diameter);
       blast.materials[1].opacity = Math.max(0, 0.2 * (1 - t / 0.6));
-      blast.materials[2].opacity = Math.min(0.6, t * 4) * (1 - t / 4);
+      blast.materials[2].opacity = Math.min(0.6, t * 4) * (1 - t / life);
       for (let i = 0; i < blast.smoke.length; i++) {
         const angle = (i / blast.smoke.length) * Math.PI * 2;
-        const spread = 0.25 + t * (0.55 + (i % 3) * 0.15);
+        const spread = (0.25 + t * (0.55 + (i % 3) * 0.15)) * blast.power;
         blast.smoke[i].setLocalPosition(
           Math.sin(angle) * spread,
           t * (0.5 + (i % 3) * 0.22),
           Math.cos(angle) * spread,
         );
-        const scale = 0.3 + Math.sqrt(t) * (1.2 + (i % 3) * 0.25);
+        const scale =
+          (0.3 + Math.sqrt(t) * (1.2 + (i % 3) * 0.25)) * blast.power;
         blast.smoke[i].setLocalScale(scale, scale * 0.85, scale);
       }
       for (const material of blast.materials) material.update();
@@ -1238,6 +1380,10 @@ export class Renderer implements CollisionWorld {
           },
         });
       }
+      return;
+    }
+    if (e.type === "artilleryImpact") {
+      this.blastEffect(e.at, e.radius, 1.7);
       return;
     }
     if (e.type === "grenadeExplosion") {

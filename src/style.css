@@ -373,3 +373,16 @@ button span {
   margin-top: 4px;
   font-size: 9px;
 }
+
+#artillery-status {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 175px;
+  text-align: center;
+  color: #f4ce86;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px #000;
+  pointer-events: none;
+}

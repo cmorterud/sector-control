@@ -1,4 +1,12 @@
 import {
+  createArtilleryState,
+  requestArtillery,
+  advanceArtillery,
+  botArtilleryTarget,
+  evadeArtillery,
+  type ArtilleryEvade,
+} from "./artillery";
+import {
   blocked,
   dist,
   industrialMap,
@@ -36,6 +44,7 @@ export interface Command {
   reload: boolean;
   mantle: boolean;
   grenade: boolean;
+  artillery?: Vec;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -73,7 +82,17 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
     (position) => position.team === p.team,
   );
-  return positions?.[p.teamIndex % positions.length];
+  const original = positions?.[p.teamIndex % positions.length];
+  if (!original || !g.map.destruction?.revision) return original;
+  const intact = (v: Vec) =>
+    groundHeight(v.x, v.z, g.map) + rifleHeight(g.map) >=
+    g.map.terrain!.bankHeight + 0.04;
+  if (intact(original)) return original;
+  return (
+    positions!
+      .filter(intact)
+      .sort((a, b) => dist(a, original) - dist(b, original))[0] ?? original
+  );
 }
 export interface Projectile extends V3 {
   id: number;
@@ -212,6 +231,7 @@ export interface Soldier extends Vec {
   target: number;
   spottedAt: number;
   mode: string;
+  artilleryEvade: ArtilleryEvade | null;
 }
 export interface Sector extends Vec {
   id: string;
@@ -234,6 +254,34 @@ export const defaultBotSettings: BotSettings = {
   burstFireTicks: 15,
 };
 export type Event = { id: number; tick: number } & (
+  | {
+      type: "artilleryCall";
+      actor: number;
+      team: Team;
+      mission: number;
+      target: Vec;
+      firstImpactAt: number;
+      endsAt: number;
+      radius: number;
+    }
+  | {
+      type: "artilleryLaunch";
+      actor: number;
+      mission: number;
+      shell: number;
+      from: V3;
+    }
+  | {
+      type: "artilleryImpact";
+      actor: number;
+      mission: number;
+      shell: number;
+      at: V3;
+      radius: number;
+      hits: { target: number; damage: number }[];
+    }
+  | { type: "artilleryEnd"; mission: number }
+  | { type: "artilleryEvade"; actor: number; mission: number; to: Vec }
   | { type: "destruction"; actor: number; change: DestructionChange }
   | {
       type: "grenadeThrow";
@@ -401,6 +449,7 @@ export class Game {
   players: Soldier[] = [];
   projectiles: Projectile[] = [];
   grenades: Grenade[] = [];
+  artillery = createArtilleryState();
   grenadeSequence = 0;
   projectileSequence = 0;
   sectors: Sector[];
@@ -482,6 +531,7 @@ export class Game {
         target: -1,
         spottedAt: 0,
         mode: "Navigate",
+        artilleryEvade: null,
       });
       this.respawn(this.players[i]);
     }
@@ -505,6 +555,7 @@ export class Game {
       projectileSequence: this.projectileSequence,
       grenades: this.grenades,
       grenadeSequence: this.grenadeSequence,
+      artillery: this.artillery,
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
@@ -550,6 +601,7 @@ export class Game {
     p.aimBloom = 0;
     p.protectedUntil = this.tick + 60;
     p.path = [];
+    p.artilleryEvade = null;
     p.target = -1;
     p.mode = "Navigate";
     p.nextThink = this.tick + (p.teamIndex % 30);
@@ -567,6 +619,7 @@ export class Game {
       }
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
+      if (c.artillery) requestArtillery(this, p, c.artillery);
       if (
         !c.fire ||
         p.reloadAt ||
@@ -652,6 +705,7 @@ export class Game {
         this.fire(p);
     this.advanceProjectiles();
     this.advanceGrenades();
+    advanceArtillery(this);
     for (const s of this.scoring === "sectors" ? this.sectors : []) {
       const occupants = this.players.filter(
           (p) => p.hp > 0 && !p.mantle && dist(p, s) <= 8,
@@ -676,6 +730,8 @@ export class Game {
       this.phase = "ended";
       this.projectiles = [];
       this.grenades = [];
+      this.artillery.missions = [];
+      this.artillery.shells = [];
       this.winner =
         this.scores.blue === this.scores.red
           ? "draw"
@@ -1325,7 +1381,10 @@ export function botAimOffset(p: Soldier, tick: number, baseSpread: number) {
   };
 }
 export function botCommand(g: Game, p: Soldier): Command {
+  const evasion = evadeArtillery(g, p);
+  if (evasion) return evasion;
   const c = idle();
+  c.artillery = botArtilleryTarget(g, p) ?? undefined;
   c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
   c.yaw = p.yaw;
   const station = firingPosition(g, p);

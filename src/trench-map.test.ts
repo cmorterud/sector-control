@@ -191,9 +191,9 @@ describe("trench prototype", () => {
           expect(p.y).toBeCloseTo(
             p.mantle
               ? mantlePosition(p.mantle, game.tick).y
-              : groundHeight(p.x, p.z, trenchMap) + (p.hop?.height ?? 0),
+              : groundHeight(p.x, p.z, game.map) + (p.hop?.height ?? 0),
           );
-          expect(blocked(p.x, p.z, 0.44, trenchMap)).toBe(false);
+          expect(blocked(p.x, p.z, 0.44, game.map)).toBe(false);
           expect(p.team === "blue" ? p.x < -18 : p.x > 18).toBe(true);
         }
     }

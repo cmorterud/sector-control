@@ -29,6 +29,16 @@ export const grenadeExplosionProfile: ExplosionProfile = {
   craterDepth: 0.55,
   terrainReach: 3,
 };
+export const artilleryExplosionProfile: ExplosionProfile = {
+  kind: "artillery",
+  radius: 12,
+  damage: 240,
+  structuralRadius: 7,
+  structuralDamage: 260,
+  craterRadius: 3.5,
+  craterDepth: 1,
+  terrainReach: 5,
+};
 export { terrainResolution, terrainPatchSize } from "./map";
 export interface Destructible {
   id: string;

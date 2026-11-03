@@ -1,3 +1,8 @@
+import {
+  artilleryAim,
+  artilleryTargetReason,
+  artilleryThreat,
+} from "./artillery";
 import "./style.css";
 import { Renderer } from "./rendering";
 import {
@@ -12,7 +17,7 @@ import { PlaytestRecorder } from "./playtest";
 import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
 import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
-root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD</div><div id="ammo"></div></footer><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
+root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD</div><div id="ammo"></div></footer><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
 let renderer: Renderer,
   game: Game,
@@ -31,6 +36,9 @@ let fire = false,
   reload = false,
   mantle = false,
   grenade = false;
+let pendingArtillery: Command["artillery"];
+let artilleryNotice = "",
+  artilleryNoticeUntil = 0;
 let audio: AudioContext | undefined;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
@@ -44,7 +52,7 @@ const requestedTeamSize = Number(
   params.get("teamSize") ?? (map.id === "trenches" ? 25 : 5),
 );
 document.querySelector(".controls")!.textContent +=
-  "　 G GRENADE　 SPACE HOP / MANTLE";
+  "　 G GRENADE　 SPACE HOP / MANTLE　 HOLD Q ARTILLERY";
 const teamSize = Math.max(
   1,
   Math.min(
@@ -76,6 +84,8 @@ function clear() {
   reload = false;
   mantle = false;
   grenade = false;
+  pendingArtillery = undefined;
+  if (renderer) renderer.artilleryPreview = null;
 }
 function menu(
   title: string,
@@ -126,6 +136,8 @@ function start() {
   pitch = 0;
   started = true;
   hitUntil = damageUntil = 0;
+  artilleryNotice = "";
+  artilleryNoticeUntil = 0;
   clear();
   resume();
   sound(500, 0.3);
@@ -147,6 +159,18 @@ function pause() {
 }
 function handle(e: Event) {
   renderer.effect(e);
+  if (e.type === "artilleryCall" && e.actor === 0) {
+    artilleryNotice = "FIRE MISSION CONFIRMED · FIRST IMPACT IN 6s";
+    artilleryNoticeUntil = performance.now() + 3500;
+    sound(620, 0.3, 0.07);
+  }
+  if (e.type === "artilleryLaunch") sound(900, 0.9, 0.035);
+  if (e.type === "artilleryImpact") {
+    const distance = dist(game.players[0], e.at);
+    if (distance < 95) sound(55, 1, 0.35 * (1 - distance / 95));
+    if (e.actor === 0 && e.hits.some((hit) => hit.target !== 0))
+      hitUntil = performance.now() + 200;
+  }
   if (e.type === "grenadeThrow" && e.actor === 0) sound(320, 0.12, 0.035);
   if (e.type === "grenadeBounce" && dist(game.players[0], e.at) < 25)
     sound(180, 0.04, 0.025);
@@ -222,6 +246,23 @@ function hud(now: number) {
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   el("ammo").innerHTML =
     `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small><small>G · GRENADES ${p.grenades}</small>`;
+  const readyIn = Math.max(
+    0,
+    Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
+  );
+  el("ammo").innerHTML +=
+    `<small>Q · ARTILLERY ${readyIn ? readyIn + "s" : "READY"}</small>`;
+  const threat = artilleryThreat(game, p);
+  const preview = renderer.artilleryPreview;
+  el("artillery-status").textContent =
+    keys.has("KeyQ") && preview
+      ? (artilleryTargetReason(game, p, preview.target) ??
+        `LMB · CALL BARRAGE · ${Math.round(dist(p, preview.target))}m · RELEASE Q TO CANCEL`)
+      : threat
+        ? `INCOMING ARTILLERY · ${game.tick < threat.firstImpactAt ? Math.ceil((threat.firstImpactAt - game.tick) / 30) + "s · " : ""}MOVE OUT OF THE MARKED AREA`
+        : now < artilleryNoticeUntil
+          ? artilleryNotice
+          : "";
   const sector =
     game.scoring === "sectors"
       ? game.sectors.find((s) => dist(s, p) <= 8)
@@ -276,7 +317,9 @@ function command(): Command {
   c.yaw = yaw;
   c.pitch = pitch;
   c.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
-  c.fire = fire;
+  c.fire = fire && !keys.has("KeyQ");
+  c.artillery = pendingArtillery;
+  pendingArtillery = undefined;
   c.aim = aim;
   c.reload = reload;
   c.mantle = mantle;
@@ -291,6 +334,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
   if (paused) return;
   keys.add(e.code);
+  if (e.code === "KeyQ") fire = false;
   if (e.code === "KeyR") reload = true;
   if (e.code === "Space" && !e.repeat) mantle = true;
   if (e.code === "KeyG" && !e.repeat) grenade = true;
@@ -303,7 +347,15 @@ window.addEventListener("mousemove", (e) => {
 });
 window.addEventListener("mousedown", (e) => {
   if (paused) return;
-  if (e.button === 0) fire = true;
+  if (e.button === 0 && keys.has("KeyQ")) {
+    const target = artilleryAim(game, game.players[0], yaw, pitch);
+    const reason = artilleryTargetReason(game, game.players[0], target);
+    if (!reason) pendingArtillery = target;
+    else {
+      artilleryNotice = reason;
+      artilleryNoticeUntil = performance.now() + 2500;
+    }
+  } else if (e.button === 0) fire = true;
   if (e.button === 2) aim = true;
 });
 window.addEventListener("mouseup", (e) => {
@@ -357,6 +409,17 @@ function frame(now: number) {
         if (paused) break;
       }
     }
+    renderer.artilleryPreview =
+      !paused && keys.has("KeyQ") && game.players[0].hp > 0
+        ? {
+            target: artilleryAim(game, game.players[0], yaw, pitch),
+            valid: !artilleryTargetReason(
+              game,
+              game.players[0],
+              artilleryAim(game, game.players[0], yaw, pitch),
+            ),
+          }
+        : null;
     renderer.draw(game, accumulator * 30, dt, params.has("overview"));
     if (now - uiTime > 50) {
       hud(now);
@@ -378,7 +441,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 30 seconds, then a shared 90-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {
