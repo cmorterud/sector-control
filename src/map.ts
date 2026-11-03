@@ -49,6 +49,22 @@ export type Ramp = Vec & {
   direction: 1 | -1;
 };
 export type TerrainRect = Vec & { w: number; d: number; h: number };
+export interface TerrainRelief {
+  grid?: {
+    originX: number;
+    originZ: number;
+    columns: number;
+    rows: number;
+    values: Float32Array;
+  };
+  cuts: Record<string, number>;
+  patches: Record<string, true>;
+}
+export type Depression = Vec & {
+  radiusX: number;
+  radiusZ: number;
+  depth: number;
+};
 export interface MapDefinition {
   id: "industrial" | "trenches";
   name: string;
@@ -70,7 +86,9 @@ export interface MapDefinition {
     rectangles: TerrainRect[];
     ramps: Ramp[];
     lining: (Vec & { w: number; d: number })[];
-    craters: (Vec & { radius: number })[];
+    craters: (Vec & { radius: number; depth?: number })[];
+    depressions?: Depression[];
+    relief?: TerrainRelief;
   };
 }
 export const industrialMap: MapDefinition = {
@@ -83,7 +101,7 @@ export const industrialMap: MapDefinition = {
   sectors,
   boxes,
 };
-export function baseGroundHeight(
+function authoredMapHeight(
   x: number,
   z: number,
   map: MapDefinition = industrialMap,
@@ -107,6 +125,20 @@ export function baseGroundHeight(
     return terrain.bankHeight;
   return terrain.heights[row * terrain.columns + col];
 }
+export function baseGroundHeight(
+  x: number,
+  z: number,
+  map: MapDefinition = industrialMap,
+): number {
+  return authoredMapHeight(x, z, map) - authoredTerrainCut(x, z, map);
+}
+export function authoredTerrainCut(
+  x: number,
+  z: number,
+  map: MapDefinition,
+): number {
+  return sampleTerrainCuts(x, z, map.terrain?.relief);
+}
 export function groundHeight(
   x: number,
   z: number,
@@ -117,22 +149,44 @@ export function groundHeight(
 export function terrainCut(x: number, z: number, map: MapDefinition): number {
   const state = map.destruction;
   if (!state || !state.revision) return 0;
-  if (
-    !state.patches[
-      `${Math.floor(x / terrainPatchSize)},${Math.floor(z / terrainPatchSize)}`
-    ]
-  )
-    return 0;
+  return sampleTerrainCuts(x, z, state);
+}
+function sampleTerrainCuts(
+  x: number,
+  z: number,
+  state?: TerrainRelief,
+): number {
+  if (!state) return 0;
   const gx = x / terrainResolution,
     gz = z / terrainResolution;
   const ix = Math.floor(gx),
     iz = Math.floor(gz);
   const tx = gx - ix,
     tz = gz - iz;
-  const a = state.cuts[`${ix},${iz}`] ?? 0,
+  let a: number, b: number, c: number, d: number;
+  if (state.grid) {
+    const grid = state.grid,
+      col = ix - grid.originX,
+      row = iz - grid.originZ;
+    if (col < 0 || row < 0 || col + 1 >= grid.columns || row + 1 >= grid.rows)
+      return 0;
+    const i = row * grid.columns + col;
+    a = grid.values[i];
+    b = grid.values[i + 1];
+    c = grid.values[i + grid.columns];
+    d = grid.values[i + grid.columns + 1];
+  } else {
+    if (
+      !state.patches[
+        `${Math.floor(x / terrainPatchSize)},${Math.floor(z / terrainPatchSize)}`
+      ]
+    )
+      return 0;
+    a = state.cuts[`${ix},${iz}`] ?? 0;
     b = state.cuts[`${ix + 1},${iz}`] ?? 0;
-  const c = state.cuts[`${ix},${iz + 1}`] ?? 0,
+    c = state.cuts[`${ix},${iz + 1}`] ?? 0;
     d = state.cuts[`${ix + 1},${iz + 1}`] ?? 0;
+  }
   return tx <= tz
     ? a + (d - c) * tx + (c - a) * tz
     : a + (b - a) * tx + (d - b) * tz;

@@ -59,3 +59,9 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 - Repeated excavation accumulates, spreading outward to keep continuous surfaces navigable; minimum world height −0.9 m. Original trench walls remain until actually excavated. Soldier damage is evaluated before cover removal from that explosion. Unrelated mantles continue; changed endpoints invalidate a climb.
 - Ground meshes and actual Ammo terrain collision share the same sampled surface. Eight-meter patches refine only affected two-meter cells; unaffected geometry stays coarse. Camera/projectile/LOS queries include dynamic terrain. Navigation caches and bot paths refresh after changes. Full restart restores pristine geometry and releases the terrain physics world's cached triangle data.
 - Destruction produces transient cosmetic fragments alongside grenade flash/smoke/audio. No tunnels, overhangs, persistent physics debris, building collapse, or artillery firing UI in this prototype. Future explosion profiles use the same damage/deformation entry point.
+
+## Authored starting terrain
+
+- Trench no man's land starts with six circular shell bowls (3–4 m radii, 0.55–0.7 m depths) and five broad elliptical depressions (0.12–0.18 m depths). Combined downward displacement is capped at 0.85 m. No raised ridges are introduced.
+- Relief tapers out before |x| = 15 m, preserving at least three meters before the closest front parapet. Trenches, firing steps, ramps, spawns and existing cover footing retain their previous heights. Two legacy scar positions move clear of wire patches.
+- Authored relief uses a shared immutable quarter-meter grid, separate from per-match explosion cuts. Actual terrain meshes/collision refine around both layers. Legacy flat scar disks are removed, and cosmetic rubble follows the ground. Grenades add excavation on top; restart restores the authored baseline.

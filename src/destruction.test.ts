@@ -65,6 +65,7 @@ it("creates a persistent crater from an actual thrown grenade, serializes it, an
 it("accumulates excavation, widens deep bowls to keep them walkable, and bounds the lowest floor", () => {
   const game = gameFor(trenchMap);
   const original = groundHeight(0, 0, game.map);
+  const distantOriginal = groundHeight(12, 0, game.map);
   blast(game, 0, 0);
   const first = groundHeight(0, 0, game.map);
   expect(original - first).toBeGreaterThan(0.25);
@@ -82,7 +83,7 @@ it("accumulates excavation, widens deep bowls to keep them walkable, and bounds 
       Math.abs(height - groundHeight(x + 0.25, 0, game.map)),
     ).toBeLessThanOrEqual(0.2001);
   }
-  expect(groundHeight(12, 0, game.map)).toBe(original);
+  expect(groundHeight(12, 0, game.map)).toBe(distantOriginal);
 });
 
 it("deforms trench floors and parapet tops without erasing the adjacent bank in one blast", () => {

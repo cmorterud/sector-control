@@ -118,3 +118,11 @@ Validation includes actual thrown-grenade craters, cumulative excavation and wal
 The new terrain faces exposed a coplanar-depth problem in authored timber placement: the wood face lay on the earth face. Runtime lining is offset 4 cm toward the lower trench side, and posts extend 6 cm above panel tops to remove the second overlapping surface. A regression checks every timber facing lies on the trench side of the bank. Native post-fix recording shows stable lining, a persistent crater and three fully destroyed sections.
 
 Grenade excavation was enlarged to a 1.75 m radius / 0.55 m nominal depth. Its radial weight is now (1 − (distance/radius)²)², giving a rounded center and soft rim instead of the previous pointed quadratic falloff. Existing standoff attenuation, slope relaxation, cumulative edits, protections and maximum depth still apply. A shape regression verifies the broader middle, low center slope, symmetry, outer boundary and walkability.
+
+## Pre-cratered no man's land
+
+`terrain-relief.ts` builds deterministic authored depressions once for the trench map. The six old shell-scar disks become real circular bowls, alongside five broad shallow ellipses. All changes are negative, capped at 0.85 m, tapered away from front parapets and masked around existing cover. Two circles move away from wire so their centers remain proper bowls. The base trench height field is unchanged outside the central strip.
+
+Authored samples use the same quarter-meter triangular interpolation as runtime cuts, with a compact numeric grid for fast ground queries and sparse metadata for affected patches. This avoids the initial dictionary-lookup slowdown in the full headless match. Mesh generation scans only local grid samples when refining authored terrain, and refines both authored and explosion layers. Static relief is separate from mutable destruction state: fresh matches start at revision zero with no runtime crater events, grenades deepen the baseline, and restart restores it. Flat scar disks are omitted and existing rim rubble follows sampled ground.
+
+Four regressions cover six traversable bowls, bounds/protected surfaces and preserved firing lanes (including pre-existing cover obstruction), actual Ammo hit heights, and cumulative grenade excavation/reset over the authored shape. All 88 tests and the production build pass.

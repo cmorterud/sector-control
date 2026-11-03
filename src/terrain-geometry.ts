@@ -1,4 +1,9 @@
-import { groundHeight, terrainCut, type MapDefinition } from "./map";
+import {
+  groundHeight,
+  terrainCut,
+  authoredTerrainCut,
+  type MapDefinition,
+} from "./map";
 import { terrainPatchSize, terrainResolution } from "./destruction";
 
 export interface TerrainGeometry {
@@ -38,7 +43,12 @@ export function terrainGeometry(
     for (const [x, y, z] of points) {
       positions.push(x, y, z);
       const shade =
-        Math.max(0.45, 1 - terrainCut(x, z, map) * 1.5) * (dark ? 0.7 : 1);
+        Math.max(
+          0.45,
+          1 -
+            terrainCut(x, z, map) * 1.5 -
+            authoredTerrainCut(x, z, map) * 0.65,
+        ) * (dark ? 0.7 : 1);
       const soil = map.terrain
         ? y > 1
           ? [0.45, 0.4, 0.28]
@@ -56,18 +66,40 @@ export function terrainGeometry(
   const epsilon = 0.00001;
   // Refine only the two-meter cells touched by excavation, not the whole patch.
   const refined = new Set<string>();
-  if (map.destruction?.patches[key])
-    for (const cutKey of Object.keys(map.destruction.cuts)) {
-      const [gx, gz] = cutKey.split(",").map(Number);
-      const wx = gx * terrainResolution,
-        wz = gz * terrainResolution;
-      if (wx < x0 || wx > x1 || wz < z0 || wz > z1) continue;
-      for (const dx of [0, -epsilon])
-        for (const dz of [0, -epsilon])
-          refined.add(
-            `${Math.floor((wx - x0 + dx) / 2)},${Math.floor((wz - z0 + dz) / 2)}`,
-          );
+  const refine = (wx: number, wz: number) => {
+    for (const dx of [0, -epsilon])
+      for (const dz of [0, -epsilon])
+        refined.add(
+          `${Math.floor((wx - x0 + dx) / 2)},${Math.floor((wz - z0 + dz) / 2)}`,
+        );
+  };
+  for (const field of [map.terrain?.relief, map.destruction]) {
+    if (!field?.patches[key]) continue;
+    if ("grid" in field && field.grid) {
+      const grid = field.grid;
+      for (let x = x0; x <= x1; x += terrainResolution)
+        for (let z = z0; z <= z1; z += terrainResolution) {
+          const col = x / terrainResolution - grid.originX,
+            row = z / terrainResolution - grid.originZ;
+          if (
+            col >= 0 &&
+            row >= 0 &&
+            col < grid.columns &&
+            row < grid.rows &&
+            grid.values[row * grid.columns + col] > 0
+          )
+            refine(x, z);
+        }
+    } else {
+      for (const cutKey of Object.keys(field.cuts)) {
+        const [gx, gz] = cutKey.split(",").map(Number);
+        const wx = gx * terrainResolution,
+          wz = gz * terrainResolution;
+        if (wx < x0 || wx > x1 || wz < z0 || wz > z1) continue;
+        refine(wx, wz);
+      }
     }
+  }
   for (let cellX = x0; cellX < x1; cellX += 2)
     for (let cellZ = z0; cellZ < z1; cellZ += 2) {
       const step = refined.has(

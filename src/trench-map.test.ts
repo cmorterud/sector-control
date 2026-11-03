@@ -58,7 +58,9 @@ describe("trench prototype", () => {
     }
     for (let x = -9; x <= 9; x += 2)
       for (let z = -50; z <= 50; z += 5)
-        expect(groundHeight(x, z, trenchMap)).toBeCloseTo(2.4);
+        expect(groundHeight(x, z, trenchMap)).toBeGreaterThanOrEqual(
+          1.55 - 0.001,
+        );
     const centerCover = trenchMap.boxes.filter((box) => Math.abs(box.x) < 18);
     expect(centerCover.filter((box) => box.kind === "sandbag")).toHaveLength(2);
     expect(

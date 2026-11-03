@@ -6,6 +6,7 @@ import {
   type Vec,
   type Box,
 } from "./map";
+import { buildTrenchRelief } from "./terrain-relief";
 
 const bankHeight = 2.4;
 const width = 160,
@@ -180,15 +181,32 @@ export const trenchMap: MapDefinition = {
     ramps,
     lining: [],
     craters: [
-      { x: -4, z: -48, radius: 3.6 },
-      { x: 9, z: -25, radius: 3 },
-      { x: -10, z: -9, radius: 3.2 },
-      { x: 8, z: 10, radius: 3.5 },
-      { x: -7, z: 24, radius: 3 },
-      { x: 3, z: 48, radius: 4 },
+      { x: -4, z: -43, radius: 3.6, depth: 0.6 },
+      { x: 9, z: -25, radius: 3, depth: 0.55 },
+      { x: -10, z: -9, radius: 3.2, depth: 0.65 },
+      { x: 8, z: 10, radius: 3.5, depth: 0.6 },
+      { x: -7, z: 24, radius: 3, depth: 0.7 },
+      { x: 3, z: 42, radius: 4, depth: 0.65 },
+    ],
+    depressions: [
+      { x: -3, z: -39, radiusX: 10, radiusZ: 14, depth: 0.16 },
+      { x: 4, z: -17, radiusX: 9, radiusZ: 12, depth: 0.14 },
+      { x: -2, z: 3, radiusX: 12, radiusZ: 15, depth: 0.18 },
+      { x: 3, z: 29, radiusX: 10, radiusZ: 14, depth: 0.15 },
+      { x: -1, z: 51, radiusX: 10, radiusZ: 10, depth: 0.12 },
     ],
   },
 };
+
+trenchMap.terrain!.relief = buildTrenchRelief(trenchMap, [
+  ...trenchMap.terrain!.craters.map((crater) => ({
+    ...crater,
+    radiusX: crater.radius,
+    radiusZ: crater.radius,
+    depth: crater.depth!,
+  })),
+  ...trenchMap.terrain!.depressions!,
+]);
 
 // Timber belongs against solid earth, never across a communication trench or ramp.
 // Clip each decorative panel to the actual terrain boundary so its visible shape

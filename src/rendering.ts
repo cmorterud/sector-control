@@ -301,23 +301,27 @@ export class Renderer implements CollisionWorld {
       const root = this.joint("old shell scar", this.mapRoot);
       this.groundDecor.push({ root, ...crater });
       this.worldParent = root;
-      const disk = new pc.Entity("shell scar");
-      disk.addComponent("render", {
-        type: "cylinder",
-        material: this.material("#44392b"),
-        castShadows: false,
-        batchGroupId: -1,
-      });
-      disk.setLocalScale(crater.radius * 2, 0.025, crater.radius * 2);
-      disk.setLocalPosition(crater.x, terrain.bankHeight + 0.015, crater.z);
-      root.addChild(disk);
+      if (!terrain.relief) {
+        const disk = new pc.Entity("shell scar");
+        disk.addComponent("render", {
+          type: "cylinder",
+          material: this.material("#44392b"),
+          castShadows: false,
+          batchGroupId: -1,
+        });
+        disk.setLocalScale(crater.radius * 2, 0.025, crater.radius * 2);
+        disk.setLocalPosition(crater.x, terrain.bankHeight + 0.015, crater.z);
+        root.addChild(disk);
+      }
       for (let i = 0; i < 5; i++) {
         const angle = (i * Math.PI * 2) / 5;
+        const x = crater.x + Math.sin(angle) * crater.radius;
+        const z = crater.z + Math.cos(angle) * crater.radius;
         this.cube(
           "crater rubble",
-          crater.x + Math.sin(angle) * crater.radius,
-          terrain.bankHeight + 0.16,
-          crater.z + Math.cos(angle) * crater.radius,
+          x,
+          groundHeight(x, z, this.map) + 0.16,
+          z,
           0.7,
           0.32,
           0.65,
