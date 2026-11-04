@@ -45,6 +45,14 @@ Bots leave threatened firing posts, seek a safe point in their own trench, and r
 
 Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` and `artilleryEnd` events link mission/shell IDs; snapshots include team cooldowns, missions, shells and retreat state. Recorder summaries count calls, impacts and retreats. Runtime terrain cuts remain sparse/serializable with a revision-based numeric lookup cache for movement and rays.
 
+## Crouching
+
+**Hold C** to crouch; release it to stand. Crouch walking is **2.25 m/s**, half normal walking speed, and holding Shift does not sprint while crouched. The soldier bends their knees, lowers their body/rifle and camera, and keeps their boots planted. There is no persistent stance status line.
+
+Crouching changes the actual hit profile, bot sight/aim height, muzzle, grenade release and explosion cover checks. It hides a soldier below the parapet even on a firing step; rounds at standing head height pass overhead, while lower rounds can still hit. A lowered rifle strikes nearby cover normally, and artillery still needs a clear view over the parapet.
+
+Space stands the soldier to hop or mantle when there is clearance. Crouching waits until an airborne action finishes, then resumes if C remains held. A solid overhead obstruction keeps the soldier crouched after C is released until there is room to stand. Adjacent earth banks are distinguished from ceilings. Death/respawn/restart reset stance. Commands/snapshots and typed `stance` transition events support recorded checks.
+
 ## Suppression, smoke and squad prototype
 
 Press **F** to throw a smoke grenade: **two per spawn**, independent of your three G explosives. The canister uses the same swept/bouncing physics, starts releasing smoke after roughly 2.5 seconds once it lands, and creates a growing **6.5 m radius cloud lasting 20 seconds**, including buildup/fade. Smoke causes no damage or excavation. It blocks vision for both bot teams and artillery spotting, while bullets still pass through it. Bots immediately drop obscured targets and must reacquire/react after visibility returns. Close silhouettes can still be seen. Explosive-grenade/artillery dust is a separate cosmetic effect.

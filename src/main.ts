@@ -53,7 +53,7 @@ const requestedTeamSize = Number(
   params.get("teamSize") ?? (map.id === "trenches" ? 25 : 5),
 );
 document.querySelector(".controls")!.textContent +=
-  "　 G GRENADE　 F SMOKE　 SPACE HOP / MANTLE　 HOLD Q ARTILLERY";
+  "　 G GRENADE　 F SMOKE　 C CROUCH　 SPACE HOP / MANTLE　 HOLD Q ARTILLERY";
 const teamSize = Math.max(
   1,
   Math.min(
@@ -324,6 +324,7 @@ function command(): Command {
   c.z = x * Math.sin(yaw) - z * Math.cos(yaw);
   c.yaw = yaw;
   c.pitch = pitch;
+  c.crouch = keys.has("KeyC");
   c.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
   c.fire = fire && !keys.has("KeyQ");
   c.artillery = pendingArtillery;
@@ -452,7 +453,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 30 seconds, then a shared 90-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Hold C to crouch and move slowly behind cover; release it to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 30 seconds, then a shared 90-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

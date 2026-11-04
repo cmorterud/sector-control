@@ -148,3 +148,40 @@ it("exposes the helmet and rifle while keeping the torso below the firing-step p
   expect(bounds("helmet").max).toBeGreaterThan(2.65);
   expect(bounds("barrel").min).toBeGreaterThan(2.4);
 });
+
+it("crouches with bent knees and planted boots, keeps the support hand attached, and hides below the parapet", () => {
+  const game = new Game(
+    new TestCollision(trenchMap),
+    false,
+    600,
+    12345,
+    undefined,
+    { map: trenchMap },
+  );
+  const p = game.players[0];
+  Object.assign(p, { x: -19, y: 0.85, z: -1, crouched: true, landedAt: -1000 });
+  const r = rigFor(p),
+    rig = r.soldiers[0];
+  const nodes = new Map<string, Entity>();
+  const visit = (e: Entity) => {
+    nodes.set(e.name, e);
+    for (const child of e.children) visit(child as Entity);
+  };
+  visit(r.people[0]);
+  for (let i = 0; i < 75; i++) {
+    r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + i / 2);
+    for (const leg of rig.legs)
+      expect(leg.ankle.getPosition().y - p.y).toBeGreaterThan(0.07);
+    const wrist = rig.arms[0].elbow
+      .getWorldTransform()
+      .transformPoint(new Vec3(0, -0.46, 0));
+    expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
+  }
+  const helmet = nodes.get("helmet")!;
+  expect(helmet.getPosition().y + 0.09).toBeLessThan(2.4);
+  expect(nodes.get("knee")!.getLocalEulerAngles().x).toBeLessThan(-120);
+  p.crouched = false;
+  for (let i = 0; i < 75; i++)
+    r.animateSoldier(p, p.x, p.z, 1 / 60, 140 + i / 2);
+  expect(helmet.getPosition().y).toBeGreaterThan(2.65);
+});

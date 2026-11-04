@@ -1,3 +1,4 @@
+import { stanceDrop } from "./crouch";
 import type { Game, Soldier, Projectile, V3, Command } from "./simulation";
 import { idle, firingPosition } from "./simulation";
 import { dist, walkSegment } from "./map";
@@ -25,7 +26,7 @@ export function suppressNearMiss(
     dy = to.y - from.y,
     dz = to.z - from.z,
     length2 = dx * dx + dy * dy + dz * dz;
-  const head = { x: p.x, y: p.y + 1.5, z: p.z };
+  const head = { x: p.x, y: p.y + 1.5 - stanceDrop(p), z: p.z };
   const t = length2
     ? Math.max(
         0,

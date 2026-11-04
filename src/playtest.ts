@@ -47,6 +47,7 @@ export class PlaytestLog {
       grenadeExplosions: this.events.filter(
         (e) => e.type === "grenadeExplosion",
       ).length,
+      stanceChanges: this.events.filter((e) => e.type === "stance").length,
       smokeThrows: this.events.filter((e) => e.type === "smokeThrow").length,
       smokeClouds: this.events.filter((e) => e.type === "smokeBloom").length,
       suppressions: this.events.filter((e) => e.type === "suppression").length,

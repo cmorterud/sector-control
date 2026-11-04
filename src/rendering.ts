@@ -1,3 +1,4 @@
+import { crouchRules } from "./crouch";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
 import * as pc from "playcanvas";
@@ -47,6 +48,7 @@ type SoldierRig = {
   phase: number;
   motion: number;
   sprint: number;
+  crouch: number;
   alive: boolean;
 };
 
@@ -666,6 +668,7 @@ export class Renderer implements CollisionWorld {
       phase: p.id * 1.7,
       motion: 0,
       sprint: 0,
+      crouch: 0,
       alive: p.hp > 0,
     });
   }
@@ -755,7 +758,7 @@ export class Renderer implements CollisionWorld {
       ? rig.motion + (Math.min(1, speed / 4.5) - rig.motion) * blend
       : 0;
     const sprint =
-      p.command.sprint && !p.command.aim
+      p.command.sprint && !p.command.aim && !p.crouched
         ? Math.max(0, Math.min(1, (speed - 4) / 3))
         : 0;
     rig.sprint = rig.alive ? rig.sprint + (sprint - rig.sprint) * blend : 0;
@@ -763,17 +766,24 @@ export class Renderer implements CollisionWorld {
       (rig.phase +
         moved * (2.5 - rig.sprint * 0.35) * (forward < -0.15 ? -1 : 1)) %
       (Math.PI * 2);
+    const crouchTarget = p.crouched && !p.mantle && !p.hop && p.hp > 0 ? 1 : 0;
+    rig.crouch += (crouchTarget - rig.crouch) * blend;
+    if (Math.abs(rig.crouch - crouchTarget) < 0.001) rig.crouch = crouchTarget;
+    const crouchDrop = crouchRules.drop * rig.crouch;
+    const squatAngle =
+      (Math.acos(clamp01((0.82 - crouchDrop) / 0.82)) * 180) / Math.PI;
     const stride = Math.sin(rig.phase) * rig.motion;
     const ready = p.command.aim || p.command.fire || p.reloadAt > 0;
     rig.body.setLocalPosition(
       0,
       0.94 -
-        (p.duckUntil > tick ? 0.09 : 0) +
+        crouchDrop -
+        (p.duckUntil > tick && !p.crouched ? 0.09 : 0) +
         (Math.cos(rig.phase * 2) - 1) * 0.022 * rig.motion,
       0,
     );
     rig.body.setLocalEulerAngles(
-      -forward * rig.motion * (2 + 8 * rig.sprint),
+      -forward * rig.motion * (2 + 8 * rig.sprint) - 8 * rig.crouch,
       0,
       -sideways * rig.motion * 4,
     );
@@ -785,12 +795,27 @@ export class Renderer implements CollisionWorld {
     rig.upper.setLocalEulerAngles(0, stride * (ready ? 1.5 : 4), -stride * 1.5);
     for (let i = 0; i < rig.legs.length; i++) {
       const phase = rig.phase + i * Math.PI;
-      const swing = Math.sin(phase) * (30 + 18 * rig.sprint) * rig.motion;
+      const swing =
+        Math.sin(phase) *
+        (30 + 18 * rig.sprint) *
+        rig.motion *
+        (1 - 0.7 * rig.crouch);
       const bend =
-        -Math.max(0, -Math.sin(phase)) * (38 + 24 * rig.sprint) * rig.motion;
-      rig.legs[i].hip.setLocalEulerAngles(swing, 0, 0);
-      rig.legs[i].knee.setLocalEulerAngles(bend, 0, 0);
-      rig.legs[i].ankle.setLocalEulerAngles(-swing * 0.25 - bend * 0.35, 0, 0);
+        -Math.max(0, -Math.sin(phase)) *
+        (38 + 24 * rig.sprint) *
+        rig.motion *
+        (1 - 0.65 * rig.crouch);
+      const hip = squatAngle + swing,
+        knee = -2 * squatAngle + bend;
+      rig.legs[i].hip.setLocalEulerAngles(hip, 0, 0);
+      rig.legs[i].knee.setLocalEulerAngles(knee, 0, 0);
+      rig.legs[i].ankle.setLocalEulerAngles(
+        rig.crouch > 0
+          ? -hip - knee + 8 * rig.crouch
+          : -swing * 0.25 - bend * 0.35,
+        0,
+        0,
+      );
     }
     const armSwing = stride * (ready ? 3 : 16 + 12 * rig.sprint);
     rig.arms[1].shoulder.setLocalEulerAngles(
@@ -1003,10 +1028,11 @@ export class Renderer implements CollisionWorld {
         z: -Math.cos(p.yaw) * Math.cos(p.pitch),
       };
     const visual = this.people[0].getPosition();
-    const pivot = { x: visual.x, y: visual.y + 1.65, z: visual.z },
+    const cameraDrop = crouchRules.drop * this.soldiers[0].crouch;
+    const pivot = { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
       desired = {
         x: visual.x - dir.x * d + Math.cos(p.yaw) * 0.65,
-        y: visual.y + 2.5 - dir.y * d,
+        y: visual.y + 2.5 - cameraDrop - dir.y * d,
         z: visual.z - dir.z * d + Math.sin(p.yaw) * 0.65,
       },
       f = this.ray(pivot, desired) * 0.95;

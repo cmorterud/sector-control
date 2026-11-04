@@ -1,3 +1,4 @@
+import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
 import { blocked, dist, groundHeight, walkSegment, type Vec } from "./map";
 import {
@@ -89,7 +90,7 @@ export function artilleryTargetReason(
   if (p.hp <= 0 || p.mantle || p.hop) return "Stand on solid ground to spot";
   if (!Number.isFinite(target.x) || !Number.isFinite(target.z))
     return "Choose a target";
-  if (g.map.terrain && p.y + 1.65 < g.map.terrain.bankHeight + 0.04)
+  if (g.map.terrain && p.y + eyeHeightOf(p) < g.map.terrain.bankHeight + 0.04)
     return "Use a firing step to spot over the parapet";
   const range = dist(p, target);
   if (range < artilleryRules.minRange || range > artilleryRules.maxRange)
@@ -100,7 +101,7 @@ export function artilleryTargetReason(
     Math.abs(target.z) > g.map.depth / 2 - margin
   )
     return "Target too close to the map boundary";
-  const from = { x: p.x, y: p.y + 1.65, z: p.z };
+  const from = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
   const to = {
     ...target,
     y: Math.max(
@@ -406,7 +407,7 @@ export function artilleryAim(
   yaw: number,
   pitch: number,
 ): Vec {
-  const from = { x: p.x, y: p.y + 1.65, z: p.z };
+  const from = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
   const to = {
     x: from.x + Math.sin(yaw) * Math.cos(pitch) * 70,
     y: from.y + Math.sin(pitch) * 70,

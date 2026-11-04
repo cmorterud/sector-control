@@ -1,3 +1,12 @@
+import {
+  stanceDrop,
+  eyeHeightOf,
+  cameraHeightOf,
+  hitHeights,
+  hitRadius,
+  updateCrouch,
+  crouchRules,
+} from "./crouch";
 import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
 import {
   suppressNearMiss,
@@ -53,6 +62,7 @@ export interface Command {
   grenade: boolean;
   artillery?: Vec;
   smoke?: boolean;
+  crouch?: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -84,9 +94,10 @@ export interface Grenade extends V3 {
 }
 export const projectileSpeed = 32;
 export const projectileRange = 60;
-export const rifleHeight = (map: MapDefinition) => (map.terrain ? 1.65 : 1.45);
-export const exposedAimHeight = (map: MapDefinition) =>
-  map.terrain ? 1.65 : 1.25;
+export const rifleHeight = (map: MapDefinition, p?: Soldier) =>
+  (map.terrain ? 1.65 : 1.45) - stanceDrop(p);
+export const exposedAimHeight = (map: MapDefinition, p?: Soldier) =>
+  (map.terrain ? 1.65 : 1.25) - stanceDrop(p);
 export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
     (position) => position.team === p.team,
@@ -208,6 +219,7 @@ export function mantlePosition(m: Mantle, tick: number): V3 {
   return { ...m.to };
 }
 export interface Soldier extends Vec {
+  crouched: boolean;
   y: number;
   teamIndex: number;
   mantle: Mantle | null;
@@ -367,6 +379,7 @@ export type Event = { id: number; tick: number } & (
   | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
   | { type: "contested"; sector: string }
+  | { type: "stance"; actor: number; crouched: boolean }
   | { type: "score" }
   | { type: "end"; winner: Team | "draw" }
 );
@@ -580,6 +593,7 @@ export class Game {
         team,
         teamIndex: i % this.teamSize,
         mantle: null,
+        crouched: false,
         hop: null,
         nextHop: 0,
         landedAt: -1000,
@@ -677,6 +691,7 @@ export class Game {
           : -Math.PI / 2
         : 0;
     p.hp = 100;
+    p.crouched = false;
     p.ammo = 30;
     p.reserve = 120;
     p.grenades = 3;
@@ -730,6 +745,7 @@ export class Game {
       );
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
+      updateCrouch(this, p, c);
       if (c.artillery) requestArtillery(this, p, c.artillery);
       if (
         !c.fire ||
@@ -751,6 +767,7 @@ export class Game {
         this.throwGrenade(p, !!c.smoke);
       if (
         c.mantle &&
+        !p.crouched &&
         !p.mantle &&
         !p.hop &&
         this.tick >= p.nextMantle &&
@@ -777,7 +794,7 @@ export class Game {
         }
       } else {
         const len = Math.max(1, Math.hypot(c.x, c.z)),
-          speed = c.sprint && !c.aim ? 7 : 4.5;
+          speed = p.crouched ? crouchRules.speed : c.sprint && !c.aim ? 7 : 4.5;
         p.vx += ((c.x / len) * speed - p.vx) * 0.24;
         p.vz += ((c.z / len) * speed - p.vz) * 0.24;
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
@@ -964,11 +981,11 @@ export class Game {
       y: Math.sin(p.pitch),
       z: -Math.cos(p.yaw) * Math.cos(p.pitch),
     };
-    const pivot = { x: p.x, y: p.y + 1.65, z: p.z },
+    const pivot = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
       distance = p.command.aim ? 2.5 : 4;
     const desired = {
       x: p.x - dir.x * distance + Math.cos(p.yaw) * 0.65,
-      y: p.y + 2.5 - dir.y * distance,
+      y: p.y + cameraHeightOf(p) - dir.y * distance,
       z: p.z - dir.z * distance + Math.sin(p.yaw) * 0.65,
     };
     const f = this.collision.ray(pivot, desired) * 0.95;
@@ -988,10 +1005,15 @@ export class Game {
     let first = this.collision.ray(camera, aim);
     for (const q of this.players)
       if (q !== p && q.hp > 0)
-        for (const y of [0.6, 1.1, 1.6])
+        for (const y of hitHeights(q))
           first = Math.min(
             first,
-            raySphere(camera, aim, { x: q.x, y: q.y + y, z: q.z }, 0.38),
+            raySphere(
+              camera,
+              aim,
+              { x: q.x, y: q.y + y, z: q.z },
+              hitRadius(q),
+            ),
           );
     aim = {
       x: camera.x + (aim.x - camera.x) * first,
@@ -1000,7 +1022,7 @@ export class Game {
     };
     const from = {
       x: p.x + Math.cos(p.yaw) * 0.32 + dir.x * 1.08,
-      y: p.y + rifleHeight(this.map),
+      y: p.y + rifleHeight(this.map, p),
       z: p.z + Math.sin(p.yaw) * 0.32 + dir.z * 1.08,
     };
     const length = Math.max(
@@ -1030,15 +1052,22 @@ export class Game {
       },
     });
     let obstruction = this.collision.ray(pivot, from);
+    // Native mesh rays can miss a muzzle starting exactly on a bank face.
+    // A crouched barrel must also clear the authoritative height field/cover.
+    if (p.crouched)
+      obstruction = Math.min(
+        obstruction,
+        this.grenadeCollision.ray(pivot, from),
+      );
     let muzzleVictim: Soldier | undefined;
     for (const q of this.players)
       if (q !== p && q.hp > 0)
-        for (const y of [0.6, 1.1, 1.6]) {
+        for (const y of hitHeights(q)) {
           const t = raySphere(
             pivot,
             from,
             { x: q.x, y: q.y + y, z: q.z },
-            0.38,
+            hitRadius(q),
           );
           if (t < obstruction) {
             obstruction = t;
@@ -1095,12 +1124,12 @@ export class Game {
         )
           for (const q of cells.get(`${cx},${cz}`) ?? [])
             if (q.id !== shot.actor && q.hp > 0)
-              for (const y of [0.6, 1.1, 1.6]) {
+              for (const y of hitHeights(q)) {
                 const t = raySphere(
                   from,
                   to,
                   { x: q.x, y: q.y + y, z: q.z },
-                  0.38,
+                  hitRadius(q),
                 );
                 if (t < nearest) {
                   nearest = t;
@@ -1153,6 +1182,7 @@ export class Game {
       victim.reloadAt = 0;
       victim.throwUntil = 0;
       victim.mantle = null;
+      victim.crouched = false;
       victim.hop = null;
       victim.y = groundHeight(victim.x, victim.z, this.map);
       this.emit({ type: "death", actor: victim.id });
@@ -1207,7 +1237,7 @@ export class Game {
     const elevation = clamp(p.pitch + 0.65, 0.15, 1.25);
     // Timber can extend slightly beyond the height-field bank. Find clearance
     // within the soldier's footprint before releasing; never start inside it.
-    const origin = { x: p.x, y: p.y + 1.8, z: p.z };
+    const origin = { x: p.x, y: p.y + 1.8 - stanceDrop(p), z: p.z };
     const from = [
       origin,
       {
@@ -1376,9 +1406,13 @@ export class Game {
         this.tick < p.protectedUntil
       )
         continue;
-      const distance = Math.hypot(p.x - at.x, p.y + 0.9 - at.y, p.z - at.z);
+      const distance = Math.hypot(
+        p.x - at.x,
+        p.y + (p.crouched ? 0.6 : 0.9) - at.y,
+        p.z - at.z,
+      );
       if (distance >= profile.radius) continue;
-      const visible = [0.6, 1.1, 1.6].some(
+      const visible = hitHeights(p).some(
         (height) =>
           this.collision.ray(at, { x: p.x, y: p.y + height, z: p.z }) >= 0.999,
       );
@@ -1587,12 +1621,12 @@ export function botCommand(g: Game, p: Soldier): Command {
       dist(q, p) < range &&
       !smokeBlocks(
         g,
-        { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
-        { x: q.x, y: q.y + exposedAimHeight(g.map), z: q.z },
+        { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },
+        { x: q.x, y: q.y + exposedAimHeight(g.map, q), z: q.z },
       ) &&
       g.collision.ray(
-        { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
-        { x: q.x, y: q.y + exposedAimHeight(g.map), z: q.z },
+        { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },
+        { x: q.x, y: q.y + exposedAimHeight(g.map, q), z: q.z },
       ) > 0.99;
     const existing = g.players.find((q) => q.id === p.target);
     const target =
@@ -1611,11 +1645,24 @@ export function botCommand(g: Game, p: Soldier): Command {
   let target = g.players.find((q) => q.id === p.target && q.hp > 0);
   if (
     target &&
-    smokeBlocks(
+    (smokeBlocks(
       g,
-      { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
-      { x: target.x, y: target.y + exposedAimHeight(g.map), z: target.z },
-    )
+      { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },
+      {
+        x: target.x,
+        y: target.y + exposedAimHeight(g.map, target),
+        z: target.z,
+      },
+    ) ||
+      (target.crouched &&
+        g.collision.ray(
+          { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },
+          {
+            x: target.x,
+            y: target.y + exposedAimHeight(g.map, target),
+            z: target.z,
+          },
+        ) < 0.99))
   ) {
     p.target = -1;
     p.spottedAt = g.tick;
@@ -1666,23 +1713,23 @@ export function botCommand(g: Game, p: Soldier): Command {
       aimZ = rz + target.vz * lead;
     const aimDistance = Math.hypot(aimX, aimZ);
     const aimYaw = Math.atan2(aimX, -aimZ);
-    let eyeHeight = p.y + 1.65,
+    let eyeHeight = p.y + eyeHeightOf(p),
       shoulderOffset = 0;
     if (p.id === 0) {
       // The optional player driver aims through the same shoulder camera as a human.
       const pitch = Math.atan2(
-        target.y + exposedAimHeight(g.map) - (p.y + 2.5),
+        target.y + exposedAimHeight(g.map, target) - (p.y + cameraHeightOf(p)),
         aimDistance,
       );
       const f =
         g.collision.ray(
-          { x: p.x, y: p.y + 1.65, z: p.z },
+          { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
           {
             x:
               p.x -
               Math.sin(aimYaw) * Math.cos(pitch) * 2.5 +
               Math.cos(aimYaw) * 0.65,
-            y: p.y + 2.5 - Math.sin(pitch) * 2.5,
+            y: p.y + cameraHeightOf(p) - Math.sin(pitch) * 2.5,
             z:
               p.z +
               Math.cos(aimYaw) * Math.cos(pitch) * 2.5 +
@@ -1697,8 +1744,10 @@ export function botCommand(g: Game, p: Soldier): Command {
       Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
       error.yaw;
     c.pitch =
-      Math.atan2(target.y + exposedAimHeight(g.map) - eyeHeight, aimDistance) +
-      error.pitch;
+      Math.atan2(
+        target.y + exposedAimHeight(g.map, target) - eyeHeight,
+        aimDistance,
+      ) + error.pitch;
     c.aim = true;
     c.sprint = false;
     c.fire =
