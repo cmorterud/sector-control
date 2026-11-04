@@ -5,14 +5,13 @@ import {
   type TerrainRect,
   type Vec,
   type Box,
+  type TrenchLine,
+  type CommunicationRoute,
 } from "./map";
 import { buildTrenchRelief } from "./terrain-relief";
 
 const bankHeight = 2.4;
-const frontNear = 21,
-  rearNear = 37;
-const rearEntrance = rearNear + 8,
-  spawnDistance = rearNear + 18;
+const spawnDistance = 55;
 const width = 160,
   depth = 128,
   cellSize = 2;
@@ -24,57 +23,154 @@ const ramps: Ramp[] = [];
 const liningCandidates: (Vec & { w: number; d: number })[] = [];
 const cover: Box[] = [];
 const firingPositions: (Vec & { team: "blue" | "red" })[] = [];
-// Four independent zigzag lines: rear and front for each faction. Three narrow
-// communication routes connect each pair without extending into no man's land.
-for (const side of [-1, 1] as const) {
-  for (const line of ["rear", "front"] as const) {
-    const near = line === "rear" ? rearNear : frontNear;
-    for (let i = 0; i < 7; i++) {
-      const x = side * (near + (i % 2 ? 0 : 8)),
-        z = -49 + i * 16;
-      floors.push({ x, z, w: 6, d: 16 });
-      if (i < 6) floors.push({ x: side * (near + 4), z: z + 8, w: 14, d: 6 });
-      for (const edge of [-1, 1])
-        liningCandidates.push({ x: x + edge * 3.06, z, w: 0.12, d: 9 });
-      if (line === "front" || i % 2 === 0) {
-        platforms.push({ x: x - side * 2, z, w: 2, d: 6, h: 0.85 });
-        ramps.push({
-          x,
-          z,
-          w: 2,
-          d: 6,
-          low: 0,
-          high: 0.85,
-          direction: side === -1 ? 1 : -1,
-        });
-      }
+// Fixed, independently authored lines: long Blue stretches and tighter Red bends.
+// Coordinates also describe the firing steps and communication paths to the AI.
+const trenchLines: TrenchLine[] = [
+  {
+    team: "blue",
+    role: "front",
+    sections: [
+      { x: -29, z: -49, length: 16 },
+      { x: -21, z: -29, length: 24, stepZ: -33 },
+      { x: -27, z: -13, length: 8 },
+      { x: -21, z: -1, length: 16 },
+      { x: -25, z: 17, length: 20 },
+      { x: -21, z: 35, length: 16 },
+      { x: -29, z: 51, length: 16 },
+    ],
+  },
+  {
+    team: "blue",
+    role: "rear",
+    sections: [
+      { x: -45, z: -49, length: 16 },
+      { x: -41, z: -31, length: 20 },
+      { x: -45, z: -13, length: 16 },
+      { x: -37, z: -1, length: 8 },
+      { x: -41, z: 13, length: 20 },
+      { x: -39, z: 31, length: 16 },
+      { x: -45, z: 49, length: 20 },
+    ],
+  },
+  {
+    team: "red",
+    role: "front",
+    sections: [
+      { x: 25, z: -51, length: 12 },
+      { x: 21, z: -39, length: 12 },
+      { x: 27, z: -27, length: 12 },
+      { x: 23, z: -15, length: 12 },
+      { x: 21, z: -1, length: 16 },
+      { x: 29, z: 15, length: 16 },
+      { x: 23, z: 31, length: 16 },
+      { x: 27, z: 47, length: 16 },
+    ],
+  },
+  {
+    team: "red",
+    role: "rear",
+    sections: [
+      { x: 43, z: -49, length: 16 },
+      { x: 39, z: -33, length: 16 },
+      { x: 45, z: -17, length: 16 },
+      { x: 37, z: -1, length: 16 },
+      { x: 45, z: 15, length: 16 },
+      { x: 41, z: 33, length: 20 },
+      { x: 43, z: 51, length: 16 },
+    ],
+  },
+];
+const communicationRoutes: CommunicationRoute[] = [];
+for (const line of trenchLines) {
+  const side = line.team === "blue" ? -1 : 1;
+  line.sections.forEach((section, i) => {
+    const { x, z, length } = section;
+    floors.push({ x, z, w: 6, d: length });
+    const next = line.sections[i + 1];
+    if (next)
+      floors.push({
+        x: (x + next.x) / 2,
+        z: z + length / 2,
+        w: Math.abs(x - next.x) + 6,
+        d: 6,
+      });
+    for (const edge of [-1, 1])
+      liningCandidates.push({
+        x: x + edge * 3.06,
+        z,
+        w: 0.12,
+        d: Math.max(2, length - 6),
+      });
+    if (line.role === "front" || i % 2 === 0) {
+      const stepZ = section.stepZ ?? z;
+      platforms.push({ x: x - side * 2, z: stepZ, w: 2, d: 6, h: 0.85 });
+      ramps.push({
+        x,
+        z: stepZ,
+        w: 2,
+        d: 6,
+        low: 0,
+        high: 0.85,
+        direction: -side as -1 | 1,
+      });
     }
-  }
-  for (const z of [-33, -1, 31]) {
-    // Offset the two entrances around an earth traverse: nobody can fire
-    // straight from the rear entrance through to the front firing step.
-    const middle = (frontNear + rearNear) / 2;
-    floors.push({ x: side * (frontNear + 4), z: z - 3, w: 10, d: 4 });
-    floors.push({ x: side * middle, z, w: 6, d: 8 });
-    floors.push({ x: side * (rearNear - 4), z: z + 3, w: 10, d: 4 });
-    // Spawn on the land immediately behind the rear line, then descend into it.
+  });
+  if (line.role === "front")
+    for (let index = 0; index < 25; index++) {
+      const segment = index % line.sections.length,
+        row = Math.floor(index / line.sections.length);
+      const section = line.sections[segment];
+      const count =
+        Math.floor(25 / line.sections.length) +
+        (segment < 25 % line.sections.length ? 1 : 0);
+      firingPositions.push({
+        team: line.team,
+        x: section.x - side * 2,
+        z: (section.stepZ ?? section.z) + (row - (count - 1) / 2) * 1.2,
+      });
+    }
+}
+for (const team of ["blue", "red"] as const) {
+  const side = team === "blue" ? -1 : 1;
+  const front = trenchLines.find((l) => l.team === team && l.role === "front")!;
+  const rear = trenchLines.find((l) => l.team === team && l.role === "rear")!;
+  for (const z of team === "blue" ? [-33, -1, 35] : [-39, -1, 31]) {
+    const near = (line: TrenchLine) =>
+      line.sections.find((s) => Math.abs(s.z - z) < s.length / 2)!.x;
+    const f = near(front),
+      r = near(rear),
+      middle = (f + r) / 2;
+    floors.push({
+      x: (f + middle) / 2,
+      z: z - 5,
+      w: Math.abs(f - middle) + 2,
+      d: 4,
+    });
+    floors.push({ x: middle, z, w: 6, d: 14 });
+    floors.push({
+      x: (r + middle) / 2,
+      z: z + 5,
+      w: Math.abs(r - middle) + 2,
+      d: 4,
+    });
+    const entrance = { x: r + side * 8, z };
     ramps.push({
-      x: side * rearEntrance,
-      z,
+      ...entrance,
       w: 10,
       d: 10,
       low: 0,
       high: bankHeight,
       direction: side,
     });
-  }
-  for (let index = 0; index < 25; index++) {
-    const segment = index % 7,
-      row = Math.floor(index / 7);
-    firingPositions.push({
-      team: side === -1 ? "blue" : "red",
-      x: side * (frontNear + (segment % 2 ? 0 : 8) - 2),
-      z: -49 + segment * 16 + (row - 1.5) * 1.2,
+    communicationRoutes.push({
+      team,
+      entrance,
+      points: [
+        { x: r, z: z + 5 },
+        { x: middle, z: z + 5 },
+        { x: middle, z: z - 5 },
+        { x: f, z: z - 5 },
+      ],
     });
   }
   for (const z of [-21, 21])
@@ -88,6 +184,15 @@ for (const side of [-1, 1] as const) {
       kind: "bunker",
     });
 }
+// Small shelter bays interrupt the regular corridor footprint without opening a parapet.
+floors.push(
+  { x: -33, z: -49, w: 4, d: 6 },
+  { x: -29, z: 17, w: 4, d: 8 },
+  { x: -45, z: -31, w: 4, d: 6 },
+  { x: 31, z: -27, w: 4, d: 6 },
+  { x: 27, z: 31, w: 4, d: 6 },
+  { x: 49, z: 15, w: 4, d: 6 },
+);
 // Light rear-line screens sit away from entry ramps and can be blown apart.
 for (const side of [-1, 1])
   cover.push({
@@ -185,6 +290,8 @@ export const trenchMap: MapDefinition = {
   terrain: {
     bankHeight,
     firingPositions,
+    trenchLines,
+    communicationRoutes,
     cellSize,
     columns,
     rows,
@@ -222,7 +329,7 @@ trenchMap.terrain!.relief = buildTrenchRelief(trenchMap, [
 
 // Timber belongs against solid earth, never across a communication trench or ramp.
 // Clip each decorative panel to the actual terrain boundary so its visible shape
-// agrees with the earth collision, including the six mirrored trench junctions.
+// agrees with the earth collision, including the independently authored communication junctions.
 for (const wall of liningCandidates) {
   const end = wall.z + wall.d / 2;
   let start: number | null = null;

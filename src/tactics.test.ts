@@ -21,7 +21,7 @@ import {
 } from "./suppression";
 import { advanceAssaults, assaultCommand } from "./assault";
 import { requestArtillery } from "./artillery";
-import { industrialMap, groundHeight, type MapDefinition } from "./map";
+import { industrialMap, groundHeight, dist, type MapDefinition } from "./map";
 import { trenchMap } from "./trench-map";
 import { PlaytestLog } from "./playtest";
 const open: MapDefinition = {
@@ -376,8 +376,8 @@ describe("covered squad advances", () => {
     for (const id of m.members) g.players[id].hp = 0;
     advanceAssaults(g);
     const next = g.assaults.readyAt.blue;
-    expect(next - g.tick).toBeGreaterThanOrEqual(18 * 30);
-    expect(next - g.tick).toBeLessThanOrEqual(24 * 30);
+    expect(next - g.tick).toBeGreaterThanOrEqual(12 * 30);
+    expect(next - g.tick).toBeLessThanOrEqual(18 * 30);
     for (const id of m.members) {
       const p = g.players[id];
       g.respawn(p);
@@ -426,6 +426,86 @@ describe("covered squad advances", () => {
     for (const id of m.members) g.players[id].hp = 0;
     advanceAssaults(g);
     expect(g.assaults.missions).toHaveLength(0);
+  });
+  it("overlaps two distinct lanes without double-assigning soldiers or sending more than eight per team", () => {
+    const { g, m } = formedSquad();
+    // Leave the first group alive at its launch point while the next window opens.
+    g.tick = g.assaults.readyAt.blue;
+    advanceAssaults(g);
+    const waves = g.assaults.missions.filter((q) => q.team === "blue");
+    expect(waves).toHaveLength(2);
+    expect(dist(waves[0].launch, waves[1].launch)).toBeGreaterThanOrEqual(12);
+    const ids = waves.flatMap((q) => q.members);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBeLessThanOrEqual(8);
+    expect(ids).not.toContain(0);
+    expect(
+      g.players.filter((p) => p.team === "blue" && p.assaultId === null),
+    ).toHaveLength(25 - ids.length);
+    g.tick = g.assaults.readyAt.blue;
+    advanceAssaults(g);
+    expect(g.assaults.missions.filter((q) => q.team === "blue")).toHaveLength(
+      2,
+    );
+    // Once a wave completes, its living forward defenders still count toward the cap.
+    for (const id of m.members) {
+      m.progress[id] = 3;
+      g.players[id].forwardPost = { ...m.route[2] };
+    }
+    advanceAssaults(g);
+    expect(g.assaults.missions.filter((q) => q.team === "blue")).toHaveLength(
+      1,
+    );
+    expect(
+      g.players.filter(
+        (p) => p.team === "blue" && (p.assaultId !== null || p.forwardPost),
+      ).length,
+    ).toBeLessThanOrEqual(8);
+  });
+  it("counts unassigned survivors still in the field toward the attacker cap", () => {
+    const { g, m } = formedSquad();
+    const others = g.players
+      .filter(
+        (p) => p.team === "blue" && !m.members.includes(p.id) && p.id !== 0,
+      )
+      .slice(0, 4);
+    for (const p of others) Object.assign(p, { x: 0, y: 2.4 });
+    g.tick = g.assaults.readyAt.blue;
+    advanceAssaults(g);
+    expect(g.assaults.missions.filter((q) => q.team === "blue")).toHaveLength(
+      1,
+    );
+  });
+  it("uses authored launch/target geometry and prefers an available smoke screen", () => {
+    const { g, m } = formedSquad();
+    const fronts = g.map.terrain!.trenchLines!.filter(
+      (l) => l.role === "front",
+    );
+    expect(
+      fronts
+        .find((l) => l.team === "blue")!
+        .sections.some(
+          (s) => s.x + 2 === m.launch.x && (s.stepZ ?? s.z) === m.launch.z,
+        ),
+    ).toBe(true);
+    expect(
+      fronts
+        .find((l) => l.team === "red")!
+        .sections.some(
+          (s) =>
+            Math.abs(s.x - 1.6 - m.route[2].x) < 0.001 &&
+            (s.stepZ ?? s.z) === m.route[2].z,
+        ),
+    ).toBe(true);
+    const other = fronts
+      .find((l) => l.team === "blue")!
+      .sections.find((s) => (s.stepZ ?? s.z) === 35)!;
+    g.smokeClouds.push({ ...cloud(g), x: -7, z: 24 });
+    g.assaults.readyAt.blue = g.tick;
+    advanceAssaults(g);
+    const wave = g.assaults.missions.find((q) => q.team === "blue" && q !== m)!;
+    expect(wave.launch).toEqual({ x: other.x + 2, z: 35 });
+    expect(wave.route[0]).toEqual({ x: -7, z: 24 });
   });
   it("keeps assault behavior disabled for industrial combat and resets squad membership on respawn", () => {
     const g = scene();
@@ -484,6 +564,30 @@ describe("covered squad advances", () => {
       log.recordTick(g, c, i / 30);
     }
     const summary = log.summary();
+    for (const team of ["blue", "red"] as const) {
+      expect(
+        log.events.filter((e) => e.type === "assaultStart" && e.team === team)
+          .length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        log.samples.some(
+          (s) =>
+            s.state.assaults.missions.filter((m) => m.team === team).length ===
+            2,
+        ),
+      ).toBe(true);
+      for (const sample of log.samples)
+        expect(
+          sample.state.players.filter(
+            (p) =>
+              p.team === team &&
+              p.hp > 0 &&
+              (p.assaultId !== null ||
+                p.forwardPost ||
+                (team === "blue" ? p.x > -14 : p.x < 14)),
+          ).length,
+        ).toBeLessThanOrEqual(8);
+    }
     expect(summary.assaults).toBeGreaterThan(0);
     expect(summary.smokeClouds).toBeGreaterThan(0);
     expect(summary.ducks).toBeGreaterThan(0);

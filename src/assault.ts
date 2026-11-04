@@ -15,6 +15,9 @@ export interface Assault {
   leader: number;
   startedAt: number;
   expiresAt: number;
+  launch: Vec;
+  departure: Vec;
+  approach: Vec;
   route: Vec[];
   progress: Record<number, number>;
   waitUntil: Record<number, number>;
@@ -48,8 +51,6 @@ export function advanceAssaults(g: Game) {
         p.nextThink = g.tick;
       }
     }
-    // Stagger the next small wave without leaving a failed attack idle for a minute.
-    g.assaults.readyAt[m.team] = g.tick + (18 + (m.id % 3) * 3) * 30;
     g.emit({
       type: "assaultEnd",
       mission: m.id,
@@ -60,56 +61,112 @@ export function advanceAssaults(g: Game) {
   });
   if (g.tick % 30) return;
   for (const team of ["blue", "red"] as const) {
+    const side = team === "blue" ? -1 : 1,
+      enemy = team === "blue" ? "red" : "blue";
+    const front = g.map.terrain.trenchLines?.find(
+      (l) => l.team === team && l.role === "front",
+    );
+    const opposing = g.map.terrain.trenchLines?.find(
+      (l) => l.team === enemy && l.role === "front",
+    );
+    if (!front || !opposing) continue;
+    const edge = (line: typeof front, sign: number) =>
+      sign * (Math.min(...line.sections.map((p) => sign * p.x)) - 7);
+    const active = g.assaults.missions.filter((m) => m.team === team);
+    // Include returning survivors from expired plans, not just current squads.
+    const attackers = g.players.filter(
+      (p) =>
+        p.team === team &&
+        p.hp > 0 &&
+        !g.humanPlayerIds.includes(p.id) &&
+        (p.assaultId !== null ||
+          p.forwardPost ||
+          side * (p.x - edge(front, side)) < 0),
+    );
     if (
       g.tick < g.assaults.readyAt[team] ||
-      g.assaults.missions.some((m) => m.team === team)
+      active.length >= 2 ||
+      attackers.length > 5
     )
       continue;
-    const side = team === "blue" ? -1 : 1;
-    const lanes = [-33, -1, 31];
-    for (const z of lanes
-      .slice(g.assaults.sequence % 3)
-      .concat(lanes.slice(0, g.assaults.sequence % 3))) {
-      const members = g.players.filter(
-        (p) =>
-          p.team === team &&
-          !g.humanPlayerIds.includes(p.id) &&
-          p.hp > 0 &&
-          p.ammo >= 10 &&
-          !p.mantle &&
-          !p.hop &&
-          !p.duckUntil &&
-          !p.forwardPost &&
-          !artilleryThreat(g, p) &&
-          Math.abs(p.x - side * 19) < 1.6 &&
-          Math.abs(p.z - z) < 4,
-      );
-      if (members.length < 3) continue;
+    const centerX = (edge(front, side) + edge(opposing, -side)) / 2;
+    const near = g.map.terrain.craters.filter(
+        (c) => side * (c.x - centerX) > 0,
+      ),
+      far = g.map.terrain.craters.filter((c) => side * (c.x - centerX) < 0);
+    if (!near.length || !far.length) continue;
+    const candidates = front.sections
+      .map((section, index) => {
+        const launch = {
+          x: section.x - side * 2,
+          z: section.stepZ ?? section.z,
+        };
+        const members = g.players.filter(
+          (p) =>
+            p.team === team &&
+            !g.humanPlayerIds.includes(p.id) &&
+            p.hp > 0 &&
+            p.ammo >= 10 &&
+            !p.mantle &&
+            !p.hop &&
+            !p.duckUntil &&
+            !p.forwardPost &&
+            p.assaultId === null &&
+            !artilleryThreat(g, p) &&
+            p.y > 0.65 &&
+            p.y < 1.5 &&
+            dist(p, launch) < 4,
+        );
+        const first = near
+          .slice()
+          .sort((a, b) => dist(launch, a) - dist(launch, b))[0];
+        const last = far
+          .slice()
+          .sort((a, b) => dist(first, a) - dist(first, b))[0];
+        const target = opposing.sections
+          .map((s) => ({ x: s.x + side * 1.6, z: s.stepZ ?? s.z }))
+          .sort((a, b) => dist(a, last) - dist(b, last))[0];
+        const screened = g.smokeClouds.some(
+          (c) => smokeDensity(c, g.tick) > 0.65 && dist(c, first) < 7,
+        );
+        return {
+          launch,
+          members,
+          first,
+          last,
+          target,
+          score:
+            dist(launch, first) -
+            (screened ? 8 : 0) +
+            ((index + g.assaults.sequence) % front.sections.length) * 0.01,
+        };
+      })
+      .filter(
+        (c) =>
+          c.members.length >= 3 &&
+          !active.some((m) => dist(m.launch, c.launch) < 12),
+      )
+      .sort((a, b) => a.score - b.score);
+    for (const { launch, members, first, last, target } of candidates) {
       const leader = members.find((p) => p.smokes > 0 && !p.reloadAt);
       if (!leader) continue;
-      const craters = [...(g.map.terrain.craters ?? [])]
-        .filter((c) => Math.abs(c.z - z) < 12 && Math.abs(c.x) < 15)
-        .sort((a, b) => side * (b.x - a.x));
-      if (!craters.length) continue;
-      const first = craters[0],
-        last = craters[craters.length - 1];
       const m: Assault = {
         id: ++g.assaults.sequence,
         team,
-        members: members.slice(0, 4).map((p) => p.id),
+        members: members
+          .slice(0, Math.min(4, 8 - attackers.length))
+          .map((p) => p.id),
         leader: leader.id,
         startedAt: g.tick,
         expiresAt: g.tick + 45 * 30,
-        route: [
-          { x: first.x, z: first.z },
-          { x: last.x, z: last.z },
-          { x: -side * 19.4, z },
-        ],
+        launch,
+        departure: { x: edge(front, side), z: launch.z },
+        approach: { x: edge(opposing, -side), z: target.z },
+        route: [{ x: first.x, z: first.z }, { x: last.x, z: last.z }, target],
         progress: {},
         waitUntil: {},
         screens: {},
       };
-      // Always include the smoke carrier when more than four soldiers share this lane.
       if (!m.members.includes(leader.id)) m.members[0] = leader.id;
       for (const id of m.members) {
         g.players[id].assaultId = m.id;
@@ -118,17 +175,21 @@ export function advanceAssaults(g: Game) {
         g.players[id].path = [];
       }
       g.assaults.missions.push(m);
+      // The next launch can overlap this wave, rather than waiting for its end.
+      g.assaults.readyAt[team] = g.tick + (12 + (m.id % 3) * 3) * 30;
       g.emit({
         type: "assaultStart",
         mission: m.id,
         team,
         members: m.members,
+        launch: m.launch,
         route: m.route,
       });
       break;
     }
   }
 }
+
 export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
   const m = g.assaults.missions.find((m) => m.id === p.assaultId);
   if (!m) return c;
@@ -138,8 +199,19 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
     p.mode = "Holding forward trench";
     return c;
   }
-  const goal = m.route[stage];
   const offset = (m.members.indexOf(p.id) - 1.5) * 0.6;
+  const side = p.team === "blue" ? -1 : 1;
+  // Clear the whole friendly parapet before turning diagonally across the field.
+  const departing = stage === 0 && side * (p.x - m.departure.x) > 0.5;
+  const approaching =
+    stage === 2 &&
+    -side * (p.x - m.approach.x) < 0.5 &&
+    Math.abs(p.z - m.approach.z - offset) > 1;
+  const goal = departing
+    ? m.departure
+    : approaching
+      ? m.approach
+      : m.route[stage];
   const destination = { x: goal.x, z: goal.z + offset };
   const screen = m.screens[stage];
   const carriers = m.members
@@ -154,10 +226,15 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
     );
   const carrier = carriers.find((q) => q.id === m.leader) ?? carriers[0];
   if (!screen && carrier?.id === p.id && !p.reloadAt && p.smokes > 0) {
-    const target =
+    const desired =
       stage === 0
         ? m.route[0]
         : { x: (p.x + goal.x) / 2, z: (p.z + goal.z) / 2 };
+    const fraction = Math.min(1, 15 / Math.max(1, dist(p, desired)));
+    const target = {
+      x: p.x + (desired.x - p.x) * fraction,
+      z: p.z + (desired.z - p.z) * fraction,
+    };
     const range = Math.max(1, dist(p, target)),
       speed2 = 13 * 13;
     const dy = groundHeight(target.x, target.z, g.map) + 0.15 - (p.y + 1.95);
@@ -200,6 +277,8 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
   const distance = dist(p, destination);
   if (
     distance < 1.7 &&
+    !departing &&
+    !approaching &&
     !p.mantle &&
     !p.hop &&
     (stage < 2 || p.y < g.map.terrain!.bankHeight - 0.5)

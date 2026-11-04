@@ -358,6 +358,7 @@ export type Event = { id: number; tick: number } & (
       mission: number;
       team: Team;
       members: number[];
+      launch: Vec;
       route: Vec[];
     }
   | {
@@ -1519,10 +1520,24 @@ function graph(map: MapDefinition) {
       add(x, z);
   // Include the actual ends/middle of narrow ramps. A regular lattice alone can
   // strand one mirrored firing step when a node falls exactly on a bank edge.
-  for (const r of map.terrain?.ramps ?? [])
+  for (const r of map.terrain?.ramps ?? []) {
     for (const x of [r.x - r.w / 2, r.x, r.x + r.w / 2])
       for (const z of [r.z - r.d / 2 + 0.8, r.z, r.z + r.d / 2 - 0.8])
         add(x, z);
+    // Leave a ramp on its low side before going around its longitudinal end.
+    // Tight, offset sections may otherwise have no lattice point on that floor.
+    const lowX = r.x - r.direction * (r.w / 2 + 0.4);
+    for (const z of [r.z - r.d / 2 - 0.8, r.z + r.d / 2 + 0.8]) add(lowX, z);
+  }
+  // Authored communication bends can fall between the regular nav lattice.
+  for (const route of map.terrain?.communicationRoutes ?? [])
+    for (let i = 0; i < route.points.length - 1; i++) {
+      const a = route.points[i],
+        b = route.points[i + 1];
+      const steps = Math.ceil(dist(a, b) / (step / 2));
+      for (let j = 0; j <= steps; j++)
+        add(a.x + ((b.x - a.x) * j) / steps, a.z + ((b.z - a.z) * j) / steps);
+    }
   for (const crater of map.destruction?.craters ?? [])
     for (const [dx, dz] of [
       [0, 0],

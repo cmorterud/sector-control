@@ -65,6 +65,16 @@ export type Depression = Vec & {
   radiusZ: number;
   depth: number;
 };
+export interface TrenchLine {
+  team: "blue" | "red";
+  role: "front" | "rear";
+  sections: (Vec & { length: number; stepZ?: number })[];
+}
+export interface CommunicationRoute {
+  team: "blue" | "red";
+  entrance: Vec;
+  points: Vec[];
+}
 export interface MapDefinition {
   id: "industrial" | "trenches";
   name: string;
@@ -79,6 +89,8 @@ export interface MapDefinition {
   terrain?: {
     bankHeight: number;
     firingPositions?: (Vec & { team: "blue" | "red" })[];
+    trenchLines?: TrenchLine[];
+    communicationRoutes?: CommunicationRoute[];
     cellSize: number;
     columns: number;
     rows: number;
