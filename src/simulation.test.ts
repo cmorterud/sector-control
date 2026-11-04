@@ -80,6 +80,9 @@ describe("combat and lifecycle", () => {
   it("deals 25 damage and kills after four shots; restores on respawn", () => {
     const { g, p, enemy } = scene();
     for (let i = 0; i < 4; i++) {
+      // Recenter each deliberate shot; this fixture isolates damage/lifecycle.
+      p.pitch = -p.recoilPitch;
+      p.yaw = -p.recoilYaw;
       g.fire(p);
       advance(g, 3);
     }

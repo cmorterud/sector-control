@@ -8,6 +8,7 @@ import {
   crouchRules,
 } from "./crouch";
 import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
+import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
 import {
   suppressNearMiss,
   suppressionCommand,
@@ -250,6 +251,10 @@ export interface Soldier extends Vec {
   reloadAt: number;
   nextShot: number;
   aimBloom: number;
+  recoilPitch: number;
+  recoilYaw: number;
+  recoilShots: number;
+  lastShotAt: number;
   respawnAt: number;
   protectedUntil: number;
   kills: number;
@@ -383,7 +388,14 @@ export type Event = { id: number; tick: number } & (
       radius: number;
       hits: { target: number; damage: number }[];
     }
-  | { type: "fire"; actor: number; projectile: number; from: V3; to: V3 }
+  | {
+      type: "fire";
+      actor: number;
+      projectile: number;
+      from: V3;
+      to: V3;
+      recoil: { pitch: number; yaw: number };
+    }
   | {
       type: "impact";
       actor: number;
@@ -641,6 +653,10 @@ export class Game {
         reloadAt: 0,
         nextShot: 0,
         aimBloom: 0,
+        recoilPitch: 0,
+        recoilYaw: 0,
+        recoilShots: 0,
+        lastShotAt: -1000,
         respawnAt: 0,
         protectedUntil: 0,
         kills: 0,
@@ -736,6 +752,8 @@ export class Game {
     p.vz = 0;
     p.nextShot = this.tick;
     p.aimBloom = 0;
+    p.recoilPitch = p.recoilYaw = p.recoilShots = 0;
+    p.lastShotAt = -1000;
     p.protectedUntil = this.tick + 60;
     p.path = [];
     p.artilleryEvade = null;
@@ -769,6 +787,7 @@ export class Game {
       );
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
+      recoverRecoil(p);
       updateCrouch(this, p, c);
       if (c.artillery) requestArtillery(this, p, c.artillery);
       if (
@@ -995,22 +1014,23 @@ export class Game {
     return true;
   }
   fire(p: Soldier) {
+    const { yaw, pitch } = weaponAim(p);
     p.ammo--;
     p.nextShot = this.tick + 3;
-    // Only botCommand uses this spread; human shot direction stays unchanged.
+    // Bloom feeds bot aim drift; the shared recoil below applies to every rifle.
     p.aimBloom = Math.min(1, p.aimBloom + 0.25);
     p.protectedUntil = 0;
     const dir = {
-      x: Math.sin(p.yaw) * Math.cos(p.pitch),
-      y: Math.sin(p.pitch),
-      z: -Math.cos(p.yaw) * Math.cos(p.pitch),
+      x: Math.sin(yaw) * Math.cos(pitch),
+      y: Math.sin(pitch),
+      z: -Math.cos(yaw) * Math.cos(pitch),
     };
     const pivot = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
       distance = p.command.aim ? 2.5 : 4;
     const desired = {
-      x: p.x - dir.x * distance + Math.cos(p.yaw) * 0.65,
+      x: p.x - dir.x * distance + Math.cos(yaw) * 0.65,
       y: p.y + cameraHeightOf(p) - dir.y * distance,
-      z: p.z - dir.z * distance + Math.sin(p.yaw) * 0.65,
+      z: p.z - dir.z * distance + Math.sin(yaw) * 0.65,
     };
     const f = this.collision.ray(pivot, desired) * 0.95;
     const camera =
@@ -1045,9 +1065,9 @@ export class Game {
       z: camera.z + (aim.z - camera.z) * first,
     };
     const from = {
-      x: p.x + Math.cos(p.yaw) * 0.32 + dir.x * 1.08,
+      x: p.x + Math.cos(yaw) * 0.32 + dir.x * 1.08,
       y: p.y + rifleHeight(this.map, p),
-      z: p.z + Math.sin(p.yaw) * 0.32 + dir.z * 1.08,
+      z: p.z + Math.sin(yaw) * 0.32 + dir.z * 1.08,
     };
     const length = Math.max(
       0.001,
@@ -1068,6 +1088,7 @@ export class Game {
       type: "fire",
       actor: p.id,
       projectile: shot.id,
+      recoil: { pitch: p.recoilPitch, yaw: p.recoilYaw },
       from,
       to: {
         x: from.x + (shot.vx / projectileSpeed) * projectileRange,
@@ -1110,6 +1131,7 @@ export class Game {
         muzzleVictim,
       );
     } else this.projectiles.push(shot);
+    kickRecoil(p, this.tick);
   }
   private advanceProjectiles() {
     const active: Projectile[] = [];

@@ -1,4 +1,5 @@
 import { crouchRules } from "./crouch";
+import { weaponAim, recoilPulse } from "./recoil";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
 import * as pc from "playcanvas";
@@ -773,6 +774,7 @@ export class Renderer implements CollisionWorld {
     const squatAngle =
       (Math.acos(clamp01((0.82 - crouchDrop) / 0.82)) * 180) / Math.PI;
     const stride = Math.sin(rig.phase) * rig.motion;
+    const kick = recoilPulse(p, tick + 1);
     const ready = p.command.aim || p.command.fire || p.reloadAt > 0;
     rig.body.setLocalPosition(
       0,
@@ -792,7 +794,11 @@ export class Renderer implements CollisionWorld {
       -Math.atan2(sideways, Math.abs(forward) + 0.001) * 40 * rig.motion,
       0,
     );
-    rig.upper.setLocalEulerAngles(0, stride * (ready ? 1.5 : 4), -stride * 1.5);
+    rig.upper.setLocalEulerAngles(
+      -kick * 2,
+      stride * (ready ? 1.5 : 4),
+      -stride * 1.5,
+    );
     for (let i = 0; i < rig.legs.length; i++) {
       const phase = rig.phase + i * Math.PI;
       const swing =
@@ -827,11 +833,14 @@ export class Renderer implements CollisionWorld {
     rig.rifle.setLocalPosition(
       0.32,
       0.36 - rig.sprint * 0.08 + rifleHeight(this.map) - 1.45,
-      -0.55 + (p.nextShot > tick ? 0.08 : 0),
+      -0.55 + kick * 0.09,
     );
     rig.rifle.setLocalEulerAngles(
-      -rig.sprint * 20 + stride * 2,
-      0,
+      -rig.sprint * 20 +
+        stride * 2 +
+        (weaponAim(p).pitch * 180) / Math.PI +
+        kick * 5,
+      (p.recoilYaw * 180) / Math.PI,
       p.reloadAt ? 12 : 0,
     );
     const landing = Math.max(0, Math.min(1, 1 - (tick - p.landedAt) / 7));
@@ -1021,19 +1030,20 @@ export class Renderer implements CollisionWorld {
         (child as pc.Entity).render!.material = this.material(c);
     }
     const p = g.players[0],
+      view = weaponAim(p),
       d = p.command.aim ? 2.5 : 4,
       dir = {
-        x: Math.sin(p.yaw) * Math.cos(p.pitch),
-        y: Math.sin(p.pitch),
-        z: -Math.cos(p.yaw) * Math.cos(p.pitch),
+        x: Math.sin(view.yaw) * Math.cos(view.pitch),
+        y: Math.sin(view.pitch),
+        z: -Math.cos(view.yaw) * Math.cos(view.pitch),
       };
     const visual = this.people[0].getPosition();
     const cameraDrop = crouchRules.drop * this.soldiers[0].crouch;
     const pivot = { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
       desired = {
-        x: visual.x - dir.x * d + Math.cos(p.yaw) * 0.65,
+        x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
         y: visual.y + 2.5 - cameraDrop - dir.y * d,
-        z: visual.z - dir.z * d + Math.sin(p.yaw) * 0.65,
+        z: visual.z - dir.z * d + Math.sin(view.yaw) * 0.65,
       },
       f = this.ray(pivot, desired) * 0.95;
     const pos = new pc.Vec3(

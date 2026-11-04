@@ -57,12 +57,18 @@ const advance = (g: Game, n: number) => {
 describe("firing-step trench combat", () => {
   it("hides a soldier on the floor, but lets arriving rounds hit an exposed head on the step", () => {
     const { game, blue, red } = scene();
-    for (let i = 0; i < 4; i++) game.fire(blue);
+    const aimedShot = () => {
+      // Isolate cover and head damage with deliberately recentered shots.
+      blue.pitch = -blue.recoilPitch;
+      blue.yaw = Math.PI / 2 - blue.recoilYaw;
+      game.fire(blue);
+    };
+    for (let i = 0; i < 4; i++) aimedShot();
     advance(game, 75);
     expect(red.hp).toBe(100);
     expect(game.scores.blue).toBe(0);
     Object.assign(red, { x: 19, y: 0.85 });
-    for (let i = 0; i < 4; i++) game.fire(blue);
+    for (let i = 0; i < 4; i++) aimedShot();
     advance(game, 50);
     expect(red.hp).toBe(0);
     expect(red.deaths).toBe(1);

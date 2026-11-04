@@ -185,3 +185,42 @@ it("crouches with bent knees and planted boots, keeps the support hand attached,
     r.animateSoldier(p, p.x, p.z, 1 / 60, 140 + i / 2);
   expect(helmet.getPosition().y).toBeGreaterThan(2.65);
 });
+
+it("kicks the barrel and shoulder back while keeping the support wrist on the grip throughout recovery", () => {
+  const game = new Game(
+    new TestCollision(trenchMap),
+    false,
+    3000,
+    12345,
+    undefined,
+    { map: trenchMap },
+  );
+  const p = game.players[0];
+  game.tick = 100;
+  const r = rigFor(p),
+    rig = r.soldiers[0];
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 99);
+  const rest = rig.rifle.getLocalPosition().clone();
+  const restDirection = rig.rifle.forward.clone();
+  game.fire(p);
+  let previousZ = Infinity;
+  for (const age of [0, 0.5, 1, 2, 4, 8]) {
+    r.animateSoldier(p, p.x, p.z, 1 / 60, 99 + age);
+    const z = rig.rifle.getLocalPosition().z;
+    expect(z).toBeLessThanOrEqual(previousZ);
+    expect(z).toBeGreaterThan(rest.z);
+    previousZ = z;
+    const wrist = rig.arms[0].elbow
+      .getWorldTransform()
+      .transformPoint(new Vec3(0, -0.46, 0));
+    expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
+    if (age === 0) {
+      expect(z - rest.z).toBeGreaterThan(0.08);
+      expect(rig.rifle.forward.y).toBeGreaterThan(restDirection.y + 0.04);
+    }
+  }
+  for (let i = 0; i < 60; i++) game.step(idle());
+  r.animateSoldier(p, p.x, p.z, 1 / 60, game.tick - 1);
+  expect(rig.rifle.getLocalPosition().z).toBeCloseTo(rest.z, 4);
+  expect(rig.rifle.forward.y).toBeCloseTo(restDirection.y, 4);
+});
