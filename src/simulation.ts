@@ -261,6 +261,8 @@ export interface Soldier extends Vec {
   nextThink: number;
   target: number;
   spottedAt: number;
+  focusUntil: number;
+  distractedUntil: number;
   mode: string;
   artilleryEvade: ArtilleryEvade | null;
 }
@@ -272,19 +274,36 @@ export interface Sector extends Vec {
 }
 export interface BotSettings {
   reactionTicks: number;
+  reactionJitterTicks: number;
   aimError: number;
   engagementRange: number;
   burstPeriodTicks: number;
   burstFireTicks: number;
+  focusMinTicks: number;
+  focusMaxTicks: number;
+  distractionMinTicks: number;
+  distractionMaxTicks: number;
 }
 export const defaultBotSettings: BotSettings = {
-  reactionTicks: 11,
-  aimError: 0.035,
+  reactionTicks: 18,
+  reactionJitterTicks: 6,
+  aimError: 0.04,
   engagementRange: 40,
   burstPeriodTicks: 24,
   burstFireTicks: 15,
+  focusMinTicks: 90,
+  focusMaxTicks: 180,
+  distractionMinTicks: 18,
+  distractionMaxTicks: 36,
 };
 export type Event = { id: number; tick: number } & (
+  | {
+      type: "botAttention";
+      actor: number;
+      target: number;
+      phase: "acquired" | "lost" | "distracted";
+      until: number;
+    }
   | {
       type: "artilleryCall";
       actor: number;
@@ -552,7 +571,7 @@ export class Game {
     public bots = true,
     duration = 14400,
     seed = 12345,
-    botSettings?: BotSettings,
+    botSettings?: Partial<BotSettings>,
     options: {
       map?: MapDefinition;
       teamSize?: number;
@@ -570,7 +589,7 @@ export class Game {
     this.botSettings = {
       ...defaultBotSettings,
       ...(this.map.terrain?.firingPositions
-        ? { engagementRange: 59, aimError: 0.02 }
+        ? { engagementRange: 59, aimError: 0.026 }
         : {}),
       ...botSettings,
     };
@@ -633,6 +652,8 @@ export class Game {
         nextThink: 0,
         target: -1,
         spottedAt: 0,
+        focusUntil: 0,
+        distractedUntil: 0,
         mode: "Navigate",
         artilleryEvade: null,
       });
@@ -719,6 +740,9 @@ export class Game {
     p.path = [];
     p.artilleryEvade = null;
     p.target = -1;
+    p.spottedAt = this.tick;
+    p.focusUntil = 0;
+    p.distractedUntil = 0;
     p.mode = "Navigate";
     p.nextThink = this.tick + (p.teamIndex % 30);
     p.command = idle();
@@ -1582,6 +1606,44 @@ export function botAimOffset(p: Soldier, tick: number, baseSpread: number) {
     pitch: (a.pitch + (b.pitch - a.pitch) * blend) * spread,
   };
 }
+// Per-soldier variation keeps attention breaks/reactions staggered without
+// consuming the gameplay RNG or changing projectile randomness.
+function botAttentionSample(p: Soldier, tick: number, salt: number) {
+  let n = Math.imul(p.id + 1, 374761393) ^ Math.imul(tick + salt, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+}
+function beginBotFocus(g: Game, p: Soldier) {
+  const min = Math.max(1, g.botSettings.focusMinTicks),
+    max = Math.max(min, g.botSettings.focusMaxTicks);
+  p.focusUntil =
+    g.botSettings.focusMaxTicks > 0
+      ? g.tick +
+        min +
+        Math.floor(botAttentionSample(p, g.tick, 17) * (max - min + 1))
+      : 0;
+  g.emit({
+    type: "botAttention",
+    actor: p.id,
+    target: p.target,
+    phase: "acquired",
+    until: p.focusUntil,
+  });
+}
+function changeBotTarget(g: Game, p: Soldier, target: number) {
+  if (p.target >= 0)
+    g.emit({
+      type: "botAttention",
+      actor: p.id,
+      target: p.target,
+      phase: "lost",
+      until: g.tick,
+    });
+  p.target = target;
+  p.spottedAt = g.tick;
+  p.focusUntil = 0;
+  if (target >= 0) beginBotFocus(g, p);
+}
 export function botCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
   if (evasion) return evasion;
@@ -1614,7 +1676,30 @@ export function botCommand(g: Game, p: Soldier): Command {
     }
   }
   const range = Math.min(projectileRange - 1, g.botSettings.engagementRange);
-  if (g.tick % 3 === p.id % 3) {
+  if (
+    p.target >= 0 &&
+    p.focusUntil > 0 &&
+    g.botSettings.focusMaxTicks > 0 &&
+    g.tick >= p.focusUntil
+  ) {
+    const min = g.botSettings.distractionMinTicks,
+      max = Math.max(min, g.botSettings.distractionMaxTicks);
+    p.distractedUntil =
+      g.tick +
+      min +
+      Math.floor(botAttentionSample(p, g.tick, 53) * (max - min + 1));
+    g.emit({
+      type: "botAttention",
+      actor: p.id,
+      target: p.target,
+      phase: "distracted",
+      until: p.distractedUntil,
+    });
+    p.target = -1;
+    p.spottedAt = g.tick;
+    p.focusUntil = 0;
+  }
+  if (g.tick >= p.distractedUntil && g.tick % 3 === p.id % 3) {
     const visible = (q: Soldier) =>
       q.team !== p.team &&
       q.hp > 0 &&
@@ -1637,12 +1722,12 @@ export function botCommand(g: Game, p: Soldier): Command {
             .sort((a, b) => dist(a, p) - dist(b, p))
             .slice(0, 6)
             .find(visible);
-    if ((target?.id ?? -1) !== p.target) {
-      p.target = target?.id ?? -1;
-      p.spottedAt = g.tick;
-    }
+    if ((target?.id ?? -1) !== p.target)
+      changeBotTarget(g, p, target?.id ?? -1);
   }
   let target = g.players.find((q) => q.id === p.target && q.hp > 0);
+  if (target && p.focusUntil === 0 && g.botSettings.focusMaxTicks > 0)
+    beginBotFocus(g, p);
   if (
     target &&
     (smokeBlocks(
@@ -1664,8 +1749,7 @@ export function botCommand(g: Game, p: Soldier): Command {
           },
         ) < 0.99))
   ) {
-    p.target = -1;
-    p.spottedAt = g.tick;
+    changeBotTarget(g, p, -1);
     target = undefined;
   }
   const objective = station ?? g.sectors[p.objective];
@@ -1751,7 +1835,13 @@ export function botCommand(g: Game, p: Soldier): Command {
     c.aim = true;
     c.sprint = false;
     c.fire =
-      g.tick - p.spottedAt >= g.botSettings.reactionTicks &&
+      g.tick - p.spottedAt >=
+        g.botSettings.reactionTicks +
+          Math.floor(
+            (g.botSettings.reactionTicks > 0
+              ? g.botSettings.reactionJitterTicks + 1
+              : 0) * botAttentionSample(p, p.spottedAt, 89),
+          ) &&
       g.tick % g.botSettings.burstPeriodTicks < g.botSettings.burstFireTicks;
     c.x *= 0.2;
     c.z *= 0.2;
@@ -1761,6 +1851,7 @@ export function botCommand(g: Game, p: Soldier): Command {
       p.mode = "Reposition";
     }
   } else if (Math.hypot(c.x, c.z) > 0.1) c.yaw = Math.atan2(c.x, -c.z);
+  if (g.tick < p.distractedUntil) p.mode = "Scanning";
   if (
     g.map.terrain &&
     !station &&

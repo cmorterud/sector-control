@@ -145,20 +145,23 @@ describe("concealing smoke", () => {
   it("removes a bot target immediately and requires a fresh reaction after visibility returns", () => {
     const g = scene(),
       p = g.players[0];
+    g.botSettings.burstPeriodTicks = g.botSettings.burstFireTicks = 1;
     enemy(g);
     g.tick = 12;
     expect(botCommand(g, p).fire).toBe(false);
     g.tick = 24;
     botCommand(g, p);
     g.tick = 25;
+    expect(botCommand(g, p).fire).toBe(false);
+    g.tick = 36;
     expect(botCommand(g, p).fire).toBe(true);
     g.smokeClouds = [cloud(g)];
     expect(botCommand(g, p).fire).toBe(false);
     expect(p.target).toBe(-1);
     g.smokeClouds = [];
-    g.tick = 27;
+    g.tick = 39;
     expect(botCommand(g, p).fire).toBe(false);
-    g.tick = 49;
+    g.tick = 65;
     expect(botCommand(g, p).fire).toBe(true);
   });
   it("lets bullets travel through smoke and deal normal damage", () => {

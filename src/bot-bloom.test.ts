@@ -68,13 +68,13 @@ it("keeps smoothly drifting aim within the approved first-shot and sustained-fir
     let previous: { yaw: number; pitch: number } | undefined;
     for (let tick = 0; tick < 300; tick++) {
       shooter.aimBloom = 0;
-      const fresh = botAimOffset(shooter, tick, 0.02);
+      const fresh = botAimOffset(shooter, tick, 0.026);
       greatestFresh = Math.max(
         greatestFresh,
         40 * Math.tan(Math.hypot(fresh.yaw, fresh.pitch)),
       );
       shooter.aimBloom = 1;
-      const bloom = botAimOffset(shooter, tick, 0.02);
+      const bloom = botAimOffset(shooter, tick, 0.026);
       greatestBloom = Math.max(
         greatestBloom,
         40 * Math.tan(Math.hypot(bloom.yaw, bloom.pitch)),
@@ -82,14 +82,14 @@ it("keeps smoothly drifting aim within the approved first-shot and sustained-fir
       if (previous)
         expect(
           Math.hypot(bloom.yaw - previous.yaw, bloom.pitch - previous.pitch),
-        ).toBeLessThan(0.004);
+        ).toBeLessThan(0.006);
       previous = bloom;
     }
   }
-  expect(greatestFresh).toBeGreaterThan(0.7);
-  expect(greatestFresh).toBeLessThan(0.801);
-  expect(greatestBloom).toBeGreaterThan(1.3);
-  expect(greatestBloom).toBeLessThan(1.401);
+  expect(greatestFresh).toBeGreaterThan(1);
+  expect(greatestFresh).toBeLessThan(1.041);
+  expect(greatestBloom).toBeGreaterThan(1.7);
+  expect(greatestBloom).toBeLessThan(1.822);
   const other = { ...shooter, id: 100 } as Soldier;
   expect(botAimOffset(shooter, 50, 0.02)).not.toEqual(
     botAimOffset(other, 50, 0.02),
@@ -114,10 +114,14 @@ it("reduces actual exposed-head hits while keeping bot fire dangerous and preser
     return { hits, shots };
   };
   const perfect = measure(0),
-    bloom = measure(0.02);
+    bloom = measure(0.02),
+    softer = measure(0.026);
   expect(bloom.shots).toBe(perfect.shots);
   expect(bloom.hits).toBeGreaterThan(5);
   expect(bloom.hits).toBeLessThan(perfect.hits * 0.8);
+  expect(softer.shots).toBe(bloom.shots);
+  expect(softer.hits).toBeGreaterThan(0);
+  expect(softer.hits).toBeLessThan(bloom.hits);
 });
 
 it("leaves human rifle trajectories unchanged regardless of bloom state", () => {
