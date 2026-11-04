@@ -21,6 +21,8 @@ npm run build
 npm run preview
 ```
 
+GitHub Actions runs `npm ci`, `npm run check` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
+
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
 
 Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or fire short bursts and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.

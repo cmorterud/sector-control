@@ -4,6 +4,8 @@ Updated November 3, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.
 
 ## Current checkpoint — start here
 
+- GitHub CI: `.github/workflows/ci.yml` runs on pushes to `main` and manual dispatch. One Ubuntu/Node.js 26 job caches npm downloads, installs via `npm ci`, runs `npm run check` and `npm run build`. Read-only repository permissions, ten-minute job limit. Local validation: YAML parses/formats, all 147 tests and production build pass. The first hosted run awaits a push to main. This is build/test automation; public deployment remains deferred.
+
 - Final native asymmetric-map artifact `sector-control-2026-11-04T03-51-46-646Z`: 90 s / 2,700 ticks, nine waves (Blue 5 / Red 4), two simultaneous squads on both sides, sampled attacking maxima 7/6. First-crater arrivals 15/9, forward-crater 9/8, landed enemy-trench arrivals 7/4. Scores 20–24, 59.72 FPS / 16.9 ms p95, four slow frames, zero errors. Direct keys artifact `...T03-54-00-476Z` walked the new central dogleg to x −18 / z −1 / y 0.85 at HP 100, 59.92 FPS, zero errors. Both videos decode (existing duplicate DTS limitation). Proof frames and all JSON/events/video/metrics under ignored playtest-artifacts/.
 
 - **Newest prototype: asymmetric trenches and overlapping assaults.** Four fixed, independently authored lines; seven Blue front sections versus eight Red, variable section lengths, different rear bends/communication positions and six small shelter bays. Floor depth 2.4 m / step height 0.85 m unchanged. Six rear/front doglegs span 16–20 m with 10 m entrance offsets and screened sightlines. No open front exits or added field fortresses; the six starting craters and five depressions remain.
