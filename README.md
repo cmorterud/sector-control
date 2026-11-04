@@ -69,7 +69,7 @@ Snapshots include smoke, suppression, duck state and squad plans/progress. Typed
 
 Choose **Trench front** on the start screen, or open [the 25v25 trench map](http://localhost:5173/?map=trenches). Blue has you plus 24 bots; Red has 25 bots. Industrial remains the default 5v5 map.
 
-The 160 × 128-meter battlefield has **four zigzag trench lines: two per team**. Each team enters its rear line from open-ground spawns, then follows communication trenches into its front line. **The front parapets are continuous: there are no ramps or walk-through exits into no man's land.** Rear entry ramps remain.
+The 160 × 128-meter battlefield has **four zigzag trench lines: two per team**. Each team enters its rear line from open-ground spawns, then follows short dogleg communication trenches into its front line. The paired lines are **16 m apart** (previously 28 m), and offset entrances/earth traverses block a straight shot from rear to front. Spawns and rear entry ramps have moved forward with the rear line. **The front parapets are continuous: there are no ramps or walk-through exits into no man's land.** Rear entry ramps remain.
 
 No man's land starts with **six real shell craters and five broad, shallow depressions**. The former flat shell-scar disks are now actual ground, shared by movement, bullets and camera collision. The main bowls are roughly 0.55–0.7 m deep, with gentle undulations of 0.12–0.18 m; overlapping relief is capped at 0.85 m. Terrain only goes downward, with a clear buffer before the front parapets and level footing around existing cover. Two old scars were moved away from wire patches. Grenades can deepen these starting craters, and restarting restores their authored shape.
 

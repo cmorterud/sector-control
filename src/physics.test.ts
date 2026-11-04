@@ -142,9 +142,14 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
     expect(
       ray({ x: -19, y: 2.5, z: -1 }, { x: 23, y: 1.65, z: -1 }),
     ).toBeLessThan(1);
+    for (const side of [-1, 1])
+      for (const z of [-33, -1, 31])
+        expect(
+          ray({ x: side * 37, y: 1.65, z }, { x: side * 21, y: 1.65, z }),
+        ).toBeLessThan(1);
     const rampHit = world.raycastFirst(
-      new Vec3(-57, 5, -1),
-      new Vec3(-57, -1, -1),
+      new Vec3(-45, 5, -1),
+      new Vec3(-45, -1, -1),
     );
     expect(rampHit?.point.y).toBeCloseTo(1.2, 2);
     const game = new Game(

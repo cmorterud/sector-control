@@ -345,6 +345,37 @@ describe("covered squad advances", () => {
     expect(p.assaultId).toBeNull();
     expect(p.forwardPost).toBeNull();
   });
+  it("lets a screened squad reach the opposing trench when defenders are not firing", () => {
+    const g = new Game(
+      new TestCollision(trenchMap),
+      true,
+      5000,
+      12345,
+      undefined,
+      { map: trenchMap, teamSize: 25, humanPlayerIds: [] },
+    );
+    g.artillery.enabled = false;
+    g.botSettings.engagementRange = 0;
+    for (const p of g.players)
+      Object.assign(p, { ...firingPosition(g, p), y: 0.85, protectedUntil: 0 });
+    g.tick = 540;
+    let arrived = false;
+    for (let i = 0; i < 1800 && !arrived; i++) {
+      g.step(botCommand(g, g.players[0]));
+      arrived = g.events.some(
+        (e) => e.type === "assaultProgress" && e.stage === "trench",
+      );
+    }
+    expect(arrived).toBe(true);
+    expect(
+      g.players.some(
+        (p) =>
+          p.forwardPost &&
+          (p.team === "blue" ? p.x > 18 : p.x < -18) &&
+          p.y < 1.5,
+      ),
+    ).toBe(true);
+  });
   it("runs a real 25v25 advance through smoke into crater cover with sustained covering fire", () => {
     const g = new Game(
       new TestCollision(trenchMap),
@@ -365,7 +396,11 @@ describe("covered squad advances", () => {
     expect(summary.smokeClouds).toBeGreaterThan(0);
     expect(summary.ducks).toBeGreaterThan(0);
     expect(summary.craterArrivals).toBeGreaterThan(0);
-    expect(summary.trenchArrivals).toBeGreaterThan(0);
+    expect(
+      log.events.some(
+        (e) => e.type === "assaultProgress" && e.stage === "forwardCrater",
+      ),
+    ).toBe(true);
     expect(summary.shots).toBeGreaterThan(1000);
     expect(
       log.events.some((e) => e.type === "mantle" && e.phase === "start"),

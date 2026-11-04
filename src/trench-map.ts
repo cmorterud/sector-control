@@ -9,6 +9,10 @@ import {
 import { buildTrenchRelief } from "./terrain-relief";
 
 const bankHeight = 2.4;
+const frontNear = 21,
+  rearNear = 37;
+const rearEntrance = rearNear + 8,
+  spawnDistance = rearNear + 18;
 const width = 160,
   depth = 128,
   cellSize = 2;
@@ -24,7 +28,7 @@ const firingPositions: (Vec & { team: "blue" | "red" })[] = [];
 // communication routes connect each pair without extending into no man's land.
 for (const side of [-1, 1] as const) {
   for (const line of ["rear", "front"] as const) {
-    const near = line === "rear" ? 49 : 21;
+    const near = line === "rear" ? rearNear : frontNear;
     for (let i = 0; i < 7; i++) {
       const x = side * (near + (i % 2 ? 0 : 8)),
         z = -49 + i * 16;
@@ -47,10 +51,15 @@ for (const side of [-1, 1] as const) {
     }
   }
   for (const z of [-33, -1, 31]) {
-    floors.push({ x: side * 35, z, w: 30, d: 6 });
+    // Offset the two entrances around an earth traverse: nobody can fire
+    // straight from the rear entrance through to the front firing step.
+    const middle = (frontNear + rearNear) / 2;
+    floors.push({ x: side * (frontNear + 4), z: z - 3, w: 10, d: 4 });
+    floors.push({ x: side * middle, z, w: 6, d: 8 });
+    floors.push({ x: side * (rearNear - 4), z: z + 3, w: 10, d: 4 });
     // Spawn on the land immediately behind the rear line, then descend into it.
     ramps.push({
-      x: side * 57,
+      x: side * rearEntrance,
       z,
       w: 10,
       d: 10,
@@ -64,13 +73,13 @@ for (const side of [-1, 1] as const) {
       row = Math.floor(index / 7);
     firingPositions.push({
       team: side === -1 ? "blue" : "red",
-      x: side * (21 + (segment % 2 ? 0 : 8) - 2),
+      x: side * (frontNear + (segment % 2 ? 0 : 8) - 2),
       z: -49 + segment * 16 + (row - 1.5) * 1.2,
     });
   }
   for (const z of [-21, 21])
     cover.push({
-      x: side * 70,
+      x: side * (spawnDistance + 3),
       z,
       w: 8,
       d: 3,
@@ -83,7 +92,7 @@ for (const side of [-1, 1] as const) {
 for (const side of [-1, 1])
   cover.push({
     id: `rear-wood-${side}`,
-    x: side * 63,
+    x: side * (spawnDistance - 4),
     z: side * 9,
     w: 0.25,
     d: 2.5,
@@ -163,7 +172,10 @@ export const trenchMap: MapDefinition = {
   depth,
   navSpacing: 4,
   scoring: "eliminations",
-  spawn: { blue: { x: -67, z: -1 }, red: { x: 67, z: -1 } },
+  spawn: {
+    blue: { x: -spawnDistance, z: -1 },
+    red: { x: spawnDistance, z: -1 },
+  },
   sectors: [
     { id: "A", x: 0, z: -32 },
     { id: "B", x: 0, z: 0 },

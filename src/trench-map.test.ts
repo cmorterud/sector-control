@@ -30,7 +30,7 @@ describe("trench prototype", () => {
       expect(new Set(soldiers.map((p) => `${p.x},${p.z}`)).size).toBe(25);
       for (const p of soldiers) {
         expect(p.y).toBeCloseTo(2.4);
-        expect(Math.abs(p.x)).toBeGreaterThan(62);
+        expect(Math.abs(p.x)).toBeGreaterThan(50);
         expect(p.team === "blue" ? p.x < 0 : p.x > 0).toBe(true);
         expect(blocked(p.x, p.z, 0.7, trenchMap)).toBe(false);
         const entrance = moveOnMap(
@@ -39,7 +39,7 @@ describe("trench prototype", () => {
           trenchMap,
         );
         expect(groundHeight(entrance.x, entrance.z, trenchMap)).toBe(0);
-        expect(Math.abs(entrance.x)).toBeLessThan(53);
+        expect(Math.abs(entrance.x)).toBeLessThan(41);
       }
     }
   });
@@ -54,7 +54,7 @@ describe("trench prototype", () => {
         inTrench = dug;
       }
       expect(bands).toBe(4);
-      for (const x of [-57, -29, 29, 57])
+      for (const x of [-45, -29, 29, 45])
         expect(groundHeight(x, z, trenchMap)).toBeLessThan(1.1);
     }
     for (let x = -9; x <= 9; x += 2)
@@ -77,39 +77,55 @@ describe("trench prototype", () => {
     const game = createGame();
     for (const p of game.players) {
       const station = firingPosition(game, p)!;
-      const path = pathfind(p, station, trenchMap);
+      const path = pathfind(p, station, game.map);
       expect(path.length, `soldier ${p.id}`).toBeGreaterThan(0);
       expect(groundHeight(station.x, station.z, trenchMap)).toBeCloseTo(0.85);
       let previous = p;
       for (const waypoint of path) {
-        expect(walkSegment(previous, waypoint, trenchMap)).toBe(true);
+        expect(walkSegment(previous, waypoint, game.map)).toBe(true);
         previous = { ...p, ...waypoint };
       }
       expect(dist(path.at(-1)!, station)).toBe(0);
     }
   });
 
-  it("keeps all six communication-trench junctions clear of timber panels and posts", () => {
-    const walls = trenchMap.terrain!.lining;
-    expect(walls.length).toBeGreaterThan(0);
+  it("shortens the gap between each pair of lines and keeps every dogleg walkable but screened by earth", () => {
+    const game = createGame(),
+      map = game.map,
+      collision = game.collision;
     for (const side of [-1, 1])
-      for (const z of [-33, -1, 31])
-        for (const offset of [-2, 0, 2]) {
-          expect(
-            walkSegment(
-              { x: side * 63, z: z + offset },
-              { x: side * 19, z: z + offset },
-              trenchMap,
-            ),
-          ).toBe(true);
-          for (const wall of walls)
-            if (Math.abs(wall.x) >= 19 && Math.abs(wall.x) <= 63)
-              expect(Math.abs(wall.z - z - offset)).toBeGreaterThanOrEqual(
-                wall.d / 2 + 0.15,
-              );
+      for (const z of [-33, -1, 31]) {
+        expect(groundHeight(side * 21, z - 2, map)).toBeLessThan(1);
+        expect(groundHeight(side * 37, z + 2, map)).toBeLessThan(1);
+        // Follow the offset passages, checking their full usable width.
+        for (const offset of [-0.6, 0, 0.6]) {
+          const route = [
+            { x: side * 37, z: z + 3 + offset },
+            { x: side * 29, z: z + 3 + offset },
+            { x: side * 29, z: z - 3 + offset },
+            { x: side * 21, z: z - 3 + offset },
+          ];
+          for (let i = 1; i < route.length; i++)
+            expect(walkSegment(route[i - 1], route[i], map)).toBe(true);
         }
-    // Real lined earth faces still stop walking; junctions need no invisible wall.
-    const stopped = moveOnMap({ x: -31, z: -49 }, { x: -3, z: 0 }, trenchMap);
+        expect(walkSegment({ x: side * 37, z }, { x: side * 21, z }, map)).toBe(
+          false,
+        );
+        for (const offset of [-3, -2, -1, 0, 1, 2, 3])
+          expect(
+            collision.ray(
+              { x: side * 37, y: 1.65, z: z + offset },
+              { x: side * 21, y: 1.65, z: z + offset },
+            ),
+          ).toBeLessThan(1);
+        expect(groundHeight(side * 25, z, map)).toBeCloseTo(2.4);
+        expect(groundHeight(side * 33, z, map)).toBeCloseTo(2.4);
+      }
+    // Adjacent front/rear zigzag traverses retain a solid earth separator.
+    for (const side of [-1, 1])
+      for (const z of [-41, -25, -9, 7, 23, 39])
+        expect(groundHeight(side * 33, z, map)).toBeCloseTo(2.4);
+    const stopped = moveOnMap({ x: -31, z: -49 }, { x: -3, z: 0 }, map);
     expect(stopped.x).toBeGreaterThanOrEqual(-32.01);
   });
 
@@ -131,9 +147,9 @@ describe("trench prototype", () => {
     expect(
       trenchMap
         .terrain!.ramps.filter((r) => r.high === 2.4)
-        .every((r) => Math.abs(r.x) > 50),
+        .every((r) => Math.abs(r.x) > 40),
     ).toBe(true);
-    expect(groundHeight(-57, -1, trenchMap)).toBeCloseTo(1.2);
+    expect(groundHeight(-45, -1, trenchMap)).toBeCloseTo(1.2);
     expect(groundHeight(-27, -49, trenchMap)).toBeCloseTo(0.85);
     expect(walkSegment({ x: -30, z: -49 }, { x: -27, z: -49 }, trenchMap)).toBe(
       true,

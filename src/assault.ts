@@ -195,7 +195,12 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
     return c;
   }
   const distance = dist(p, destination);
-  if (distance < 1.7 && (stage < 2 || p.y < g.map.terrain!.bankHeight - 0.5)) {
+  if (
+    distance < 1.7 &&
+    !p.mantle &&
+    !p.hop &&
+    (stage < 2 || p.y < g.map.terrain!.bankHeight - 0.5)
+  ) {
     stage = ++m.progress[p.id];
     m.waitUntil[p.id] = g.tick + (stage === 1 ? 90 : 45);
     if (stage === 3) p.forwardPost = { x: p.x, z: p.z };
