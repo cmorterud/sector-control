@@ -17,7 +17,7 @@ import { PlaytestRecorder } from "./playtest";
 import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
 import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
-root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD</div><div id="ammo"></div></footer><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
+root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
 let renderer: Renderer,
   game: Game,
@@ -35,7 +35,8 @@ let fire = false,
   aim = false,
   reload = false,
   mantle = false,
-  grenade = false;
+  grenade = false,
+  smoke = false;
 let pendingArtillery: Command["artillery"];
 let artilleryNotice = "",
   artilleryNoticeUntil = 0;
@@ -52,7 +53,7 @@ const requestedTeamSize = Number(
   params.get("teamSize") ?? (map.id === "trenches" ? 25 : 5),
 );
 document.querySelector(".controls")!.textContent +=
-  "　 G GRENADE　 SPACE HOP / MANTLE　 HOLD Q ARTILLERY";
+  "　 G GRENADE　 F SMOKE　 SPACE HOP / MANTLE　 HOLD Q ARTILLERY";
 const teamSize = Math.max(
   1,
   Math.min(
@@ -84,6 +85,7 @@ function clear() {
   reload = false;
   mantle = false;
   grenade = false;
+  smoke = false;
   pendingArtillery = undefined;
   if (renderer) renderer.artilleryPreview = null;
 }
@@ -159,6 +161,10 @@ function pause() {
 }
 function handle(e: Event) {
   renderer.effect(e);
+  if (e.type === "nearMiss" && e.actor === 0) sound(1250, 0.035, 0.055);
+  if (e.type === "smokeThrow" && e.actor === 0) sound(300, 0.12, 0.035);
+  if (e.type === "smokeBloom" && dist(game.players[0], e.at) < 45)
+    sound(200, 0.9, 0.025);
   if (e.type === "artilleryCall" && e.actor === 0) {
     artilleryNotice = "FIRE MISSION CONFIRMED · FIRST IMPACT IN 6s";
     artilleryNoticeUntil = performance.now() + 3500;
@@ -245,7 +251,7 @@ function hud(now: number) {
   el("health").innerHTML =
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   el("ammo").innerHTML =
-    `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small><small>G · GRENADES ${p.grenades}</small>`;
+    `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small><small>G · GRENADES ${p.grenades}　 F · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
@@ -285,6 +291,8 @@ function hud(now: number) {
           : sector
             ? `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
+  el("suppression").style.opacity =
+    p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
   if (keys.has("Tab")) {
@@ -324,9 +332,11 @@ function command(): Command {
   c.reload = reload;
   c.mantle = mantle;
   c.grenade = grenade;
+  c.smoke = smoke;
   reload = false;
   mantle = false;
   grenade = false;
+  smoke = false;
   return c;
 }
 window.addEventListener("keydown", (e) => {
@@ -338,6 +348,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyR") reload = true;
   if (e.code === "Space" && !e.repeat) mantle = true;
   if (e.code === "KeyG" && !e.repeat) grenade = true;
+  if (e.code === "KeyF" && !e.repeat) smoke = true;
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 window.addEventListener("mousemove", (e) => {
@@ -437,11 +448,11 @@ try {
   menu(
     map.id === "trenches" ? "Trench front" : "Sector Control",
     map.id === "trenches"
-      ? `Hold your trench. Use the firing step to see and shoot over the parapet; step down to shelter. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · eliminations · eight minutes.`
+      ? `Use firing steps for covering fire, then cross with smoke and advancing squads. Step down when pinned. ${Math.max(1, Math.min(25, Math.round(teamSize) || 25))} soldiers per team · eliminations · eight minutes.`
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 30 seconds, then a shared 90-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>25 vs 25</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop, or near a bank to climb up or down. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 30 seconds, then a shared 90-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

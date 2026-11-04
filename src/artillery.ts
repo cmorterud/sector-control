@@ -1,3 +1,4 @@
+import { smokeBlocks } from "./smoke";
 import { blocked, dist, groundHeight, walkSegment, type Vec } from "./map";
 import {
   idle,
@@ -107,7 +108,8 @@ export function artilleryTargetReason(
       (g.map.terrain?.bankHeight ?? 0) + 0.1,
     ),
   };
-  if (g.collision.ray(from, to) < 0.995) return "No clear view of that area";
+  if (smokeBlocks(g, from, to) || g.collision.ray(from, to) < 0.995)
+    return "No clear view of that area";
   if (g.tick < g.artillery.readyAt[p.team]) return "Artillery is reloading";
   if (g.artillery.missions.some((m) => m.team === p.team))
     return "Fire mission already active";
@@ -264,9 +266,9 @@ export function artilleryThreat(g: Game, p: Vec): FireMission | undefined {
 export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
   if (
     !g.artillery.enabled ||
-    teamHasHuman(g, p) ||
     g.tick < g.artillery.readyAt[p.team] ||
-    g.tick % 30 !== p.id % 30
+    g.tick % 30 !== p.id % 30 ||
+    teamHasHuman(g, p)
   )
     return null;
   const targets = g.players.filter(

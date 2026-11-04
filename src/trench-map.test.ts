@@ -15,6 +15,7 @@ const createGame = (seconds = 60) =>
   new Game(new TestCollision(trenchMap), true, seconds * 30, 12345, undefined, {
     map: trenchMap,
     teamSize: 25,
+    assaults: false,
   });
 
 describe("trench prototype", () => {

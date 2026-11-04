@@ -1,3 +1,4 @@
+import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
 import * as pc from "playcanvas";
 import { createPhysicsWorld, TerrainPhysics } from "./physics";
@@ -69,6 +70,10 @@ export class Renderer implements CollisionWorld {
   artilleryPreview: { target: Vec; valid: boolean } | null = null;
   private artilleryMarkers = new Map<number, pc.Entity>();
   private shells = new Map<number, pc.Entity>();
+  private smokeVolumes = new Map<
+    number,
+    { root: pc.Entity; material: pc.StandardMaterial }
+  >();
   private previousShells = new Map<number, V3>();
   private blasts: {
     root: pc.Entity;
@@ -762,7 +767,9 @@ export class Renderer implements CollisionWorld {
     const ready = p.command.aim || p.command.fire || p.reloadAt > 0;
     rig.body.setLocalPosition(
       0,
-      0.94 + (Math.cos(rig.phase * 2) - 1) * 0.022 * rig.motion,
+      0.94 -
+        (p.duckUntil > tick ? 0.09 : 0) +
+        (Math.cos(rig.phase * 2) - 1) * 0.022 * rig.motion,
       0,
     );
     rig.body.setLocalEulerAngles(
@@ -908,6 +915,11 @@ export class Renderer implements CollisionWorld {
       for (const material of blast.materials) material.destroy();
     }
     this.blasts = [];
+    for (const smoke of this.smokeVolumes.values()) {
+      smoke.root.destroy();
+      smoke.material.destroy();
+    }
+    this.smokeVolumes.clear();
     this.people = [];
     this.rings = [];
     this.effects = [];
@@ -1020,6 +1032,7 @@ export class Renderer implements CollisionWorld {
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);
     this.drawArtillery(g, alpha);
+    this.drawSmoke(g, alpha);
     this.drawBlasts(dt);
     for (const fx of this.effects) {
       fx.life -= dt;
@@ -1058,7 +1071,9 @@ export class Renderer implements CollisionWorld {
         const shell = new pc.Entity("grenade shell");
         shell.addComponent("render", {
           type: "sphere",
-          material: this.material("#414d29"),
+          material: this.material(
+            grenade.kind === "smoke" ? "#b8b49e" : "#414d29",
+          ),
         });
         shell.setLocalScale(0.24, 0.28, 0.24);
         entity.addChild(shell);
@@ -1084,6 +1099,61 @@ export class Renderer implements CollisionWorld {
       );
       const spin = (g.tick - grenade.bornAt + alpha) * 14;
       entity.setEulerAngles(spin, spin * 0.6, 0);
+    }
+  }
+  private drawSmoke(g: Game, alpha: number) {
+    const active = new Set(g.smokeClouds.map((s) => s.id));
+    for (const [id, volume] of this.smokeVolumes)
+      if (!active.has(id)) {
+        volume.root.destroy();
+        volume.material.destroy();
+        this.smokeVolumes.delete(id);
+      }
+    for (const cloud of g.smokeClouds) {
+      let volume = this.smokeVolumes.get(cloud.id);
+      if (!volume) {
+        const root = this.joint("concealing smoke cloud", this.app.root),
+          material = new pc.StandardMaterial();
+        material.diffuse = color("#b6b8ac");
+        material.blendType = pc.BLEND_NORMAL;
+        material.depthWrite = false;
+        material.opacity = 0;
+        material.update();
+        for (let i = 0; i < 15; i++) {
+          const puff = this.joint("smoke volume", root);
+          puff.addComponent("render", {
+            type: "sphere",
+            material,
+            castShadows: false,
+            receiveShadows: false,
+          });
+        }
+        volume = { root, material };
+        this.smokeVolumes.set(cloud.id, volume);
+      }
+      const age = (g.tick - cloud.bornAt + alpha) / 30,
+        density = smokeDensity(cloud, g.tick + alpha);
+      const radius = smokeRules.radius * (0.3 + 0.7 * density),
+        height = smokeRules.height * (0.5 + 0.5 * density);
+      volume.root.setPosition(cloud.x, cloud.y, cloud.z);
+      volume.material.opacity = density * 0.84;
+      volume.material.update();
+      for (let i = 0; i < volume.root.children.length; i++) {
+        const puff = volume.root.children[i],
+          angle = i * 2.4 + Math.sin(age * 0.25 + i) * 0.06;
+        const ring = i < 3 ? 0 : 0.45;
+        puff.setLocalPosition(
+          Math.cos(angle) * radius * ring,
+          Math.sin(i * 1.7) * height * 0.2,
+          Math.sin(angle) * radius * ring,
+        );
+        const swell = 1 + Math.sin(age * 0.8 + i) * 0.06;
+        puff.setLocalScale(
+          radius * 1.05 * swell,
+          height * 1.5 * swell,
+          radius * 1.05 * swell,
+        );
+      }
     }
   }
   private drawArtillery(g: Game, alpha: number) {

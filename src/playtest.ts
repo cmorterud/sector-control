@@ -47,6 +47,18 @@ export class PlaytestLog {
       grenadeExplosions: this.events.filter(
         (e) => e.type === "grenadeExplosion",
       ).length,
+      smokeThrows: this.events.filter((e) => e.type === "smokeThrow").length,
+      smokeClouds: this.events.filter((e) => e.type === "smokeBloom").length,
+      suppressions: this.events.filter((e) => e.type === "suppression").length,
+      ducks: this.events.filter((e) => e.type === "duck" && e.phase === "start")
+        .length,
+      assaults: this.events.filter((e) => e.type === "assaultStart").length,
+      craterArrivals: this.events.filter(
+        (e) => e.type === "assaultProgress" && e.stage === "crater",
+      ).length,
+      trenchArrivals: this.events.filter(
+        (e) => e.type === "assaultProgress" && e.stage === "trench",
+      ).length,
       artilleryCalls: this.events.filter((e) => e.type === "artilleryCall")
         .length,
       artilleryImpacts: this.events.filter((e) => e.type === "artilleryImpact")

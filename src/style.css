@@ -386,3 +386,12 @@ button span {
   text-shadow: 0 2px 4px #000;
   pointer-events: none;
 }
+
+#suppression {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, #ddd4b8 100%);
+  transition: opacity 0.12s;
+}

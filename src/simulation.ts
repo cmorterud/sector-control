@@ -1,3 +1,10 @@
+import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
+import {
+  suppressNearMiss,
+  suppressionCommand,
+  suppressionRules,
+} from "./suppression";
+import { createAssaultState, advanceAssaults, assaultCommand } from "./assault";
 import {
   createArtilleryState,
   requestArtillery,
@@ -45,6 +52,7 @@ export interface Command {
   mantle: boolean;
   grenade: boolean;
   artillery?: Vec;
+  smoke?: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -64,6 +72,7 @@ export const grenadeRadius = 0.12;
 export const grenadeSpeed = 20;
 export const grenadeGravity = 10;
 export interface Grenade extends V3 {
+  kind?: "smoke";
   id: number;
   actor: number;
   team: Team;
@@ -82,6 +91,7 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
     (position) => position.team === p.team,
   );
+  if (p.forwardPost) return p.forwardPost;
   const original = positions?.[p.teamIndex % positions.length];
   if (!original || !g.map.destruction?.revision) return original;
   const intact = (v: Vec) =>
@@ -95,6 +105,7 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   );
 }
 export interface Projectile extends V3 {
+  suppressed?: number[];
   id: number;
   actor: number;
   team: Team;
@@ -210,6 +221,14 @@ export interface Soldier extends Vec {
   ammo: number;
   reserve: number;
   grenades: number;
+  smokes: number;
+  suppression: number;
+  duckUntil: number;
+  nextDuck: number;
+  nextNearMiss: number;
+  suppressionShelter: Vec | null;
+  assaultId: number | null;
+  forwardPost: Vec | null;
   throwUntil: number;
   nextGrenade: number;
   yaw: number;
@@ -280,11 +299,44 @@ export type Event = { id: number; tick: number } & (
       radius: number;
       hits: { target: number; damage: number }[];
     }
+  | {
+      type: "smokeBloom";
+      actor: number;
+      grenade: number;
+      cloud: number;
+      at: V3;
+      expiresAt: number;
+    }
+  | { type: "smokeEnd"; cloud: number }
+  | { type: "suppression"; actor: number; source: number; level: number }
+  | {
+      type: "nearMiss";
+      actor: number;
+      source: number;
+      at: V3;
+      distance: number;
+    }
+  | { type: "duck"; actor: number; phase: "start" | "end" }
+  | {
+      type: "assaultStart";
+      mission: number;
+      team: Team;
+      members: number[];
+      route: Vec[];
+    }
+  | {
+      type: "assaultProgress";
+      mission: number;
+      actor: number;
+      stage: "crater" | "forwardCrater" | "trench";
+      at: Vec;
+    }
+  | { type: "assaultEnd"; mission: number; team: Team; reached: number }
   | { type: "artilleryEnd"; mission: number }
   | { type: "artilleryEvade"; actor: number; mission: number; to: Vec }
   | { type: "destruction"; actor: number; change: DestructionChange }
   | {
-      type: "grenadeThrow";
+      type: "grenadeThrow" | "smokeThrow";
       actor: number;
       grenade: number;
       from: V3;
@@ -338,8 +390,25 @@ export class TestCollision implements CollisionWorld {
   }
   ray(a: V3, b: V3): number {
     let nearest = 1;
+    const minX = Math.min(a.x, b.x),
+      maxX = Math.max(a.x, b.x),
+      minY = Math.min(a.y, b.y),
+      maxY = Math.max(a.y, b.y),
+      minZ = Math.min(a.z, b.z),
+      maxZ = Math.max(a.z, b.z);
     // Exact slabs matter for short grenade sweeps and very thin timber panels.
     for (const box of this.map.boxes) {
+      // Most bullet/near-miss/canister sweeps are short. Reject distant boxes
+      // before allocating slab endpoints and testing all three axes.
+      if (
+        maxX < box.x - box.w / 2 ||
+        minX > box.x + box.w / 2 ||
+        maxZ < box.z - box.d / 2 ||
+        minZ > box.z + box.d / 2 ||
+        maxY < (box.baseY ?? 0) ||
+        minY > (box.baseY ?? 0) + box.h
+      )
+        continue;
       let entry = 0,
         exit = 1;
       const low = {
@@ -450,6 +519,9 @@ export class Game {
   projectiles: Projectile[] = [];
   grenades: Grenade[] = [];
   artillery = createArtilleryState();
+  assaults = createAssaultState();
+  smokeClouds: SmokeCloud[] = [];
+  smokeSequence = 0;
   grenadeSequence = 0;
   projectileSequence = 0;
   sectors: Sector[];
@@ -472,10 +544,13 @@ export class Game {
       map?: MapDefinition;
       teamSize?: number;
       humanPlayerIds?: readonly number[];
+      assaults?: boolean;
     } = {},
   ) {
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
     this.map = runtimeMap(options.map ?? industrialMap);
+    this.assaults.enabled =
+      (options.assaults ?? true) && this.map.id === "trenches";
     this.collision.setMap?.(this.map);
     this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
@@ -516,6 +591,14 @@ export class Game {
         ammo: 30,
         reserve: 120,
         grenades: 3,
+        smokes: 2,
+        suppression: 0,
+        duckUntil: 0,
+        nextDuck: 0,
+        nextNearMiss: 0,
+        suppressionShelter: null,
+        assaultId: null,
+        forwardPost: null,
         throwUntil: 0,
         nextGrenade: 0,
         yaw: 0,
@@ -563,6 +646,9 @@ export class Game {
       grenades: this.grenades,
       grenadeSequence: this.grenadeSequence,
       artillery: this.artillery,
+      assaults: this.assaults,
+      smokeClouds: this.smokeClouds,
+      smokeSequence: this.smokeSequence,
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
@@ -594,6 +680,14 @@ export class Game {
     p.ammo = 30;
     p.reserve = 120;
     p.grenades = 3;
+    p.smokes = 2;
+    p.suppression = 0;
+    p.duckUntil = 0;
+    p.nextDuck = this.tick;
+    p.nextNearMiss = this.tick;
+    p.suppressionShelter = null;
+    p.assaultId = null;
+    p.forwardPost = null;
     p.throwUntil = 0;
     p.nextGrenade = this.tick;
     p.reloadAt = 0;
@@ -619,11 +713,21 @@ export class Game {
     this.events = [];
     if (this.phase !== "playing") return;
     this.tick++;
+    this.smokeClouds = this.smokeClouds.filter((s) => {
+      if (this.tick < s.expiresAt) return true;
+      this.emit({ type: "smokeEnd", cloud: s.id });
+      return false;
+    });
+    advanceAssaults(this);
     for (const p of this.players) {
       if (p.hp <= 0) {
         if (this.tick >= p.respawnAt) this.respawn(p);
         else continue;
       }
+      p.suppression = Math.max(
+        0,
+        p.suppression - suppressionRules.recoveryPerTick,
+      );
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
       if (c.artillery) requestArtillery(this, p, c.artillery);
@@ -638,13 +742,13 @@ export class Game {
       p.yaw = c.yaw;
       p.pitch = clamp(c.pitch, -1.1, 1.1);
       if (
-        c.grenade &&
+        (c.grenade || c.smoke) &&
         !p.mantle &&
         !p.reloadAt &&
-        p.grenades > 0 &&
+        (c.smoke ? p.smokes > 0 : p.grenades > 0) &&
         this.tick >= p.nextGrenade
       )
-        this.throwGrenade(p);
+        this.throwGrenade(p, !!c.smoke);
       if (
         c.mantle &&
         !p.mantle &&
@@ -739,6 +843,8 @@ export class Game {
       this.grenades = [];
       this.artillery.missions = [];
       this.artillery.shells = [];
+      this.smokeClouds = [];
+      this.assaults.missions = [];
       this.winner =
         this.scores.blue === this.scores.red
           ? "draw"
@@ -1004,6 +1110,24 @@ export class Game {
       shot.x = from.x + (to.x - from.x) * nearest;
       shot.y = from.y + (to.y - from.y) * nearest;
       shot.z = from.z + (to.z - from.z) * nearest;
+      for (
+        let cx = Math.floor(
+          (Math.min(from.x, shot.x) - suppressionRules.radius) / 4,
+        );
+        cx <=
+        Math.floor((Math.max(from.x, shot.x) + suppressionRules.radius) / 4);
+        cx++
+      )
+        for (
+          let cz = Math.floor(
+            (Math.min(from.z, shot.z) - suppressionRules.radius) / 4,
+          );
+          cz <=
+          Math.floor((Math.max(from.z, shot.z) + suppressionRules.radius) / 4);
+          cz++
+        )
+          for (const q of cells.get(`${cx},${cz}`) ?? [])
+            suppressNearMiss(this, q, shot, from, shot);
       shot.remaining = Math.max(0, shot.remaining - travel);
       if (nearest < 1)
         this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim);
@@ -1078,7 +1202,8 @@ export class Game {
       );
     return fraction;
   }
-  private throwGrenade(p: Soldier) {
+  private throwGrenade(p: Soldier, smoke = false) {
+    const speed = smoke ? 13 : grenadeSpeed;
     const elevation = clamp(p.pitch + 0.65, 0.15, 1.25);
     // Timber can extend slightly beyond the height-field bank. Find clearance
     // within the soldier's footprint before releasing; never start inside it.
@@ -1126,19 +1251,28 @@ export class Game {
       x: from.x + (desired.x - from.x) * f,
       y: from.y + (desired.y - from.y) * f,
       z: from.z + (desired.z - from.z) * f,
-      vx: Math.sin(p.yaw) * Math.cos(elevation) * grenadeSpeed,
-      vy: Math.sin(elevation) * grenadeSpeed,
-      vz: -Math.cos(p.yaw) * Math.cos(elevation) * grenadeSpeed,
+      vx: Math.sin(p.yaw) * Math.cos(elevation) * speed,
+      vy: Math.sin(elevation) * speed,
+      vz: -Math.cos(p.yaw) * Math.cos(elevation) * speed,
       bornAt: this.tick,
-      explodeAt: this.tick + grenadeFuseTicks,
+      explodeAt: this.tick + (smoke ? smokeRules.fuse : grenadeFuseTicks),
+      ...(smoke ? { kind: "smoke" as const } : {}),
     };
-    p.grenades--;
+    if (smoke) {
+      p.smokes--;
+      const mission = this.assaults.missions.find((m) => m.id === p.assaultId);
+      if (mission)
+        mission.screens[mission.progress[p.id]] = {
+          actor: p.id,
+          tick: this.tick,
+        };
+    } else p.grenades--;
     p.protectedUntil = 0;
     p.throwUntil = this.tick + 15;
     p.nextGrenade = this.tick + 24;
     this.grenades.push(grenade);
     this.emit({
-      type: "grenadeThrow",
+      type: smoke ? "smokeThrow" : "grenadeThrow",
       actor: p.id,
       grenade: grenade.id,
       from: { x: grenade.x, y: grenade.y, z: grenade.z },
@@ -1149,7 +1283,12 @@ export class Game {
   private advanceGrenades() {
     const active: Grenade[] = [];
     for (const g of this.grenades) {
-      if (this.tick >= g.explodeAt) {
+      if (
+        this.tick >= g.explodeAt &&
+        (g.kind !== "smoke" ||
+          g.y - groundHeight(g.x, g.z, this.map) < 0.5 ||
+          this.tick - g.bornAt >= 180)
+      ) {
         this.explodeGrenade(g);
         continue;
       }
@@ -1195,6 +1334,28 @@ export class Game {
     this.grenades = active;
   }
   private explodeGrenade(g: Grenade) {
+    if (g.kind === "smoke") {
+      const cloud: SmokeCloud = {
+        id: ++this.smokeSequence,
+        actor: g.actor,
+        team: g.team,
+        x: g.x,
+        z: g.z,
+        y: Math.max(g.y, groundHeight(g.x, g.z, this.map)) + 1.4,
+        bornAt: this.tick,
+        expiresAt: this.tick + smokeRules.lifetime,
+      };
+      this.smokeClouds.push(cloud);
+      this.emit({
+        type: "smokeBloom",
+        actor: g.actor,
+        grenade: g.id,
+        cloud: cloud.id,
+        at: { x: cloud.x, y: cloud.y, z: cloud.z },
+        expiresAt: cloud.expiresAt,
+      });
+      return;
+    }
     const at = { x: g.x, y: g.y, z: g.z };
     const hits = this.explode(at, g.actor, g.team, grenadeExplosionProfile);
     this.emit({
@@ -1390,6 +1551,8 @@ export function botAimOffset(p: Soldier, tick: number, baseSpread: number) {
 export function botCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
   if (evasion) return evasion;
+  const duck = suppressionCommand(g, p);
+  if (duck) return duck;
   const c = idle();
   c.artillery = botArtilleryTarget(g, p) ?? undefined;
   c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
@@ -1422,6 +1585,11 @@ export function botCommand(g: Game, p: Soldier): Command {
       q.team !== p.team &&
       q.hp > 0 &&
       dist(q, p) < range &&
+      !smokeBlocks(
+        g,
+        { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
+        { x: q.x, y: q.y + exposedAimHeight(g.map), z: q.z },
+      ) &&
       g.collision.ray(
         { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
         { x: q.x, y: q.y + exposedAimHeight(g.map), z: q.z },
@@ -1440,7 +1608,19 @@ export function botCommand(g: Game, p: Soldier): Command {
       p.spottedAt = g.tick;
     }
   }
-  const target = g.players.find((q) => q.id === p.target && q.hp > 0);
+  let target = g.players.find((q) => q.id === p.target && q.hp > 0);
+  if (
+    target &&
+    smokeBlocks(
+      g,
+      { x: p.x, y: p.y + rifleHeight(g.map), z: p.z },
+      { x: target.x, y: target.y + exposedAimHeight(g.map), z: target.z },
+    )
+  ) {
+    p.target = -1;
+    p.spottedAt = g.tick;
+    target = undefined;
+  }
   const objective = station ?? g.sectors[p.objective];
   while (
     p.path.length &&
@@ -1467,7 +1647,11 @@ export function botCommand(g: Game, p: Soldier): Command {
   if (target) {
     p.mode = "Engage";
     const d = dist(p, target);
-    const error = botAimOffset(p, g.tick, g.botSettings.aimError);
+    const error = botAimOffset(
+      p,
+      g.tick,
+      g.botSettings.aimError * (1 + p.suppression * 1.5),
+    );
     // Lead a visible moving target by the projectile's intercept time.
     const rx = target.x - p.x,
       rz = target.z - p.z;
@@ -1539,5 +1723,5 @@ export function botCommand(g: Game, p: Soldier): Command {
     const landing = mantleLanding(p, c, g.map);
     c.mantle = !!landing && dist(landing, objective) + 0.3 < dist(p, objective);
   }
-  return c;
+  return assaultCommand(g, p, c);
 }
