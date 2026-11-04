@@ -44,18 +44,31 @@ describe("terrain mantle", () => {
     ).toHaveLength(0);
   });
 
-  it("can climb down after its cooldown and resets climbing state on respawn", () => {
+  it("walks back off the bank during mantle cooldown and resets falling on respawn", () => {
     const { game, p } = scene();
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
-    while (game.tick < p.nextMantle) game.step(idle());
-    game.step({ ...idle(), yaw: -Math.PI / 2, mantle: true });
-    expect(p.mantle?.to.y).toBe(0);
     while (p.mantle) game.step(idle());
+    const cooldown = p.nextMantle,
+      events = [];
+    for (let i = 0; i < 35; i++) {
+      game.step({ ...idle(), x: -1, yaw: -Math.PI / 2 });
+      events.push(...game.events);
+    }
+    const start = events.find((e) => e.type === "fall" && e.phase === "start");
+    expect(start?.tick).toBeLessThan(cooldown);
+    expect(events.some((e) => e.type === "fall" && e.phase === "land")).toBe(
+      true,
+    );
+    expect(events.some((e) => e.type === "mantle")).toBe(false);
     expect(p.mantle).toBeNull();
+    expect(p.fall).toBeNull();
     expect(p.x).toBeLessThan(-18);
     expect(p.y).toBe(0);
-    game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
+    Object.assign(p, { x: -17.9, y: 2.4, vx: 0, vz: 0 });
+    for (let i = 0; i < 8; i++) game.step({ ...idle(), x: -1 });
+    expect(p.fall).not.toBeNull();
     game.respawn(p);
+    expect(p.fall).toBeNull();
     expect(p.mantle).toBeNull();
     expect(p.y).toBe(groundHeight(p.x, p.z, trenchMap));
   });

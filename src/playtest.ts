@@ -54,6 +54,11 @@ export class PlaytestLog {
         (e) => e.type === "grenadeExplosion",
       ).length,
       stanceChanges: this.events.filter((e) => e.type === "stance").length,
+      falls: this.events.filter((e) => e.type === "fall" && e.phase === "start")
+        .length,
+      fallLandings: this.events.filter(
+        (e) => e.type === "fall" && e.phase === "land",
+      ).length,
       smokeThrows: this.events.filter((e) => e.type === "smokeThrow").length,
       smokeClouds: this.events.filter((e) => e.type === "smokeBloom").length,
       suppressions: this.events.filter((e) => e.type === "suppression").length,

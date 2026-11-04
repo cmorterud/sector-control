@@ -737,7 +737,7 @@ export class Renderer implements CollisionWorld {
     const distance = Math.hypot(dx, dz);
     // Animate actual travel, not requested velocity against a wall or a respawn jump.
     const moved =
-      p.hp > 0 && rig.alive && !p.mantle && !p.hop && distance < 2
+      p.hp > 0 && rig.alive && !p.mantle && !p.hop && !p.fall && distance < 2
         ? distance
         : 0;
     const speed = moved / Math.max(dt, 0.001);
@@ -844,7 +844,7 @@ export class Renderer implements CollisionWorld {
       p.reloadAt ? 12 : 0,
     );
     const landing = Math.max(0, Math.min(1, 1 - (tick - p.landedAt) / 7));
-    if (p.hop || landing > 0) {
+    if (p.hop || p.fall || landing > 0) {
       const flight = p.hop
         ? Math.max(
             0,
@@ -856,18 +856,28 @@ export class Renderer implements CollisionWorld {
         : 0;
       const tuck = p.hop
         ? Math.sin(flight * Math.PI)
-        : Math.sin(landing * Math.PI) * 0.55;
-      rig.body.setLocalPosition(0, 0.94 - (p.hop ? 0.025 : 0.1) * tuck, 0);
-      rig.body.setLocalEulerAngles(-7 * tuck, 0, 0);
+        : p.fall
+          ? Math.min(0.45, -p.fall.velocity / 16)
+          : Math.sin(landing * Math.PI) * 0.55;
+      rig.body.setLocalPosition(
+        0,
+        0.94 - crouchDrop - (p.hop || p.fall ? 0.025 : 0.1) * tuck,
+        0,
+      );
+      rig.body.setLocalEulerAngles(-8 * rig.crouch - 7 * tuck, 0, 0);
       rig.hips.setLocalEulerAngles(0, 0, 0);
       for (let i = 0; i < 2; i++) {
-        rig.legs[i].hip.setLocalEulerAngles((i === 0 ? 38 : 28) * tuck, 0, 0);
-        rig.legs[i].knee.setLocalEulerAngles(
-          (i === 0 ? -70 : -55) * tuck,
+        rig.legs[i].hip.setLocalEulerAngles(
+          squatAngle + (i === 0 ? 38 : 28) * tuck,
           0,
           0,
         );
-        rig.legs[i].ankle.setLocalEulerAngles(30 * tuck, 0, 0);
+        rig.legs[i].knee.setLocalEulerAngles(
+          -2 * squatAngle + (i === 0 ? -70 : -55) * tuck,
+          0,
+          0,
+        );
+        rig.legs[i].ankle.setLocalEulerAngles(squatAngle + 30 * tuck, 0, 0);
       }
     }
     if (p.mantle) {

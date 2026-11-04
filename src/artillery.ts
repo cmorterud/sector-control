@@ -87,7 +87,8 @@ export function artilleryTargetReason(
     return "Artillery unavailable";
   if (teamHasHuman(g, p) && !g.humanPlayerIds.includes(p.id))
     return "Artillery is reserved for your team's human player";
-  if (p.hp <= 0 || p.mantle || p.hop) return "Stand on solid ground to spot";
+  if (p.hp <= 0 || p.mantle || p.hop || p.fall)
+    return "Stand on solid ground to spot";
   if (!Number.isFinite(target.x) || !Number.isFinite(target.z))
     return "Choose a target";
   if (g.map.terrain && p.y + eyeHeightOf(p) < g.map.terrain.bankHeight + 0.04)

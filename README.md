@@ -25,6 +25,8 @@ GitHub Actions runs `npm ci`, `npm run check` (TypeScript and tests), and `npm r
 
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
 
+Walk over a trench edge to drop in naturally; no Space press is needed. Gravity carries you onto the firing step or floor, with a small landing pose. Press **Space** to hop on open ground or mantle upward to climb out. Hopping over an edge continues the arc down to the ground below.
+
 Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or fire short bursts and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.
 
 Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Grenades arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. Aim up/down to change the arc. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. Explosive blast smoke is cosmetic. Press **F** for a separate concealing smoke grenade; bots use these during squad advances, while explosive grenade throws remain player-controlled.

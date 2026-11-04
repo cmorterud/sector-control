@@ -139,6 +139,11 @@ export interface Hop {
   startTick: number;
   height: number;
   velocity: number;
+  originY: number;
+}
+export interface Fall {
+  startTick: number;
+  velocity: number;
 }
 export const hopSpeed = 3.8;
 export const hopGravity = 16;
@@ -225,6 +230,7 @@ export interface Soldier extends Vec {
   teamIndex: number;
   mantle: Mantle | null;
   hop: Hop | null;
+  fall: Fall | null;
   nextHop: number;
   landedAt: number;
   nextMantle: number;
@@ -412,6 +418,7 @@ export type Event = { id: number; tick: number } & (
   | { type: "capture"; sector: string; team: Team }
   | { type: "contested"; sector: string }
   | { type: "stance"; actor: number; crouched: boolean }
+  | { type: "fall"; actor: number; phase: "start" | "land"; at: V3 }
   | { type: "score" }
   | { type: "end"; winner: Team | "draw" }
 );
@@ -632,6 +639,7 @@ export class Game {
         mantle: null,
         crouched: false,
         hop: null,
+        fall: null,
         nextHop: 0,
         landedAt: -1000,
         nextMantle: 0,
@@ -751,6 +759,7 @@ export class Game {
     p.reloadAt = 0;
     p.mantle = null;
     p.hop = null;
+    p.fall = null;
     p.nextHop = this.tick;
     p.landedAt = -1000;
     p.nextMantle = this.tick;
@@ -819,6 +828,7 @@ export class Game {
         !p.crouched &&
         !p.mantle &&
         !p.hop &&
+        !p.fall &&
         this.tick >= p.nextMantle &&
         this.tick >= p.nextHop
       ) {
@@ -849,8 +859,13 @@ export class Game {
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
         p.x = pos.x;
         p.z = pos.z;
-        p.y = groundHeight(p.x, p.z, this.map);
+        const ground = groundHeight(p.x, p.z, this.map);
         if (p.hop) this.advanceHop(p);
+        else {
+          if (!p.fall && p.y - ground > 0.23) this.startFall(p);
+          if (p.fall) this.advanceFall(p);
+          else p.y = ground;
+        }
       }
       if (p.reloadAt && this.tick >= p.reloadAt) {
         const n = Math.min(30 - p.ammo, p.reserve);
@@ -928,7 +943,12 @@ export class Game {
       ) < 0.99
     )
       return;
-    p.hop = { startTick: this.tick, height: 0, velocity: hopSpeed };
+    p.hop = {
+      startTick: this.tick,
+      height: 0,
+      velocity: hopSpeed,
+      originY: p.y,
+    };
     p.mode = "Hop";
     this.emit({
       type: "hop",
@@ -939,30 +959,57 @@ export class Game {
   }
   private advanceHop(p: Soldier) {
     const h = p.hop!;
-    const next = h.height + h.velocity / 30 - hopGravity / (2 * 30 * 30);
+    const next = p.y + h.velocity / 30 - hopGravity / (2 * 30 * 30);
     h.velocity -= hopGravity / 30;
-    let height = Math.max(0, next);
-    if (height > h.height) {
-      const from = { x: p.x, y: p.y + h.height + 1.9, z: p.z };
-      const to = { ...from, y: p.y + height + 1.9 };
+    const ground = groundHeight(p.x, p.z, this.map);
+    let height = Math.max(ground, next);
+    if (height > p.y) {
+      const from = { x: p.x, y: p.y + 1.9, z: p.z };
+      const to = { ...from, y: height + 1.9 };
       const fraction = this.collision.ray(from, to);
       if (fraction < 1) {
-        height = Math.max(
-          h.height,
-          h.height + (height - h.height) * fraction - 0.01,
-        );
+        height = Math.max(p.y, p.y + (height - p.y) * fraction - 0.01);
         h.velocity = Math.min(0, h.velocity);
       }
     }
-    h.height = height;
-    p.y += height;
+    h.height = Math.max(0, height - h.originY);
+    p.y = height;
     p.mode = "Hop";
-    if (next <= 0 && h.velocity < 0) {
+    if (next <= ground && h.velocity < 0) {
       p.hop = null;
       p.nextHop = this.tick + 8;
       p.landedAt = this.tick;
       this.emit({
         type: "hop",
+        actor: p.id,
+        phase: "land",
+        at: { x: p.x, y: p.y, z: p.z },
+      });
+    }
+  }
+  private startFall(p: Soldier) {
+    p.fall = { startTick: this.tick, velocity: 0 };
+    this.emit({
+      type: "fall",
+      actor: p.id,
+      phase: "start",
+      at: { x: p.x, y: p.y, z: p.z },
+    });
+  }
+  private advanceFall(p: Soldier) {
+    const fall = p.fall!;
+    const ground = groundHeight(p.x, p.z, this.map);
+    p.y += fall.velocity / 30 - hopGravity / (2 * 30 * 30);
+    fall.velocity -= hopGravity / 30;
+    p.mode = "Falling";
+    if (p.y <= ground) {
+      p.y = ground;
+      p.fall = null;
+      p.landedAt = this.tick;
+      p.mode = "Navigate";
+      p.nextHop = this.tick + 8;
+      this.emit({
+        type: "fall",
         actor: p.id,
         phase: "land",
         at: { x: p.x, y: p.y, z: p.z },
@@ -1236,6 +1283,7 @@ export class Game {
       victim.mantle = null;
       victim.crouched = false;
       victim.hop = null;
+      victim.fall = null;
       victim.y = groundHeight(victim.x, victim.z, this.map);
       this.emit({ type: "death", actor: victim.id });
     }
@@ -1495,7 +1543,11 @@ export class Game {
           p.mantle = null;
           p.landedAt = this.tick;
         }
-        p.y = groundHeight(p.x, p.z, this.map) + (p.hop?.height ?? 0);
+        const ground = groundHeight(p.x, p.z, this.map);
+        if (!p.hop && !p.fall) {
+          if (p.hp > 0 && p.y - ground > 0.23) this.startFall(p);
+          else p.y = ground;
+        }
       }
       this.emit({ type: "destruction", actor, change });
     }
@@ -1902,6 +1954,8 @@ export function botCommand(g: Game, p: Soldier): Command {
     g.map.terrain &&
     !station &&
     !p.mantle &&
+    !p.hop &&
+    !p.fall &&
     g.tick >= p.nextMantle &&
     Math.abs(p.x) < 34 &&
     g.tick % 6 === p.id % 6

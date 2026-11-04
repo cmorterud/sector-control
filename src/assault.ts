@@ -109,6 +109,7 @@ export function advanceAssaults(g: Game) {
             p.ammo >= 10 &&
             !p.mantle &&
             !p.hop &&
+            !p.fall &&
             !p.duckUntil &&
             !p.forwardPost &&
             p.assaultId === null &&
@@ -281,6 +282,7 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
     !approaching &&
     !p.mantle &&
     !p.hop &&
+    !p.fall &&
     (stage < 2 || p.y < g.map.terrain!.bankHeight - 0.5)
   ) {
     stage = ++m.progress[p.id];
@@ -306,7 +308,7 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
   c.aim = false;
   c.fire = false;
   c.reload = p.ammo < 10 && p.reserve > 0;
-  if (!p.mantle && !p.hop && g.tick >= p.nextMantle) {
+  if (!p.mantle && !p.hop && !p.fall && g.tick >= p.nextMantle) {
     const landing = mantleLanding(p, c, g.map);
     c.mantle = !!landing && dist(landing, destination) + 0.2 < distance;
   }

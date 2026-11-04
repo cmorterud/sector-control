@@ -200,3 +200,12 @@ The trench default is fifty soldiers per side; normal play is human +49 versus f
 With changed station spacing/spawns, bots could replan through a nearby anchor behind them or cut a corner early within the 0.6 m arrival threshold. pathfind removes visible redundant prefix anchors; the movement loop advances to the next waypoint only if that segment is walkable. All one hundred physically settle at distinct steps in a controlled 30 s navigation check. Tests retain cover/Ammo/recoil/attention and 25v25 assault cases alongside the larger-roster geometry checks.
 
 First actual GitHub run 41770451040 installed and typechecked successfully, passing 146/147 tests. Its eight-minute simulation took ~19.9 s and exceeded the old 15 s local-oriented limit. The integration test now permits 60 s while retaining full duration, scoring and final-minute shot/death checks. This changes a test execution budget, not simulation speed or match length. Local suite **148 tests** and build pass.
+
+
+## Automatic trench drops
+
+Horizontal soldier movement permits downward terrain discontinuities while keeping the 0.23 m upward walking limit and ordinary cover collision. Only recessed trench lining has crest/descending/overlap-escape handling; the earth behind it and rear wooden screens stay solid. Navigation walkSegment remains conservative so ordinary routes still use ramps; assault movement and player input may step off an edge. Mantle routes only accept upward ledges.
+
+Soldier.fall stores startTick and downward velocity, integrates gravity at 30 Hz from absolute world feet height, and lands on the current terrain. Hop also integrates absolute feet height with originY for its pose, so crossing a drop does not snap the root onto the lower floor. Excavation can remove support and begin a fall. Neither midair Space nor artillery spotting can start; assault recruitment/milestones wait for grounded soldiers. Death/respawn clear the state. Typed fall start/land events, snapshots and recorder fall/fallLandings totals expose the lifecycle.
+
+Rendering interpolates the root normally, tucks the legs during descent and compresses on landing while preserving crouch and the support-hand grip. The Space hint only advertises upward climbs; instructions describe walking off edges. Seven new simulation regressions plus a real-rig pose/grip regression bring the suite to **156 tests**. Existing up-mantle, Ammo collision, concealment, navigation and full combat checks remain.

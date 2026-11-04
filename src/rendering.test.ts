@@ -224,3 +224,30 @@ it("kicks the barrel and shoulder back while keeping the support wrist on the gr
   expect(rig.rifle.getLocalPosition().z).toBeCloseTo(rest.z, 4);
   expect(rig.rifle.forward.y).toBeCloseTo(restDirection.y, 4);
 });
+
+it("tucks falling legs and keeps the rifle grip attached while the root drops", () => {
+  const game = new Game(
+    new TestCollision(trenchMap),
+    false,
+    600,
+    12345,
+    undefined,
+    { map: trenchMap },
+  );
+  const p = game.players[0];
+  Object.assign(p, {
+    x: -18.8,
+    z: -27,
+    y: 1.3,
+    fall: { startTick: 100, velocity: -6 },
+  });
+  const r = rigFor(p),
+    rig = r.soldiers[0];
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 110);
+  for (const leg of rig.legs)
+    expect(leg.ankle.getPosition().y).toBeGreaterThan(p.y + 0.07);
+  const wrist = rig.arms[0].elbow
+    .getWorldTransform()
+    .transformPoint(new Vec3(0, -0.46, 0));
+  expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
+});

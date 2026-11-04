@@ -248,26 +248,55 @@ export function blocked(
   );
 }
 export function moveOnMap(
-  p: Vec,
+  p: Vec & { y?: number; fall?: unknown; hop?: { velocity: number } | null },
   d: Vec,
   map: MapDefinition = industrialMap,
 ): Vec {
   const steps = Math.max(1, Math.ceil(Math.hypot(d.x, d.z) / 0.15));
   let x = p.x,
     z = p.z;
+  const airborne = p.y !== undefined && p.y > groundHeight(x, z, map) + 0.23;
+  const canMove = (nx: number, nz: number) => {
+    const ground = groundHeight(x, z, map),
+      next = groundHeight(nx, nz, map);
+    const feet = airborne ? p.y! : ground;
+    if (
+      next - feet > 0.23 ||
+      Math.abs(nx) > map.width / 2 - 1.45 ||
+      Math.abs(nz) > map.depth / 2 - 1.45
+    )
+      return false;
+    return !map.boxes.some((b) => {
+      if (
+        Math.abs(nx - b.x) >= b.w / 2 + 0.45 ||
+        Math.abs(nz - b.z) >= b.d / 2 + 0.45
+      )
+        return false;
+      if (b.id?.startsWith("lining-")) {
+        // Step over the recessed timber crest, then fall beside its earth face.
+        if ((p.y ?? ground) >= (b.baseY ?? 0) + b.h - 0.01) return false;
+        if (
+          (p.fall || (p.hop && p.hop.velocity < 0)) &&
+          (p.y ?? ground) > next + 0.23
+        )
+          return false;
+        const overlapping =
+          Math.abs(x - b.x) < b.w / 2 + 0.45 &&
+          Math.abs(z - b.z) < b.d / 2 + 0.45;
+        if (
+          overlapping &&
+          Math.hypot(nx - b.x, nz - b.z) > Math.hypot(x - b.x, z - b.z)
+        )
+          return false;
+      }
+      return true;
+    });
+  };
   for (let i = 0; i < steps; i++) {
     const nx = x + d.x / steps;
-    if (
-      !blocked(nx, z, 0.45, map) &&
-      Math.abs(groundHeight(nx, z, map) - groundHeight(x, z, map)) <= 0.23
-    )
-      x = nx;
+    if (canMove(nx, z)) x = nx;
     const nz = z + d.z / steps;
-    if (
-      !blocked(x, nz, 0.45, map) &&
-      Math.abs(groundHeight(x, nz, map) - groundHeight(x, z, map)) <= 0.23
-    )
-      z = nz;
+    if (canMove(x, nz)) z = nz;
   }
   return { x, z };
 }
@@ -312,7 +341,7 @@ export function mantleRoute(
     const rise = nextHeight - fromHeight;
     // Walkable slopes are not ledges; Space on a ramp should hop normally.
     if (Math.abs(step) < 0.3) continue;
-    if (Math.abs(rise) > 2.5) return null;
+    if (rise <= 0 || rise > 2.5) return null;
     const landing = { x: x + dx * 0.85, z: z + dz * 0.85 };
     const height = groundHeight(landing.x, landing.z, map);
     if (Math.abs(height - fromHeight - rise) > 0.12) return null;

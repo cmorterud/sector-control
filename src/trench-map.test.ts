@@ -211,8 +211,9 @@ describe("trench prototype", () => {
       const floor = { x: station.x + side * 4, z: station.z };
       expect(groundHeight(floor.x, floor.z, map)).toBe(0);
       const stopped = moveOnMap(floor, { x: -side * 14, z: 0 }, map);
-      expect(groundHeight(stopped.x, stopped.z, map)).toBeCloseTo(0.85);
-      expect(Math.abs(stopped.x - station.x)).toBeLessThan(1.2);
+      // Setbacks can now drop into their adjacent elbow, but the front bank stays sealed.
+      expect(groundHeight(stopped.x, stopped.z, map)).toBeLessThan(0.851);
+      expect(Math.abs(stopped.x)).toBeGreaterThanOrEqual(17.99);
       expect(walkSegment(floor, { x: side * 10, z: station.z }, map)).toBe(
         false,
       );

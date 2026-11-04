@@ -87,7 +87,7 @@ describe("artillery missions", () => {
     p.hp = 0;
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
     p.hp = 100;
-    p.hop = { startTick: g.tick, height: 0.1, velocity: 1 };
+    p.hop = { startTick: g.tick, height: 0.1, velocity: 1, originY: p.y };
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
     p.hop = null;
     g.map.boxes.push({ x: 0, z: -1, w: 3, d: 20, h: 10, kind: "building" });
