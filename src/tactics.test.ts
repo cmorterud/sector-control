@@ -19,7 +19,7 @@ import {
   suppressNearMiss,
   suppressionRules,
 } from "./suppression";
-import { advanceAssaults } from "./assault";
+import { advanceAssaults, assaultCommand } from "./assault";
 import { requestArtillery } from "./artillery";
 import { industrialMap, groundHeight, type MapDefinition } from "./map";
 import { trenchMap } from "./trench-map";
@@ -303,6 +303,95 @@ describe("near-miss suppression", () => {
 });
 
 describe("covered squad advances", () => {
+  function formedSquad() {
+    const g = new Game(
+      new TestCollision(trenchMap),
+      true,
+      5000,
+      12345,
+      undefined,
+      { map: trenchMap, teamSize: 25 },
+    );
+    g.artillery.enabled = false;
+    g.botSettings.engagementRange = 0;
+    for (const p of g.players)
+      Object.assign(p, { ...firingPosition(g, p), y: 0.85, protectedUntil: 0 });
+    g.tick = 540;
+    advanceAssaults(g);
+    return { g, m: g.assaults.missions[0] };
+  }
+  it("replaces a dead smoke carrier and still gets survivors out into the field", () => {
+    const { g, m } = formedSquad();
+    g.players[m.leader].hp = 0;
+    const replacement = g.players[m.members.find((id) => id !== m.leader)!];
+    expect(assaultCommand(g, replacement, idle()).smoke).toBe(true);
+    let thrown = false,
+      crossed = false;
+    for (let i = 0; i < 450 && !crossed; i++) {
+      g.step(idle());
+      thrown ||= g.events.some(
+        (e) => e.type === "smokeThrow" && e.actor === replacement.id,
+      );
+      crossed = m.members.some(
+        (id) => g.players[id].hp > 0 && Math.abs(g.players[id].x) < 15,
+      );
+    }
+    expect(thrown).toBe(true);
+    expect(crossed).toBe(true);
+    expect(g.players[0].assaultId).toBeNull();
+  });
+  it("waits for thick smoke before leaving, then keeps moving if that cloud disappears", () => {
+    const { g, m } = formedSquad(),
+      p = g.players[m.members[1]];
+    m.waitUntil[p.id] = g.tick;
+    m.screens[0] = { actor: m.leader, tick: g.tick };
+    g.smokeClouds.push({ ...cloud(g), actor: m.leader, bornAt: g.tick });
+    expect(assaultCommand(g, p, idle()).x).toBe(0);
+    g.tick += 60;
+    expect(assaultCommand(g, p, idle()).x).toBeGreaterThan(0);
+    g.smokeClouds = [];
+    expect(assaultCommand(g, p, idle()).x).toBeGreaterThan(0);
+  });
+  it("lets stranded survivors dash onward without inventing smoke inventory", () => {
+    const { g, m } = formedSquad(),
+      p = g.players[m.members[1]];
+    for (const id of m.members) g.players[id].smokes = 0;
+    m.waitUntil[p.id] = g.tick;
+    expect(assaultCommand(g, p, idle()).x).toBe(0);
+    m.progress[p.id] = 1;
+    Object.assign(p, m.route[0]);
+    expect(assaultCommand(g, p, idle()).x).toBe(0);
+    g.tick += 90;
+    const c = assaultCommand(g, p, idle());
+    expect(c.x).toBeGreaterThan(0);
+    expect(c.sprint).toBe(true);
+    expect(c.smoke).not.toBe(true);
+    expect(p.smokes).toBe(0);
+  });
+  it("sends another small wave after a failed attempt while leaving most soldiers at their posts", () => {
+    const { g, m } = formedSquad();
+    for (const id of m.members) g.players[id].hp = 0;
+    advanceAssaults(g);
+    const next = g.assaults.readyAt.blue;
+    expect(next - g.tick).toBeGreaterThanOrEqual(18 * 30);
+    expect(next - g.tick).toBeLessThanOrEqual(24 * 30);
+    for (const id of m.members) {
+      const p = g.players[id];
+      g.respawn(p);
+      Object.assign(p, { ...firingPosition(g, p), y: 0.85 });
+    }
+    g.tick = next - 1;
+    advanceAssaults(g);
+    expect(g.assaults.missions.some((q) => q.team === "blue")).toBe(false);
+    g.tick = next;
+    advanceAssaults(g);
+    const wave = g.assaults.missions.find((q) => q.team === "blue")!;
+    expect(wave.members.length).toBeGreaterThanOrEqual(3);
+    expect(wave.members.length).toBeLessThanOrEqual(4);
+    expect(
+      g.players.filter((p) => p.assaultId === null).length,
+    ).toBeGreaterThan(40);
+  });
   it("forms a small group of bots without assigning a human or sending the entire team", () => {
     const g = new Game(
       new TestCollision(trenchMap),

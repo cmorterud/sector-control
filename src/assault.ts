@@ -18,7 +18,7 @@ export interface Assault {
   route: Vec[];
   progress: Record<number, number>;
   waitUntil: Record<number, number>;
-  screens: Record<number, { actor: number; tick: number }>;
+  screens: Record<number, { actor: number; tick: number; ready?: boolean }>;
 }
 export interface AssaultState {
   enabled: boolean;
@@ -48,7 +48,8 @@ export function advanceAssaults(g: Game) {
         p.nextThink = g.tick;
       }
     }
-    g.assaults.readyAt[m.team] = g.tick + 45 * 30;
+    // Stagger the next small wave without leaving a failed attack idle for a minute.
+    g.assaults.readyAt[m.team] = g.tick + (18 + (m.id % 3) * 3) * 30;
     g.emit({
       type: "assaultEnd",
       mission: m.id,
@@ -141,18 +142,17 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
   const offset = (m.members.indexOf(p.id) - 1.5) * 0.6;
   const destination = { x: goal.x, z: goal.z + offset };
   const screen = m.screens[stage];
-  const carrier =
-    stage === 0
-      ? g.players[m.leader]
-      : m.members
-          .map((id) => g.players[id])
-          .find(
-            (q) =>
-              q.hp > 0 &&
-              q.assaultId === m.id &&
-              m.progress[q.id] === stage &&
-              q.smokes > 0,
-          );
+  const carriers = m.members
+    .map((id) => g.players[id])
+    .filter(
+      (q) =>
+        q.hp > 0 &&
+        q.assaultId === m.id &&
+        m.progress[q.id] === stage &&
+        q.smokes > 0 &&
+        !q.reloadAt,
+    );
+  const carrier = carriers.find((q) => q.id === m.leader) ?? carriers[0];
   if (!screen && carrier?.id === p.id && !p.reloadAt && p.smokes > 0) {
     const target =
       stage === 0
@@ -181,15 +181,18 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
     p.mode = stage ? "Regrouping in crater" : "Covering the assault";
     return c;
   }
-  if (
-    !screen ||
-    !g.smokeClouds.some(
+  if (screen && !screen.ready)
+    screen.ready = g.smokeClouds.some(
       (s) =>
         s.actor === screen.actor &&
         s.bornAt >= screen.tick &&
         smokeDensity(s, g.tick) > 0.65,
-    )
-  ) {
+    );
+  // Once a leg starts, finish it even if its smoke fades. Survivors without
+  // another canister make a short, exposed dash rather than freeze in the field.
+  const dashWithoutSmoke =
+    stage > 0 && !screen && !carrier && g.tick >= m.waitUntil[p.id] + 3 * 30;
+  if (!screen?.ready && !dashWithoutSmoke) {
     c.x = c.z = 0;
     p.mode = "Waiting for smoke";
     return c;

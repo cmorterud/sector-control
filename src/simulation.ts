@@ -1592,7 +1592,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
   c.yaw = p.yaw;
   const station = firingPosition(g, p);
-  if (g.tick >= p.nextThink) {
+  if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;
     if (station) p.path = pathfind(p, station, g.map);
     else {
