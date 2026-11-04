@@ -11,7 +11,8 @@ import {
 import { buildTrenchRelief } from "./terrain-relief";
 
 const bankHeight = 2.4;
-const spawnDistance = 55;
+const spawnDistance = 60,
+  rearCoverDistance = 55;
 const width = 160,
   depth = 128,
   cellSize = 2;
@@ -83,6 +84,8 @@ const trenchLines: TrenchLine[] = [
 const communicationRoutes: CommunicationRoute[] = [];
 for (const line of trenchLines) {
   const side = line.team === "blue" ? -1 : 1;
+  const counts =
+    line.team === "blue" ? [8, 8, 4, 8, 8, 7, 7] : [7, 7, 6, 6, 6, 6, 6, 6];
   line.sections.forEach((section, i) => {
     const { x, z, length } = section;
     floors.push({ x, z, w: 6, d: length });
@@ -103,12 +106,20 @@ for (const line of trenchLines) {
       });
     if (line.role === "front" || i % 2 === 0) {
       const stepZ = section.stepZ ?? z;
-      platforms.push({ x: x - side * 2, z: stepZ, w: 2, d: 6, h: 0.85 });
+      // Longer steps fit the doubled roster; the tight Blue setback keeps four posts.
+      const stepDepth = line.role === "front" && counts[i] > 4 ? 10 : 6;
+      platforms.push({
+        x: x - side * 2,
+        z: stepZ,
+        w: 2,
+        d: stepDepth,
+        h: 0.85,
+      });
       ramps.push({
         x,
         z: stepZ,
         w: 2,
-        d: 6,
+        d: stepDepth,
         low: 0,
         high: 0.85,
         direction: -side as -1 | 1,
@@ -116,19 +127,17 @@ for (const line of trenchLines) {
     }
   });
   if (line.role === "front")
-    for (let index = 0; index < 25; index++) {
-      const segment = index % line.sections.length,
-        row = Math.floor(index / line.sections.length);
-      const section = line.sections[segment];
-      const count =
-        Math.floor(25 / line.sections.length) +
-        (segment < 25 % line.sections.length ? 1 : 0);
-      firingPositions.push({
-        team: line.team,
-        x: section.x - side * 2,
-        z: (section.stepZ ?? section.z) + (row - (count - 1) / 2) * 1.2,
+    for (let row = 0; row < Math.max(...counts); row++)
+      line.sections.forEach((section, segment) => {
+        if (row >= counts[segment]) return;
+        firingPositions.push({
+          team: line.team,
+          x: section.x - side * 2,
+          z:
+            (section.stepZ ?? section.z) +
+            (row - (counts[segment] - 1) / 2) * 1.2,
+        });
       });
-    }
 }
 for (const team of ["blue", "red"] as const) {
   const side = team === "blue" ? -1 : 1;
@@ -175,7 +184,7 @@ for (const team of ["blue", "red"] as const) {
   }
   for (const z of [-21, 21])
     cover.push({
-      x: side * (spawnDistance + 3),
+      x: side * (rearCoverDistance + 3),
       z,
       w: 8,
       d: 3,
@@ -197,7 +206,7 @@ floors.push(
 for (const side of [-1, 1])
   cover.push({
     id: `rear-wood-${side}`,
-    x: side * (spawnDistance - 4),
+    x: side * (rearCoverDistance - 4),
     z: side * 9,
     w: 0.25,
     d: 2.5,

@@ -2,7 +2,7 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front is a 25v25 elimination duel fought from firing steps. Matches last eight minutes.
+Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front is a 50v50 elimination duel fought from firing steps. Matches last eight minutes.
 
 ## Run
 
@@ -71,11 +71,13 @@ Snapshots include smoke, suppression, duck state and squad plans/progress. Typed
 
 ## Trench front prototype
 
-Choose **Trench front** on the start screen, or open [the 25v25 trench map](http://localhost:5173/?map=trenches). Blue has you plus 24 bots; Red has 25 bots. Industrial remains the default 5v5 map.
+Choose **Trench front** on the start screen, or open [the 50v50 trench map](http://localhost:5173/?map=trenches). Blue has you plus 49 bots; Red has 50 bots. Industrial remains the default 5v5 map.
 
 The 160 × 128-meter battlefield has **four zigzag trench lines: two per team**. Each team enters its rear line from open-ground spawns, then follows short dogleg communication trenches into its front line. Blue has longer uneven stretches and setbacks; Red has more frequent, independently placed bends. Small shelter bays break up their footprints. The six communication routes bridge **16–20 m** between paired lines, with offset entrances and earth traverses blocking straight shots. Spawns remain behind the rear lines. **The front parapets are continuous: there are no ramps or walk-through exits into no man's land.** Rear entry ramps remain.
 
 No man's land starts with **six real shell craters and five broad, shallow depressions**. The former flat shell-scar disks are now actual ground, shared by movement, bullets and camera collision. The main bowls are roughly 0.55–0.7 m deep, with gentle undulations of 0.12–0.18 m; overlapping relief is capped at 0.85 m. Terrain only goes downward, with a clear buffer before the front parapets and level footing around existing cover. Two old scars were moved away from wire patches. Grenades can deepen these starting craters, and restarting restores their authored shape.
+
+Fifty distinct firing positions per side are spread along longer steps, with 1.2 m spacing. The short Blue setback keeps four positions. Spawn formations start five metres farther back to keep the larger roster off the entrance ramps.
 
 Trenches are **2.4 m deep**, with **0.85 m firing steps** along the front edges. The floor conceals a standing soldier from the opposing trench. On a step, the head/helmet and raised rifle clear the parapet while the torso stays behind earth. Walk back off the step to shelter. Cover and visibility come from the actual world geometry; shots aimed below the parapet strike the bank.
 
@@ -83,7 +85,7 @@ Most bots hold individual firing positions inside their own front trench and aim
 
 Walk near an edge and press **Space** to mantle up or down. The prompt appears when facing a nearby ledge; movement direction takes priority while walking. A climb takes 1.2 seconds: approach, reach with the free right hand, pull up, cross with tucked knees, and stand on the ledge. The left hand stays on the tucked rifle. Foot/torso/head clearance and a stable landing are checked; firing/capturing pauses during the climb. When there is no valid mantle, Space gives a small hop (about 0.45 m high, half a second airborne), with a knee tuck and soft landing. Upward motion stops at ceilings; airborne presses do not trigger another hop. Hops retain normal horizontal collision, so they do not bypass banks or solid cover. Mantling climbs terrain banks rather than buildings or solid cover. Manual mantling still lets you deliberately go over the top, fully exposed; assault squads also mantle terrain edges through the same movement checks. The prototype retains the current assault rifle and visible traveling rounds; historical weapons are a separate design pass.
 
-For a log-only 50-soldier test: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`. Snapshots include map ID, scoring mode, team size, elevation, and active mantle state; `mantle` events record start/end and both endpoints; `hop` events record takeoff/landing, and snapshots include active hop height/velocity. A death can interrupt a climb. `teamSize=1..25` changes the roster for experiments.
+For a log-only 100-soldier test: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`. Snapshots include map ID, scoring mode, team size, elevation, and active mantle state; `mantle` events record start/end and both endpoints; `hop` events record takeoff/landing, and snapshots include active hop height/velocity. A death can interrupt a climb. `teamSize=1..50` changes the roster for experiments.
 
 ## Recorded playtests
 

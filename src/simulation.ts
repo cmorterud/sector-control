@@ -514,6 +514,14 @@ export class TestCollision implements CollisionWorld {
 }
 export const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
+export function resolveTeamSize(map: MapDefinition, requested?: number) {
+  const fallback = map.id === "trenches" ? 50 : 5;
+  return clamp(
+    Number.isFinite(requested) ? Math.round(requested!) : fallback,
+    1,
+    50,
+  );
+}
 export function raySphere(a: V3, b: V3, c: V3, r: number): number {
   const dx = b.x - a.x,
     dy = b.y - a.y,
@@ -606,10 +614,7 @@ export class Game {
         : {}),
       ...botSettings,
     };
-    const requested = options.teamSize ?? 5;
-    this.teamSize = bots
-      ? clamp(Number.isFinite(requested) ? Math.round(requested) : 5, 1, 25)
-      : 1;
+    this.teamSize = bots ? resolveTeamSize(this.map, options.teamSize) : 1;
     this.sectors = this.map.sectors.map((s) => ({
       ...s,
       control: 0,
@@ -1608,7 +1613,10 @@ export function pathfind(
         u = came.get(u)!;
         out.push(nodes[u]);
       }
-      return out.reverse();
+      const route = out.reverse();
+      // Do not walk back to a nearby lattice anchor when the next one is clear.
+      while (route.length > 1 && walkSegment(a, route[1], map)) route.shift();
+      return route;
     }
     open.delete(u);
     for (const v of edges[u]) {
@@ -1792,7 +1800,8 @@ export function botCommand(g: Game, p: Soldier): Command {
   const objective = station ?? g.sectors[p.objective];
   while (
     p.path.length &&
-    dist(p, p.path[0]) < (station ? (p.path.length === 1 ? 0.15 : 0.6) : 1)
+    dist(p, p.path[0]) < (station ? (p.path.length === 1 ? 0.15 : 0.6) : 1) &&
+    (p.path.length === 1 || walkSegment(p, p.path[1], g.map))
   )
     p.path.shift();
   const dest = p.path[0];

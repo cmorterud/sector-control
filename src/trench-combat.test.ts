@@ -152,4 +152,4 @@ it("keeps the firing-step battle active through a full eight-minute match", () =
     }),
   ).toBeGreaterThan(100);
   expect(lateDeaths).toBeGreaterThan(0);
-}, 15000);
+}, 60000);

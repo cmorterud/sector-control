@@ -9,38 +9,72 @@ import {
   mantlePosition,
   firingPosition,
   rifleHeight,
+  resolveTeamSize,
 } from "./simulation";
 
 const createGame = (seconds = 60) =>
   new Game(new TestCollision(trenchMap), true, seconds * 30, 12345, undefined, {
     map: trenchMap,
-    teamSize: 25,
+    teamSize: 50,
     assaults: false,
   });
 
 describe("trench prototype", () => {
-  it("spawns 25 soldiers on each side in clear ground behind their first trench", () => {
+  it("spawns 50 soldiers on each side in clear ground behind their first trench", () => {
     const game = createGame();
-    expect(game.players).toHaveLength(50);
-    expect(game.snapshot()).toMatchObject({ mapId: "trenches", teamSize: 25 });
+    expect(game.players).toHaveLength(100);
+    expect(game.snapshot()).toMatchObject({ mapId: "trenches", teamSize: 50 });
     for (const team of ["blue", "red"]) {
       const soldiers = game.players.filter((p) => p.team === team);
-      expect(soldiers).toHaveLength(25);
-      expect(new Set(soldiers.map((p) => p.teamIndex)).size).toBe(25);
-      expect(new Set(soldiers.map((p) => `${p.x},${p.z}`)).size).toBe(25);
+      expect(soldiers).toHaveLength(50);
+      expect(new Set(soldiers.map((p) => p.teamIndex)).size).toBe(50);
+      expect(new Set(soldiers.map((p) => `${p.x},${p.z}`)).size).toBe(50);
       for (const p of soldiers) {
         expect(p.y).toBeCloseTo(2.4);
         expect(Math.abs(p.x)).toBeGreaterThan(50);
         expect(p.team === "blue" ? p.x < 0 : p.x > 0).toBe(true);
         expect(blocked(p.x, p.z, 0.7, trenchMap)).toBe(false);
-        const entrance = moveOnMap(
+        // The larger formation includes rows beside the ramp: align first.
+        const approach = moveOnMap(
           p,
-          { x: p.team === "blue" ? 24 : -24, z: 0 },
+          { x: 0, z: trenchMap.spawn[p.team].z - p.z },
+          trenchMap,
+        );
+        const entrance = moveOnMap(
+          approach,
+          { x: p.team === "blue" ? 33 : -33, z: 0 },
           trenchMap,
         );
         expect(groundHeight(entrance.x, entrance.z, trenchMap)).toBe(0);
         expect(Math.abs(entrance.x)).toBeLessThan(41);
       }
+    }
+  });
+
+  it("defaults to 50v50, caps experimental rosters consistently, and keeps distinct firing positions", () => {
+    const game = new Game(
+      new TestCollision(trenchMap),
+      true,
+      1800,
+      12345,
+      undefined,
+      { map: trenchMap },
+    );
+    expect(game.teamSize).toBe(50);
+    expect(game.players).toHaveLength(100);
+    expect(new Game(new TestCollision()).players).toHaveLength(10);
+    expect(resolveTeamSize(trenchMap, 1000)).toBe(50);
+    expect(resolveTeamSize(trenchMap, NaN)).toBe(50);
+    expect(resolveTeamSize(trenchMap, 0)).toBe(1);
+    for (const team of ["blue", "red"]) {
+      const posts = game.map.terrain!.firingPositions!.filter(
+        (p) => p.team === team,
+      );
+      expect(posts).toHaveLength(50);
+      expect(new Set(posts.map((p) => `${p.x},${p.z}`)).size).toBe(50);
+      for (let i = 0; i < posts.length; i++)
+        for (let j = 0; j < i; j++)
+          expect(dist(posts[i], posts[j])).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -93,7 +127,7 @@ describe("trench prototype", () => {
     }
   });
 
-  it("walks all fifty soldiers to their distinct posts through the asymmetric bends", () => {
+  it("walks all one hundred soldiers to their distinct posts through the asymmetric bends", () => {
     const game = createGame(60);
     game.botSettings.engagementRange = 0;
     game.artillery.enabled = false;
@@ -223,7 +257,7 @@ describe("trench prototype", () => {
       ).toBeLessThan(1);
     const game = createGame();
     const p = game.players[1],
-      enemy = game.players[25];
+      enemy = game.players.find((q) => q.team === "red")!;
     for (const q of game.players) q.hp = 0;
     Object.assign(p, { x: -21, y: 0, z: -27, hp: 100, target: -1 });
     Object.assign(enemy, { x: 0, y: 2.4, z: -27, hp: 100 });
@@ -242,7 +276,7 @@ describe("trench prototype", () => {
     expect(p.target).toBe(enemy.id);
   });
 
-  it("runs a 50-soldier match with combat from its own firing steps, valid heights, and cleanup", () => {
+  it("runs a 100-soldier match with combat from its own firing steps, valid heights, and cleanup", () => {
     const game = createGame();
     const counts: Record<string, number> = {};
     let maxProjectiles = 0;
