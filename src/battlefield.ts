@@ -16,7 +16,8 @@ export type SoundKind =
   | "grenade"
   | "artillery"
   | "whistle"
-  | "debris";
+  | "debris"
+  | "timber";
 export type SoundCue = {
   kind: SoundKind;
   at: V3;
@@ -138,6 +139,11 @@ export class BattlefieldFeedback {
       this.shock = { tick: -1000, strength: 0 };
       this.nextCrack = 0;
     }
+    if (
+      e.type === "destruction" &&
+      e.change.objects.some((o) => o.id.startsWith("tree-") && o.stage === 2)
+    )
+      this.cue(g, "timber", e.change.at, 0.55, false, true, e.id);
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
         g,

@@ -48,6 +48,7 @@ import {
 import {
   runtimeMap,
   deformExplosion,
+  damageVegetation,
   grenadeExplosionProfile,
   type DestructionChange,
   type ExplosionProfile,
@@ -1323,6 +1324,10 @@ export class Game {
       victim.team !== shot.team &&
       this.tick >= victim.protectedUntil;
     if (hit && victim) this.damage(victim, 25, shot.actor, shot.team);
+    if (!victim) {
+      const change = damageVegetation(this.map, at);
+      if (change) this.applyDestruction(shot.actor, change);
+    }
     this.emit({
       type: "impact",
       actor: shot.actor,
@@ -1555,32 +1560,38 @@ export class Game {
     const change = deformExplosion(this.map, at, profile, (a, b) =>
       this.collision.ray(a, b),
     );
-    if (change) {
-      navigation.delete(this.map);
-      this.collision.updateWorld?.(change);
-      for (const p of this.players) {
-        p.path = [];
-        p.nextThink = this.tick + (p.id % 30);
-        if (p.mantle) {
-          const m = p.mantle;
-          if (
-            Math.abs(groundHeight(m.from.x, m.from.z, this.map) - m.from.y) <
-              0.02 &&
-            Math.abs(groundHeight(m.to.x, m.to.z, this.map) - m.to.y) < 0.02
-          )
-            continue;
-          p.mantle = null;
-          p.landedAt = this.tick;
-        }
-        const ground = groundHeight(p.x, p.z, this.map);
-        if (!p.hop && !p.fall) {
-          if (p.hp > 0 && p.y - ground > 0.23) this.startFall(p);
-          else p.y = ground;
-        }
-      }
-      this.emit({ type: "destruction", actor, change });
-    }
+    if (change) this.applyDestruction(actor, change);
     return hits;
+  }
+  private applyDestruction(actor: number, change: DestructionChange) {
+    if (change.geometry === false) {
+      this.collision.updateWorld?.(change);
+      this.emit({ type: "destruction", actor, change });
+      return;
+    }
+    navigation.delete(this.map);
+    this.collision.updateWorld?.(change);
+    for (const p of this.players) {
+      p.path = [];
+      p.nextThink = this.tick + (p.id % 30);
+      if (p.mantle) {
+        const m = p.mantle;
+        if (
+          Math.abs(groundHeight(m.from.x, m.from.z, this.map) - m.from.y) <
+            0.02 &&
+          Math.abs(groundHeight(m.to.x, m.to.z, this.map) - m.to.y) < 0.02
+        )
+          continue;
+        p.mantle = null;
+        p.landedAt = this.tick;
+      }
+      const ground = groundHeight(p.x, p.z, this.map);
+      if (!p.hop && !p.fall) {
+        if (p.hp > 0 && p.y - ground > 0.23) this.startFall(p);
+        else p.y = ground;
+      }
+    }
+    this.emit({ type: "destruction", actor, change });
   }
 }
 // Each map owns a cached height-aware navigation graph.

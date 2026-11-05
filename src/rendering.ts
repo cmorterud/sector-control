@@ -102,6 +102,7 @@ export class Renderer implements CollisionWorld {
     { entity: pc.Entity; mesh: pc.Mesh }
   >();
   private objectVisuals = new Map<string, pc.Entity>();
+  private objectStates = new Map<string, string>();
   private groundDecor: {
     root: pc.Entity;
     x: number;
@@ -387,6 +388,7 @@ export class Renderer implements CollisionWorld {
     }
     this.terrainPatches.clear();
     this.objectVisuals.clear();
+    this.objectStates.clear();
     this.groundDecor = [];
     this.boardVisuals = [];
     this.mapRoot.destroy();
@@ -418,15 +420,160 @@ export class Renderer implements CollisionWorld {
     this.terrainPatches.set(key, { entity, mesh });
   }
   private buildDestructible(object: Destructible) {
+    const b = object.original;
+    const signature = JSON.stringify([object.stage, b.baseY, b.w, b.h, b.d]);
+    if (this.objectStates.get(object.id) === signature) return false;
+    this.objectStates.set(object.id, signature);
     this.objectVisuals.get(object.id)?.destroy();
     this.objectVisuals.delete(object.id);
-    if (object.stage === 2) return;
+    if (object.stage === 2) return true;
     const previousBatch = this.batchGroup;
     this.batchGroup = this.coverBatch;
     const root = this.joint(object.id, this.mapRoot);
-    const b = object.original;
     const h = b.h * (object.stage === 1 ? 0.6 : 1),
       base = b.baseY ?? 0;
+    if (["tree", "brush", "log", "stump"].includes(b.kind)) {
+      const primitive = (
+        name: string,
+        type: "sphere" | "cylinder",
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        h: number,
+        d: number,
+        tint: string,
+      ) => {
+        const e = new pc.Entity(name);
+        e.addComponent("render", {
+          type,
+          material: this.material(tint),
+          castShadows: true,
+          receiveShadows: true,
+          batchGroupId: this.coverBatch,
+        });
+        e.setLocalPosition(x, y, z);
+        e.setLocalScale(w, h, d);
+        root.addChild(e);
+        return e;
+      };
+      const seed = [...object.id].reduce((n, c) => n + c.charCodeAt(0), 0);
+      if (b.kind !== "brush") {
+        const solid = this.cube(
+          b.kind,
+          b.x,
+          base + h / 2,
+          b.z,
+          b.w,
+          h,
+          b.d,
+          "#5e4934",
+          true,
+          root,
+        );
+        solid.render!.enabled = false;
+        if (b.kind === "log") {
+          const alongX = b.w > b.d;
+          const log = primitive(
+            "fallen timber",
+            "cylinder",
+            b.x,
+            base + h / 2,
+            b.z,
+            alongX ? b.d : b.w,
+            Math.max(b.w, b.d),
+            h,
+            "#65503a",
+          );
+          log.setLocalEulerAngles(alongX ? 0 : 90, 0, alongX ? 90 : 0);
+        } else
+          primitive(
+            b.kind,
+            "cylinder",
+            b.x,
+            base + h / 2,
+            b.z,
+            b.w,
+            h,
+            b.d,
+            object.stage ? "#4c3c2c" : "#66503a",
+          );
+      }
+      if (b.kind === "tree") {
+        for (const side of [-1, 1]) {
+          const branch = primitive(
+            "tree branch",
+            "cylinder",
+            b.x + side * h * 0.09,
+            base + h * 0.55,
+            b.z,
+            b.w * 0.35,
+            h * 0.42,
+            b.w * 0.35,
+            "#5a4833",
+          );
+          branch.setLocalEulerAngles(0, seed % 120, side * 48);
+        }
+        if (object.stage === 0)
+          for (let i = 0; i < 3; i++) {
+            primitive(
+              "tree crown",
+              "sphere",
+              b.x + Math.sin(seed + i * 2.4) * b.h * 0.1,
+              base + b.h * (0.62 + (i % 2) * 0.12),
+              b.z + Math.cos(seed + i * 2.4) * b.h * 0.1,
+              b.h * 0.5,
+              b.h * 0.7,
+              b.h * 0.5,
+              i % 2 ? "#666b42" : "#56613d",
+            );
+          }
+      } else if (b.kind === "brush") {
+        if (b.h < 0.6)
+          for (let i = 0; i < 4; i++) {
+            const blade = this.cube(
+              "grass",
+              b.x + (i - 1.5) * 0.2,
+              base + h * 0.5,
+              b.z + Math.sin(seed + i) * 0.3,
+              0.06,
+              h,
+              0.12,
+              i % 2 ? "#727448" : "#5d683e",
+              false,
+              root,
+            );
+            blade.setLocalEulerAngles(i * 9, seed % 180, (i - 1.5) * 12);
+          }
+        else
+          for (let i = 0; i < 3; i++)
+            primitive(
+              "low foliage",
+              "sphere",
+              b.x + Math.sin(seed + i * 2.4) * b.w * 0.15,
+              base + h * 0.52,
+              b.z + Math.cos(seed + i * 2.4) * b.d * 0.15,
+              b.w * 0.8,
+              h,
+              b.d * 0.8,
+              object.stage ? "#777046" : i % 2 ? "#707446" : "#58633c",
+            );
+      } else if (b.kind === "stump")
+        primitive(
+          "splintered stump cap",
+          "cylinder",
+          b.x,
+          base + h + 0.015,
+          b.z,
+          b.w * 0.94,
+          0.04,
+          b.d * 0.94,
+          "#b59d6b",
+        );
+      this.objectVisuals.set(object.id, root);
+      this.batchGroup = previousBatch;
+      return true;
+    }
     const tint =
       b.kind === "wood"
         ? object.stage === 1
@@ -478,12 +625,16 @@ export class Renderer implements CollisionWorld {
     }
     this.objectVisuals.set(object.id, root);
     this.batchGroup = previousBatch;
+    return true;
   }
   updateWorld(change: DestructionChange) {
     for (const key of change.patches) this.rebuildTerrainPatch(key);
+    let coverChanged = false;
     for (const changed of change.objects)
-      this.buildDestructible(this.map.destruction!.objects[changed.id]);
-    if (change.objects.length) this.app.batcher!.generate([this.coverBatch]);
+      coverChanged =
+        this.buildDestructible(this.map.destruction!.objects[changed.id]) ||
+        coverChanged;
+    if (coverChanged) this.app.batcher!.generate([this.coverBatch]);
     if (change.crater) {
       let changed = false;
       for (const board of this.boardVisuals) {
@@ -1541,7 +1692,7 @@ export class Renderer implements CollisionWorld {
     }
     if (e.type === "destruction") {
       const count = Math.min(
-        16,
+        e.change.kind === "rifle" ? 2 : 24,
         6 + e.change.objects.length * 2 + (e.change.crater ? 4 : 0),
       );
       for (let i = 0; i < count; i++) {
@@ -1554,7 +1705,11 @@ export class Renderer implements CollisionWorld {
           0.12,
           0.12,
           0.12,
-          i % 3 ? "#6b5438" : "#9b8661",
+          e.change.objects.some((o) => o.id.startsWith("brush-")) && i % 3 === 0
+            ? "#687447"
+            : i % 3
+              ? "#6b5438"
+              : "#9b8661",
         );
         this.effects.push({
           e: fragment,

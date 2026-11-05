@@ -14,7 +14,11 @@ export type Box = Vec & {
     | "sandbag"
     | "wire"
     | "bunker"
-    | "wood";
+    | "wood"
+    | "tree"
+    | "brush"
+    | "log"
+    | "stump";
   baseY?: number;
 };
 export const sectors = [
@@ -85,6 +89,7 @@ export interface MapDefinition {
   spawn: Record<"blue" | "red", Vec>;
   sectors: (Vec & { id: string })[];
   boxes: Box[];
+  vegetation?: Box[];
   destruction?: DestructionState;
   terrain?: {
     bankHeight: number;
@@ -166,9 +171,10 @@ const runtimeCutGrids = new WeakMap<
 >();
 export function terrainCut(x: number, z: number, map: MapDefinition): number {
   const state = map.destruction;
-  if (!state || !state.revision) return 0;
+  const revision = state?.terrainRevision ?? state?.revision ?? 0;
+  if (!state || !revision) return 0;
   let cached = runtimeCutGrids.get(state);
-  if (!cached || cached.revision !== state.revision) {
+  if (!cached || cached.revision !== revision) {
     const originX = Math.floor(-map.width / 2 / terrainResolution) - 1;
     const originZ = Math.floor(-map.depth / 2 / terrainResolution) - 1;
     const columns = Math.ceil(map.width / terrainResolution) + 3;
@@ -182,7 +188,7 @@ export function terrainCut(x: number, z: number, map: MapDefinition): number {
         values[row * columns + col] = depth;
     }
     cached = {
-      revision: state.revision,
+      revision,
       relief: {
         cuts: state.cuts,
         patches: state.patches,
@@ -191,12 +197,13 @@ export function terrainCut(x: number, z: number, map: MapDefinition): number {
     };
     runtimeCutGrids.set(state, cached);
   }
-  return sampleTerrainCuts(x, z, cached.relief);
+  return sampleTerrainCuts(x, z, cached.relief, map);
 }
 function sampleTerrainCuts(
   x: number,
   z: number,
   state?: TerrainRelief,
+  runtimeMap?: MapDefinition,
 ): number {
   if (!state) return 0;
   const gx = x / terrainResolution,
@@ -229,9 +236,41 @@ function sampleTerrainCuts(
     c = state.cuts[`${ix},${iz + 1}`] ?? 0;
     d = state.cuts[`${ix + 1},${iz + 1}`] ?? 0;
   }
-  return tx <= tz
-    ? a + (d - c) * tx + (c - a) * tz
-    : a + (b - a) * tx + (d - b) * tz;
+  const interpolate = (a: number, b: number, c: number, d: number) =>
+    tx <= tz
+      ? a + (d - c) * tx + (c - a) * tz
+      : a + (b - a) * tx + (d - b) * tz;
+  // Cuts straddling an intact authored cliff retain its vertical face. Once
+  // the high side has collapsed, interpolate the resulting surface instead
+  // of depths measured from two different bank heights (which leaves a lip).
+  if (runtimeMap && Math.max(a, b, c, d) - Math.min(a, b, c, d) > 0.3) {
+    const bases = [
+      [ix, iz],
+      [ix + 1, iz],
+      [ix, iz + 1],
+      [ix + 1, iz + 1],
+    ].map(([gx, gz]) =>
+      baseGroundHeight(
+        gx * terrainResolution,
+        gz * terrainResolution,
+        runtimeMap,
+      ),
+    );
+    const low = Math.min(...bases);
+    const heights = [a, b, c, d].map((cut, i) =>
+      Math.max(-0.9, bases[i] - cut),
+    );
+    if (
+      Math.max(...bases) - low > 0.3 &&
+      bases.every((base, i) => base <= low + 0.3 || heights[i] <= low + 0.23)
+    )
+      return Math.max(
+        0,
+        baseGroundHeight(x, z, runtimeMap) -
+          interpolate(heights[0], heights[1], heights[2], heights[3]),
+      );
+  }
+  return interpolate(a, b, c, d);
 }
 export function blocked(
   x: number,

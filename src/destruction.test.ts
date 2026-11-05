@@ -248,7 +248,7 @@ it("supports larger future explosion profiles through the same world-damage inte
   expect(baseGroundHeight(0, 0, map)).toBe(0);
 });
 
-it("breaking trench lining exposes retained earth instead of opening a passage through the bank", () => {
+it("one grenade strips lining and chips the bank while lower earth still stops shots", () => {
   const game = gameFor(trenchMap);
   const lining = Object.values(game.map.destruction!.objects).find(
     (object) =>
@@ -259,7 +259,8 @@ it("breaking trench lining exposes retained earth instead of opening a passage t
   expect(lining).toBeDefined();
   blast(game, -18.5, -1, 1.2);
   expect(lining.stage).toBe(2);
-  expect(groundHeight(-17.5, -1, game.map)).toBeGreaterThan(2);
+  expect(groundHeight(-17.5, -1, game.map)).toBeGreaterThan(1.3);
+  expect(groundHeight(-17.5, -1, game.map)).toBeLessThan(2);
   expect(
     game.collision.ray(
       { x: -18.5, y: 1.2, z: -1 },

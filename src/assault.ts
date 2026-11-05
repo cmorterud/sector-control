@@ -1,3 +1,4 @@
+import { availableCraterCover, craterDepth } from "./crater-cover";
 import {
   groundHeight,
   dist,
@@ -60,6 +61,7 @@ export function advanceAssaults(g: Game) {
     return false;
   });
   if (g.tick % 30) return;
+  const cover = availableCraterCover(g.map);
   for (const team of ["blue", "red"] as const) {
     const side = team === "blue" ? -1 : 1,
       enemy = team === "blue" ? "red" : "blue";
@@ -90,10 +92,8 @@ export function advanceAssaults(g: Game) {
     )
       continue;
     const centerX = (edge(front, side) + edge(opposing, -side)) / 2;
-    const near = g.map.terrain.craters.filter(
-        (c) => side * (c.x - centerX) > 0,
-      ),
-      far = g.map.terrain.craters.filter((c) => side * (c.x - centerX) < 0);
+    const near = cover.filter((c) => side * (c.x - centerX) > 0),
+      far = cover.filter((c) => side * (c.x - centerX) < 0);
     if (!near.length || !far.length) continue;
     const candidates = front.sections
       .map((section, index) => {
@@ -120,10 +120,16 @@ export function advanceAssaults(g: Game) {
         );
         const first = near
           .slice()
-          .sort((a, b) => dist(launch, a) - dist(launch, b))[0];
+          .sort(
+            (a, b) =>
+              dist(launch, a) - a.depth * 2 - (dist(launch, b) - b.depth * 2),
+          )[0];
         const last = far
           .slice()
-          .sort((a, b) => dist(first, a) - dist(first, b))[0];
+          .sort(
+            (a, b) =>
+              dist(first, a) - a.depth * 2 - (dist(first, b) - b.depth * 2),
+          )[0];
         const target = opposing.sections
           .map((s) => ({ x: s.x + side * 1.6, z: s.stepZ ?? s.z }))
           .sort((a, b) => dist(a, last) - dist(b, last))[0];
@@ -256,6 +262,7 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
   }
   if (g.tick < m.waitUntil[p.id]) {
     c.x = c.z = 0;
+    c.crouch = stage > 0 && craterDepth(g.map, p) > 0.5;
     p.mode = stage ? "Regrouping in crater" : "Covering the assault";
     return c;
   }

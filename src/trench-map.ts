@@ -1,3 +1,4 @@
+import { vegetationFor } from "./vegetation";
 import {
   groundHeight,
   type MapDefinition,
@@ -363,3 +364,5 @@ for (const wall of liningCandidates) {
   }
   addPanel(end);
 }
+
+trenchMap.vegetation = vegetationFor(trenchMap);

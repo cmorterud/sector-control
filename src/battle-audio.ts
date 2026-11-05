@@ -97,12 +97,12 @@ export class BattleAudio {
     if (!this.running) return;
     const important =
       cue.local ||
-      ["crack", "artillery", "grenade", "whistle"].includes(cue.kind);
+      ["crack", "artillery", "grenade", "whistle", "timber"].includes(cue.kind);
     const priority = ["artillery", "grenade"].includes(cue.kind)
       ? 3
       : cue.local || cue.kind === "crack"
         ? 2
-        : cue.kind === "whistle"
+        : ["whistle", "timber"].includes(cue.kind)
           ? 1
           : 0;
     if (this.voices.size >= (important ? 40 : 28)) {
@@ -140,7 +140,9 @@ export class BattleAudio {
             ? 0.065
             : foot
               ? 0.16
-              : 0.65;
+              : cue.kind === "timber"
+                ? 1.2
+                : 0.65;
     const delay =
       cue.local || crack || foot || whistle
         ? 0
@@ -164,7 +166,9 @@ export class BattleAudio {
               ? 1900
               : foot
                 ? 2400
-                : 8500 * (1 - distant * 0.85);
+                : cue.kind === "timber"
+                  ? 1700
+                  : 8500 * (1 - distant * 0.85);
     if (cue.occluded)
       filter.frequency.value = Math.min(
         filter.frequency.value,

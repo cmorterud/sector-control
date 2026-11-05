@@ -1,3 +1,4 @@
+import { foliageBlocks } from "./vegetation";
 import type { Game, V3, Team } from "./simulation";
 
 export interface SmokeCloud extends V3 {
@@ -27,10 +28,11 @@ export function smokeDensity(cloud: SmokeCloud, tick: number): number {
 }
 // Integrate the visible segment through each ellipsoid; the same envelope drives rendering.
 export function smokeBlocks(
-  g: Pick<Game, "smokeClouds" | "tick">,
+  g: Pick<Game, "smokeClouds" | "tick"> & Partial<Pick<Game, "map">>,
   from: V3,
   to: V3,
 ): boolean {
+  if (g.map && foliageBlocks(g.map, from, to)) return true;
   let opacity = 0;
   const length = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
   if (length < 0.001) return false;

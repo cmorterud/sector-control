@@ -95,6 +95,15 @@ export class PlaytestLog {
         .length,
       artilleryEvades: this.events.filter((e) => e.type === "artilleryEvade")
         .length,
+      treesFelled: this.events
+        .flatMap((e) => (e.type === "destruction" ? e.change.objects : []))
+        .filter((o) => o.id.startsWith("tree-") && o.stage === 2).length,
+      brushCleared: this.events
+        .flatMap((e) => (e.type === "destruction" ? e.change.objects : []))
+        .filter((o) => o.id.startsWith("brush-") && o.stage === 2).length,
+      bankCuts: this.events.filter(
+        (e) => e.type === "destruction" && (e.change.wallSamples ?? 0) > 0,
+      ).length,
       destructionEvents: this.events.filter((e) => e.type === "destruction")
         .length,
       craters: this.events.filter(
