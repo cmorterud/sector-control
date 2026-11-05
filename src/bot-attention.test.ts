@@ -16,12 +16,13 @@ function scene() {
   const [target, p] = g.players;
   Object.assign(target, { x: 0, y: 0, z: 0, hp: 1000000, protectedUntil: 0 });
   Object.assign(p, { x: 20, y: 0, z: 0, nextThink: 1e9, protectedUntil: 0 });
+  g.botSettings.awareness = false; // isolate attention timers from the separate perception model.
   return { g, p, target };
 }
 
 describe("bot attention", () => {
   it("uses wider default cones and delays a newly acquired target before firing", () => {
-    expect(defaultBotSettings.aimError).toBe(0.04);
+    expect(defaultBotSettings.aimError).toBe(0.075);
     const trench = new Game(
       { ray: () => 1, move: (p) => p },
       false,
@@ -30,23 +31,23 @@ describe("bot attention", () => {
       undefined,
       { map: trenchMap },
     );
-    expect(trench.botSettings.aimError).toBe(0.026);
+    expect(trench.botSettings.aimError).toBe(0.06);
     const { g, p, target } = scene();
     g.botSettings.burstPeriodTicks = g.botSettings.burstFireTicks = 1;
     g.tick = 1;
     expect(botCommand(g, p).fire).toBe(false);
     expect(p.target).toBe(target.id);
     const acquired = p.spottedAt;
-    for (g.tick = acquired + 1; g.tick < acquired + 18; g.tick++)
+    for (g.tick = acquired + 1; g.tick < acquired + 27; g.tick++)
       expect(botCommand(g, p).fire).toBe(false);
     let first = 0;
-    for (; g.tick <= acquired + 24; g.tick++)
+    for (; g.tick <= acquired + 45; g.tick++)
       if (botCommand(g, p).fire) {
         first = g.tick - acquired;
         break;
       }
-    expect(first).toBeGreaterThanOrEqual(18);
-    expect(first).toBeLessThanOrEqual(24);
+    expect(first).toBeGreaterThanOrEqual(27);
+    expect(first).toBeLessThanOrEqual(45);
   });
 
   it("actually stops firing/tracking during breaks, then searches and pays the full reaction delay again", () => {
@@ -77,7 +78,7 @@ describe("bot attention", () => {
       }
       if (lost && !acquiredAgain && g.tick >= breakUntil && p.target >= 0)
         acquiredAgain = p.spottedAt;
-      if (acquiredAgain && g.tick - acquiredAgain < 18)
+      if (acquiredAgain && g.tick - acquiredAgain < 27)
         expect(p.command.fire).toBe(false);
       if (
         acquiredAgain &&
@@ -89,8 +90,8 @@ describe("bot attention", () => {
     }
     expect(lost).toBe(true);
     expect(acquiredAgain).toBeGreaterThanOrEqual(breakUntil);
-    expect(firedAgain).toBeGreaterThanOrEqual(acquiredAgain + 18);
-    expect(firedAgain).toBeLessThanOrEqual(acquiredAgain + 27);
+    expect(firedAgain).toBeGreaterThanOrEqual(acquiredAgain + 27);
+    expect(firedAgain).toBeLessThanOrEqual(acquiredAgain + 62);
     expect(log.summary().attentionBreaks).toBe(1);
     expect(log.summary().targetAcquisitions).toBe(2);
   });
@@ -124,8 +125,8 @@ describe("bot attention", () => {
       };
       const n = run();
       expect(run()).toBe(n);
-      expect(n).toBeGreaterThanOrEqual(90);
-      expect(n).toBeLessThanOrEqual(180);
+      expect(n).toBeGreaterThanOrEqual(60);
+      expect(n).toBeLessThanOrEqual(120);
       windows.push(n);
     }
     expect(new Set(windows).size).toBeGreaterThan(15);

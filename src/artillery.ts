@@ -13,8 +13,8 @@ import {
 import { artilleryExplosionProfile } from "./destruction";
 
 export const artilleryRules = {
-  initialDelay: 30 * 30,
-  cooldown: 90 * 30,
+  initialDelay: 20 * 30,
+  cooldown: 50 * 30,
   warning: 6 * 30,
   shellCount: 5,
   interval: 30,

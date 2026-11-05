@@ -60,12 +60,12 @@ describe("artillery missions", () => {
     ready(g);
     expect(requestArtillery(g, p, target)).toBe(true);
     const cooldown = g.artillery.readyAt.blue;
-    expect(cooldown).toBe(g.tick + 2700);
+    expect(cooldown).toBe(g.tick + 1500);
     expect(requestArtillery(g, { ...p, id: 1 }, target)).toBe(false);
     g.respawn(p);
     expect(g.artillery.readyAt.blue).toBe(cooldown);
     expect(g.events.filter((e) => e.type === "artilleryCall")).toHaveLength(1);
-    expect(scene().artillery.readyAt.blue).toBe(900);
+    expect(scene().artillery.readyAt.blue).toBe(600);
   });
   it("rejects hidden, blocked, airborne, dead, out-of-range and invalid markers without spending a charge", () => {
     const g = scene(trenchMap),
@@ -92,7 +92,7 @@ describe("artillery missions", () => {
     p.hop = null;
     g.map.boxes.push({ x: 0, z: -1, w: 3, d: 20, h: 10, kind: "building" });
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
-    expect(g.artillery.readyAt.blue).toBe(900);
+    expect(g.artillery.readyAt.blue).toBe(600);
     expect(g.artillery.missions).toHaveLength(0);
   });
   it("warns before damage, sends five moving shells at one-second intervals, and clears the mission", () => {
@@ -289,7 +289,7 @@ describe("artillery damage and bots", () => {
       g.tick = 900 + teammate.id;
       expect(botArtilleryTarget(g, teammate)).toBeNull();
       expect(requestArtillery(g, teammate, enemy)).toBe(false);
-      expect(g.artillery.readyAt[team]).toBe(900);
+      expect(g.artillery.readyAt[team]).toBe(600);
       human.hp = 0;
       expect(requestArtillery(g, teammate, enemy)).toBe(false);
       expect(botArtilleryTarget(g, teammate)).toBeNull();

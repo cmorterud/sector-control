@@ -11,6 +11,7 @@ function scene(bots = false) {
     12345,
     {
       aimError: 0,
+      awareness: false,
       reactionTicks: 0,
       focusMaxTicks: 0,
       burstPeriodTicks: 1,
@@ -34,15 +35,17 @@ describe("rifle recoil", () => {
     const g = scene(),
       p = g.players[0];
     const shots: Shot[] = [];
-    for (let i = 0; i < 27; i++) {
-      g.step({ ...idle(), fire: true });
+    for (let i = 0; i < 54; i++) {
+      g.step({ ...idle(), fire: i % 6 === 0 });
       for (const e of g.events) if (e.type === "fire") shots.push(e);
       expect(p.pitch).toBe(0);
       expect(p.yaw).toBe(0);
     }
     expect(shots).toHaveLength(9);
     expect(shots[0].recoil).toEqual({ pitch: 0, yaw: 0 });
-    expect(shots[1].recoil.pitch).toBeGreaterThan(0.005);
+    expect(shots[1].recoil.pitch).toBeCloseTo(
+      recoilRules.pitchKick * Math.exp((-recoilRules.recovery * 6) / 30),
+    );
     expect(shots.at(-1)!.recoil.pitch).toBeGreaterThan(shots[1].recoil.pitch);
     expect(shots.slice(1).some((e) => Math.abs(e.recoil.yaw) > 0.0001)).toBe(
       true,
@@ -74,7 +77,7 @@ describe("rifle recoil", () => {
     const g = scene(true),
       p = g.players[1],
       shots = [];
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 150; i++) {
       g.step(idle());
       for (const e of g.events)
         if (e.type === "fire" && e.actor === p.id) shots.push(e);
@@ -129,6 +132,7 @@ describe("rifle recoil", () => {
     expect(p.recoilPitch).toBe(0);
     p.reloadAt = 0;
     g.collision.ray = () => 0;
+    g.step(idle());
     g.step({ ...idle(), fire: true });
     expect(g.events.some((e) => e.type === "impact" && e.target === null)).toBe(
       true,

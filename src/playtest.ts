@@ -20,6 +20,7 @@ export class PlaytestLog {
     audio?: {
       played: number;
       dropped: number;
+      stolen?: number;
       peakVoices: number;
       spatial: number;
       occluded: number;

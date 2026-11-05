@@ -36,6 +36,7 @@ let renderer: Renderer,
   accumulator = 0,
   uiTime = 0;
 const keys = new Set<string>();
+let triggerDown = false;
 let fire = false,
   aim = false,
   reload = false,
@@ -69,6 +70,7 @@ function sound(freq: number, length = 0.08, volume = 0.04) {
 function clear() {
   keys.clear();
   fire = false;
+  triggerDown = false;
   aim = false;
   reload = false;
   mantle = false;
@@ -242,7 +244,7 @@ function hud(now: number) {
   el("health").innerHTML =
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   el("ammo").innerHTML =
-    `<small>AR-01 / ASSAULT RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "AUTO · 600 RPM"}</small><small>G · GRENADES ${p.grenades}　 F · SMOKE ${p.smokes}</small>`;
+    `<small>AR-01 / SEMI-AUTO RIFLE</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : "SEMI · CLICK TO FIRE"}</small><small>G · GRENADES ${p.grenades}　 F · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
@@ -319,6 +321,7 @@ function command(): Command {
   c.crouch = keys.has("KeyC");
   c.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
   c.fire = fire && !keys.has("KeyQ");
+  fire = false;
   c.artillery = pendingArtillery;
   pendingArtillery = undefined;
   c.aim = aim;
@@ -359,11 +362,14 @@ window.addEventListener("mousedown", (e) => {
       artilleryNotice = reason;
       artilleryNoticeUntil = performance.now() + 2500;
     }
-  } else if (e.button === 0) fire = true;
+  } else if (e.button === 0) {
+    if (!triggerDown) fire = true;
+    triggerDown = true;
+  }
   if (e.button === 2) aim = true;
 });
 window.addEventListener("mouseup", (e) => {
-  if (e.button === 0) fire = false;
+  if (e.button === 0) triggerDown = false;
   if (e.button === 2) aim = false;
 });
 window.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -464,7 +470,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Fire with left mouse. Press G to throw a grenade: three per spawn, three-second fuse. Hold C to crouch and move slowly behind cover; release it to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 30 seconds, then a shared 90-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Hold C to crouch and move slowly behind cover; release it to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Hold Q to mark artillery, then left-click to confirm; release Q to cancel. Use a firing step when spotting from a trench. First charge at 20 seconds, then a shared 50-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

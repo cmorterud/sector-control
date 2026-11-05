@@ -66,7 +66,11 @@ class Context {
   createDynamicsCompressor = () => this.node();
   createPanner = () => this.node();
   createBufferSource = () => this.node();
-  createOscillator = () => this.node();
+  oscillators = 0;
+  createOscillator = () => {
+    this.oscillators++;
+    return this.node();
+  };
   createMediaStreamDestination = () =>
     Object.assign(this.node(), { stream: { gameAudio: true } });
   createBuffer(_channels: number, length: number) {
@@ -103,11 +107,12 @@ it("bounds simultaneous battlefield voices but reserves room for local fire and 
   expect(a.stats.dropped).toBe(72);
   for (let i = 0; i < 20; i++) a.play({ ...cue, kind: "artillery" });
   expect(a.stats.peakVoices).toBe(40);
-  expect(a.stats.byKind.artillery).toBe(12);
+  expect(a.stats.byKind.artillery).toBe(20);
+  expect(a.stats.stolen).toBe(8);
   a.pause();
   a.resume();
   a.play({ ...cue, local: true });
-  expect(a.stats.played).toBe(41);
+  expect(a.stats.played).toBe(49);
 });
 it("disconnects all voices on pause and restart, cancels delayed sounds, and ignores paused play requests", () => {
   const { a, c } = setup();
@@ -157,4 +162,17 @@ it("shares the limited game mix with capture and cleans up completed voice nodes
   source.onended!();
   expect(nodes.every((n) => n.disconnected)).toBe(true);
   a.pause(); // already ended voices must also tolerate lifecycle cleanup.
+});
+
+it("uses unpitched explosion layers and guarantees a blast voice when rifle chatter saturates the mix", () => {
+  const { a, c } = setup();
+  a.play({ ...cue, kind: "artillery" });
+  expect(c.oscillators).toBe(0);
+  a.reset();
+  for (let i = 0; i < 40; i++) a.play({ ...cue, local: true });
+  expect(a.stats.peakVoices).toBe(40);
+  a.play({ ...cue, kind: "grenade" });
+  expect(a.stats.byKind.grenade).toBe(1);
+  expect(a.stats.stolen).toBe(1);
+  expect(a.stats.peakVoices).toBe(40);
 });

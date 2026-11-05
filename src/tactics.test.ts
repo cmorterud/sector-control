@@ -146,6 +146,9 @@ describe("concealing smoke", () => {
     const g = scene(),
       p = g.players[0];
     g.botSettings.burstPeriodTicks = g.botSettings.burstFireTicks = 1;
+    g.botSettings.awareness = false;
+    g.botSettings.reactionTicks = 18;
+    g.botSettings.reactionJitterTicks = 6;
     enemy(g);
     g.tick = 12;
     expect(botCommand(g, p).fire).toBe(false);
@@ -183,7 +186,7 @@ describe("concealing smoke", () => {
     g.tick = 900;
     g.smokeClouds = [cloud(g)];
     expect(requestArtillery(g, g.players[0], { x: 25, z: 0 })).toBe(false);
-    expect(g.artillery.readyAt.blue).toBe(900);
+    expect(g.artillery.readyAt.blue).toBe(600);
   });
   it("clears canisters/clouds at match end and restores fresh inventory/state in a new game", () => {
     const g = scene();

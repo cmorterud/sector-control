@@ -281,6 +281,7 @@ describe("combat and lifecycle", () => {
     enemy.vx = 4.5;
     p.target = enemy.id;
     p.nextThink = 100;
+    g.botSettings.awareness = false;
     g.tick = 1;
     const c = botCommand(g, p);
     expect(c.yaw).toBeGreaterThan(0.1);
@@ -293,6 +294,7 @@ describe("combat and lifecycle", () => {
     p.nextThink = 100;
     g.tick = 1;
     g.botSettings.aimError = 0;
+    g.botSettings.awareness = false;
     const command = botCommand(g, p);
     p.command = command;
     p.yaw = command.yaw;
@@ -301,10 +303,13 @@ describe("combat and lifecycle", () => {
     advance(g, 25);
     expect(enemy.hp).toBe(75);
   });
-  it("fires at 600 rpm and stops at an empty magazine", () => {
+  it("requires a fresh press per round, caps semi-auto at 300 rpm, and stops at empty", () => {
     const g = new Game(empty, false);
     const c = { ...idle(), fire: true };
     for (let i = 0; i < 90; i++) g.step(c);
+    expect(g.players[0].ammo).toBe(29);
+    g.step(idle());
+    for (let i = 0; i < 180; i++) g.step({ ...idle(), fire: i % 6 === 0 });
     expect(g.players[0].ammo).toBe(0);
     g.step(c);
     expect(g.players[0].ammo).toBe(0);
@@ -430,4 +435,36 @@ describe("navigation and headless portability", () => {
       expect(p.reserve).toBeGreaterThanOrEqual(0);
     }
   }, 30000);
+});
+
+it("requires releasing a press made during cooldown or reload instead of firing it later", () => {
+  const g = new Game(empty, false),
+    p = g.players[0];
+  g.step({ ...idle(), fire: true });
+  g.step(idle());
+  g.step({ ...idle(), fire: true });
+  for (let i = 0; i < 12; i++) g.step({ ...idle(), fire: true });
+  expect(p.ammo).toBe(29);
+  g.step(idle());
+  g.step({ ...idle(), fire: true });
+  expect(p.ammo).toBe(28);
+  g.step(idle());
+  g.step({ ...idle(), reload: true, fire: true });
+  for (let i = 0; i < 65; i++) g.step({ ...idle(), fire: true });
+  expect(p.ammo).toBe(30);
+  g.step(idle());
+  g.step({ ...idle(), fire: true });
+  expect(p.ammo).toBe(29);
+});
+it("does not fire a held trigger automatically after respawning", () => {
+  const g = new Game(empty, false),
+    p = g.players[0];
+  p.hp = 0;
+  p.respawnAt = 3;
+  for (let i = 0; i < 6; i++) g.step({ ...idle(), fire: true });
+  expect(p.hp).toBe(100);
+  expect(p.ammo).toBe(30);
+  g.step(idle());
+  g.step({ ...idle(), fire: true });
+  expect(p.ammo).toBe(29);
 });

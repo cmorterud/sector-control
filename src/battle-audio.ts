@@ -9,9 +9,10 @@ export class BattleAudio {
   private worldGain: GainNode;
   private master: GainNode;
   private noise: AudioBuffer;
-  private voices = new Set<() => void>();
+  private voices = new Map<() => void, number>();
   private running = false;
   stats = {
+    stolen: 0,
     played: 0,
     dropped: 0,
     peakVoices: 0,
@@ -54,12 +55,13 @@ export class BattleAudio {
   }
   pause() {
     this.running = false;
-    for (const stop of [...this.voices]) stop();
+    for (const stop of [...this.voices.keys()]) stop();
     void this.context.suspend();
   }
   reset() {
-    for (const stop of [...this.voices]) stop();
+    for (const stop of [...this.voices.keys()]) stop();
     this.stats = {
+      stolen: 0,
       played: 0,
       dropped: 0,
       peakVoices: 0,
@@ -96,9 +98,24 @@ export class BattleAudio {
     const important =
       cue.local ||
       ["crack", "artillery", "grenade", "whistle"].includes(cue.kind);
+    const priority = ["artillery", "grenade"].includes(cue.kind)
+      ? 3
+      : cue.local || cue.kind === "crack"
+        ? 2
+        : cue.kind === "whistle"
+          ? 1
+          : 0;
     if (this.voices.size >= (important ? 40 : 28)) {
-      this.stats.dropped++;
-      return;
+      const victim = [...this.voices.entries()].find(
+        ([, rank]) => rank < priority,
+      );
+      if (victim && priority === 3) {
+        victim[0]();
+        this.stats.stolen++;
+      } else {
+        this.stats.dropped++;
+        return;
+      }
     }
     this.stats.played++;
     this.stats.byKind[cue.kind] = (this.stats.byKind[cue.kind] ?? 0) + 1;
@@ -113,8 +130,8 @@ export class BattleAudio {
     const distant = Math.min(1, cue.distance / 100);
     const length = explosion
       ? cue.kind === "artillery"
-        ? 1.8
-        : 1.15
+        ? 2.4
+        : 1.6
       : whistle
         ? 0.95
         : rifle
@@ -138,7 +155,9 @@ export class BattleAudio {
       : crack
         ? 2800
         : explosion
-          ? 900
+          ? cue.kind === "artillery"
+            ? 12000
+            : 8500
           : cue.kind === "mud"
             ? 550
             : cue.kind === "wood"
@@ -147,15 +166,30 @@ export class BattleAudio {
                 ? 2400
                 : 8500 * (1 - distant * 0.85);
     if (cue.occluded)
-      filter.frequency.value = Math.min(filter.frequency.value, 1100);
+      filter.frequency.value = Math.min(
+        filter.frequency.value,
+        explosion ? 2200 : 1100,
+      );
+    if (explosion)
+      filter.frequency.exponentialRampToValueAtTime(380, start + 0.22);
     if (whistle) filter.frequency.exponentialRampToValueAtTime(420, end);
     const envelope = c.createGain();
     envelope.gain.setValueAtTime(0.0001, start);
     const volume = cue.volume * (cue.occluded ? 0.48 : 1);
     envelope.gain.exponentialRampToValueAtTime(
       Math.max(0.0002, volume),
-      start + (whistle ? 0.1 : 0.004),
+      start + (whistle ? 0.1 : explosion ? 0.001 : 0.004),
     );
+    if (explosion) {
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.35),
+        start + 0.075,
+      );
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.1),
+        start + 0.45,
+      );
+    }
     if (rifle) {
       envelope.gain.exponentialRampToValueAtTime(
         Math.max(0.0001, volume * 0.025),
@@ -169,6 +203,7 @@ export class BattleAudio {
     envelope.gain.exponentialRampToValueAtTime(0.0001, end);
     filter.connect(envelope);
     const nodes: AudioNode[] = [filter, envelope];
+    let output: AudioNode = this.world;
     if (!cue.local) {
       const pan = c.createPanner();
       pan.panningModel = "equalpower";
@@ -181,6 +216,7 @@ export class BattleAudio {
       pan.positionZ.value = cue.at.z;
       envelope.connect(pan).connect(this.world);
       nodes.push(pan);
+      output = pan;
     } else envelope.connect(this.world);
     const noise = c.createBufferSource();
     noise.buffer = this.noise;
@@ -190,7 +226,27 @@ export class BattleAudio {
     noise.start(start, Math.abs(Math.sin(cue.seed)) * 0.15);
     noise.stop(end);
     const sources: AudioScheduledSourceNode[] = [noise];
-    if (explosion || rifle || cue.kind === "wood" || whistle) {
+    if (explosion) {
+      // Broadband concussion and a separate unpitched low rumble; no tonal "ping".
+      const rumble = c.createBufferSource(),
+        low = c.createBiquadFilter(),
+        gain = c.createGain();
+      rumble.buffer = this.noise;
+      rumble.loop = true;
+      rumble.playbackRate.value = 0.7;
+      low.type = "lowpass";
+      low.frequency.value = 180;
+      low.Q.value = 0.6;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.85, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      rumble.connect(low).connect(gain).connect(output);
+      rumble.start(start, 0.2);
+      rumble.stop(end);
+      sources.push(rumble);
+      nodes.push(rumble, low, gain);
+    }
+    if (rifle || cue.kind === "wood" || whistle) {
       const body = c.createOscillator(),
         gain = c.createGain();
       body.type = whistle ? "sine" : "triangle";
@@ -226,7 +282,7 @@ export class BattleAudio {
       this.voices.delete(stop);
     };
     noise.onended = stop;
-    this.voices.add(stop);
+    this.voices.set(stop, priority);
     this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
   }
   tone(freq: number, length = 0.08, volume = 0.04) {
@@ -252,7 +308,7 @@ export class BattleAudio {
       this.voices.delete(stop);
     };
     o.onended = stop;
-    this.voices.add(stop);
+    this.voices.set(stop, 2);
     this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
     o.start();
     o.stop(end);

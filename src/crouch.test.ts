@@ -204,6 +204,7 @@ describe("crouching combat profile", () => {
     Object.assign(p, { x: -19, y: 0.85, z: -1 });
     Object.assign(red, { y: 0.85, z: -1 });
     g.botSettings.engagementRange = 59;
+    g.botSettings.awareness = false;
     g.tick = 1;
     botCommand(g, red);
     expect(red.target).toBe(0);
@@ -213,7 +214,7 @@ describe("crouching combat profile", () => {
     expect(red.target).toBe(-1);
     g.tick = 900;
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
-    expect(g.artillery.readyAt.blue).toBe(900);
+    expect(g.artillery.readyAt.blue).toBe(600);
     p.crouched = false;
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(true);
   });
@@ -228,6 +229,7 @@ describe("crouching combat profile", () => {
     expect(g.events.some((e) => e.type === "impact" && e.target === null)).toBe(
       true,
     );
+    g.step(idle());
     p.nextShot = 0;
     g.step({ ...idle(), fire: true, yaw: Math.PI / 2 });
     expect(g.projectiles).toHaveLength(1);

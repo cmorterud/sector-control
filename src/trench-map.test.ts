@@ -273,6 +273,7 @@ describe("trench prototype", () => {
         { x: enemy.x, y: enemy.y + 1.25, z: enemy.z },
       ),
     ).toBe(1);
+    p.awareness.nextLook = game.tick;
     botCommand(game, p);
     expect(p.target).toBe(enemy.id);
   });

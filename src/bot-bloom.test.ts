@@ -42,11 +42,9 @@ function duel(aimError = 0.02) {
 
 it("builds bloom on actual burst shots, recovers between bursts, and clears it on respawn", () => {
   const { game, shooter } = duel();
-  game.step(idle());
-  expect(shooter.ammo).toBe(29);
-  expect(shooter.aimBloom).toBe(0.25);
-  for (let i = 0; i < 12; i++) game.step(idle());
-  expect(shooter.ammo).toBe(25);
+  // Direct rounds isolate the bloom accumulation contract from bot recognition/cadence.
+  for (let i = 0; i < 4; i++) game.fire(shooter);
+  expect(shooter.ammo).toBe(26);
   expect(shooter.aimBloom).toBe(1);
   game.botSettings.burstFireTicks = 0;
   for (let i = 0; i < 9; i++) game.step(idle());

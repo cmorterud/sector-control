@@ -1,4 +1,14 @@
 import {
+  freshAwareness,
+  awarenessSample,
+  canNotice,
+  observeTarget,
+  turnToward,
+  angleDelta,
+  semiAutoIntent,
+  type Awareness,
+} from "./awareness";
+import {
   stanceDrop,
   eyeHeightOf,
   cameraHeightOf,
@@ -256,6 +266,9 @@ export interface Soldier extends Vec {
   vz: number;
   reloadAt: number;
   nextShot: number;
+  triggerHeld: boolean;
+  triggerPressed: boolean;
+  awareness: Awareness;
   aimBloom: number;
   recoilPitch: number;
   recoilYaw: number;
@@ -284,6 +297,7 @@ export interface Sector extends Vec {
   contested: boolean;
 }
 export interface BotSettings {
+  awareness: boolean;
   reactionTicks: number;
   reactionJitterTicks: number;
   aimError: number;
@@ -296,16 +310,17 @@ export interface BotSettings {
   distractionMaxTicks: number;
 }
 export const defaultBotSettings: BotSettings = {
-  reactionTicks: 18,
-  reactionJitterTicks: 6,
-  aimError: 0.04,
+  awareness: true,
+  reactionTicks: 27,
+  reactionJitterTicks: 18,
+  aimError: 0.075,
   engagementRange: 40,
   burstPeriodTicks: 24,
   burstFireTicks: 15,
-  focusMinTicks: 90,
-  focusMaxTicks: 180,
-  distractionMinTicks: 18,
-  distractionMaxTicks: 36,
+  focusMinTicks: 60,
+  focusMaxTicks: 120,
+  distractionMinTicks: 24,
+  distractionMaxTicks: 54,
 };
 export type Event = { id: number; tick: number } & (
   | {
@@ -617,7 +632,7 @@ export class Game {
     this.botSettings = {
       ...defaultBotSettings,
       ...(this.map.terrain?.firingPositions
-        ? { engagementRange: 59, aimError: 0.026 }
+        ? { engagementRange: 59, aimError: 0.06 }
         : {}),
       ...botSettings,
     };
@@ -666,6 +681,9 @@ export class Game {
         vz: 0,
         reloadAt: 0,
         nextShot: 0,
+        triggerHeld: false,
+        triggerPressed: false,
+        awareness: freshAwareness(),
         aimBloom: 0,
         recoilPitch: 0,
         recoilYaw: 0,
@@ -766,6 +784,8 @@ export class Game {
     p.vx = 0;
     p.vz = 0;
     p.nextShot = this.tick;
+    p.triggerHeld = p.triggerPressed = false;
+    p.awareness = freshAwareness();
     p.aimBloom = 0;
     p.recoilPitch = p.recoilYaw = p.recoilShots = 0;
     p.lastShotAt = -1000;
@@ -793,8 +813,15 @@ export class Game {
     advanceAssaults(this);
     for (const p of this.players) {
       if (p.hp <= 0) {
-        if (this.tick >= p.respawnAt) this.respawn(p);
-        else continue;
+        if (this.tick >= p.respawnAt) {
+          const held = p.triggerHeld;
+          this.respawn(p);
+          if (p.id === 0) p.triggerHeld = held;
+        } else {
+          p.triggerHeld = p.id === 0 && human.fire;
+          p.triggerPressed = false;
+          continue;
+        }
       }
       p.suppression = Math.max(
         0,
@@ -802,6 +829,8 @@ export class Game {
       );
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
+      p.triggerPressed = c.fire && !p.triggerHeld;
+      p.triggerHeld = c.fire;
       recoverRecoil(p);
       updateCrouch(this, p, c);
       if (c.artillery) requestArtillery(this, p, c.artillery);
@@ -889,7 +918,7 @@ export class Game {
         p.hp > 0 &&
         !p.mantle &&
         this.tick >= p.throwUntil &&
-        p.command.fire &&
+        p.triggerPressed &&
         !p.reloadAt &&
         p.ammo > 0 &&
         this.tick >= p.nextShot
@@ -1069,7 +1098,7 @@ export class Game {
   fire(p: Soldier) {
     const { yaw, pitch } = weaponAim(p);
     p.ammo--;
-    p.nextShot = this.tick + 3;
+    p.nextShot = this.tick + 6;
     // Bloom feeds bot aim drift; the shared recoil below applies to every rifle.
     p.aimBloom = Math.min(1, p.aimBloom + 0.25);
     p.protectedUntil = 0;
@@ -1705,11 +1734,7 @@ export function botAimOffset(p: Soldier, tick: number, baseSpread: number) {
 }
 // Per-soldier variation keeps attention breaks/reactions staggered without
 // consuming the gameplay RNG or changing projectile randomness.
-function botAttentionSample(p: Soldier, tick: number, salt: number) {
-  let n = Math.imul(p.id + 1, 374761393) ^ Math.imul(tick + salt, 668265263);
-  n = Math.imul(n ^ (n >>> 13), 1274126177);
-  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
-}
+const botAttentionSample = awarenessSample;
 function beginBotFocus(g: Game, p: Soldier) {
   const min = Math.max(1, g.botSettings.focusMinTicks),
     max = Math.max(min, g.botSettings.focusMaxTicks);
@@ -1736,6 +1761,11 @@ function changeBotTarget(g: Game, p: Soldier, target: number) {
       phase: "lost",
       until: g.tick,
     });
+  if (target >= 0) {
+    const nextLook = p.awareness.nextLook;
+    p.awareness = freshAwareness();
+    p.awareness.nextLook = nextLook;
+  } else p.awareness.visible = false;
   p.target = target;
   p.spottedAt = g.tick;
   p.focusUntil = 0;
@@ -1750,6 +1780,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   c.artillery = botArtilleryTarget(g, p) ?? undefined;
   c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
   c.yaw = p.yaw;
+  c.pitch = p.pitch;
   const station = firingPosition(g, p);
   if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;
@@ -1795,11 +1826,20 @@ export function botCommand(g: Game, p: Soldier): Command {
     p.target = -1;
     p.spottedAt = g.tick;
     p.focusUntil = 0;
+    p.awareness.confidence = 0;
+    p.awareness.visible = false;
   }
-  if (g.tick >= p.distractedUntil && g.tick % 3 === p.id % 3) {
+  if (
+    g.tick >= p.distractedUntil &&
+    (g.botSettings.awareness
+      ? g.tick >= p.awareness.nextLook
+      : g.tick % 3 === p.id % 3)
+  ) {
+    p.awareness.nextLook = g.tick + 5 + (p.id % 5);
     const visible = (q: Soldier) =>
       q.team !== p.team &&
       q.hp > 0 &&
+      canNotice(g, p, q) &&
       dist(q, p) < range &&
       !smokeBlocks(
         g,
@@ -1821,6 +1861,8 @@ export function botCommand(g: Game, p: Soldier): Command {
             .find(visible);
     if ((target?.id ?? -1) !== p.target)
       changeBotTarget(g, p, target?.id ?? -1);
+    if (target)
+      observeTarget(g, p, target, target.y + exposedAimHeight(g.map, target));
   }
   let target = g.players.find((q) => q.id === p.target && q.hp > 0);
   if (target && p.focusUntil === 0 && g.botSettings.focusMaxTicks > 0)
@@ -1836,7 +1878,8 @@ export function botCommand(g: Game, p: Soldier): Command {
         z: target.z,
       },
     ) ||
-      (target.crouched &&
+      ((target.crouched ||
+        (g.tick >= p.awareness.nextTrigger && g.tick >= p.nextShot)) &&
         g.collision.ray(
           { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },
           {
@@ -1849,6 +1892,11 @@ export function botCommand(g: Game, p: Soldier): Command {
     changeBotTarget(g, p, -1);
     target = undefined;
   }
+  p.awareness.confidence = clamp(
+    p.awareness.confidence + (target && p.awareness.visible ? 1 / 30 : -1 / 20),
+    0,
+    1,
+  );
   const objective = station ?? g.sectors[p.objective];
   while (
     p.path.length &&
@@ -1879,30 +1927,47 @@ export function botCommand(g: Game, p: Soldier): Command {
     const error = botAimOffset(
       p,
       g.tick,
-      g.botSettings.aimError * (1 + p.suppression * 1.5),
+      g.botSettings.aimError *
+        (1 +
+          p.suppression * 1.5 +
+          (g.botSettings.awareness
+            ? (1 - p.awareness.confidence) * 0.8 + Math.hypot(p.vx, p.vz) * 0.08
+            : 0)),
     );
-    // Lead a visible moving target by the projectile's intercept time.
-    const rx = target.x - p.x,
-      rz = target.z - p.z;
-    const a = target.vx ** 2 + target.vz ** 2 - projectileSpeed ** 2;
-    const b = 2 * (rx * target.vx + rz * target.vz);
+    const seen =
+      g.botSettings.awareness && p.awareness.observed
+        ? p.awareness.observed
+        : {
+            x: target.x,
+            y: target.y + exposedAimHeight(g.map, target),
+            z: target.z,
+          };
+    const velocity = g.botSettings.awareness
+      ? p.awareness.velocity
+      : { x: target.vx, z: target.vz };
+    // Aim from delayed observations and estimated movement, not live target velocity.
+    const rx = seen.x - p.x,
+      rz = seen.z - p.z;
+    const a = velocity.x ** 2 + velocity.z ** 2 - projectileSpeed ** 2;
+    const b = 2 * (rx * velocity.x + rz * velocity.z);
     const lead = clamp(
       (-b - Math.sqrt(Math.max(0, b * b - 4 * a * d * d))) / (2 * a),
       0,
       projectileRange / projectileSpeed,
     );
-    const aimX = rx + target.vx * lead,
-      aimZ = rz + target.vz * lead;
+    const estimate = g.botSettings.awareness
+      ? Math.min(0.7, lead) *
+        (0.35 + awarenessSample(p, p.spottedAt, 337) * 0.35)
+      : lead;
+    const aimX = rx + velocity.x * estimate,
+      aimZ = rz + velocity.z * estimate;
     const aimDistance = Math.hypot(aimX, aimZ);
     const aimYaw = Math.atan2(aimX, -aimZ);
     let eyeHeight = p.y + eyeHeightOf(p),
       shoulderOffset = 0;
     if (p.id === 0) {
       // The optional player driver aims through the same shoulder camera as a human.
-      const pitch = Math.atan2(
-        target.y + exposedAimHeight(g.map, target) - (p.y + cameraHeightOf(p)),
-        aimDistance,
-      );
+      const pitch = Math.atan2(seen.y - (p.y + cameraHeightOf(p)), aimDistance);
       const f =
         g.collision.ray(
           { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
@@ -1925,11 +1990,11 @@ export function botCommand(g: Game, p: Soldier): Command {
       aimYaw -
       Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
       error.yaw;
-    c.pitch =
-      Math.atan2(
-        target.y + exposedAimHeight(g.map, target) - eyeHeight,
-        aimDistance,
-      ) + error.pitch;
+    c.pitch = Math.atan2(seen.y - eyeHeight, aimDistance) + error.pitch;
+    if (g.botSettings.awareness) {
+      c.yaw = turnToward(p.yaw, c.yaw, 0.075);
+      c.pitch = p.pitch + clamp(c.pitch - p.pitch, -0.035, 0.035);
+    }
     c.aim = true;
     c.sprint = false;
     c.fire =
@@ -1940,7 +2005,21 @@ export function botCommand(g: Game, p: Soldier): Command {
               ? g.botSettings.reactionJitterTicks + 1
               : 0) * botAttentionSample(p, p.spottedAt, 89),
           ) &&
-      g.tick % g.botSettings.burstPeriodTicks < g.botSettings.burstFireTicks;
+      (g.botSettings.awareness
+        ? g.botSettings.burstFireTicks > 0
+        : g.tick % g.botSettings.burstPeriodTicks <
+          g.botSettings.burstFireTicks) &&
+      (!g.botSettings.awareness ||
+        (p.awareness.confidence >= 0.75 &&
+          Math.abs(angleDelta(c.yaw, aimYaw)) < 0.12));
+    if (c.fire) {
+      c.fire = semiAutoIntent(g, p);
+      if (c.fire && g.botSettings.awareness) {
+        const scatter = g.botSettings.aimError * 0.65 * (1 + p.suppression);
+        c.yaw += (awarenessSample(p, g.tick, 401) * 2 - 1) * scatter;
+        c.pitch += (awarenessSample(p, g.tick, 409) * 2 - 1) * scatter;
+      }
+    }
     c.x *= 0.2;
     c.z *= 0.2;
     if (!station && g.tick % 90 < 30) {
@@ -1949,6 +2028,21 @@ export function botCommand(g: Game, p: Soldier): Command {
       p.mode = "Reposition";
     }
   } else if (Math.hypot(c.x, c.z) > 0.1) c.yaw = Math.atan2(c.x, -c.z);
+  if (
+    !target &&
+    g.botSettings.awareness &&
+    p.awareness.observed &&
+    g.tick - p.awareness.seenAt < 60
+  ) {
+    const seen = p.awareness.observed;
+    c.yaw = turnToward(
+      p.yaw,
+      Math.atan2(seen.x - p.x, p.z - seen.z) +
+        Math.sin((g.tick + p.id) * 0.08) * 0.25,
+      0.04,
+    );
+    p.mode = "Searching";
+  }
   if (g.tick < p.distractedUntil) p.mode = "Scanning";
   if (
     g.map.terrain &&

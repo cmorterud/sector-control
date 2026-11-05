@@ -17,6 +17,7 @@ function scene(range = 0) {
     12345,
     {
       ...defaultBotSettings,
+      awareness: false,
       engagementRange: range,
       reactionTicks: 0,
       aimError: 0,

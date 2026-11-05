@@ -1,3 +1,4 @@
+import { blastPlume } from "./blast-plume";
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse } from "./recoil";
@@ -1393,7 +1394,7 @@ export class Renderer implements CollisionWorld {
     const materials = [
       material("#ffc46a", true),
       material("#c9ad79", true),
-      material("#68675f"),
+      material("#756957"),
     ];
     const particle = (
       name: string,
@@ -1433,7 +1434,7 @@ export class Renderer implements CollisionWorld {
     this.blasts = this.blasts.filter((blast) => {
       blast.age += dt;
       const t = blast.age;
-      const life = 4 * blast.power;
+      const life = 5 * blast.power;
       if (t >= life) {
         blast.root.destroy();
         for (const material of blast.materials) material.destroy();
@@ -1450,16 +1451,9 @@ export class Renderer implements CollisionWorld {
       blast.materials[1].opacity = Math.max(0, 0.2 * (1 - t / 0.6));
       blast.materials[2].opacity = Math.min(0.6, t * 4) * (1 - t / life);
       for (let i = 0; i < blast.smoke.length; i++) {
-        const angle = (i / blast.smoke.length) * Math.PI * 2;
-        const spread = (0.25 + t * (0.55 + (i % 3) * 0.15)) * blast.power;
-        blast.smoke[i].setLocalPosition(
-          Math.sin(angle) * spread,
-          t * (0.5 + (i % 3) * 0.22),
-          Math.cos(angle) * spread,
-        );
-        const scale =
-          (0.3 + Math.sqrt(t) * (1.2 + (i % 3) * 0.25)) * blast.power;
-        blast.smoke[i].setLocalScale(scale, scale * 0.85, scale);
+        const plume = blastPlume(t, i, blast.power);
+        blast.smoke[i].setLocalPosition(plume.x, plume.y, plume.z);
+        blast.smoke[i].setLocalScale(plume.size, plume.height, plume.size);
       }
       for (const material of blast.materials) material.update();
       return true;

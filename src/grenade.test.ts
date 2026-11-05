@@ -270,3 +270,52 @@ describe("grenades", () => {
     expect(new Game(new TestCollision(), false).grenades).toHaveLength(0);
   });
 });
+
+it("detonates a real thrown grenade inside either enemy trench and records damage even after its thrower dies", () => {
+  for (const side of [-1, 1]) {
+    const world = new TestCollision(trenchMap);
+    const g = new Game(
+      { ray: (a, b) => world.ray(a, b), move: (p) => ({ x: p.x, z: p.z }) },
+      false,
+      600,
+      12345,
+      { engagementRange: 0 },
+      { map: trenchMap },
+    );
+    const p = g.players[0];
+    Object.assign(p, {
+      x: side * 18,
+      z: -1,
+      y: 0.85,
+      team: side < 0 ? "blue" : "red",
+      protectedUntil: 0,
+    });
+    const q = {
+      ...structuredClone(p),
+      id: 1,
+      team: (side < 0 ? "red" : "blue") as "blue" | "red",
+      x: -side * 23,
+      y: 0,
+      nextThink: 1e9,
+    };
+    g.players.push(q);
+    g.step({ ...idle(), yaw: (-side * Math.PI) / 2, grenade: true });
+    const thrown = { ...g.grenades[0] };
+    expect(thrown).toBeDefined();
+    p.hp = 0;
+    p.respawnAt = 1000;
+    const events: Event[] = [];
+    for (let i = 0; i < 90; i++) {
+      g.step(idle());
+      events.push(...g.events);
+    }
+    const burst = events.find((e) => e.type === "grenadeExplosion");
+    expect(burst?.tick).toBe(thrown.explodeAt);
+    expect(
+      burst?.type === "grenadeExplosion" &&
+        burst.hits.some((h) => h.target === q.id),
+    ).toBe(true);
+    expect(q.hp).toBeLessThan(100);
+    expect(g.grenades).toHaveLength(0);
+  }
+});
