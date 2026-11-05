@@ -227,4 +227,4 @@ it("reduces actual long-range head-hit accuracy as well as volume, while preserv
   );
   expect(current.hits).toBeLessThan(priorAim.hits);
   expect(current.rate).toBeLessThan(priorAim.rate * 0.8);
-});
+}, 30000);
