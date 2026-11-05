@@ -14,6 +14,10 @@ import {
   type Event,
   type Soldier,
 } from "./simulation";
+import { BattleAudio } from "./battle-audio";
+import { BattlefieldFeedback } from "./battlefield";
+import { weaponAim } from "./recoil";
+import { eyeHeightOf } from "./crouch";
 import { PlaytestRecorder } from "./playtest";
 import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
 import { trenchMap } from "./trench-map";
@@ -41,7 +45,10 @@ let fire = false,
 let pendingArtillery: Command["artillery"];
 let artilleryNotice = "",
   artilleryNoticeUntil = 0;
-let audio: AudioContext | undefined;
+let audio: BattleAudio | undefined;
+const battlefield = new BattlefieldFeedback((cue) => audio?.play(cue));
+let audioVolume = 0.65;
+let cameraReactions = true;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
 const params = new URLSearchParams(location.search),
@@ -57,21 +64,7 @@ document.querySelector(".controls")!.textContent +=
   "　 G GRENADE　 F SMOKE　 C CROUCH　 SPACE HOP / MANTLE　 HOLD Q ARTILLERY";
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function sound(freq: number, length = 0.08, volume = 0.04) {
-  if (!audio) return;
-  const o = audio.createOscillator(),
-    v = audio.createGain();
-  o.type = "triangle";
-  o.frequency.setValueAtTime(freq, audio.currentTime);
-  o.frequency.exponentialRampToValueAtTime(
-    Math.max(30, freq / 3),
-    audio.currentTime + length,
-  );
-  v.gain.setValueAtTime(volume, audio.currentTime);
-  v.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + length);
-  o.connect(v);
-  v.connect(audio.destination);
-  o.start();
-  o.stop(audio.currentTime + length);
+  audio?.tone(freq, length, volume);
 }
 function clear() {
   keys.clear();
@@ -93,12 +86,19 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
   el("primary").onclick = action;
+  el("volume").oninput = (e) => {
+    audioVolume = Number((e.target as HTMLInputElement).value) / 100;
+    audio?.volume(audioVolume);
+  };
+  el("camera-reactions").onchange = (e) =>
+    (cameraReactions = (e.target as HTMLInputElement).checked);
 }
 function resume() {
-  audio ??= new AudioContext();
-  void audio.resume();
+  audio ??= new BattleAudio();
+  audio.volume(audioVolume);
+  audio.resume();
   if (demo) {
     paused = false;
     last = performance.now();
@@ -123,11 +123,16 @@ function start() {
     { map, teamSize, humanPlayerIds: autoplay ? [] : [0] },
   );
   renderer.reset(game);
+  battlefield.reset(game);
+  audio ??= new BattleAudio();
+  audio.reset();
+  audio.volume(audioVolume);
   if (params.has("playtest"))
     recording = new PlaytestRecorder(
       renderer.canvas,
       Math.max(5, Math.min(120, Number(params.get("clip") ?? 60) || 60)),
       params.get("video") !== "0",
+      audio.capture.stream,
     );
   yaw = game.players[0].yaw;
   pitch = 0;
@@ -141,6 +146,7 @@ function start() {
 }
 function pause() {
   paused = true;
+  audio?.pause();
   clear();
   accumulator = 0;
   if (started && game.phase === "playing")
@@ -156,7 +162,7 @@ function pause() {
 }
 function handle(e: Event) {
   renderer.effect(e);
-  if (e.type === "nearMiss" && e.actor === 0) sound(1250, 0.035, 0.055);
+  battlefield.event(game, e);
   if (e.type === "smokeThrow" && e.actor === 0) sound(300, 0.12, 0.035);
   if (e.type === "smokeBloom" && dist(game.players[0], e.at) < 45)
     sound(200, 0.9, 0.025);
@@ -165,10 +171,7 @@ function handle(e: Event) {
     artilleryNoticeUntil = performance.now() + 3500;
     sound(620, 0.3, 0.07);
   }
-  if (e.type === "artilleryLaunch") sound(900, 0.9, 0.035);
   if (e.type === "artilleryImpact") {
-    const distance = dist(game.players[0], e.at);
-    if (distance < 95) sound(55, 1, 0.35 * (1 - distance / 95));
     if (e.actor === 0 && e.hits.some((hit) => hit.target !== 0))
       hitUntil = performance.now() + 200;
   }
@@ -176,15 +179,8 @@ function handle(e: Event) {
   if (e.type === "grenadeBounce" && dist(game.players[0], e.at) < 25)
     sound(180, 0.04, 0.025);
   if (e.type === "grenadeExplosion") {
-    const distance = dist(game.players[0], e.at);
-    if (distance < 65) sound(85, 0.65, 0.22 * (1 - distance / 65));
     if (e.actor === 0 && e.hits.some((hit) => hit.target !== 0))
       hitUntil = performance.now() + 200;
-  }
-  if (e.type === "fire") {
-    if (e.actor === 0) {
-      sound(110, 0.06, 0.09);
-    } else if (dist(game.players[0], e.from) < 35) sound(90, 0.05, 0.012);
   }
   if (e.type === "impact" && e.hit && e.actor === 0) {
     hitUntil = performance.now() + 150;
@@ -402,6 +398,14 @@ function frame(now: number) {
   last = now;
   if (started) {
     if (!paused) {
+      const p = game.players[0],
+        view = weaponAim(p);
+      audio?.listener(
+        { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
+        view.yaw,
+        view.pitch,
+      );
+      audio?.muffle(battlefield.state(game.tick).muffle);
       accumulator += dt;
       let steps = 0;
       while (accumulator >= 1 / 30 && steps++ < 4) {
@@ -411,8 +415,15 @@ function frame(now: number) {
             ? botCommand(game, game.players[0])
             : command();
         game.step(input);
-        recording?.tick(game, input);
         for (const e of game.events) handle(e);
+        battlefield.step(game);
+        if (recording)
+          recording.log.presentation = {
+            feedback: { ...battlefield.stats },
+            audio: audio ? structuredClone(audio.stats) : undefined,
+            recent: [...battlefield.recent],
+          };
+        recording?.tick(game, input);
         accumulator -= 1 / 30;
         if (paused) break;
       }
@@ -428,6 +439,10 @@ function frame(now: number) {
             ),
           }
         : null;
+    renderer.cameraReaction = battlefield.state(
+      game.tick - 1 + accumulator * 30,
+      cameraReactions && !paused,
+    );
     renderer.draw(game, accumulator * 30, dt, params.has("overview"));
     if (now - uiTime > 50) {
       hud(now);

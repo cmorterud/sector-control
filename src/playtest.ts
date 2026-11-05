@@ -14,7 +14,24 @@ export class CaptureCadence {
 }
 
 export class PlaytestLog {
-  readonly version = 2;
+  readonly version = 3;
+  presentation?: {
+    feedback: Record<string, number>;
+    audio?: {
+      played: number;
+      dropped: number;
+      peakVoices: number;
+      spatial: number;
+      occluded: number;
+      byKind: Record<string, number>;
+    };
+    recent: {
+      tick: number;
+      kind: string;
+      distance: number;
+      occluded: boolean;
+    }[];
+  };
   readonly startedAt = new Date().toISOString();
   commands: { tick: number; command: Command }[] = [];
   events: Event[] = [];
@@ -122,6 +139,7 @@ export class PlaytestRecorder {
     private source: HTMLCanvasElement,
     private limitSeconds = 60,
     recordVideo = true,
+    gameAudio?: MediaStream,
   ) {
     this.canvas.width = 1280;
     this.canvas.height = 720;
@@ -140,11 +158,15 @@ export class PlaytestRecorder {
       if (typeof MediaRecorder === "undefined")
         throw new Error("MediaRecorder unavailable");
       const mimeType = [
+        ...(gameAudio ? ["video/webm;codecs=vp8,opus"] : []),
         "video/webm;codecs=vp8",
         "video/webm",
         "video/mp4",
       ].find((type) => MediaRecorder.isTypeSupported(type));
       this.stream = this.canvas.captureStream(30);
+      // Clone our own game's output track; stopping a clip must not mute gameplay.
+      for (const track of gameAudio?.getAudioTracks() ?? [])
+        this.stream.addTrack(track.clone());
       this.recorder = new MediaRecorder(this.stream, {
         ...(mimeType ? { mimeType } : {}),
         videoBitsPerSecond: 2_500_000,

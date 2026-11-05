@@ -1,0 +1,260 @@
+import type { SoundCue } from "./battlefield";
+import type { V3 } from "./simulation";
+
+// Synthesized game audio only; no files, microphone or network requests.
+export class BattleAudio {
+  readonly context: AudioContext;
+  readonly capture: MediaStreamAudioDestinationNode;
+  private world: BiquadFilterNode;
+  private worldGain: GainNode;
+  private master: GainNode;
+  private noise: AudioBuffer;
+  private voices = new Set<() => void>();
+  private running = false;
+  stats = {
+    played: 0,
+    dropped: 0,
+    peakVoices: 0,
+    spatial: 0,
+    occluded: 0,
+    byKind: {} as Record<string, number>,
+  };
+  constructor() {
+    const c = (this.context = new AudioContext());
+    this.world = c.createBiquadFilter();
+    this.world.type = "lowpass";
+    this.world.frequency.value = 18000;
+    this.worldGain = c.createGain();
+    this.master = c.createGain();
+    this.master.gain.value = 0.65;
+    const limiter = c.createDynamicsCompressor();
+    limiter.threshold.value = -18;
+    limiter.knee.value = 12;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.15;
+    this.world.connect(this.worldGain).connect(this.master).connect(limiter);
+    limiter.connect(c.destination);
+    this.capture = c.createMediaStreamDestination();
+    limiter.connect(this.capture);
+    this.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const data = this.noise.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  volume(value: number) {
+    this.master.gain.setTargetAtTime(
+      Math.max(0, Math.min(1, value)),
+      this.context.currentTime,
+      0.02,
+    );
+  }
+  resume() {
+    this.running = true;
+    void this.context.resume();
+  }
+  pause() {
+    this.running = false;
+    for (const stop of [...this.voices]) stop();
+    void this.context.suspend();
+  }
+  reset() {
+    for (const stop of [...this.voices]) stop();
+    this.stats = {
+      played: 0,
+      dropped: 0,
+      peakVoices: 0,
+      spatial: 0,
+      occluded: 0,
+      byKind: {},
+    };
+    this.muffle(0);
+  }
+  listener(at: V3, yaw: number, pitch: number) {
+    const l = this.context.listener,
+      t = this.context.currentTime;
+    l.positionX.setValueAtTime(at.x, t);
+    l.positionY.setValueAtTime(at.y, t);
+    l.positionZ.setValueAtTime(at.z, t);
+    l.forwardX.setValueAtTime(Math.sin(yaw) * Math.cos(pitch), t);
+    l.forwardY.setValueAtTime(Math.sin(pitch), t);
+    l.forwardZ.setValueAtTime(-Math.cos(yaw) * Math.cos(pitch), t);
+    l.upX.setValueAtTime(-Math.sin(yaw) * Math.sin(pitch), t);
+    l.upY.setValueAtTime(Math.cos(pitch), t);
+    l.upZ.setValueAtTime(Math.cos(yaw) * Math.sin(pitch), t);
+  }
+  muffle(amount: number) {
+    const t = this.context.currentTime;
+    this.world.frequency.setTargetAtTime(
+      18000 * Math.pow(0.065, amount),
+      t,
+      0.035,
+    );
+    this.worldGain.gain.setTargetAtTime(1 - amount * 0.28, t, 0.035);
+  }
+  play(cue: SoundCue) {
+    if (!this.running) return;
+    const important =
+      cue.local ||
+      ["crack", "artillery", "grenade", "whistle"].includes(cue.kind);
+    if (this.voices.size >= (important ? 40 : 28)) {
+      this.stats.dropped++;
+      return;
+    }
+    this.stats.played++;
+    this.stats.byKind[cue.kind] = (this.stats.byKind[cue.kind] ?? 0) + 1;
+    this.stats.spatial += Number(!cue.local);
+    this.stats.occluded += Number(!!cue.occluded);
+    const c = this.context;
+    const explosion = cue.kind === "artillery" || cue.kind === "grenade";
+    const foot = ["mud", "wood", "concrete"].includes(cue.kind);
+    const rifle = cue.kind === "rifle";
+    const whistle = cue.kind === "whistle";
+    const crack = cue.kind === "crack";
+    const distant = Math.min(1, cue.distance / 100);
+    const length = explosion
+      ? cue.kind === "artillery"
+        ? 1.8
+        : 1.15
+      : whistle
+        ? 0.95
+        : rifle
+          ? 0.16 + distant * 0.42
+          : crack
+            ? 0.065
+            : foot
+              ? 0.16
+              : 0.65;
+    const delay =
+      cue.local || crack || foot || whistle
+        ? 0
+        : Math.min(0.35, cue.distance / 343);
+    const start = c.currentTime + delay;
+    const end = start + length;
+    const filter = c.createBiquadFilter();
+    filter.type = crack || whistle ? "bandpass" : "lowpass";
+    filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
+    filter.frequency.value = whistle
+      ? 1700
+      : crack
+        ? 2800
+        : explosion
+          ? 900
+          : cue.kind === "mud"
+            ? 550
+            : cue.kind === "wood"
+              ? 1900
+              : foot
+                ? 2400
+                : 8500 * (1 - distant * 0.85);
+    if (cue.occluded)
+      filter.frequency.value = Math.min(filter.frequency.value, 1100);
+    if (whistle) filter.frequency.exponentialRampToValueAtTime(420, end);
+    const envelope = c.createGain();
+    envelope.gain.setValueAtTime(0.0001, start);
+    const volume = cue.volume * (cue.occluded ? 0.48 : 1);
+    envelope.gain.exponentialRampToValueAtTime(
+      Math.max(0.0002, volume),
+      start + (whistle ? 0.1 : 0.004),
+    );
+    if (rifle) {
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.025),
+        start + 0.055,
+      );
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * (0.08 + distant * 0.18)),
+        start + 0.09,
+      );
+    }
+    envelope.gain.exponentialRampToValueAtTime(0.0001, end);
+    filter.connect(envelope);
+    const nodes: AudioNode[] = [filter, envelope];
+    if (!cue.local) {
+      const pan = c.createPanner();
+      pan.panningModel = "equalpower";
+      pan.distanceModel = "inverse";
+      pan.refDistance = explosion ? 12 : whistle ? 30 : crack ? 2 : 5;
+      pan.rolloffFactor = 1;
+      pan.maxDistance = 160;
+      pan.positionX.value = cue.at.x;
+      pan.positionY.value = cue.at.y;
+      pan.positionZ.value = cue.at.z;
+      envelope.connect(pan).connect(this.world);
+      nodes.push(pan);
+    } else envelope.connect(this.world);
+    const noise = c.createBufferSource();
+    noise.buffer = this.noise;
+    noise.playbackRate.value = 0.92 + Math.abs(Math.sin(cue.seed * 2.4)) * 0.16;
+    noise.loop = true;
+    noise.connect(filter);
+    noise.start(start, Math.abs(Math.sin(cue.seed)) * 0.15);
+    noise.stop(end);
+    const sources: AudioScheduledSourceNode[] = [noise];
+    if (explosion || rifle || cue.kind === "wood" || whistle) {
+      const body = c.createOscillator(),
+        gain = c.createGain();
+      body.type = whistle ? "sine" : "triangle";
+      body.frequency.setValueAtTime(
+        whistle ? 1600 : explosion ? 95 : rifle ? 155 : 260,
+        start,
+      );
+      body.frequency.exponentialRampToValueAtTime(
+        whistle ? 380 : explosion ? 32 : 70,
+        end,
+      );
+      gain.gain.setValueAtTime(
+        Math.max(0.0001, volume * (whistle ? 0.12 : explosion ? 0.6 : 0.3)),
+        start,
+      );
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      body.connect(gain).connect(filter);
+      body.start(start);
+      body.stop(end);
+      sources.push(body);
+      nodes.push(gain, body);
+    }
+    nodes.push(noise);
+    let cleaned = false;
+    const stop = () => {
+      if (cleaned) return;
+      cleaned = true;
+      for (const source of sources) {
+        source.onended = null;
+        source.stop();
+      }
+      for (const node of nodes) node.disconnect();
+      this.voices.delete(stop);
+    };
+    noise.onended = stop;
+    this.voices.add(stop);
+    this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
+  }
+  tone(freq: number, length = 0.08, volume = 0.04) {
+    if (!this.running || this.voices.size >= 40) return;
+    const c = this.context,
+      o = c.createOscillator(),
+      gain = c.createGain(),
+      end = c.currentTime + length;
+    o.type = "triangle";
+    o.frequency.setValueAtTime(freq, c.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(30, freq / 3), end);
+    gain.gain.setValueAtTime(volume, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    o.connect(gain).connect(this.master);
+    let cleaned = false;
+    const stop = () => {
+      if (cleaned) return;
+      cleaned = true;
+      o.onended = null;
+      o.stop();
+      o.disconnect();
+      gain.disconnect();
+      this.voices.delete(stop);
+    };
+    o.onended = stop;
+    this.voices.add(stop);
+    this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
+    o.start();
+    o.stop(end);
+  }
+}

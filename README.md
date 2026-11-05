@@ -31,6 +31,16 @@ Rifles now kick upward and slightly sideways on every shot. The kick moves the b
 
 Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Grenades arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. Aim up/down to change the arc. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. Explosive blast smoke is cosmetic. Press **F** for a separate concealing smoke grenade; bots use these during squad advances, while explosive grenade throws remain player-controlled.
 
+## Battlefield sound and reactions
+
+Rifles, explosions and incoming shells now have directional sound, distance filtering and cover muffling. Nearby rounds produce sharp spatial cracks using the actual unobstructed near-miss events. Rifle tails soften with distance; artillery has a falling whistle and a heavier blast. Sounds are synthesized locally as a prototype.
+
+Footsteps follow distance actually walked: mud outside the trenches, wood on visible duckboards, and concrete in the industrial district. Sprinting is louder and crouching quieter. Planks disappear where excavation removes their support, and footsteps there return to mud. Nearby soldiers contribute footsteps; airborne or stationary soldiers do not.
+
+Nearby explosions briefly jolt the camera, muffle battlefield sound and add falling-dirt audio. Cover reduces the reaction, hearing recovers over a few seconds, and nearby soldier rigs briefly brace. These are presentation effects and do not alter input, aim, damage or bot decisions. Start/pause menus include a **Battlefield volume** slider (zero mutes) and a **Blast camera motion** toggle. Headphones help with direction.
+
+Recorded playtests now include the game's stereo output, along with presentation counters and a bounded recent-sound log in the JSON. They capture no microphone or desktop audio. Sound voices and audible footsteps are capped for the 100-soldier battle; pausing cancels active/scheduled sounds and restarting clears feedback.
+
 ## Destruction prototype
 
 Grenades now excavate persistent craters and damage wooden obstacles, trench lining, and sandbags in both maps. A ground-level grenade can dig roughly 0.5 m at its center across an initial 3.5 m footprint, with a smooth rounded bowl; airbursts dig less. Repeated hits deepen and widen the bowl, with a lowest floor of −0.9 m. Craters affect walking height, cover, bullets, camera collision, and bot routes. Parapet crests can be chipped, and repeated concentrated hits can create a breach. Wooden lining can break away while the earth behind it remains solid. Sandbags lose height before disappearing. Two light wooden screens behind the trench lines provide additional destructible cover.

@@ -1,3 +1,4 @@
+import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse } from "./recoil";
 import { smokeRules, smokeDensity } from "./smoke";
@@ -56,6 +57,10 @@ type SoldierRig = {
 export class Renderer implements CollisionWorld {
   app: pc.Application;
   camera: pc.Entity;
+  cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
+  private boardBatch = -1;
+  private blastFlinches = new Map<number, { tick: number; strength: number }>();
+  private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
   rings: pc.Entity[] = [];
@@ -114,6 +119,11 @@ export class Renderer implements CollisionWorld {
         antialias: true,
       },
     });
+    this.boardBatch = this.app.batcher!.addGroup(
+      "trench duckboards",
+      false,
+      200,
+    ).id;
     this.mapBatch = this.app.batcher!.addGroup("static map", false, 200).id;
     this.coverBatch = this.app.batcher!.addGroup(
       "destructible cover",
@@ -304,7 +314,11 @@ export class Renderer implements CollisionWorld {
         this.cube("road marking", 1, 0.015, i, 0.12, 0.02, 3, "#b8b29b");
       }
     this.batchGroup = -1;
-    this.app.batcher!.generate([this.mapBatch, this.coverBatch]);
+    this.app.batcher!.generate([
+      this.mapBatch,
+      this.coverBatch,
+      this.boardBatch,
+    ]);
     this.worldParent = undefined;
   }
   private buildTrenchTerrain() {
@@ -344,6 +358,21 @@ export class Renderer implements CollisionWorld {
       }
     }
     this.worldParent = this.mapRoot;
+    this.batchGroup = this.boardBatch;
+    for (const b of duckboards(this.map)) {
+      const root = this.cube(
+        "duckboard",
+        b.x,
+        0.025,
+        b.z,
+        1.3,
+        0.045,
+        1.8,
+        "#756044",
+      );
+      root.enabled = intactBoard(b, this.map);
+      this.boardVisuals.push({ root, ...b });
+    }
     this.batchGroup = previousBatch;
   }
   setMap(map: MapDefinition) {
@@ -358,6 +387,7 @@ export class Renderer implements CollisionWorld {
     this.terrainPatches.clear();
     this.objectVisuals.clear();
     this.groundDecor = [];
+    this.boardVisuals = [];
     this.mapRoot.destroy();
     this.terrainPhysics = new TerrainPhysics();
     this.buildMap();
@@ -453,6 +483,17 @@ export class Renderer implements CollisionWorld {
     for (const changed of change.objects)
       this.buildDestructible(this.map.destruction!.objects[changed.id]);
     if (change.objects.length) this.app.batcher!.generate([this.coverBatch]);
+    if (change.crater) {
+      let changed = false;
+      for (const board of this.boardVisuals) {
+        const enabled = intactBoard(board, this.map);
+        if (board.root.enabled !== enabled) {
+          board.root.enabled = enabled;
+          changed = true;
+        }
+      }
+      if (changed) this.app.batcher!.generate([this.boardBatch]);
+    }
     if (change.crater)
       for (const decor of this.groundDecor)
         if (
@@ -933,6 +974,16 @@ export class Renderer implements CollisionWorld {
       rig.arms[1].shoulder.setLocalEulerAngles(150 - 110 * smooth(t), 0, -15);
       rig.arms[1].elbow.setLocalEulerAngles(55 * (1 - t), 0, 0);
     }
+    const flinch = this.blastFlinches?.get(p.id);
+    if (flinch && p.hp > 0 && !p.mantle) {
+      const age = Math.max(0, (tick - flinch.tick) / 30);
+      const brace =
+        flinch.strength *
+        Math.sin(Math.min(1, age / 0.4) * Math.PI) *
+        Math.exp(-age * 2);
+      rig.upper.rotateLocal(12 * brace, 0, -5 * brace);
+      if (age > 0.6) this.blastFlinches.delete(p.id);
+    }
     this.attachSupportArm(rig);
   }
   reset(g: Game) {
@@ -953,6 +1004,8 @@ export class Renderer implements CollisionWorld {
     this.previousShells.clear();
     this.artilleryMarkers.clear();
     this.artilleryPreview = null;
+    this.blastFlinches.clear();
+    this.cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
     this.previousGrenades.clear();
     for (const blast of this.blasts) {
       blast.root.destroy();
@@ -1040,7 +1093,11 @@ export class Renderer implements CollisionWorld {
         (child as pc.Entity).render!.material = this.material(c);
     }
     const p = g.players[0],
-      view = weaponAim(p),
+      baseView = weaponAim(p),
+      view = {
+        yaw: baseView.yaw + (overview ? 0 : this.cameraReaction.yaw),
+        pitch: baseView.pitch + (overview ? 0 : this.cameraReaction.pitch),
+      },
       d = p.command.aim ? 2.5 : 4,
       dir = {
         x: Math.sin(view.yaw) * Math.cos(view.pitch),
@@ -1067,6 +1124,7 @@ export class Renderer implements CollisionWorld {
       pos.y + dir.y * 20,
       pos.z + dir.z * 20,
     );
+    if (!overview) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
       this.camera.camera!.projection = pc.PROJECTION_ORTHOGRAPHIC;
@@ -1468,6 +1526,25 @@ export class Renderer implements CollisionWorld {
     }
   }
   effect(e: Event) {
+    if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") {
+      this.people.forEach((person, id) => {
+        const p = person.getPosition();
+        const distance = Math.hypot(
+          p.x - e.at.x,
+          p.y + 1 - e.at.y,
+          p.z - e.at.z,
+        );
+        if (distance < e.radius * 1.8)
+          this.blastFlinches.set(id, {
+            tick: e.tick,
+            strength:
+              (1 - distance / (e.radius * 1.8)) *
+              (this.ray({ x: p.x, y: p.y + 1, z: p.z }, e.at) < 0.98
+                ? 0.45
+                : 1),
+          });
+      });
+    }
     if (e.type === "destruction") {
       const count = Math.min(
         16,

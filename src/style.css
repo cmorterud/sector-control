@@ -395,3 +395,24 @@ button span {
   background: radial-gradient(ellipse at center, transparent 30%, #ddd4b8 100%);
   transition: opacity 0.12s;
 }
+
+.audio-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin: 18px 0;
+  color: #c8c9bc;
+  font-size: 12px;
+}
+.audio-settings label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.audio-settings input {
+  accent-color: #74b3b7;
+}
+.audio-settings input[type="range"] {
+  width: 120px;
+}

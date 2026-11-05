@@ -24,6 +24,7 @@ type Harness = {
   map: typeof trenchMap;
   people: Entity[];
   soldiers: Rig[];
+  blastFlinches: Map<number, { tick: number; strength: number }>;
   cube: Renderer["cube"];
   createSoldier(p: Soldier): void;
   animateSoldier(
@@ -250,4 +251,30 @@ it("tucks falling legs and keeps the rifle grip attached while the root drops", 
     .getWorldTransform()
     .transformPoint(new Vec3(0, -0.46, 0));
   expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
+});
+
+it("braces after a nearby blast without detaching the support hand, then settles", () => {
+  const game = new Game(
+    new TestCollision(trenchMap),
+    false,
+    600,
+    12345,
+    undefined,
+    { map: trenchMap },
+  );
+  const p = game.players[0],
+    r = rigFor(p),
+    rig = r.soldiers[0];
+  r.blastFlinches = new Map([[p.id, { tick: 100, strength: 1 }]]);
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 99);
+  const rest = rig.upper.forward.clone();
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 103);
+  expect(rig.upper.forward.distance(rest)).toBeGreaterThan(0.02);
+  const wrist = rig.arms[0].elbow
+    .getWorldTransform()
+    .transformPoint(new Vec3(0, -0.46, 0));
+  expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 130);
+  expect(rig.upper.forward.distance(rest)).toBeLessThan(0.0001);
+  expect(r.blastFlinches.size).toBe(0);
 });
