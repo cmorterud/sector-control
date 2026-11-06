@@ -134,7 +134,7 @@ export class BattleAudio {
         ? 2.4
         : 1.6
       : whistle
-        ? 0.95
+        ? 0.75
         : rifle
           ? cue.kind === "machineGun"
             ? 0.11 + distant * 0.25

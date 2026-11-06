@@ -15,6 +15,9 @@ import { artillerySector } from "./artillery-sectors";
 
 const shellsPerBarrage = 8;
 const barrageDuration = 4 * 30;
+const shellHeight = 35;
+const shellApproach = 12;
+const shellGravity = 10;
 export const artilleryRules = {
   initialDelay: 20 * 30,
   cooldown: 50 * 30,
@@ -22,12 +25,29 @@ export const artilleryRules = {
   shellCount: shellsPerBarrage,
   barrageDuration,
   interval: barrageDuration / (shellsPerBarrage - 1),
-  flightTicks: 30,
+  flightTicks: 24,
   scatterRadius: 14,
   dangerRadius: 14 + artilleryExplosionProfile.radius,
   minRange: 15,
   maxRange: 70,
 };
+// Jitter interior arrivals, anchoring the first/last shell to the same window.
+// A local random stream keeps timing from consuming combat/scatter randomness.
+export function barrageOffsets(seed: number): number[] {
+  const offsets = Array.from({ length: shellsPerBarrage }, (_, i) => {
+    const nominal = Math.round(i * artilleryRules.interval);
+    if (i === 0 || i === shellsPerBarrage - 1) return nominal;
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return nominal + Math.floor((seed / 4294967296) * 11) - 5;
+  });
+  const gaps = offsets.slice(1).map((n, i) => n - offsets[i]);
+  // Avoid a rare draw that still sounds almost evenly spaced.
+  if (Math.max(...gaps) - Math.min(...gaps) < 8) {
+    offsets[2] = Math.round(2 * artilleryRules.interval) - 5;
+    offsets[3] = Math.round(3 * artilleryRules.interval) + 5;
+  }
+  return offsets;
+}
 export interface FireMission {
   id: number;
   actor: number;
@@ -38,6 +58,7 @@ export interface FireMission {
   endsAt: number;
   launched: number;
   impacts: Vec[];
+  impactOffsets: number[];
   uncertainty?: number;
   dangerRadius?: number;
 }
@@ -183,6 +204,9 @@ export function requestArtillery(
       g.tick + artilleryRules.warning + artilleryRules.barrageDuration + 30,
     launched: 0,
     impacts: [],
+    impactOffsets: barrageOffsets(
+      g.seed ^ Math.imul(g.artillery.missionSequence, 83492791) ^ g.tick,
+    ),
   };
   for (let i = 0; i < artilleryRules.shellCount; i++) {
     const angle = g.random() * Math.PI * 2,
@@ -221,7 +245,7 @@ export function advanceArtillery(g: Game) {
       g.tick >=
         mission.firstImpactAt -
           artilleryRules.flightTicks +
-          Math.round(mission.launched * artilleryRules.interval)
+          mission.impactOffsets[mission.launched]
     ) {
       const target = mission.impacts[mission.launched++];
       const side = mission.team === "blue" ? -1 : 1;
@@ -232,16 +256,17 @@ export function advanceArtillery(g: Game) {
         below = { ...target, y: floor + 0.025 };
       const surface =
         above.y + (below.y - above.y) * g.collision.ray(above, below);
+      const flightSeconds = artilleryRules.flightTicks / 30;
       const shell: ArtilleryShell = {
         id: ++g.artillery.shellSequence,
         mission: mission.id,
         actor: mission.actor,
         team: mission.team,
-        x: target.x + side * 12,
-        y: surface + 35,
+        x: target.x + side * shellApproach,
+        y: surface + shellHeight,
         z: target.z,
-        vx: -side * 12,
-        vy: -30,
+        vx: (-side * shellApproach) / flightSeconds,
+        vy: -shellHeight / flightSeconds + (shellGravity * flightSeconds) / 2,
         vz: 0,
         bornAt: g.tick,
       };
@@ -264,10 +289,10 @@ export function advanceArtillery(g: Game) {
     const from = { x: shell.x, y: shell.y, z: shell.z };
     const to = {
       x: shell.x + shell.vx / 30,
-      y: shell.y + shell.vy / 30 - 5 / (30 * 30),
+      y: shell.y + shell.vy / 30 - shellGravity / (2 * 30 * 30),
       z: shell.z + shell.vz / 30,
     };
-    shell.vy -= 10 / 30;
+    shell.vy -= shellGravity / 30;
     let fraction = g.collision.ray(from, to);
     // Ground crossing fallback handles short native-ray contact tolerances.
     if (to.y <= groundHeight(to.x, to.z, g.map) + 0.025) {

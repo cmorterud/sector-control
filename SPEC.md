@@ -72,3 +72,5 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 - Q opens a broad-sector tactical artillery map; blind calls from cover have greater placement uncertainty. Shared charge, range, warning and dense salvo timing remain.
 - Artillery craters vary in shape/depth and locally round off blasted firing-step ends.
 - Future only: a creeping barrage with a slowly advancing fire line.
+
+- Artillery shells descend in 0.8 seconds, with irregular per-mission arrival gaps across the existing four-second barrage window; warning remains four seconds.

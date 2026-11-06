@@ -14,6 +14,7 @@ import {
   requestArtillery,
   artilleryThreat,
   botArtilleryTarget,
+  barrageOffsets,
 } from "./artillery";
 import { artilleryExplosionProfile } from "./destruction";
 import { groundHeight, industrialMap, type MapDefinition } from "./map";
@@ -53,6 +54,35 @@ function ready(g: Game) {
 }
 
 describe("artillery missions", () => {
+  it("varies shell gaps substantially, reproducibly and within the same barrage window", () => {
+    const patterns = new Set<string>();
+    for (let seed = 0; seed < 256; seed++) {
+      const offsets = barrageOffsets(seed);
+      expect(offsets).toEqual(barrageOffsets(seed));
+      expect(offsets).toHaveLength(8);
+      expect(offsets[0]).toBe(0);
+      expect(offsets.at(-1)).toBe(120);
+      expect(offsets.every(Number.isInteger)).toBe(true);
+      const gaps = offsets.slice(1).map((n, i) => n - offsets[i]);
+      expect(Math.min(...gaps)).toBeGreaterThanOrEqual(7);
+      expect(Math.max(...gaps)).toBeLessThanOrEqual(28);
+      expect(Math.max(...gaps) - Math.min(...gaps)).toBeGreaterThanOrEqual(8);
+      patterns.add(offsets.join(","));
+    }
+    expect(patterns.size).toBeGreaterThan(240);
+  });
+  it("stores isolated mission timing without consuming extra combat randomness", () => {
+    const g = scene(),
+      expected = scene();
+    ready(g);
+    ready(expected);
+    for (let i = 0; i < 16; i++) expected.random(); // Existing eight-shell scatter.
+    requestArtillery(g, g.players[0], target);
+    expect(g.seed).toBe(expected.seed);
+    const snapshot = g.snapshot();
+    snapshot.artillery.missions[0].impactOffsets[1] = 999;
+    expect(g.artillery.missions[0].impactOffsets[1]).toBeLessThan(30);
+  });
   it("starts locked, spends a shared team charge once, and preserves cooldown through respawn", () => {
     const g = scene(),
       p = g.players[0];
@@ -100,11 +130,17 @@ describe("artillery missions", () => {
     ready(g);
     g.step({ ...idle(), artillery: target });
     const mission = structuredClone(g.artillery.missions[0]);
-    const events = advance(g, 89);
+    const events = advance(
+      g,
+      artilleryRules.warning - artilleryRules.flightTicks - 1,
+    );
     expect(g.artillery.shells).toHaveLength(0);
     g.step(idle());
     expect(g.artillery.shells).toHaveLength(1);
+    const launchedAt = g.tick;
     const shell = { ...g.artillery.shells[0] };
+    expect(shell.vy).toBeCloseTo(-39.75);
+    expect(Math.abs(shell.vx)).toBe(15);
     g.step(idle());
     expect(g.artillery.shells[0].y).toBeLessThan(shell.y);
     expect(Math.abs(g.artillery.shells[0].x - shell.x)).toBeGreaterThan(0.3);
@@ -120,9 +156,14 @@ describe("artillery missions", () => {
     expect(radii.every((r) => r <= 14)).toBe(true);
     expect(artilleryRules.dangerRadius).toBe(26);
     expect(impacts[0].tick).toBe(mission.firstImpactAt);
+    expect(impacts[0].tick - launchedAt).toBe(24);
     impacts.forEach((e, i) =>
-      expect(e.tick).toBe(mission.firstImpactAt + Math.round((i * 120) / 7)),
+      expect(e.tick).toBe(mission.firstImpactAt + mission.impactOffsets[i]),
     );
+    impacts.forEach((e, i) => {
+      expect(e.at.x).toBeCloseTo(mission.impacts[i].x, 2);
+      expect(e.at.z).toBeCloseTo(mission.impacts[i].z, 2);
+    });
     expect(g.artillery.shells).toHaveLength(0);
     expect(g.artillery.missions).toHaveLength(0);
     expect(g.map.destruction!.craters).toHaveLength(8);
@@ -151,7 +192,7 @@ describe("artillery missions", () => {
     const g = scene();
     ready(g);
     requestArtillery(g, g.players[0], target);
-    advance(g, 91);
+    advance(g, artilleryRules.warning - artilleryRules.flightTicks + 1);
     expect(g.artillery.shells).toHaveLength(1);
     g.duration = g.tick + 1;
     g.step(idle());

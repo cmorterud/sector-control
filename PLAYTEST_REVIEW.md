@@ -422,3 +422,10 @@ The user confirmed the pictured projection blocked movement. A grazing shell(-23
 Native final `sector-control-2026-11-06T18-00-43-980Z`:60s/100soldiers/1800ticks,4–6,2882shots/424MG rounds/10deaths,four squads/nine enemy-trench arrivals,two missions/sixteen impacts/sixteen craters/seven bank cuts/38destroyed cover pieces.58.06FPS/16.9ms p95/34slow frames/zero errors. Video+audio decode exit0, with existing duplicate DTS warnings. Artifacts include JSON/events/video,earth-remnant-battle-audit.json,earth-remnant-before.png and final earth-remnant-fixed-native.png. No claim that every possible blast layout has been tested.
 
 The comparison was initially opened while localhost was down; Vite restarted on5173. Background-tab CDP timed out repeatedly; activating the owned tab through native Chrome made the comparison usable. Final native screenshot confirms the tall sheet is gone. No security settings changed, no user's tabs deleted.
+
+
+## Faster descent and uneven shell arrivals — November 6, 2026
+
+All 216 tests, strict TypeScript and production build pass. Timing tests cover 256 seeded schedules, distinct bounded gaps, the unchanged 120-tick warning/span, isolated serialized offsets, preserved combat RNG, physical scatter endpoints and 24-tick flight. Whistle duration is 0.75 s for the nominal 0.8 s flight.
+
+Native `sector-control-2026-11-06T19-48-35-177Z`: 60 s / 100 soldiers / 1,800 ticks, score 4–7, 2,790 shots / eleven deaths, eight enemy-trench arrivals, two calls and sixteen impacts/craters. The first mission's actual gaps are 13,22,16,20,12,17,20 ticks; the second's are 13,19,14,19,24,13,18. Both give exactly 120 ticks warning and 120 ticks first-to-last. Fifteen flights are 24 ticks and one is 25 ticks as terrain changes. All sixteen whistles and artillery sounds play; 58.46 FPS / 17.4 ms p95 / 27 slow frames / zero errors. Full video and stereo audio decode successfully. Logs, audit JSON, screenshot and a short barrage video clip live under ignored playtest-artifacts/. This is a limited native battle check, not a broad performance benchmark.

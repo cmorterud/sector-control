@@ -288,3 +288,10 @@ The user confirmed the thin post-barrage projection blocked movement. A grazing 
 A second issue left thin high faces beside lowered samples: runtime height interpolation required every high corner of a cell to reach the floor. It now interpolates final surface heights when a high-side corner is materially eroded. Grid cells abutting authored cliff boundaries also qualify when depth differences alone would miss them. Intact bank cliffs retain their authored discontinuity. Renderer, Ammo patches, movement and rays share the corrected height sampler.
 
 Four regressions cover the actual grazing-shell remnant, ten-micron bank-edge probes (formerly y0 at the edge versus y2.4 immediately beside it), actual Ammo down-rays/crossing and repeated strikes around protected foundations/distant traverses. The previous code fails the remnant/crossing checks. Ignored local before/after review pages use the production renderer and actual terrain mesh; they are not part of the production game or CI.
+
+
+## Quicker shell descent and irregular arrival gaps — November 6, 2026
+
+Shell flight is24 ticks/0.8s instead of30ticks/1s. Launch velocities derive from the unchanged35m descent/12m lateral approach and10m/s² gravity, preserving scheduled ground/roof arrival: vy−39.75m/s, lateral speed15m/s. Launches move later within the unchanged four-second warning. The whistle is0.75s instead of0.95s.
+
+Each mission serializes impactOffsets: first0,last120ticks, six interior arrivals jittered by up to five ticks around their nominal slots. Seven gaps range7–28ticks (~0.23–0.93s); a bounded fallback avoids near-uniform draws. Local seeded randomness gives different repeatable mission rhythms without advancing combat/scatter RNG. Launches use each stored offset minus flightTicks; mission cleanup/danger window, eight-shell count, scatter, damage, cooldown and ownership remain unchanged. Tests sweep256 timing seeds, verify serialization isolation/RNG preservation, actual24tick flights, exact four-second warning/span and physical scatter endpoints; roof collision retains coverage.
