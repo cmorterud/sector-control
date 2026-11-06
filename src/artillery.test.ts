@@ -95,12 +95,12 @@ describe("artillery missions", () => {
     expect(g.artillery.readyAt.blue).toBe(600);
     expect(g.artillery.missions).toHaveLength(0);
   });
-  it("warns before damage, sends five moving shells at one-second intervals, and clears the mission", () => {
+  it("gives four seconds of warning and spreads eight moving shells over the same four-second impact window", () => {
     const g = scene();
     ready(g);
     g.step({ ...idle(), artillery: target });
     const mission = structuredClone(g.artillery.missions[0]);
-    const events = advance(g, 149);
+    const events = advance(g, 89);
     expect(g.artillery.shells).toHaveLength(0);
     g.step(idle());
     expect(g.artillery.shells).toHaveLength(1);
@@ -108,16 +108,24 @@ describe("artillery missions", () => {
     g.step(idle());
     expect(g.artillery.shells[0].y).toBeLessThan(shell.y);
     expect(Math.abs(g.artillery.shells[0].x - shell.x)).toBeGreaterThan(0.3);
-    events.push(...advance(g, 179));
+    events.push(...advance(g, 180));
     const impacts = events.filter((e) => e.type === "artilleryImpact");
-    expect(impacts).toHaveLength(5);
+    expect(mission.firstImpactAt - mission.calledAt).toBe(120);
+    expect(impacts).toHaveLength(8);
+    expect(impacts.at(-1)!.tick - impacts[0].tick).toBe(120);
+    const radii = mission.impacts.map((p) =>
+      Math.hypot(p.x - mission.target.x, p.z - mission.target.z),
+    );
+    expect(Math.max(...radii)).toBeGreaterThan(10);
+    expect(radii.every((r) => r <= 14)).toBe(true);
+    expect(artilleryRules.dangerRadius).toBe(26);
     expect(impacts[0].tick).toBe(mission.firstImpactAt);
     impacts.forEach((e, i) =>
-      expect(e.tick).toBe(mission.firstImpactAt + i * 30),
+      expect(e.tick).toBe(mission.firstImpactAt + Math.round((i * 120) / 7)),
     );
     expect(g.artillery.shells).toHaveLength(0);
     expect(g.artillery.missions).toHaveLength(0);
-    expect(g.map.destruction!.craters).toHaveLength(5);
+    expect(g.map.destruction!.craters).toHaveLength(8);
   });
   it("keeps a confirmed barrage after caller death, serializes isolated state, and logs the complete lifecycle", () => {
     const g = scene();
@@ -135,7 +143,7 @@ describe("artillery missions", () => {
       log.recordTick(g, idle(), i / 30);
     }
     expect(log.summary().artilleryCalls).toBe(1);
-    expect(log.summary().artilleryImpacts).toBe(5);
+    expect(log.summary().artilleryImpacts).toBe(8);
     expect(eventTimeline(log.events)).toContain("artilleryEnd");
     expect(g.artillery.missions).toHaveLength(0);
   });
@@ -143,7 +151,7 @@ describe("artillery missions", () => {
     const g = scene();
     ready(g);
     requestArtillery(g, g.players[0], target);
-    advance(g, 151);
+    advance(g, 91);
     expect(g.artillery.shells).toHaveLength(1);
     g.duration = g.tick + 1;
     g.step(idle());
@@ -169,12 +177,12 @@ describe("artillery missions", () => {
     ready(g);
     requestArtillery(g, g.players[0], { x: -5, z: 0 });
     // Aim validation remains ground/LOS based; force this mission's scatter onto a roof to verify collision.
-    g.artillery.missions[0].impacts = Array.from({ length: 5 }, () => ({
+    g.artillery.missions[0].impacts = Array.from({ length: 8 }, () => ({
       x: 10,
       z: 0,
     }));
     const impacts = advance(g, 332).filter((e) => e.type === "artilleryImpact");
-    expect(impacts).toHaveLength(5);
+    expect(impacts).toHaveLength(8);
     for (const hit of impacts) expect(hit.at.y).toBeGreaterThanOrEqual(5);
     expect(g.map.boxes[0].h).toBe(5);
     expect(groundHeight(10, 0, g.map)).toBe(0);
@@ -237,7 +245,8 @@ describe("artillery damage and bots", () => {
     expect(p.artilleryEvade).not.toBeNull();
     expect(artilleryThreat(g, p.artilleryEvade!.destination)).toBeUndefined();
     const destination = p.artilleryEvade!.destination;
-    for (let i = 0; i < 300; i++) {
+    const shelterUntil = g.artillery.missions[0].endsAt;
+    while (g.tick < shelterUntil - 1) {
       g.tick++;
       const c = botCommand(g, p);
       const pos = g.collision.move(p, { x: (c.x * 7) / 30, z: (c.z * 7) / 30 });

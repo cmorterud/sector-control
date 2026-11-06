@@ -21,7 +21,7 @@ npm run build
 npm run preview
 ```
 
-GitHub Actions runs `npm ci`, `npm run check` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
+GitHub Actions runs `npm ci`, `npm run check -- --maxWorkers=1` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
 
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
 
@@ -61,7 +61,7 @@ Destruction events record the source, world revision, object health/stage, chang
 
 Each team has one shared charge: first available **20 seconds** into the match, then **50 seconds** after each confirmed call. Death does not replenish it or cancel an ordered barrage. If a team has a human player, only that human can call its artillery, including while waiting to respawn. Teams made entirely of bots coordinate their own calls. In normal play this reserves Blue's charge for you; autoplay has no human-controlled soldiers, so both teams can call automatically.
 
-An incoming ground marker and local warning give roughly **six seconds** before a **five-shell barrage**, with shells one second apart, scattered within 10 m of the target. Descending visible shells whistle and burst on solid surfaces, including bunker roofs. Each shell has a 12 m damage radius, cover-aware falloff, larger dust/smoke, flying debris, and a nominal **7 m crater footprint / 1.3 m depth** (less for elevated bursts, capped by the existing −0.9 m floor). Light cover breaks; fixed buildings/bunkers remain. The marked danger area includes scatter and blast reach. Self damage applies; teammates and protected spawns retain grenade protection. Artillery dust/smoke remains cosmetic; dedicated smoke grenades conceal vision.
+An incoming ground marker and local warning give roughly **four seconds** before an **eight-shell barrage**, scattered within **14 m** of the target. All eight shells land within the same **four-second first-to-last impact window**, about 0.57 seconds apart. The warning ring covers the full 26 m scatter-plus-blast radius. Descending visible shells whistle and burst on solid surfaces, including bunker roofs. Each shell has a 12 m damage radius, cover-aware falloff, larger dust/smoke, flying debris, and a nominal **7 m crater footprint / 1.3 m depth** (less for elevated bursts, capped by the existing −0.9 m floor). Light cover breaks; fixed buildings/bunkers remain. The marked danger area includes scatter and blast reach. Self damage applies; teammates and protected spawns retain grenade protection. Artillery dust/smoke remains cosmetic; dedicated smoke grenades conceal vision.
 
 Bots leave threatened firing posts, seek a safe point in their own trench, and return after the barrage. Destroyed firing steps send them to nearby intact stations. This is a balance prototype: no artillery guns, ammunition types, creeping barrages or structural building collapse yet.
 

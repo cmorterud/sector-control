@@ -12,15 +12,18 @@ import {
 } from "./simulation";
 import { artilleryExplosionProfile } from "./destruction";
 
+const shellsPerBarrage = 8;
+const barrageDuration = 4 * 30;
 export const artilleryRules = {
   initialDelay: 20 * 30,
   cooldown: 50 * 30,
-  warning: 6 * 30,
-  shellCount: 5,
-  interval: 30,
+  warning: 4 * 30,
+  shellCount: shellsPerBarrage,
+  barrageDuration,
+  interval: barrageDuration / (shellsPerBarrage - 1),
   flightTicks: 30,
-  scatterRadius: 10,
-  dangerRadius: 22,
+  scatterRadius: 14,
+  dangerRadius: 14 + artilleryExplosionProfile.radius,
   minRange: 15,
   maxRange: 70,
 };
@@ -127,10 +130,7 @@ export function requestArtillery(g: Game, p: Soldier, target: Vec): boolean {
     calledAt: g.tick,
     firstImpactAt: g.tick + artilleryRules.warning,
     endsAt:
-      g.tick +
-      artilleryRules.warning +
-      (artilleryRules.shellCount - 1) * artilleryRules.interval +
-      30,
+      g.tick + artilleryRules.warning + artilleryRules.barrageDuration + 30,
     launched: 0,
     impacts: [],
   };
@@ -164,7 +164,7 @@ export function advanceArtillery(g: Game) {
       g.tick >=
         mission.firstImpactAt -
           artilleryRules.flightTicks +
-          mission.launched * artilleryRules.interval
+          Math.round(mission.launched * artilleryRules.interval)
     ) {
       const target = mission.impacts[mission.launched++];
       const side = mission.team === "blue" ? -1 : 1;
