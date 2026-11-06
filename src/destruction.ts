@@ -344,9 +344,19 @@ export function deformExplosion(
   }
   if (!edits.size && !objects.length) return null;
   const patches = new Set<string>();
+  const bounds: [number, number, number, number] = [
+    Infinity,
+    -Infinity,
+    Infinity,
+    -Infinity,
+  ];
   for (const [key, depth] of edits) {
     state.cuts[key] = depth;
     const [x, z] = key.split(",").map(Number);
+    bounds[0] = Math.min(bounds[0], x * terrainResolution);
+    bounds[1] = Math.max(bounds[1], x * terrainResolution);
+    bounds[2] = Math.min(bounds[2], z * terrainResolution);
+    bounds[3] = Math.max(bounds[3], z * terrainResolution);
     for (const dx of [-terrainResolution, terrainResolution])
       for (const dz of [-terrainResolution, terrainResolution])
         patches.add(
@@ -355,7 +365,7 @@ export function deformExplosion(
   }
   if (edits.size)
     state.terrainRevision = (state.terrainRevision ?? state.revision) + 1;
-  applyCoverChanges(map, objects, at);
+  applyCoverChanges(map, objects, at, edits.size ? bounds : undefined);
   const crater = edits.size
     ? {
         id: state.craters.length + 1,
@@ -384,6 +394,7 @@ function applyCoverChanges(
   map: MapDefinition,
   changes: DestructionChange["objects"],
   at: Point,
+  bounds?: [number, number, number, number],
 ) {
   const state = map.destruction!;
   const apply = (change: DestructionChange["objects"][number]) => {
@@ -412,11 +423,44 @@ function applyCoverChanges(
     }
   };
   for (const change of changes.slice()) apply(change);
+  if (!bounds) return;
   for (const object of Object.values(state.objects)) {
     if (object.stage === 2) continue;
-    const b = object.original,
-      ground =
-        b.kind === "log" ? timberSupport(map, b) : groundHeight(b.x, b.z, map);
+    const b = object.original;
+    if (
+      b.x + b.w / 2 + 0.5 < bounds[0] ||
+      b.x - b.w / 2 - 0.5 > bounds[1] ||
+      b.z + b.d / 2 + 0.5 < bounds[2] ||
+      b.z - b.d / 2 - 0.5 > bounds[3]
+    )
+      continue;
+    if (object.lining) {
+      const backingDirection =
+        baseGroundHeight(b.x - 0.25, b.z, map) >
+        baseGroundHeight(b.x + 0.25, b.z, map)
+          ? -1
+          : 1;
+      const x = b.x + backingDirection * 0.25;
+      // Lining decorates the retaining earth; it is not a freestanding wall.
+      // Remove a metre-wide panel once excavation removes its backing, even
+      // when that backing shielded the wood from the initial blast damage.
+      if (
+        [-0.35, 0, 0.35].some((fraction) => {
+          const z = b.z + b.d * fraction;
+          return baseGroundHeight(x, z, map) - groundHeight(x, z, map) > 0.25;
+        })
+      ) {
+        const change = { id: object.id, hp: 0, stage: 2 };
+        const previous = changes.find((c) => c.id === object.id);
+        if (previous) Object.assign(previous, change);
+        else changes.push(change);
+        apply(change);
+        continue;
+      }
+    }
+    if (!["tree", "brush", "log", "stump"].includes(b.kind)) continue;
+    const ground =
+      b.kind === "log" ? timberSupport(map, b) : groundHeight(b.x, b.z, map);
     if (
       (b.kind === "tree" && ground < (b.baseY ?? 0) - 0.45) ||
       (b.kind === "brush" && ground < (b.baseY ?? 0) - 0.12)

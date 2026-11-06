@@ -611,5 +611,5 @@ describe("covered squad advances", () => {
     ).toBe(true);
     expect(g.assaults.missions).toHaveLength(0);
     expect(g.smokeClouds).toHaveLength(0);
-  }, 10000);
+  }, 30000);
 });

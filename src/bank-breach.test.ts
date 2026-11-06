@@ -78,3 +78,41 @@ it("does not excavate sideways through an intact concrete screen or change prote
   expect(groundHeight(-17.5, -1, g.map)).toBeCloseTo(2.4);
   expect(g.map.boxes.some((b) => b.id === "shield")).toBe(true);
 });
+
+it("collapses shielded decorative lining when artillery removes its earth backing", () => {
+  for (const side of [-1, 1]) {
+    const g = scene();
+    const panels = Object.values(g.map.destruction!.objects).filter(
+      (o) =>
+        o.lining &&
+        Math.abs(o.original.x - side * 18) < 0.2 &&
+        Math.abs(o.original.z + 1) < 1.1,
+    );
+    expect(panels.length).toBeGreaterThan(0);
+    const distant = Object.values(g.map.destruction!.objects).find(
+      (o) =>
+        o.lining && Math.hypot(o.original.x - side * 18, o.original.z + 1) > 15,
+    )!;
+    g.explode({ x: side * 18.5, y: 1.2, z: -1 }, 0, "blue", {
+      ...artilleryExplosionProfile,
+      damage: 0,
+      structuralDamage: 0,
+    });
+    // No direct wood damage: this specifically exercises lost terrain support.
+    expect(panels.every((p) => p.stage === 2 && p.hp === 0)).toBe(true);
+    expect(distant.stage).toBe(0);
+    const change = g.events.find((e) => e.type === "destruction");
+    expect(
+      change?.type === "destruction" &&
+        panels.every((p) =>
+          change.change.objects.some((c) => c.id === p.id && c.stage === 2),
+        ),
+    ).toBe(true);
+    expect(
+      g.collision.ray(
+        { x: side * 18.6, y: 0.5, z: -1 },
+        { x: side * 17.5, y: 0.5, z: -1 },
+      ),
+    ).toBe(1);
+  }
+});
