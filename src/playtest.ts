@@ -69,6 +69,10 @@ export class PlaytestLog {
       impacts: this.events.filter((e) => e.type === "impact").length,
       kills: this.events.filter((e) => e.type === "death").length,
       captures: this.events.filter((e) => e.type === "capture").length,
+      neutralizations: this.events.filter((e) => e.type === "neutralized")
+        .length,
+      mode: this.samples[0]?.state.scoring,
+      finalScores: this.samples.at(-1)?.state.scores,
       grenadesThrown: this.events.filter((e) => e.type === "grenadeThrow")
         .length,
       grenadeExplosions: this.events.filter(
@@ -235,12 +239,15 @@ export class PlaytestRecorder {
       c.fillText(
         game.scoring === "eliminations"
           ? "TRENCH DUEL | ELIMINATIONS"
-          : game.sectors
-              .map(
-                (s) =>
-                  `${s.id}: ${s.contested ? "CONTESTED" : (s.owner ?? "neutral")} ${Math.round(Math.abs(s.control) * 100)}%`,
-              )
-              .join(" | "),
+          : (game.scoring === "domination"
+              ? `DOMINATION / ${game.scoreLimit} | `
+              : "") +
+              game.sectors
+                .map(
+                  (s) =>
+                    `${s.id}: ${s.contested ? "CONTESTED" : (s.owner ?? "neutral")} ${Math.round(Math.abs(s.control) * 100)}%`,
+                )
+                .join(" | "),
         20,
         640,
       );

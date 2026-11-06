@@ -282,10 +282,17 @@ describe("trench prototype", () => {
     const game = createGame();
     const counts: Record<string, number> = {};
     let maxProjectiles = 0;
+    const income = { blue: 0, red: 0 };
     for (let i = 0; i < 60 * 30; i++) {
       game.step(botCommand(game, game.players[0]));
-      for (const event of game.events)
+      for (const event of game.events) {
         counts[event.type] = (counts[event.type] ?? 0) + 1;
+        if (event.type === "score") {
+          income.blue += event.held!.blue;
+          income.red += event.held!.red;
+          expect(event.points).toEqual(income);
+        }
+      }
       maxProjectiles = Math.max(maxProjectiles, game.projectiles.length);
       if (i % 30 === 0)
         for (const p of game.players) {
@@ -304,8 +311,11 @@ describe("trench prototype", () => {
     expect(counts.fire).toBeGreaterThan(100);
     expect(counts.damage).toBeGreaterThan(0);
     expect(counts.death).toBeGreaterThan(0);
-    expect(counts.capture ?? 0).toBe(0);
-    expect(game.scores.blue + game.scores.red).toBe(counts.death);
+    expect(counts.capture).toBe(4);
+    expect(game.sectors.every((s) => s.owner === s.home)).toBe(true);
+    expect(game.scores).toEqual(income);
+    expect(income.blue).toBeGreaterThan(0);
+    expect(income.red).toBeGreaterThan(0);
     expect(counts.end).toBe(1);
     expect(game.projectiles).toHaveLength(0);
   }, 15000);

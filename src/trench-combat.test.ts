@@ -22,7 +22,7 @@ function scene(range = 0) {
       reactionTicks: 0,
       aimError: 0,
     },
-    { map: trenchMap },
+    { map: { ...trenchMap, scoring: "eliminations" } },
   );
   const template = game.players[0];
   template.hp = 0;
@@ -92,7 +92,7 @@ describe("firing-step trench combat", () => {
     expect(Math.abs(command.pitch)).toBeLessThan(0.01);
   });
 
-  it("scores eliminations without awarding capture points for standing in the center", () => {
+  it("does not award domination points for standing in no man’s land", () => {
     const game = new Game(
       new TestCollision(trenchMap),
       false,
@@ -107,7 +107,7 @@ describe("firing-step trench combat", () => {
       game.step(idle());
       events.push(...game.events);
     }
-    expect(game.snapshot().scoring).toBe("eliminations");
+    expect(game.snapshot().scoring).toBe("domination");
     expect(game.scores).toEqual({ blue: 0, red: 0 });
     expect(events.some((e) => e.type === "capture")).toBe(false);
     expect(game.phase).toBe("ended");
@@ -121,7 +121,7 @@ it("keeps the firing-step battle active through a full eight-minute match", () =
     480 * 30,
     12345,
     undefined,
-    { map: trenchMap, teamSize: 25 },
+    { map: { ...trenchMap, scoring: "eliminations" }, teamSize: 25 },
   );
   let shots = 0,
     lateShots = 0,

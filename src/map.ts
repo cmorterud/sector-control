@@ -85,9 +85,9 @@ export interface MapDefinition {
   width: number;
   depth: number;
   navSpacing: number;
-  scoring?: "sectors" | "eliminations";
+  scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
-  sectors: (Vec & { id: string })[];
+  sectors: (Vec & { id: string; home?: "blue" | "red" })[];
   boxes: Box[];
   vegetation?: Box[];
   destruction?: DestructionState;

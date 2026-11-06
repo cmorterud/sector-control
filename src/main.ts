@@ -1,6 +1,7 @@
 import { artilleryThreat } from "./artillery";
 import "./style.css";
 import { ArtilleryMap } from "./artillery-map";
+import { flagContains } from "./domination";
 import { Renderer } from "./rendering";
 import {
   Game,
@@ -206,7 +207,7 @@ function handle(e: Event) {
       e.winner === "draw" ? "Draw" : e.winner === "blue" ? "Victory" : "Defeat";
     menu(
       result,
-      `Operation complete · ${game.scoring === "eliminations" ? "Eliminations · " : ""}Blue ${game.scores.blue} / Red ${game.scores.red}`,
+      `Operation complete · ${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}Blue ${game.scores.blue} / Red ${game.scores.red}`,
       "Deploy again",
       start,
       table(),
@@ -214,7 +215,7 @@ function handle(e: Event) {
   }
 }
 function table() {
-  const capture = game.scoring === "sectors";
+  const capture = game.scoring !== "eliminations";
   const style = capture ? "" : ' style="grid-template-columns:1fr 35px 35px"';
   const header = `<div class="row"${style}><span>SOLDIER</span><span>K</span><span>D</span>${capture ? "<span>CAP</span>" : ""}</div>`;
   const row = (p: Soldier) =>
@@ -239,10 +240,13 @@ function hud(now: number) {
   el("sectors").innerHTML =
     game.scoring === "eliminations"
       ? '<span class="sector">TRENCH DUEL · ELIMINATIONS</span>'
-      : game.sectors
+      : (game.scoring === "domination"
+          ? `<span class="mode-tag">DOMINATION<small>FIRST TO ${game.scoreLimit}</small></span>`
+          : "") +
+        game.sectors
           .map(
             (s) =>
-              `<span class="sector ${s.contested ? "contested" : (s.owner ?? "")}">${s.id}</span>`,
+              `<span class="sector flag-sector ${s.contested ? "contested" : (s.owner ?? "")}" title="${s.id} · ${s.contested ? "Contested · scoring paused" : (s.owner ?? "Neutral")}">${s.id}<div class="bar"><i class="${s.control < 0 ? "redbar" : ""}" style="width:${Math.abs(s.control) * 100}%"></i></div></span>`,
           )
           .join("");
   el("health").innerHTML =
@@ -263,12 +267,16 @@ function hud(now: number) {
       ? artilleryNotice
       : "";
   const sector =
-    game.scoring === "sectors"
-      ? game.sectors.find((s) => dist(s, p) <= 8)
+    game.scoring !== "eliminations"
+      ? game.sectors.find((s) =>
+          game.scoring === "domination"
+            ? flagContains(game, p, s)
+            : dist(s, p) <= 8,
+        )
       : undefined;
   if (sector)
     el("health").innerHTML +=
-      `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : (sector.owner?.toUpperCase() ?? "NEUTRAL")}</small>`;
+      `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id} · ${sector.contested ? "CONTESTED" : (sector.owner?.toUpperCase() ?? "NEUTRAL")}</small>`;
   const ledge =
     map.terrain &&
     !p.mantle &&
@@ -280,10 +288,10 @@ function hud(now: number) {
       ? `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
       : p.mantle
         ? "<small>CLIMBING TRENCH EDGE</small>"
-        : ledge
+        : ledge && !(game.scoring === "domination" && sector)
           ? "<small>SPACE · MANTLE TRENCH EDGE</small>"
           : sector
-            ? `<small>SECTOR ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
+            ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
   el("suppression").style.opacity =
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
@@ -470,11 +478,11 @@ try {
   menu(
     map.id === "trenches" ? "Trench front" : "Sector Control",
     map.id === "trenches"
-      ? `Use firing steps for covering fire, then cross with smoke and advancing squads. Step down when pinned. ${teamSize} soldiers per team · eliminations · eight minutes.`
+      ? `Capture flags A–D in the front trenches and hold them to score. Use smoke and advancing squads to take enemy flags. Step down when pinned. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Hold C to crouch and move slowly behind cover; release it to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 20 seconds, then a shared 50-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag in the trench. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Hold C to crouch and move slowly behind cover; release it to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 20 seconds, then a shared 50-second cooldown. Move away from incoming barrage markers. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

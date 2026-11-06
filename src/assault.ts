@@ -23,6 +23,7 @@ export interface Assault {
   progress: Record<number, number>;
   waitUntil: Record<number, number>;
   screens: Record<number, { actor: number; tick: number; ready?: boolean }>;
+  objective?: string;
 }
 export interface AssaultState {
   enabled: boolean;
@@ -95,6 +96,13 @@ export function advanceAssaults(g: Game) {
     const near = cover.filter((c) => side * (c.x - centerX) > 0),
       far = cover.filter((c) => side * (c.x - centerX) < 0);
     if (!near.length || !far.length) continue;
+    const flags =
+      g.scoring === "domination"
+        ? g.sectors.filter(
+            (s) => s.home === enemy && (s.owner !== team || s.contested),
+          )
+        : [];
+    if (g.scoring === "domination" && !flags.length) continue;
     const candidates = front.sections
       .map((section, index) => {
         const launch = {
@@ -131,9 +139,20 @@ export function advanceAssaults(g: Game) {
             (a, b) =>
               dist(first, a) - a.depth * 2 - (dist(first, b) - b.depth * 2),
           )[0];
-        const target = opposing.sections
-          .map((s) => ({ x: s.x + side * 1.6, z: s.stepZ ?? s.z }))
-          .sort((a, b) => dist(a, last) - dist(b, last))[0];
+        const flag = flags
+          .slice()
+          .sort(
+            (a, b) =>
+              dist(a, last) +
+              active.filter((m) => m.objective === a.id).length * 24 -
+              (dist(b, last) +
+                active.filter((m) => m.objective === b.id).length * 24),
+          )[0];
+        const target = flag
+          ? { x: flag.x, z: flag.z }
+          : opposing.sections
+              .map((s) => ({ x: s.x + side * 1.6, z: s.stepZ ?? s.z }))
+              .sort((a, b) => dist(a, last) - dist(b, last))[0];
         const screened = g.smokeClouds.some(
           (c) => smokeDensity(c, g.tick) > 0.65 && dist(c, first) < 7,
         );
@@ -143,9 +162,11 @@ export function advanceAssaults(g: Game) {
           first,
           last,
           target,
+          objective: flag?.id,
           score:
             dist(launch, first) -
             (screened ? 8 : 0) +
+            (flag ? dist(last, target) * 0.3 : 0) +
             ((index + g.assaults.sequence) % front.sections.length) * 0.01,
         };
       })
@@ -155,7 +176,14 @@ export function advanceAssaults(g: Game) {
           !active.some((m) => dist(m.launch, c.launch) < 12),
       )
       .sort((a, b) => a.score - b.score);
-    for (const { launch, members, first, last, target } of candidates) {
+    for (const {
+      launch,
+      members,
+      first,
+      last,
+      target,
+      objective,
+    } of candidates) {
       const leader = members.find((p) => p.smokes > 0 && !p.reloadAt);
       if (!leader) continue;
       const m: Assault = {
@@ -174,6 +202,7 @@ export function advanceAssaults(g: Game) {
         progress: {},
         waitUntil: {},
         screens: {},
+        ...(objective ? { objective } : {}),
       };
       if (!m.members.includes(leader.id)) m.members[0] = leader.id;
       for (const id of m.members) {
@@ -192,6 +221,7 @@ export function advanceAssaults(g: Game) {
         members: m.members,
         launch: m.launch,
         route: m.route,
+        ...(m.objective ? { objective: m.objective } : {}),
       });
       break;
     }

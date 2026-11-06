@@ -92,6 +92,27 @@ nav {
   font-size: 12px;
   font-weight: bold;
 }
+.mode-tag {
+  align-self: center;
+  padding: 6px 10px;
+  background: #192525cf;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.mode-tag small {
+  display: block;
+  margin-top: 4px;
+  font-size: 9px;
+  color: #c7c8b9;
+}
+.flag-sector {
+  min-width: 44px;
+}
+.flag-sector .bar {
+  height: 3px;
+  width: 100%;
+  margin-top: 5px;
+}
 .contested {
   color: #efd07b;
   animation: blink 0.7s infinite alternate;

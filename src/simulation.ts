@@ -54,6 +54,7 @@ import {
   type ExplosionProfile,
 } from "./destruction";
 import { rosterWeapon, weaponProfiles, type WeaponKind } from "./weapons";
+import { dominationRules, dominationPost, flagOccupant } from "./domination";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
@@ -115,8 +116,10 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
     (position) => position.team === p.team,
   );
-  if (p.forwardPost) return p.forwardPost;
   const original = positions?.[p.teamIndex % positions.length];
+  const flagPost = dominationPost(g, p, original);
+  if (flagPost) return flagPost;
+  if (p.forwardPost) return p.forwardPost;
   if (!original || !g.map.destruction?.revision) return original;
   const intact = (v: Vec) =>
     groundHeight(v.x, v.z, g.map) + rifleHeight(g.map) >=
@@ -295,6 +298,7 @@ export interface Soldier extends Vec {
 }
 export interface Sector extends Vec {
   id: string;
+  home?: Team;
   control: number;
   owner: Team | null;
   contested: boolean;
@@ -385,6 +389,7 @@ export type Event = { id: number; tick: number } & (
       members: number[];
       launch: Vec;
       route: Vec[];
+      objective?: string;
     }
   | {
       type: "assaultProgress";
@@ -436,10 +441,15 @@ export type Event = { id: number; tick: number } & (
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
   | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
+  | { type: "neutralized"; sector: string; previous: Team; team: Team }
   | { type: "contested"; sector: string }
   | { type: "stance"; actor: number; crouched: boolean }
   | { type: "fall"; actor: number; phase: "start" | "land"; at: V3 }
-  | { type: "score" }
+  | {
+      type: "score";
+      points?: Record<Team, number>;
+      held?: Record<Team, number>;
+    }
   | { type: "end"; winner: Team | "draw" }
 );
 type EventInput = Event extends infer E
@@ -565,12 +575,17 @@ export function raySphere(a: V3, b: V3, c: V3, r: number): number {
   const t = (-B - Math.sqrt(D)) / A;
   return t >= 0 && t <= 1 ? t : 1;
 }
-export function capture(s: Sector, blue: boolean, red: boolean): Team | null {
+export function capture(
+  s: Sector,
+  blue: boolean,
+  red: boolean,
+  ticks = 300,
+): Team | null {
   s.contested = blue && red;
   if (blue === red) return null;
   const previous = s.control,
     sign = blue ? 1 : -1;
-  s.control = clamp(s.control + sign / 300, -1, 1);
+  s.control = clamp(s.control + sign / ticks, -1, 1);
   if (
     (s.owner === "blue" && s.control <= 1e-8) ||
     (s.owner === "red" && s.control >= -1e-8)
@@ -606,7 +621,8 @@ export class Game {
   projectileSequence = 0;
   sectors: Sector[];
   readonly map: MapDefinition;
-  readonly scoring: "sectors" | "eliminations";
+  readonly scoring: "sectors" | "eliminations" | "domination";
+  readonly scoreLimit: number | null;
   private grenadeCollision: TestCollision;
   botSettings: BotSettings;
   readonly teamSize: number;
@@ -634,6 +650,8 @@ export class Game {
     this.collision.setMap?.(this.map);
     this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
+    this.scoreLimit =
+      this.scoring === "domination" ? dominationRules.scoreLimit : null;
     this.botSettings = {
       ...defaultBotSettings,
       ...(this.map.terrain?.firingPositions
@@ -705,7 +723,7 @@ export class Game {
         deaths: 0,
         captures: 0,
         command: idle(),
-        objective: i % 3,
+        objective: i % Math.max(1, this.sectors.length),
         path: [],
         nextThink: 0,
         target: -1,
@@ -727,6 +745,7 @@ export class Game {
       tick: this.tick,
       mapId: this.map.id,
       scoring: this.scoring,
+      scoreLimit: this.scoreLimit,
       teamSize: this.teamSize,
       humanPlayerIds: this.humanPlayerIds,
       duration: this.duration,
@@ -940,16 +959,27 @@ export class Game {
     this.advanceProjectiles();
     this.advanceGrenades();
     advanceArtillery(this);
-    for (const s of this.scoring === "sectors" ? this.sectors : []) {
-      const occupants = this.players.filter(
-          (p) => p.hp > 0 && !p.mantle && dist(p, s) <= 8,
+    for (const s of this.scoring !== "eliminations" ? this.sectors : []) {
+      const occupants = this.players.filter((p) =>
+          this.scoring === "domination"
+            ? flagOccupant(this, p, s)
+            : p.hp > 0 && !p.mantle && dist(p, s) <= 8,
         ),
-        was = s.contested;
+        was = s.contested,
+        owner = s.owner;
       const team = capture(
         s,
         occupants.some((p) => p.team === "blue"),
         occupants.some((p) => p.team === "red"),
+        this.scoring === "domination" ? dominationRules.captureTicks : 300,
       );
+      if (this.scoring === "domination" && owner && !s.owner)
+        this.emit({
+          type: "neutralized",
+          sector: s.id,
+          previous: owner,
+          team: owner === "blue" ? "red" : "blue",
+        });
       if (s.contested && !was) this.emit({ type: "contested", sector: s.id });
       if (team) {
         for (const p of occupants) if (p.team === team) p.captures++;
@@ -960,7 +990,26 @@ export class Game {
       for (const s of this.sectors) if (s.owner) this.scores[s.owner]++;
       this.emit({ type: "score" });
     }
-    if (this.tick >= this.duration) {
+    if (
+      this.scoring === "domination" &&
+      this.tick % dominationRules.scoreInterval === 0
+    ) {
+      const held = { blue: 0, red: 0 };
+      for (const s of this.sectors)
+        if (s.owner && !s.contested) {
+          this.scores[s.owner] = Math.min(
+            this.scoreLimit!,
+            this.scores[s.owner] + 1,
+          );
+          held[s.owner]++;
+        }
+      this.emit({ type: "score", points: { ...this.scores }, held });
+    }
+    if (
+      this.tick >= this.duration ||
+      (this.scoreLimit !== null &&
+        Math.max(this.scores.blue, this.scores.red) >= this.scoreLimit)
+    ) {
       this.phase = "ended";
       this.projectiles = [];
       this.grenades = [];
@@ -1936,7 +1985,19 @@ export function botCommand(g: Game, p: Soldier): Command {
     c.sprint = !target;
     p.mode = "Navigate";
   } else {
-    p.mode = station ? "Firing step" : "Capture";
+    const flag =
+      g.scoring === "domination"
+        ? g.sectors.find((s) => flagOccupant(g, p, s))
+        : undefined;
+    p.mode = flag
+      ? flag.contested
+        ? "Contesting flag"
+        : flag.owner === p.team
+          ? "Defending flag"
+          : "Capturing flag"
+      : station
+        ? "Firing step"
+        : "Capture";
     if (station) c.yaw = p.team === "blue" ? Math.PI / 2 : -Math.PI / 2;
   }
   for (const q of g.players)

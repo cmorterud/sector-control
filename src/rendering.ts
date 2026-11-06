@@ -13,6 +13,7 @@ import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse } from "./recoil";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
+import { dominationRules, flagContains } from "./domination";
 import * as pc from "playcanvas";
 import { createPhysicsWorld, TerrainPhysics } from "./physics";
 import {
@@ -88,6 +89,7 @@ export class Renderer implements CollisionWorld {
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
   rings: pc.Entity[] = [];
+  private objectiveTerrainRevision = -1;
   effects: { e: pc.Entity; life: number; velocity?: V3; size?: number }[] = [];
   private fallingTrees: FallingTree[] = [];
   private fragments: { entity: pc.Entity; state: Debris }[] = [];
@@ -1419,6 +1421,7 @@ export class Renderer implements CollisionWorld {
     this.smokeVolumes.clear();
     this.people = [];
     this.rings = [];
+    this.objectiveTerrainRevision = -1;
     this.effects = [];
     this.remember(g);
     this.soldiers = [];
@@ -1426,7 +1429,7 @@ export class Renderer implements CollisionWorld {
     for (const p of g.players) this.createSoldier(p);
     this.batchGroup = -1;
     this.app.batcher!.generate([this.actorBatch]);
-    for (const s of g.scoring === "sectors" ? g.sectors : []) {
+    for (const s of g.scoring !== "eliminations" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
       ring.setPosition(s.x, groundHeight(s.x, s.z, this.map) + 0.04, s.z);
@@ -1434,9 +1437,11 @@ export class Renderer implements CollisionWorld {
         const a = (i / 64) * Math.PI * 2;
         const e = this.cube(
           "boundary",
-          Math.sin(a) * 8,
+          Math.sin(a) *
+            (g.scoring === "domination" ? dominationRules.radius : 8),
           0,
-          Math.cos(a) * 8,
+          Math.cos(a) *
+            (g.scoring === "domination" ? dominationRules.radius : 8),
           0.16,
           0.05,
           0.65,
@@ -1446,7 +1451,33 @@ export class Renderer implements CollisionWorld {
         );
         e.setLocalEulerAngles(0, (a * 180) / Math.PI, 0);
       }
-      this.cube("beacon", 0, 1, 0, 0.25, 2, 0.25, "#d4c699", false, ring);
+      if (g.scoring === "domination") {
+        this.cube(
+          "flagpole",
+          0,
+          1.9,
+          0,
+          0.07,
+          3.8,
+          0.07,
+          "#a5a697",
+          false,
+          ring,
+        );
+        this.cube(
+          "flag cloth",
+          0.7,
+          3.1,
+          0,
+          1.3,
+          0.75,
+          0.045,
+          "#d4c699",
+          false,
+          ring,
+        );
+      } else
+        this.cube("beacon", 0, 1, 0, 0.25, 2, 0.25, "#d4c699", false, ring);
       this.rings.push(ring);
     }
   }
@@ -1480,6 +1511,9 @@ export class Renderer implements CollisionWorld {
         e.setPosition(p.x, p.y + 0.25, p.z);
       }
     }
+    const objectiveRevision = g.map.destruction?.terrainRevision ?? 0;
+    const positionObjectives =
+      this.objectiveTerrainRevision !== objectiveRevision;
     for (let i = 0; i < this.rings.length; i++) {
       const s = g.sectors[i],
         c = s.contested
@@ -1489,9 +1523,33 @@ export class Renderer implements CollisionWorld {
             : s.owner === "red"
               ? "#de6e5f"
               : "#d4c699";
-      for (const child of this.rings[i].children)
-        (child as pc.Entity).render!.material = this.material(c);
+      const root = this.rings[i];
+      if (g.scoring === "domination" && positionObjectives)
+        root.setPosition(s.x, groundHeight(s.x, s.z, this.map) + 0.04, s.z);
+      for (const child of root.children) {
+        const e = child as pc.Entity;
+        if (e.name !== "flagpole") e.render!.material = this.material(c);
+        if (
+          g.scoring === "domination" &&
+          positionObjectives &&
+          e.name === "boundary"
+        ) {
+          const local = e.getLocalPosition();
+          const point = {
+            x: s.x + local.x,
+            z: s.z + local.z,
+            y: groundHeight(s.x + local.x, s.z + local.z, g.map),
+          };
+          e.setLocalPosition(
+            local.x,
+            point.y - root.getPosition().y + 0.04,
+            local.z,
+          );
+          e.render!.enabled = flagContains(g, point, s);
+        }
+      }
     }
+    this.objectiveTerrainRevision = objectiveRevision;
     const p = g.players[0],
       baseView = weaponAim(p),
       view = {

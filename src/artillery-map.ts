@@ -12,6 +12,7 @@ export class ArtilleryMap {
   private marker = document.createElement("i");
   private you = document.createElement("i");
   private buttons: HTMLButtonElement[] = [];
+  private flagMarkers: { id: string; dot: Element }[] = [];
   constructor(
     private game: () => Game,
     private call: (target: Vec & { area: true }) => void,
@@ -75,6 +76,25 @@ export class ArtilleryMap {
         );
         path.setAttribute("stroke-width", "2");
         svg.append(path);
+      }
+    this.flagMarkers = [];
+    if (g.scoring === "domination")
+      for (const s of g.sectors) {
+        const dot = document.createElementNS(svg.namespaceURI, "circle");
+        dot.setAttribute("cx", String(s.x + g.map.width / 2));
+        dot.setAttribute("cy", String(s.z + g.map.depth / 2));
+        dot.setAttribute("r", "2.2");
+        dot.setAttribute("stroke", "#172324");
+        dot.setAttribute("stroke-width", "0.4");
+        const label = document.createElementNS(svg.namespaceURI, "text");
+        label.setAttribute("x", String(s.x + g.map.width / 2));
+        label.setAttribute("y", String(s.z + g.map.depth / 2 + 1));
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("font-size", "3");
+        label.setAttribute("fill", "#172324");
+        label.textContent = s.id;
+        svg.append(dot, label);
+        this.flagMarkers.push({ id: s.id, dot });
       }
     this.grid.append(svg, this.you, this.marker);
     this.cursor = {
@@ -151,5 +171,18 @@ export class ArtilleryMap {
     this.marker.style.top = `${this.cursor.z * 100}%`;
     this.you.style.left = `${(p.x / g.map.width + 0.5) * 100}%`;
     this.you.style.top = `${(p.z / g.map.depth + 0.5) * 100}%`;
+    for (const marker of this.flagMarkers) {
+      const s = g.sectors.find((s) => s.id === marker.id)!;
+      marker.dot.setAttribute(
+        "fill",
+        s.contested
+          ? "#efd07b"
+          : s.owner === "blue"
+            ? "#64bdd6"
+            : s.owner === "red"
+              ? "#e38e77"
+              : "#d0c7a3",
+      );
+    }
   }
 }

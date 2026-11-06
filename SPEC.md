@@ -36,7 +36,7 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 ## Approved trench experiment
 
 - Selectable `map=trenches`, 160 × 128 meters; 25 soldiers per faction (human + 24 Blue bots, 25 Red bots). Industrial remains the default 5v5 option.
-- Four zigzag trench lines (rear and front for each faction), linked by three communication routes per side. Teams spawn on open ground immediately behind their first/rear line, aligned with broad entry ramps. Exposed central no man's land has two low sandbag remnants and two small wire patches; bunkers stay behind the rear lines. Earth banks, firing steps, timber lining, and shell scars remain. Continuous front parapets with no ramps into no man's land. Rear entry ramps remain. Trench mode scores enemy eliminations over eight minutes; Industrial keeps sector scoring.
+- Four zigzag trench lines (rear and front for each faction), linked by three communication routes per side. Teams spawn on open ground immediately behind their first/rear line, aligned with broad entry ramps. Exposed central no man's land has two low sandbag remnants and two small wire patches; bunkers stay behind the rear lines. Earth banks, firing steps, timber lining, and shell scars remain. Continuous front parapets with no ramps into no man's land. Rear entry ramps remain. Trench mode now uses domination (see current rules below); Industrial keeps sector scoring.
 - Trench floor at 0 m, land at 2.4 m, firing steps at 0.85 m. Center-trench standing hit volumes are below the parapet; raised steps expose the head/helmet and raised rifle while the torso remains below the bank. Shots and target acquisition use actual bank occlusion. Front entrances are sealed; only rear entry ramps remain.
 - Space mantles nearby terrain edges up/down, maximum 2.5-meter change, 1.2-second action plus half-second cooldown. Stable landing and world sweep required. No firing or capturing during the climb; bullets can still hit exposed climbing soldiers. Death/respawn clears the action.
 - Current rifle, projectile speed, faction colors, and articulated soldiers are retained for the prototype. Historical equipment/art and tuned faction balance are future work.
@@ -49,7 +49,7 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 
 - Fifty firing stations: 25 per faction distributed along seven front-line step sections. Bots hold these positions, acquire exposed heads with up to 59 m engagement range, and do not mantle into no man's land. Industrial AI remains objective-driven.
 - Trench rifle muzzle/LOS height is 1.65 m above the feet; bot aim targets head height rather than the concealed torso. Articulated arm poses raise and support the weapon without detaching the left hand.
-- One point per enemy elimination; no sector capture awards, sector rings, or objective labels in trench mode. Faction scores track total opposing deaths. Manual over-the-top mantling is retained; there is no automatic exit route.
+- Original elimination scoring is retained as an explicit simulation fixture; current trench play uses domination. Manual over-the-top mantling is retained; there is no automatic exit route.
 
 ## Destruction prototype
 
@@ -74,3 +74,9 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 - Future only: a creeping barrage with a slowly advancing fire line.
 
 - Artillery shells descend in 0.8 seconds, with irregular per-mission arrival gaps across the existing four-second barrage window; warning remains four seconds.
+
+## Current trench mode — domination (November 6)
+
+Four initially neutral flags: A(−22.5,−33), B(−22.5,35) in Blue’s front line; C(28.5,−27), D(24.5,31) in Red’s. Six-meter radius, feet within 1.1 m of flag ground and unobstructed chest-height ray; alive, grounded soldiers only. Neutral capture 450 ticks; enemy neutralization 450 then capture 450, no numerical superiority bonus. Both teams present freeze capture and income; empty ownership persists. Every 90 ticks each owned, uncontested flag scores one point. First to 300 or higher score at eight minutes; ties draw. Kills affect personal K/D only. Rear spawns unchanged.
+
+Flags are decorative, rebased to deformed ground; capture checks use actual shared terrain/collision. HUD/world/tactical map show public ownership and contests; scoreboard includes captures. Bot assaults target enemy flags, landed survivors capture then defend steps, nearby riflemen retake threatened home flags. Existing artillery evasion, suppression, awareness and machine-gunner covering roles retain priority. Industrial keeps its original capture/scoring rules. Creeping barrage remains deferred.

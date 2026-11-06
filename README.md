@@ -2,7 +2,7 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front is a 50v50 elimination duel fought from firing steps. Matches last eight minutes.
+Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front is 50v50 domination fought across four trench flags. Matches last up to eight minutes.
 
 ## Run
 
@@ -34,6 +34,14 @@ Rifles are **semi-automatic** for players and bots: one round per press, with a 
 Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or space your shots and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.
 
 Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Grenades arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. Aim up/down to change the arc. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. A connected column of thrown-up dirt rises above the trench lip so a burst inside it remains visible. Flash and damage still respect solid earth. Explosive blast smoke is cosmetic. Press **F** for a separate concealing smoke grenade; bots use these during squad advances, while explosive grenade throws remain player-controlled.
+
+## Trench domination
+
+Capture **A and B** in Blue’s front trench and **C and D** in Red’s. All four start neutral. Stand within six meters of a flag in its connected trench space: bank tops and solid walls do not count. A neutral flag takes **15 seconds** to capture; an enemy flag takes 15 seconds to neutralize, then 15 more to claim. Extra soldiers do not speed this up. Both teams present freeze progress and income. Ownership remains after leaving.
+
+Each uncontested flag earns its owner **one point every three seconds**. First to **300** wins; otherwise the higher score after eight minutes wins, with ties drawn. Kills remain personal scoreboard statistics and earn no team points. The HUD shows ownership, contested flags and capture progress; the Q tactical map also marks public flag ownership.
+
+Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
 ## Battlefield sound and reactions
 

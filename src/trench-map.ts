@@ -286,15 +286,16 @@ export const trenchMap: MapDefinition = {
   width,
   depth,
   navSpacing: 4,
-  scoring: "eliminations",
+  scoring: "domination",
   spawn: {
     blue: { x: -spawnDistance, z: -1 },
     red: { x: spawnDistance, z: -1 },
   },
   sectors: [
-    { id: "A", x: 0, z: -32 },
-    { id: "B", x: 0, z: 0 },
-    { id: "C", x: 0, z: 32 },
+    { id: "A", x: -22.5, z: -33, home: "blue" },
+    { id: "B", x: -22.5, z: 35, home: "blue" },
+    { id: "C", x: 28.5, z: -27, home: "red" },
+    { id: "D", x: 24.5, z: 31, home: "red" },
   ],
   boxes: cover,
   terrain: {

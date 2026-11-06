@@ -491,15 +491,9 @@ describe("covered squad advances", () => {
           (s) => s.x + 2 === m.launch.x && (s.stepZ ?? s.z) === m.launch.z,
         ),
     ).toBe(true);
-    expect(
-      fronts
-        .find((l) => l.team === "red")!
-        .sections.some(
-          (s) =>
-            Math.abs(s.x - 1.6 - m.route[2].x) < 0.001 &&
-            (s.stepZ ?? s.z) === m.route[2].z,
-        ),
-    ).toBe(true);
+    const flag = g.sectors.find((s) => s.id === m.objective)!;
+    expect(flag.home).toBe("red");
+    expect(m.route[2]).toEqual({ x: flag.x, z: flag.z });
     const other = fronts
       .find((l) => l.team === "blue")!
       .sections.find((s) => (s.stepZ ?? s.z) === 35)!;
