@@ -1,4 +1,5 @@
 import type { SoundCue } from "./battlefield";
+import { treeFallTime } from "./environment-effects";
 import type { V3 } from "./simulation";
 
 // Synthesized game audio only; no files, microphone or network requests.
@@ -141,7 +142,7 @@ export class BattleAudio {
             : foot
               ? 0.16
               : cue.kind === "timber"
-                ? 1.2
+                ? 1.5
                 : 0.65;
     const delay =
       cue.local || crack || foot || whistle
@@ -202,6 +203,29 @@ export class BattleAudio {
       envelope.gain.exponentialRampToValueAtTime(
         Math.max(0.0001, volume * (0.08 + distant * 0.18)),
         start + 0.09,
+      );
+    }
+    if (cue.kind === "timber") {
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.12),
+        start + 0.12,
+      );
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.1),
+        start + treeFallTime - 0.03,
+      );
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.85),
+        start + treeFallTime + 0.005,
+      );
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.15),
+        start + treeFallTime + 0.14,
+      );
+      filter.frequency.setTargetAtTime(
+        cue.occluded ? 300 : 550,
+        start + treeFallTime - 0.02,
+        0.015,
       );
     }
     envelope.gain.exponentialRampToValueAtTime(0.0001, end);

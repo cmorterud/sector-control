@@ -3,11 +3,13 @@ import { BattleAudio } from "./battle-audio";
 import type { SoundCue } from "./battlefield";
 class Param {
   value = 0;
+  ramps: { value: number; time: number }[] = [];
   setValueAtTime(n: number) {
     this.value = n;
   }
-  exponentialRampToValueAtTime(n: number) {
+  exponentialRampToValueAtTime(n: number, time = 0) {
     this.value = n;
+    this.ramps.push({ value: n, time });
   }
   setTargetAtTime(n: number) {
     this.value = n;
@@ -100,6 +102,21 @@ const cue: SoundCue = {
   distance: 10,
   seed: 1,
 };
+it("gives falling timber a delayed landing thud without a pitched oscillator", () => {
+  const { a, c } = setup();
+  a.play({ ...cue, kind: "timber", local: true });
+  expect(c.oscillators).toBe(0);
+  const envelope = c.nodes.find((n) =>
+    n.gain.ramps.some((p) => p.time > 0.9 && p.time < 1 && p.value > 0.2),
+  )!;
+  expect(envelope).toBeDefined();
+  expect(
+    envelope.gain.ramps.some(
+      (p) => p.time > 0.1 && p.time < 0.9 && p.value < 0.05,
+    ),
+  ).toBe(true);
+  expect(envelope.gain.ramps.at(-1)!.time).toBeGreaterThan(1.4);
+});
 it("bounds simultaneous battlefield voices but reserves room for local fire and nearby blasts", () => {
   const { a } = setup();
   for (let i = 0; i < 100; i++) a.play(cue);

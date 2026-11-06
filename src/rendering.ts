@@ -1,4 +1,13 @@
 import { blastPlume } from "./blast-plume";
+import {
+  treeFallPose,
+  maxFallingTrees,
+  maxDebris,
+  debrisPiece,
+  advanceDebris,
+  type Debris,
+  type DebrisKind,
+} from "./environment-effects";
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse } from "./recoil";
@@ -18,6 +27,7 @@ import {
   moveOnMap,
   type MapDefinition,
   type Vec,
+  type Box,
 } from "./map";
 import {
   type CollisionWorld,
@@ -54,6 +64,19 @@ type SoldierRig = {
   crouch: number;
   alive: boolean;
 };
+type FallingTree = {
+  pivot: pc.Entity;
+  root: pc.Entity;
+  source: Box;
+  height: number;
+  crown: boolean;
+  log?: Box;
+  pieces: string[];
+  hidden?: { log: pc.RenderComponent[]; stump: pc.RenderComponent[] };
+  axis: pc.Vec3;
+  age: number;
+  landed: boolean;
+};
 
 export class Renderer implements CollisionWorld {
   app: pc.Application;
@@ -66,6 +89,8 @@ export class Renderer implements CollisionWorld {
   private soldiers: SoldierRig[] = [];
   rings: pc.Entity[] = [];
   effects: { e: pc.Entity; life: number; velocity?: V3; size?: number }[] = [];
+  private fallingTrees: FallingTree[] = [];
+  private fragments: { entity: pc.Entity; state: Debris }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
   previous: V3[] = [];
   private mapBatch = -1;
@@ -381,6 +406,7 @@ export class Renderer implements CollisionWorld {
     const restore = !!this.map.destruction?.revision || this.map.id !== map.id;
     this.map = map;
     if (!restore) return;
+    this.clearEnvironmentEffects();
     this.terrainPhysics.destroy();
     for (const patch of this.terrainPatches.values()) {
       patch.entity.destroy();
@@ -418,6 +444,163 @@ export class Renderer implements CollisionWorld {
       old.mesh.destroy();
     }
     this.terrainPatches.set(key, { entity, mesh });
+  }
+  private clearEnvironmentEffects() {
+    for (const fall of this.fallingTrees) fall.pivot.destroy();
+    for (const fragment of this.fragments) fragment.entity.destroy();
+    this.fallingTrees = [];
+    this.fragments = [];
+  }
+  private finishTreeFall(fall: FallingTree) {
+    for (const render of [
+      ...(fall.hidden?.log ?? []),
+      ...(fall.hidden?.stump ?? []),
+    ])
+      render.enabled = true;
+    fall.pivot.destroy();
+    this.fallingTrees = this.fallingTrees.filter((f) => f !== fall);
+  }
+  private startTreeFall(object: Destructible) {
+    const root = this.objectVisuals.get(object.id);
+    if (!root) return;
+    if (this.fallingTrees.length >= maxFallingTrees)
+      this.finishTreeFall(this.fallingTrees[0]);
+    const stage = JSON.parse(this.objectStates.get(object.id) ?? "[0]")[0];
+    const b = object.original,
+      base = b.baseY ?? 0;
+    // The falling tree is presentation only. Its old standing collider must
+    // disappear immediately; the simulation already installed the final pieces.
+    for (const body of root.findComponents("rigidbody")) body.entity.destroy();
+    for (const render of root.findComponents("render") as pc.RenderComponent[])
+      render.batchGroupId = -1;
+    for (const child of root.children) {
+      const p = child.getLocalPosition();
+      child.setLocalPosition(p.x - b.x, p.y - base, p.z - b.z);
+    }
+    const pivot = this.joint("falling tree", this.app.root);
+    pivot.setPosition(b.x, base, b.z);
+    root.reparent(pivot);
+    root.setLocalPosition(0, 0, 0);
+    this.objectVisuals.delete(object.id);
+    const log = this.map.destruction!.objects[`log-${b.id}`]?.original;
+    const dx = log ? log.x - b.x : 0,
+      dz = log ? log.z - b.z : 0;
+    this.fallingTrees.push({
+      pivot,
+      root,
+      source: { ...b },
+      height: b.h * (stage === 1 ? 0.6 : 1),
+      crown: stage === 0,
+      log,
+      pieces: [`log-${b.id}`, `stump-${b.id}`],
+      axis: log ? new pc.Vec3(dz, 0, -dx).normalize() : new pc.Vec3(0, 0, 1),
+      age: 0,
+      landed: false,
+    });
+  }
+  private spawnDebris(
+    at: V3,
+    kind: DebrisKind,
+    count: number,
+    seed: number,
+    smallChips = false,
+  ) {
+    const previousBatch = this.batchGroup;
+    this.batchGroup = -1;
+    for (let i = 0; i < count; i++) {
+      if (this.fragments.length >= maxDebris)
+        this.fragments.shift()!.entity.destroy();
+      const state = debrisPiece(at, kind, seed * 31 + i);
+      if (smallChips) {
+        for (const axis of ["x", "y", "z"] as const) {
+          state.size[axis] *= 0.3;
+          state.velocity[axis] *= 0.6;
+        }
+        state.life = 1.4;
+      }
+      const entity = this.cube(
+        `${kind} fragment`,
+        at.x,
+        at.y,
+        at.z,
+        state.size.x,
+        state.size.y,
+        state.size.z,
+        kind === "leaf"
+          ? i % 2
+            ? "#687447"
+            : "#82814d"
+          : kind === "wood"
+            ? i % 2
+              ? "#9b8054"
+              : "#685039"
+            : "#67513a",
+        false,
+        this.app.root,
+      );
+      if (smallChips || kind === "leaf") entity.render!.castShadows = false;
+      this.fragments.push({ entity, state });
+    }
+    this.batchGroup = previousBatch;
+  }
+  private drawEnvironmentEffects(dt: number) {
+    for (const fall of [...this.fallingTrees]) {
+      fall.age += dt;
+      const pose = treeFallPose(fall.age),
+        b = fall.source,
+        log = fall.log;
+      const length = log ? Math.max(log.w, log.d) : 1.15;
+      fall.root.setLocalScale(
+        1,
+        1 + (length / fall.height - 1) * pose.blend,
+        1,
+      );
+      fall.pivot.setRotation(
+        new pc.Quat().setFromAxisAngle(fall.axis, log ? pose.angle : 0),
+      );
+      const base = b.baseY ?? 0;
+      fall.pivot.setPosition(
+        b.x,
+        base + (log ? (log.baseY ?? 0) + log.h / 2 - base : 0) * pose.blend,
+        b.z,
+      );
+      if (pose.angle > 20 || !log)
+        for (const render of fall.hidden?.stump ?? []) render.enabled = true;
+      if (pose.landed && !fall.landed) {
+        fall.landed = true;
+        const at = {
+          x: log?.x ?? b.x,
+          z: log?.z ?? b.z,
+          y: groundHeight(log?.x ?? b.x, log?.z ?? b.z, this.map) + 0.15,
+        };
+        this.spawnDebris(at, "earth", 8, b.x * 7 + b.z);
+        this.spawnDebris(at, "wood", 6, b.z * 9);
+        if (fall.crown)
+          this.spawnDebris({ ...at, y: at.y + 0.8 }, "leaf", 10, b.x);
+      }
+      if (pose.finished) this.finishTreeFall(fall);
+    }
+    this.fragments = this.fragments.filter(({ entity, state }) => {
+      const fade = advanceDebris(state, dt, (x, z) =>
+        groundHeight(x, z, this.map),
+      );
+      if (fade <= 0) {
+        entity.destroy();
+        return false;
+      }
+      entity.setPosition(state.at.x, state.at.y, state.at.z);
+      entity.setEulerAngles(
+        state.rotation.x,
+        state.rotation.y,
+        state.rotation.z,
+      );
+      entity.setLocalScale(
+        state.size.x * fade,
+        state.size.y * fade,
+        state.size.z * fade,
+      );
+      return true;
+    });
   }
   private buildDestructible(object: Destructible) {
     const b = object.original;
@@ -628,12 +811,37 @@ export class Renderer implements CollisionWorld {
     return true;
   }
   updateWorld(change: DestructionChange) {
+    for (const fall of [...this.fallingTrees])
+      if (change.objects.some((o) => fall.pieces.includes(o.id)))
+        this.finishTreeFall(fall);
+    for (const changed of change.objects) {
+      const object = this.map.destruction!.objects[changed.id];
+      if (object.original.kind === "tree" && changed.stage === 2)
+        this.startTreeFall(object);
+    }
     for (const key of change.patches) this.rebuildTerrainPatch(key);
     let coverChanged = false;
     for (const changed of change.objects)
       coverChanged =
         this.buildDestructible(this.map.destruction!.objects[changed.id]) ||
         coverChanged;
+    for (const fall of this.fallingTrees) {
+      if (fall.hidden) continue;
+      const hide = (id: string) => {
+        const renders = (this.objectVisuals.get(id)?.findComponents("render") ??
+          []) as pc.RenderComponent[];
+        return renders.filter((r) => {
+          if (!r.enabled) return false;
+          r.batchGroupId = -1;
+          r.enabled = false;
+          return true;
+        });
+      };
+      fall.hidden = {
+        log: hide(`log-${fall.source.id}`),
+        stump: hide(`stump-${fall.source.id}`),
+      };
+    }
     if (coverChanged) this.app.batcher!.generate([this.coverBatch]);
     if (change.crater) {
       let changed = false;
@@ -1139,6 +1347,7 @@ export class Renderer implements CollisionWorld {
     this.attachSupportArm(rig);
   }
   reset(g: Game) {
+    this.clearEnvironmentEffects();
     for (const e of [
       ...this.people,
       ...this.rings,
@@ -1290,6 +1499,7 @@ export class Renderer implements CollisionWorld {
     this.drawArtillery(g, alpha);
     this.drawSmoke(g, alpha);
     this.drawBlasts(dt);
+    this.drawEnvironmentEffects(dt);
     for (const fx of this.effects) {
       fx.life -= dt;
       const size = fx.life * (fx.size ?? 0.7);
@@ -1691,36 +1901,47 @@ export class Renderer implements CollisionWorld {
       });
     }
     if (e.type === "destruction") {
-      const count = Math.min(
-        e.change.kind === "rifle" ? 2 : 24,
-        6 + e.change.objects.length * 2 + (e.change.crater ? 4 : 0),
-      );
-      for (let i = 0; i < count; i++) {
-        const angle = i * 2.4;
-        const fragment = this.cube(
-          "earth and cover debris",
-          e.change.at.x,
-          e.change.at.y + 0.1,
-          e.change.at.z,
-          0.12,
-          0.12,
-          0.12,
-          e.change.objects.some((o) => o.id.startsWith("brush-")) && i % 3 === 0
-            ? "#687447"
-            : i % 3
-              ? "#6b5438"
-              : "#9b8661",
+      if (e.change.kind === "rifle") {
+        this.spawnDebris(e.change.at, "wood", 2, e.id, true);
+      } else {
+        this.spawnDebris(e.change.at, "earth", e.change.crater ? 18 : 6, e.id);
+        const changed = e.change.objects.map(
+          (o) => this.map.destruction!.objects[o.id],
         );
-        this.effects.push({
-          e: fragment,
-          life: 1 + (i % 3) * 0.15,
-          size: 0.16,
-          velocity: {
-            x: Math.cos(angle) * (2 + (i % 3)),
-            y: 2 + (i % 4),
-            z: Math.sin(angle) * (2 + (i % 3)),
-          },
-        });
+        for (const [i, object] of changed
+          .filter((o) =>
+            ["wood", "tree", "log", "stump"].includes(o.original.kind),
+          )
+          .slice(0, 4)
+          .entries()) {
+          const b = object.original;
+          this.spawnDebris(
+            {
+              x: b.x,
+              y:
+                Math.max(
+                  b.baseY ?? 0,
+                  Math.min((b.baseY ?? 0) + b.h, e.change.at.y),
+                ) + 0.1,
+              z: b.z,
+            },
+            "wood",
+            3,
+            e.id + i,
+          );
+        }
+        for (const [i, object] of changed
+          .filter((o) => o.original.kind === "brush")
+          .slice(0, 4)
+          .entries()) {
+          const b = object.original;
+          this.spawnDebris(
+            { x: b.x, y: (b.baseY ?? 0) + 0.4, z: b.z },
+            "leaf",
+            3,
+            e.id + i,
+          );
+        }
       }
       return;
     }

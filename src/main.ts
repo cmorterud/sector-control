@@ -449,7 +449,12 @@ function frame(now: number) {
       game.tick - 1 + accumulator * 30,
       cameraReactions && !paused,
     );
-    renderer.draw(game, accumulator * 30, dt, params.has("overview"));
+    renderer.draw(
+      game,
+      accumulator * 30,
+      paused ? 0 : dt,
+      params.has("overview"),
+    );
     if (now - uiTime > 50) {
       hud(now);
       uiTime = now;

@@ -139,11 +139,26 @@ export class BattlefieldFeedback {
       this.shock = { tick: -1000, strength: 0 };
       this.nextCrack = 0;
     }
-    if (
-      e.type === "destruction" &&
-      e.change.objects.some((o) => o.id.startsWith("tree-") && o.stage === 2)
-    )
-      this.cue(g, "timber", e.change.at, 0.55, false, true, e.id);
+    if (e.type === "destruction") {
+      const fallen = e.change.objects
+        .filter((o) => o.id.startsWith("tree-") && o.stage === 2)
+        .map((o) => g.map.destruction!.objects[o.id].original)
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z),
+        )
+        .slice(0, 4);
+      for (const tree of fallen)
+        this.cue(
+          g,
+          "timber",
+          { x: tree.x, y: (tree.baseY ?? 0) + 0.5, z: tree.z },
+          0.55,
+          false,
+          true,
+          e.id,
+        );
+    }
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
         g,
