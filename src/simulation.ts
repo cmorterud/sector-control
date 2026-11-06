@@ -53,6 +53,7 @@ import {
   type DestructionChange,
   type ExplosionProfile,
 } from "./destruction";
+import { rosterWeapon, weaponProfiles, type WeaponKind } from "./weapons";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
@@ -72,7 +73,7 @@ export interface Command {
   reload: boolean;
   mantle: boolean;
   grenade: boolean;
-  artillery?: Vec;
+  artillery?: Vec & { area?: boolean };
   smoke?: boolean;
   crouch?: boolean;
 }
@@ -236,6 +237,7 @@ export function mantlePosition(m: Mantle, tick: number): V3 {
   return { ...m.to };
 }
 export interface Soldier extends Vec {
+  weapon: WeaponKind;
   crouched: boolean;
   y: number;
   teamIndex: number;
@@ -340,6 +342,7 @@ export type Event = { id: number; tick: number } & (
       firstImpactAt: number;
       endsAt: number;
       radius: number;
+      uncertainty?: number;
     }
   | {
       type: "artilleryLaunch";
@@ -413,6 +416,7 @@ export type Event = { id: number; tick: number } & (
     }
   | {
       type: "fire";
+      weapon?: WeaponKind;
       actor: number;
       projectile: number;
       from: V3;
@@ -650,6 +654,11 @@ export class Game {
       const team: Team = i < this.teamSize ? "blue" : "red";
       this.players.push({
         id: i,
+        weapon: rosterWeapon(
+          i % this.teamSize,
+          this.teamSize,
+          this.humanPlayerIds.includes(i),
+        ),
         team,
         teamIndex: i % this.teamSize,
         mantle: null,
@@ -762,8 +771,8 @@ export class Game {
         : 0;
     p.hp = 100;
     p.crouched = false;
-    p.ammo = 30;
-    p.reserve = 120;
+    p.ammo = weaponProfiles[p.weapon].magazine;
+    p.reserve = weaponProfiles[p.weapon].reserve;
     p.grenades = 3;
     p.smokes = 2;
     p.suppression = 0;
@@ -898,7 +907,10 @@ export class Game {
         }
       }
       if (p.reloadAt && this.tick >= p.reloadAt) {
-        const n = Math.min(30 - p.ammo, p.reserve);
+        const n = Math.min(
+          weaponProfiles[p.weapon].magazine - p.ammo,
+          p.reserve,
+        );
         p.ammo += n;
         p.reserve -= n;
         p.reloadAt = 0;
@@ -907,10 +919,10 @@ export class Game {
         c.reload &&
         !p.mantle &&
         !p.reloadAt &&
-        p.ammo < 30 &&
+        p.ammo < weaponProfiles[p.weapon].magazine &&
         p.reserve > 0
       ) {
-        p.reloadAt = this.tick + 60;
+        p.reloadAt = this.tick + weaponProfiles[p.weapon].reloadTicks;
         this.emit({ type: "reload", actor: p.id });
       }
     }
@@ -1099,7 +1111,7 @@ export class Game {
   fire(p: Soldier) {
     const { yaw, pitch } = weaponAim(p);
     p.ammo--;
-    p.nextShot = this.tick + 6;
+    p.nextShot = this.tick + weaponProfiles[p.weapon].shotTicks;
     // Bloom feeds bot aim drift; the shared recoil below applies to every rifle.
     p.aimBloom = Math.min(1, p.aimBloom + 0.25);
     p.protectedUntil = 0;
@@ -1169,6 +1181,7 @@ export class Game {
     };
     this.emit({
       type: "fire",
+      weapon: p.weapon,
       actor: p.id,
       projectile: shot.id,
       recoil: { pitch: p.recoilPitch, yaw: p.recoilYaw },
@@ -1939,6 +1952,7 @@ export function botCommand(g: Game, p: Soldier): Command {
       p,
       g.tick,
       g.botSettings.aimError *
+        (p.weapon === "machineGun" ? 1.35 : 1) *
         (1 +
           p.suppression * 1.5 +
           (g.botSettings.awareness
@@ -2026,7 +2040,10 @@ export function botCommand(g: Game, p: Soldier): Command {
     if (c.fire) {
       c.fire = semiAutoIntent(g, p);
       if (c.fire && g.botSettings.awareness) {
-        const scatter = g.botSettings.aimError * 0.65 * (1 + p.suppression);
+        const scatter =
+          g.botSettings.aimError *
+          (p.weapon === "machineGun" ? 0.9 : 0.65) *
+          (1 + p.suppression);
         c.yaw += (awarenessSample(p, g.tick, 401) * 2 - 1) * scatter;
         c.pitch += (awarenessSample(p, g.tick, 409) * 2 - 1) * scatter;
       }

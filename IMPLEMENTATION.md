@@ -268,3 +268,14 @@ The user requested two seconds less warning, more shells over a wider area, and 
 The mission test checks actual swept impacts at the new schedule, wider-than-10 m but bounded-14 m planned scatter, the full danger radius and cleanup. Roof, owner death and airborne-match-end fixtures now expect eight shells. The retreat fixture checks shelter before actual mission expiry rather than a fixed ten-second delay, since the whole warning-plus-salvo ends two seconds earlier. Native evidence follows in PLAYTEST_REVIEW.md.
 
 Validation uses one Vitest worker in CI, matching the successful local `npm run check -- --maxWorkers=1` run (198 tests, 78.18 s). A parallel local run hit wall-clock timeouts in four unchanged simulation/terrain tests; no assertions or their limits were changed. Serial workers avoid competing CPU-heavy scenario files on the same runner. Strict production build passes.
+
+
+## Tactical sectors, machine gunners and crater shape — November 5, 2026
+
+Q toggles ArtilleryMap; a relative virtual cursor preserves pointer lock, while unlocked demo play uses ordinary sector buttons. Map open consumes fire/aim/throws without stopping movement or simulation. Cancel, death, pause and reset close it, and confirmation queues one ordinary command. The map has static authored trench strokes and own position only. artillery-sectors quantizes requests in the simulation to approximately 16 m cells. Human area calls skip exposure/LOS restrictions, retaining finite/boundary/range/alive/team/charge validation. Observation determines 6 m or 10 m seeded salvo-center uncertainty plus normal scatter; danger/AI avoidance includes uncertainty, and edge impacts clamp to map bounds. Bot calls retain precise spotting constraints and original danger radius.
+
+Weapon profiles assign floor(teamSize/12) deterministic bot gunners per team, never humans. Gunners use 60/240 ammunition, three-tick mechanical rate, 90-tick reload, four-to-six-round trigger strings and 45–90 tick pauses. Awareness, target loss and suppression retain priority; drift/scatter increase for gunners and assault recruitment excludes them. Fire events include weapon kind; recorder counts machineGunShots. A longer shroud/ammo box/bipod and heavier short report distinguish them. Damage/projectiles/recoil retain the shared implementation.
+
+Artillery excavation uses a locally seeded CraterShape without consuming combat RNG: varied elliptical orientation/size/depth, sub-cell offsets and smooth harmonic rim variation. Physical cuts and render/Ammo patches share this sampler. Directly struck low step lips relax into the floor; crossing authored height discontinuities requires local direct blast contact so relaxation cannot propagate along an untouched cliff. Tests cover actual step-end terrain, a walking exit and matching Ammo down-rays.
+
+Deferred user request: creeping barrage should move its impact line forward slowly. No creeping-barrage behavior is implemented here.

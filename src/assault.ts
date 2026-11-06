@@ -105,6 +105,7 @@ export function advanceAssaults(g: Game) {
           (p) =>
             p.team === team &&
             !g.humanPlayerIds.includes(p.id) &&
+            p.weapon !== "machineGun" &&
             p.hp > 0 &&
             p.ammo >= 10 &&
             !p.mantle &&

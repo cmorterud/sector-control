@@ -125,7 +125,7 @@ export class BattleAudio {
     const c = this.context;
     const explosion = cue.kind === "artillery" || cue.kind === "grenade";
     const foot = ["mud", "wood", "concrete"].includes(cue.kind);
-    const rifle = cue.kind === "rifle";
+    const rifle = cue.kind === "rifle" || cue.kind === "machineGun";
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
@@ -136,7 +136,9 @@ export class BattleAudio {
       : whistle
         ? 0.95
         : rifle
-          ? 0.16 + distant * 0.42
+          ? cue.kind === "machineGun"
+            ? 0.11 + distant * 0.25
+            : 0.16 + distant * 0.42
           : crack
             ? 0.065
             : foot
@@ -279,7 +281,15 @@ export class BattleAudio {
         gain = c.createGain();
       body.type = whistle ? "sine" : "triangle";
       body.frequency.setValueAtTime(
-        whistle ? 1600 : explosion ? 95 : rifle ? 155 : 260,
+        whistle
+          ? 1600
+          : cue.kind === "machineGun"
+            ? 115
+            : explosion
+              ? 95
+              : rifle
+                ? 155
+                : 260,
         start,
       );
       body.frequency.exponentialRampToValueAtTime(

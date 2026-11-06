@@ -9,6 +9,7 @@ import type { Event, Game, V3 } from "./simulation";
 
 export type SoundKind =
   | "rifle"
+  | "machineGun"
   | "crack"
   | "mud"
   | "wood"
@@ -162,7 +163,7 @@ export class BattlefieldFeedback {
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
         g,
-        "rifle",
+        e.weapon === "machineGun" ? "machineGun" : "rifle",
         e.from,
         e.actor === 0 ? 0.4 : 0.3,
         e.actor === 0,

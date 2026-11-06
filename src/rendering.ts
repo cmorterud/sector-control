@@ -1036,6 +1036,45 @@ export class Renderer implements CollisionWorld {
       false,
       rifle,
     );
+    if (p.weapon === "machineGun") {
+      this.cube(
+        "machine gun barrel shroud",
+        0,
+        0.025,
+        -0.53,
+        0.11,
+        0.11,
+        0.48,
+        "#293133",
+        false,
+        rifle,
+      );
+      this.cube(
+        "machine gun ammo box",
+        -0.15,
+        -0.11,
+        0.06,
+        0.25,
+        0.25,
+        0.23,
+        "#555d3d",
+        false,
+        rifle,
+      );
+      for (const side of [-1, 1])
+        this.cube(
+          "folded bipod",
+          side * 0.07,
+          -0.06,
+          -0.36,
+          0.035,
+          0.035,
+          0.4,
+          "#424b48",
+          false,
+          rifle,
+        );
+    }
     // The hand belongs to the weapon, so gait, recoil and reload cannot detach it.
     const supportHand = this.joint(
       "left hand grip",
@@ -1626,7 +1665,7 @@ export class Renderer implements CollisionWorld {
     const markers = g.artillery.missions.map((m) => ({
       id: m.id,
       target: m.target,
-      radius: artilleryRules.dangerRadius,
+      radius: m.dangerRadius ?? artilleryRules.dangerRadius,
       color: m.team === "blue" ? "#e9bb69" : "#ee795c",
     }));
     if (this.artilleryPreview)

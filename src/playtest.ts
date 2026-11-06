@@ -57,6 +57,9 @@ export class PlaytestLog {
       slowFramesOver33ms: this.frames.filter((ms) => ms > 1000 / 30).length,
       errors: [...this.errors],
       shots: this.events.filter((e) => e.type === "fire").length,
+      machineGunShots: this.events.filter(
+        (e) => e.type === "fire" && e.weapon === "machineGun",
+      ).length,
       targetAcquisitions: this.events.filter(
         (e) => e.type === "botAttention" && e.phase === "acquired",
       ).length,

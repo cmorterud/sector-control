@@ -1,4 +1,5 @@
 import { fallenTreeParts, timberSupport } from "./vegetation";
+import { craterShape, craterSampler, type CraterShape } from "./crater-shape";
 import {
   baseGroundHeight,
   groundHeight,
@@ -20,6 +21,7 @@ export interface ExplosionProfile {
   craterDepth: number;
   terrainReach: number;
   bankDepth?: number;
+  craterVariation?: number;
 }
 export const grenadeExplosionProfile: ExplosionProfile = {
   kind: "grenade",
@@ -42,6 +44,7 @@ export const artilleryExplosionProfile: ExplosionProfile = {
   craterDepth: 1.3,
   terrainReach: 5,
   bankDepth: 3.2,
+  craterVariation: 0.18,
 };
 export { terrainResolution, terrainPatchSize } from "./map";
 export interface Destructible {
@@ -56,6 +59,7 @@ export interface Crater extends Point {
   id: number;
   radius: number;
   depth: number;
+  shape?: CraterShape;
 }
 export interface DestructionState {
   revision: number;
@@ -216,7 +220,19 @@ export function deformExplosion(
     edits.set(`${x},${z}`, next);
     queue.push({ x, z });
   };
-  const r = profile.craterRadius;
+  const shape = profile.craterVariation
+    ? craterShape(
+        at,
+        state.craters.length + 1,
+        profile.craterRadius,
+        profile.craterDepth,
+        profile.craterVariation,
+      )
+    : undefined;
+  const r = shape?.reach ?? profile.craterRadius;
+  const radial = shape
+    ? craterSampler(shape)
+    : (dx: number, dz: number) => Math.hypot(dx, dz) / r;
   if (r > 0 && profile.craterDepth > 0)
     for (
       let x = Math.ceil((at.x - r) / terrainResolution);
@@ -230,8 +246,8 @@ export function deformExplosion(
       ) {
         const wx = x * terrainResolution,
           wz = z * terrainResolution;
-        const distance = Math.hypot(wx - at.x, wz - at.z);
-        if (distance >= r) continue;
+        const q = radial(wx - at.x, wz - at.z);
+        if (q >= 1) continue;
         const surface = groundHeight(wx, wz, map);
         const standoff = Math.abs(at.y - surface);
         if (
@@ -240,9 +256,9 @@ export function deformExplosion(
         )
           continue;
         const depth =
-          profile.craterDepth *
+          (shape?.depth ?? profile.craterDepth) *
           (1 - standoff / profile.terrainReach) *
-          (1 - (distance / r) ** 2) ** 2;
+          (1 - q ** 2) ** (shape ? 1.7 : 2);
         lower(x, z, read(x, z) + depth);
       }
   let wallSamples = 0;
@@ -260,8 +276,9 @@ export function deformExplosion(
         const wx = x * terrainResolution,
           wz = z * terrainResolution;
         const distance = Math.hypot(wx - at.x, wz - at.z);
+        const q = radial(wx - at.x, wz - at.z);
         const top = groundHeight(wx, wz, map);
-        if (distance < 0.05 || distance >= r || top < at.y + 0.2) continue;
+        if (distance < 0.05 || q >= 1 || top < at.y + 0.2) continue;
         const to = { x: wx, y: at.y, z: wz };
         const f = ray(at, to);
         if (f >= 0.999) continue;
@@ -283,13 +300,13 @@ export function deformExplosion(
         const before = groundHeight(hit.x - dx * 0.2, hit.z - dz * 0.2, map);
         const behind = groundHeight(hit.x + dx * 0.2, hit.z + dz * 0.2, map);
         if (before > at.y + 0.08 || behind < at.y + 0.15) continue;
-        const amount =
-          profile.bankDepth * Math.sqrt(Math.max(0, 1 - (distance / r) ** 2));
+        const amount = profile.bankDepth * Math.sqrt(Math.max(0, 1 - q ** 2));
         const previous = read(x, z);
         lower(x, z, previous + amount);
         if (read(x, z) > previous + 0.0001) wallSamples++;
       }
   }
+  const directCuts = new Set(edits.keys());
   // Relax the bowl outward as repeated hits deepen it. Preserve existing steep
   // trench walls, but don't introduce unwalkable slopes on one continuous surface.
   for (let i = 0; i < queue.length; i++) {
@@ -319,10 +336,17 @@ export function deformExplosion(
             ? { x, z, base }
             : { x: nx, z: nz, base: neighborBase };
         const low = Math.min(base, neighborBase);
+        const touched =
+          directCuts.has(`${x},${z}`) || directCuts.has(`${nx},${nz}`);
+        // Only an actual blast contact may crumble an authored ledge. Let a
+        // struck firing step blend into its floor, but keep remote bank faces.
+        const stepLip = !!shape && high.base <= 1.1 && low >= -0.1;
         // Preserve intact trench faces; smooth across a bank only after it is cut down.
         if (
-          read(high.x, high.z) <= 0 ||
-          high.base - read(high.x, high.z) > low + 0.23
+          !touched ||
+          (!stepLip &&
+            (read(high.x, high.z) <= 0 ||
+              high.base - read(high.x, high.z) > low + 0.23))
         )
           continue;
         const lowHeight = Math.max(
@@ -350,9 +374,15 @@ export function deformExplosion(
     Infinity,
     -Infinity,
   ];
+  let reach = r;
   for (const [key, depth] of edits) {
     state.cuts[key] = depth;
     const [x, z] = key.split(",").map(Number);
+    if (shape)
+      reach = Math.max(
+        reach,
+        Math.hypot(x * terrainResolution - at.x, z * terrainResolution - at.z),
+      );
     bounds[0] = Math.min(bounds[0], x * terrainResolution);
     bounds[1] = Math.max(bounds[1], x * terrainResolution);
     bounds[2] = Math.min(bounds[2], z * terrainResolution);
@@ -370,8 +400,9 @@ export function deformExplosion(
     ? {
         id: state.craters.length + 1,
         ...at,
-        radius: r,
-        depth: profile.craterDepth,
+        radius: reach,
+        depth: shape?.depth ?? profile.craterDepth,
+        ...(shape ? { shape } : {}),
       }
     : null;
   if (crater) state.craters.push(crater);

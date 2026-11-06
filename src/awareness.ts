@@ -66,6 +66,16 @@ export function semiAutoIntent(g: Game, p: Soldier) {
     return false;
   const a = p.awareness;
   a.stringShots++;
+  if (p.weapon === "machineGun") {
+    const pause =
+      a.stringShots >= 4 + Math.floor(awarenessSample(p, p.spottedAt, 311) * 3);
+    a.nextTrigger =
+      g.tick +
+      (pause ? 45 + Math.floor(awarenessSample(p, g.tick, 313) * 46) : 3) +
+      Math.floor(p.suppression * 10);
+    if (pause) a.stringShots = 0;
+    return true;
+  }
   const pause =
     a.stringShots >= 2 + Math.floor(awarenessSample(p, p.spottedAt, 311) * 2);
   a.nextTrigger =

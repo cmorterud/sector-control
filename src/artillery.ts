@@ -11,6 +11,7 @@ import {
   type Command,
 } from "./simulation";
 import { artilleryExplosionProfile } from "./destruction";
+import { artillerySector } from "./artillery-sectors";
 
 const shellsPerBarrage = 8;
 const barrageDuration = 4 * 30;
@@ -37,6 +38,8 @@ export interface FireMission {
   endsAt: number;
   launched: number;
   impacts: Vec[];
+  uncertainty?: number;
+  dangerRadius?: number;
 }
 export interface ArtilleryShell extends V3 {
   id: number;
@@ -84,22 +87,36 @@ function teamHasHuman(g: Game, p: Soldier): boolean {
 export function artilleryTargetReason(
   g: Game,
   p: Soldier,
-  target: Vec,
+  target: Vec & { area?: boolean },
 ): string | null {
   if (!g.artillery.enabled || g.phase !== "playing")
     return "Artillery unavailable";
   if (teamHasHuman(g, p) && !g.humanPlayerIds.includes(p.id))
     return "Artillery is reserved for your team's human player";
-  if (p.hp <= 0 || p.mantle || p.hop || p.fall)
+  if (target.area && !g.humanPlayerIds.includes(p.id))
+    return "Tactical map calls require a human soldier";
+  if (p.hp <= 0) return "Redeploy before calling artillery";
+  if (!target.area && (p.mantle || p.hop || p.fall))
     return "Stand on solid ground to spot";
   if (!Number.isFinite(target.x) || !Number.isFinite(target.z))
     return "Choose a target";
-  if (g.map.terrain && p.y + eyeHeightOf(p) < g.map.terrain.bankHeight + 0.04)
+  if (
+    target.area &&
+    (Math.abs(target.x) > g.map.width / 2 ||
+      Math.abs(target.z) > g.map.depth / 2)
+  )
+    return "Choose a sector on the map";
+  if (target.area) target = { ...artillerySector(g.map, target), area: true };
+  if (
+    !target.area &&
+    g.map.terrain &&
+    p.y + eyeHeightOf(p) < g.map.terrain.bankHeight + 0.04
+  )
     return "Use a firing step to spot over the parapet";
   const range = dist(p, target);
   if (range < artilleryRules.minRange || range > artilleryRules.maxRange)
     return "Mark ground 15–70 m away";
-  const margin = artilleryRules.scatterRadius + 1;
+  const margin = target.area ? 1 : artilleryRules.scatterRadius + 1;
   if (
     Math.abs(target.x) > g.map.width / 2 - margin ||
     Math.abs(target.z) > g.map.depth / 2 - margin
@@ -113,20 +130,53 @@ export function artilleryTargetReason(
       (g.map.terrain?.bankHeight ?? 0) + 0.1,
     ),
   };
-  if (smokeBlocks(g, from, to) || g.collision.ray(from, to) < 0.995)
+  if (
+    !target.area &&
+    (smokeBlocks(g, from, to) || g.collision.ray(from, to) < 0.995)
+  )
     return "No clear view of that area";
   if (g.tick < g.artillery.readyAt[p.team]) return "Artillery is reloading";
   if (g.artillery.missions.some((m) => m.team === p.team))
     return "Fire mission already active";
   return null;
 }
-export function requestArtillery(g: Game, p: Soldier, target: Vec): boolean {
+export function artilleryUncertainty(g: Game, p: Soldier, target: Vec): number {
+  const from = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
+  const to = {
+    ...target,
+    y: Math.max(
+      groundHeight(target.x, target.z, g.map) + 0.15,
+      (g.map.terrain?.bankHeight ?? 0) + 0.1,
+    ),
+  };
+  return (g.map.terrain && from.y < g.map.terrain.bankHeight + 0.04) ||
+    smokeBlocks(g, from, to) ||
+    g.collision.ray(from, to) < 0.995
+    ? 10
+    : 6;
+}
+export function requestArtillery(
+  g: Game,
+  p: Soldier,
+  target: Vec & { area?: boolean },
+): boolean {
   if (artilleryTargetReason(g, p, target)) return false;
+  const area = !!target.area;
+  if (area) target = artillerySector(g.map, target);
+  const uncertainty = area ? artilleryUncertainty(g, p, target) : 0;
+  const angle = uncertainty ? g.random() * Math.PI * 2 : 0;
+  const drift = uncertainty ? Math.sqrt(g.random()) * uncertainty : 0;
+  const center = {
+    x: target.x + Math.cos(angle) * drift,
+    z: target.z + Math.sin(angle) * drift,
+  };
   const mission: FireMission = {
     id: ++g.artillery.missionSequence,
     actor: p.id,
     team: p.team,
-    target: { ...target },
+    target: { x: target.x, z: target.z },
+    uncertainty,
+    dangerRadius: artilleryRules.dangerRadius + uncertainty,
     calledAt: g.tick,
     firstImpactAt: g.tick + artilleryRules.warning,
     endsAt:
@@ -138,8 +188,14 @@ export function requestArtillery(g: Game, p: Soldier, target: Vec): boolean {
     const angle = g.random() * Math.PI * 2,
       radius = Math.sqrt(g.random()) * artilleryRules.scatterRadius;
     mission.impacts.push({
-      x: target.x + Math.cos(angle) * radius,
-      z: target.z + Math.sin(angle) * radius,
+      x: Math.max(
+        -g.map.width / 2 + 1,
+        Math.min(g.map.width / 2 - 1, center.x + Math.cos(angle) * radius),
+      ),
+      z: Math.max(
+        -g.map.depth / 2 + 1,
+        Math.min(g.map.depth / 2 - 1, center.z + Math.sin(angle) * radius),
+      ),
     });
   }
   g.artillery.readyAt[p.team] = g.tick + artilleryRules.cooldown;
@@ -150,10 +206,11 @@ export function requestArtillery(g: Game, p: Soldier, target: Vec): boolean {
     actor: p.id,
     team: p.team,
     mission: mission.id,
-    target: { ...target },
+    target: { x: target.x, z: target.z },
     firstImpactAt: mission.firstImpactAt,
     endsAt: mission.endsAt,
-    radius: artilleryRules.dangerRadius,
+    radius: mission.dangerRadius!,
+    uncertainty,
   });
   return true;
 }
@@ -262,7 +319,8 @@ export function advanceArtillery(g: Game) {
 }
 export function artilleryThreat(g: Game, p: Vec): FireMission | undefined {
   return g.artillery.missions.find(
-    (m) => dist(p, m.target) < artilleryRules.dangerRadius + 2,
+    (m) =>
+      dist(p, m.target) < (m.dangerRadius ?? artilleryRules.dangerRadius) + 2,
   );
 }
 export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
