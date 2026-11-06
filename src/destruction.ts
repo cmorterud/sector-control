@@ -309,61 +309,136 @@ export function deformExplosion(
   const directCuts = new Set(edits.keys());
   // Relax the bowl outward as repeated hits deepen it. Preserve existing steep
   // trench walls, but don't introduce unwalkable slopes on one continuous surface.
-  for (let i = 0; i < queue.length; i++) {
-    const { x, z } = queue[i];
-    const base = baseGroundHeight(
-      x * terrainResolution,
-      z * terrainResolution,
-      map,
-    );
-    const height = base - read(x, z);
-    for (const [dx, dz] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      const nx = x + dx,
-        nz = z + dz;
-      const neighborBase = baseGroundHeight(
-        nx * terrainResolution,
-        nz * terrainResolution,
+  let relaxed = 0;
+  const relax = () => {
+    for (; relaxed < queue.length; relaxed++) {
+      const { x, z } = queue[relaxed];
+      const base = baseGroundHeight(
+        x * terrainResolution,
+        z * terrainResolution,
         map,
       );
-      if (Math.abs(neighborBase - base) > 0.3) {
-        const high =
-          base > neighborBase
-            ? { x, z, base }
-            : { x: nx, z: nz, base: neighborBase };
-        const low = Math.min(base, neighborBase);
-        const touched =
-          directCuts.has(`${x},${z}`) || directCuts.has(`${nx},${nz}`);
-        // Only an actual blast contact may crumble an authored ledge. Let a
-        // struck firing step blend into its floor, but keep remote bank faces.
-        const stepLip = !!shape && high.base <= 1.1 && low >= -0.1;
-        // Preserve intact trench faces; smooth across a bank only after it is cut down.
-        if (
-          !touched ||
-          (!stepLip &&
-            (read(high.x, high.z) <= 0 ||
-              high.base - read(high.x, high.z) > low + 0.23))
-        )
-          continue;
-        const lowHeight = Math.max(
-          -0.9,
-          base > neighborBase ? neighborBase - read(nx, nz) : base - read(x, z),
+      const height = base - read(x, z);
+      for (const [dx, dz] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx,
+          nz = z + dz;
+        const neighborBase = baseGroundHeight(
+          nx * terrainResolution,
+          nz * terrainResolution,
+          map,
         );
-        // A column may collapse after its low neighbor was already processed.
-        // Revisit the high side too, so the newly opened lip joins the floor.
-        lower(
-          high.x,
-          high.z,
-          high.base - (lowHeight + terrainResolution * 0.45),
-        );
+        if (Math.abs(neighborBase - base) > 0.3) {
+          const high =
+            base > neighborBase
+              ? { x, z, base }
+              : { x: nx, z: nz, base: neighborBase };
+          const low = Math.min(base, neighborBase);
+          const touched =
+            directCuts.has(`${x},${z}`) || directCuts.has(`${nx},${nz}`);
+          // Only an actual blast contact may crumble an authored ledge. Let a
+          // struck firing step blend into its floor, but keep remote bank faces.
+          const stepLip = !!shape && high.base <= 1.1 && low >= -0.1;
+          // Preserve intact trench faces; smooth across a bank only after it is cut down.
+          if (
+            !touched ||
+            (!stepLip &&
+              (read(high.x, high.z) <= 0 ||
+                high.base - read(high.x, high.z) > low + 0.23))
+          )
+            continue;
+          const lowHeight = Math.max(
+            -0.9,
+            base > neighborBase
+              ? neighborBase - read(nx, nz)
+              : base - read(x, z),
+          );
+          // A column may collapse after its low neighbor was already processed.
+          // Revisit the high side too, so the newly opened lip joins the floor.
+          lower(
+            high.x,
+            high.z,
+            high.base - (lowHeight + terrainResolution * 0.45),
+          );
+        }
+        const maxHeight = height + terrainResolution * 0.45;
+        if (neighborBase - read(nx, nz) > maxHeight + 0.0001)
+          lower(nx, nz, neighborBase - maxHeight);
       }
-      const maxHeight = height + terrainResolution * 0.45;
-      if (neighborBase - read(nx, nz) > maxHeight + 0.0001)
-        lower(nx, nz, neighborBase - maxHeight);
+    }
+  };
+  relax();
+  if (shape && edits.size) {
+    // Blast-damaged, narrow earth traverses should slump, rather than leave a
+    // tall sheet between two excavated sides. Freeze the eligible footprint:
+    // collapse must never march along an untouched trench wall.
+    const eligible = new Map<string, { x: number; z: number }>();
+    for (const { x, z } of queue)
+      for (const [dx, dz] of [
+        [0, 0],
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx,
+          nz = z + dz;
+        eligible.set(`${nx},${nz}`, { x: nx, z: nz });
+      }
+    const bases = new Map<string, number>();
+    const baseAt = (x: number, z: number) => {
+      const key = `${x},${z}`;
+      let base = bases.get(key);
+      if (base === undefined) {
+        base = baseGroundHeight(
+          x * terrainResolution,
+          z * terrainResolution,
+          map,
+        );
+        bases.set(key, base);
+      }
+      return base;
+    };
+    const surface = (x: number, z: number) =>
+      Math.max(-0.9, baseAt(x, z) - read(x, z));
+    // Five samples span 1.25 m on each side: a damaged strip narrower than
+    // 2.5 m cannot keep a near-vertical crest > 0.75 m above both shoulders.
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false;
+      for (const { x, z } of eligible.values()) {
+        const base = baseAt(x, z);
+        if (base < 1.1) continue;
+        for (const [dx, dz] of [
+          [5, 0],
+          [0, 5],
+        ]) {
+          const shoulder = Math.max(
+            surface(x - dx, z - dz),
+            surface(x + dx, z + dz),
+          );
+          if (surface(x, z) - shoulder <= 0.75) continue;
+          // An untouched authored traverse is stable. Require erosion of this
+          // sample or newly lost support on at least one sampled shoulder.
+          if (
+            read(x, z) < 0.15 &&
+            !edits.has(`${x - dx},${z - dz}`) &&
+            !edits.has(`${x + dx},${z + dz}`)
+          )
+            continue;
+          const before = read(x, z);
+          lower(x, z, base - (shoulder + terrainResolution * 0.45));
+          if (read(x, z) > before + 0.0001) {
+            directCuts.add(`${x},${z}`);
+            changed = true;
+          }
+        }
+      }
+      if (!changed) break;
+      relax();
     }
   }
   if (!edits.size && !objects.length) return null;

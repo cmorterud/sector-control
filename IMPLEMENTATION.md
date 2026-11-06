@@ -279,3 +279,12 @@ Weapon profiles assign floor(teamSize/12) deterministic bot gunners per team, ne
 Artillery excavation uses a locally seeded CraterShape without consuming combat RNG: varied elliptical orientation/size/depth, sub-cell offsets and smooth harmonic rim variation. Physical cuts and render/Ammo patches share this sampler. Directly struck low step lips relax into the floor; crossing authored height discontinuities requires local direct blast contact so relaxation cannot propagate along an untouched cliff. Tests cover actual step-end terrain, a walking exit and matching Ammo down-rays.
 
 Deferred user request: creeping barrage should move its impact line forward slowly. No creeping-barrage behavior is implemented here.
+
+
+## Solid jutting earth remnants — November 6, 2026
+
+The user confirmed the thin post-barrage projection blocked movement. A grazing shell at(-23,3.75), y0.025 reproduces a2.14m earth crest between low shoulders. Artillery now slumps damaged upper-bank samples when both opposite shoulders within1.25m are >0.75m lower. Eligible samples are frozen to the current excavation footprint plus one adjacent grid sample; up to three local passes reuse existing slope relaxation, floor cap and protected-foundation checks. This cannot march along an untouched trench wall. Authored base-height queries cache locally during collapse. Grenade profiles retain their prior deformation rule.
+
+A second issue left thin high faces beside lowered samples: runtime height interpolation required every high corner of a cell to reach the floor. It now interpolates final surface heights when a high-side corner is materially eroded. Grid cells abutting authored cliff boundaries also qualify when depth differences alone would miss them. Intact bank cliffs retain their authored discontinuity. Renderer, Ammo patches, movement and rays share the corrected height sampler.
+
+Four regressions cover the actual grazing-shell remnant, ten-micron bank-edge probes (formerly y0 at the edge versus y2.4 immediately beside it), actual Ammo down-rays/crossing and repeated strikes around protected foundations/distant traverses. The previous code fails the remnant/crossing checks. Ignored local before/after review pages use the production renderer and actual terrain mesh; they are not part of the production game or CI.

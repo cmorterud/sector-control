@@ -240,10 +240,23 @@ function sampleTerrainCuts(
     tx <= tz
       ? a + (d - c) * tx + (c - a) * tz
       : a + (b - a) * tx + (d - b) * tz;
-  // Cuts straddling an intact authored cliff retain its vertical face. Once
-  // the high side has collapsed, interpolate the resulting surface instead
-  // of depths measured from two different bank heights (which leaves a lip).
-  if (runtimeMap && Math.max(a, b, c, d) - Math.min(a, b, c, d) > 0.3) {
+  // Keep intact authored cliffs vertical. Once their upper samples erode,
+  // interpolate final heights rather than cuts measured from different bases.
+  // Otherwise a collapsed sample can have a 2.4 m lip a few microns beside it.
+  const terrain = runtimeMap?.terrain;
+  const cliffCell =
+    terrain &&
+    (((ix + 1) * terrainResolution + runtimeMap.width / 2) %
+      terrain.cellSize ===
+      0 ||
+      ((iz + 1) * terrainResolution + runtimeMap.depth / 2) %
+        terrain.cellSize ===
+        0);
+  if (
+    runtimeMap &&
+    (Math.max(a, b, c, d) - Math.min(a, b, c, d) > 0.3 ||
+      (cliffCell && Math.max(a, b, c, d) > 0.15))
+  ) {
     const bases = [
       [ix, iz],
       [ix + 1, iz],
@@ -262,7 +275,7 @@ function sampleTerrainCuts(
     );
     if (
       Math.max(...bases) - low > 0.3 &&
-      bases.every((base, i) => base <= low + 0.3 || heights[i] <= low + 0.23)
+      bases.some((base, i) => base > low + 0.3 && heights[i] < base - 0.15)
     )
       return Math.max(
         0,
