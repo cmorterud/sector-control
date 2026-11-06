@@ -371,3 +371,5 @@ Final native tree proof **sector-control-2026-11-05T11-50-01-085Z** (November 5 
 
 
 Hosted run 42022466588 at 5e6f3d9 completed 190/191 tests, with only the sixteen-scenario awareness accuracy sweep exceeding the default five-second wall-clock budget (hosted suite 65.72 s). The existing full eight-minute battle passed. The accuracy test now has a thirty-second integration budget; its eight identities × two settings × 900 ticks and every hit-rate/nonzero-hit assertion remain unchanged. This is a test runner budget adjustment, with no runtime source changes. The focused awareness suite was rerun locally before the follow-up push; hosted verification follows it.
+
+Hosted follow-up [run 42022871164](https://github.com/cmorterud/sector-control/actions/runs/42022871164) at **7520445** passed all 191 tests and the production build. The timeout issue is resolved with every accuracy assertion retained.
