@@ -126,7 +126,10 @@ it("keeps the firing-step battle active through a full eight-minute match", () =
   let shots = 0,
     lateShots = 0,
     deaths = 0,
+    creditedDeaths = 0,
+    environmentalDeaths = 0,
     lateDeaths = 0;
+  const damageSources = new Map<number, number>();
   for (let i = 0; i < 480 * 30; i++) {
     game.step(botCommand(game, game.players[0]));
     for (const e of game.events) {
@@ -134,14 +137,20 @@ it("keeps the firing-step battle active through a full eight-minute match", () =
         shots++;
         if (i >= 420 * 30) lateShots++;
       }
+      if (e.type === "damage") damageSources.set(e.actor, e.source);
       if (e.type === "death") {
+        const source = damageSources.get(e.actor);
+        if (source === -1) environmentalDeaths++;
+        else if (source !== undefined && source !== e.actor) creditedDeaths++;
         deaths++;
         if (i >= 420 * 30) lateDeaths++;
       }
     }
   }
   expect(game.phase).toBe("ended");
-  expect(game.scores.blue + game.scores.red).toBe(deaths);
+  expect(game.scores.blue + game.scores.red).toBe(creditedDeaths);
+  expect(environmentalDeaths).toBeGreaterThan(0);
+  expect(creditedDeaths + environmentalDeaths).toBeLessThanOrEqual(deaths);
   expect(
     lateShots,
     JSON.stringify({

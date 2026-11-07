@@ -103,6 +103,9 @@ export class PlaytestLog {
         .length,
       artilleryImpacts: this.events.filter((e) => e.type === "artilleryImpact")
         .length,
+      ambientArtilleryImpacts: this.events.filter(
+        (e) => e.type === "artilleryImpact" && e.ambient,
+      ).length,
       artilleryEvades: this.events.filter((e) => e.type === "artilleryEvade")
         .length,
       treesFelled: this.events

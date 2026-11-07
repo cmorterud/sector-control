@@ -2596,7 +2596,7 @@ export class Renderer implements CollisionWorld {
       root.lookAt(x + shell.vx, y + shell.vy, z + shell.vz);
     }
   }
-  private blastEffect(at: V3, radius: number, power = 1) {
+  private blastEffect(at: V3, radius: number, power = 1, scale = 1) {
     if (this.blasts.length >= maxBlastClouds) {
       const oldest = this.blasts.shift()!;
       oldest.root.destroy();
@@ -2604,6 +2604,7 @@ export class Renderer implements CollisionWorld {
     }
     const root = this.joint("explosion dust", this.app.root);
     root.setPosition(at.x, at.y, at.z);
+    root.setLocalScale(scale, scale, scale);
     const material = (hex: string, emissive = false) => {
       const m = new pc.StandardMaterial();
       m.diffuse = color(hex);
@@ -2817,7 +2818,8 @@ export class Renderer implements CollisionWorld {
       return;
     }
     if (e.type === "artilleryImpact") {
-      this.blastEffect(e.at, e.radius, 1.7);
+      const scale = e.ambient ? 2 : 1;
+      this.blastEffect(e.at, e.radius / scale, 1.7, scale);
       return;
     }
     if (e.type === "grenadeExplosion") {

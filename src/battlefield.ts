@@ -238,12 +238,12 @@ export class BattlefieldFeedback {
           g,
           artillery ? "artillery" : "grenade",
           e.at,
-          artillery ? 0.85 : 0.65,
+          artillery ? (e.ambient ? 1 : 0.85) : 0.65,
           false,
           true,
           e.id,
         );
-      const range = artillery ? 30 : 16;
+      const range = artillery ? (e.ambient ? 60 : 30) : 16;
       if (p.hp > 0 && distance < range) {
         const covered =
           g.collision.ray({ x: p.x, y: p.y + eyeHeightOf(p), z: p.z }, e.at) <

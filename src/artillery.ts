@@ -10,9 +10,18 @@ import {
   type V3,
   type Command,
 } from "./simulation";
-import { artilleryExplosionProfile } from "./destruction";
+import {
+  artilleryExplosionProfile,
+  ambientArtilleryExplosionProfile,
+} from "./destruction";
 import { artillerySector } from "./artillery-sectors";
 
+export const ambientArtilleryRules = {
+  minInterval: 8 * 30,
+  maxInterval: 22 * 30,
+  edgeMargin: 8,
+  spawnClearance: 34,
+};
 const shellsPerBarrage = 8;
 const barrageDuration = 4 * 30;
 const shellHeight = 35;
@@ -63,6 +72,7 @@ export interface FireMission {
   dangerRadius?: number;
 }
 export interface ArtilleryShell extends V3 {
+  ambient?: boolean;
   id: number;
   mission: number;
   actor: number;
@@ -74,6 +84,7 @@ export interface ArtilleryShell extends V3 {
 }
 export interface ArtilleryState {
   enabled: boolean;
+  ambient: { enabled: boolean; seed: number; nextAt: number };
   readyAt: Record<Team, number>;
   missions: FireMission[];
   shells: ArtilleryShell[];
@@ -88,8 +99,18 @@ export interface ArtilleryEvade {
   checkedAt: number;
   lastPosition: Vec;
 }
-export function createArtilleryState(): ArtilleryState {
+export function createArtilleryState(
+  seed = 12345,
+  ambientEnabled = false,
+): ArtilleryState {
+  const ambient = {
+    enabled: ambientEnabled,
+    seed: (seed ^ 0x51a7e11) >>> 0,
+    nextAt: 0,
+  };
+  ambient.nextAt = ambientGap(ambient);
   return {
+    ambient,
     enabled: true,
     readyAt: {
       blue: artilleryRules.initialDelay,
@@ -101,6 +122,97 @@ export function createArtilleryState(): ArtilleryState {
     shellSequence: 0,
     reports: [],
   };
+}
+// A snapshot-owned stream keeps stray timing/placement independent of combat RNG.
+function ambientRandom(state: ArtilleryState["ambient"]): number {
+  state.seed = (Math.imul(state.seed, 1664525) + 1013904223) >>> 0;
+  return state.seed / 4294967296;
+}
+function ambientGap(state: ArtilleryState["ambient"]): number {
+  return (
+    ambientArtilleryRules.minInterval +
+    Math.floor(
+      ambientRandom(state) *
+        (ambientArtilleryRules.maxInterval -
+          ambientArtilleryRules.minInterval +
+          1),
+    )
+  );
+}
+function launchShell(
+  g: Game,
+  target: Vec,
+  mission: number,
+  actor: number,
+  team: Team,
+  ambient = false,
+) {
+  const side = team === "blue" ? -1 : 1;
+  const floor = groundHeight(target.x, target.z, g.map);
+  const above = { ...target, y: floor + 50 },
+    below = { ...target, y: floor + 0.025 };
+  const surface = above.y + (below.y - above.y) * g.collision.ray(above, below);
+  const flightSeconds = artilleryRules.flightTicks / 30;
+  const shell: ArtilleryShell = {
+    id: ++g.artillery.shellSequence,
+    mission,
+    actor,
+    team,
+    ...(ambient ? { ambient: true } : {}),
+    x: target.x + side * shellApproach,
+    y: surface + shellHeight,
+    z: target.z,
+    vx: (-side * shellApproach) / flightSeconds,
+    vy: -shellHeight / flightSeconds + (shellGravity * flightSeconds) / 2,
+    vz: 0,
+    bornAt: g.tick,
+  };
+  g.artillery.shells.push(shell);
+  g.emit({
+    type: "artilleryLaunch",
+    actor,
+    mission,
+    shell: shell.id,
+    ...(ambient ? { ambient: true } : {}),
+    from: { x: shell.x, y: shell.y, z: shell.z },
+  });
+}
+function advanceAmbient(g: Game) {
+  const state = g.artillery.ambient;
+  if (
+    g.phase !== "playing" ||
+    !g.artillery.enabled ||
+    !state.enabled ||
+    g.tick < state.nextAt
+  )
+    return;
+  state.nextAt = g.tick + ambientGap(state);
+  // Bounded rejection sampling, using authored spawn positions, never live targets.
+  for (let i = 0; i < 64; i++) {
+    const target = {
+      x:
+        (ambientRandom(state) - 0.5) *
+        (g.map.width - ambientArtilleryRules.edgeMargin * 2),
+      z:
+        (ambientRandom(state) - 0.5) *
+        (g.map.depth - ambientArtilleryRules.edgeMargin * 2),
+    };
+    if (
+      Object.values(g.map.spawn).some(
+        (s) => dist(s, target) < ambientArtilleryRules.spawnClearance,
+      )
+    )
+      continue;
+    launchShell(
+      g,
+      target,
+      ++g.artillery.missionSequence,
+      -1,
+      ambientRandom(state) < 0.5 ? "blue" : "red",
+      true,
+    );
+    return;
+  }
 }
 function teamHasHuman(g: Game, p: Soldier): boolean {
   return g.players.some(
@@ -241,6 +353,7 @@ export function requestArtillery(
   return true;
 }
 export function advanceArtillery(g: Game) {
+  advanceAmbient(g);
   g.artillery.reports = (g.artillery.reports ?? []).filter(
     (r) => g.tick - r.tick < 90,
   );
@@ -253,36 +366,7 @@ export function advanceArtillery(g: Game) {
           mission.impactOffsets[mission.launched]
     ) {
       const target = mission.impacts[mission.launched++];
-      const side = mission.team === "blue" ? -1 : 1;
-      // Land on the first solid surface (including roofs), retaining the warning
-      // interval instead of starting a roof-bound shell too close to its impact.
-      const floor = groundHeight(target.x, target.z, g.map);
-      const above = { ...target, y: floor + 50 },
-        below = { ...target, y: floor + 0.025 };
-      const surface =
-        above.y + (below.y - above.y) * g.collision.ray(above, below);
-      const flightSeconds = artilleryRules.flightTicks / 30;
-      const shell: ArtilleryShell = {
-        id: ++g.artillery.shellSequence,
-        mission: mission.id,
-        actor: mission.actor,
-        team: mission.team,
-        x: target.x + side * shellApproach,
-        y: surface + shellHeight,
-        z: target.z,
-        vx: (-side * shellApproach) / flightSeconds,
-        vy: -shellHeight / flightSeconds + (shellGravity * flightSeconds) / 2,
-        vz: 0,
-        bornAt: g.tick,
-      };
-      g.artillery.shells.push(shell);
-      g.emit({
-        type: "artilleryLaunch",
-        actor: shell.actor,
-        mission: mission.id,
-        shell: shell.id,
-        from: { x: shell.x, y: shell.y, z: shell.z },
-      });
+      launchShell(g, target, mission.id, mission.actor, mission.team);
     }
   }
   const active: ArtilleryShell[] = [];
@@ -322,11 +406,14 @@ export function advanceArtillery(g: Game) {
       g.tick - shell.bornAt >= 90
     ) {
       const at = { x: shell.x, y: shell.y + 0.025, z: shell.z };
+      const profile = shell.ambient
+        ? ambientArtilleryExplosionProfile
+        : artilleryExplosionProfile;
       const hits = g.explode(
         at,
         shell.actor,
-        shell.team,
-        artilleryExplosionProfile,
+        shell.ambient ? null : shell.team,
+        profile,
       );
       g.artillery.reports.push({
         mission: shell.mission,
@@ -339,7 +426,8 @@ export function advanceArtillery(g: Game) {
         mission: shell.mission,
         shell: shell.id,
         at,
-        radius: artilleryExplosionProfile.radius,
+        radius: profile.radius,
+        ...(shell.ambient ? { ambient: true } : {}),
         hits,
       });
     } else active.push(shell);

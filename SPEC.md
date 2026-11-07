@@ -91,3 +91,8 @@ Artillery retains its original 240 damage / 12 m falloff radius. Partial exposur
 ## Tighter trench cross-sections — November 7
 
 Support/communication corridors and connecting elbows are two meters wide; firing trenches are four meters overall (two-meter floor, one-meter ramp and one-meter step). Rear entries narrow to four meters and six screened bays to 4 × 4 m. The four asymmetric lines and continuous front parapets remain. One-meter authored terrain cells resolve the new edges, while distant open terrain retains its two-meter mesh. Navigation anchors, firing posts, retreat/duck targets, flags and decoration follow the revised geometry.
+
+
+### Spontaneous heavy artillery — November 7, 2026
+
+Trench maps enable independent stray heavy shells: one at a time, random 8–22-second launch gaps, uniform bounded location sampling away from spawn assemblies. No team request/charge, advance warning marker or countdown. Existing 24-tick ballistic flight, real surface collision and cover checks apply. Twice guided spatial footprint:24m blast radius,14m structural radius,5m nominal crater radius and7m terrain reach; peak damage240, structural damage260 and crater/bank depth stay unchanged. Both teams can take damage, protected spawns remain immune, and environmental deaths award no player/team kill credit. Physical shell/impact perception remains available to bots. Presentation doubles flash/dust spatial scale without extending lifetime, with stronger sound and broader shock reach. Snapshot-owned RNG/schedule resets on a new match and pauses with simulation; industrial maps retain existing behavior. Launch/impact events carry ambient=true and actor=-1; playtest summaries count heavy impacts separately. Creeping barrage remains deferred.

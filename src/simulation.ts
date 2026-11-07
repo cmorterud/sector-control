@@ -351,6 +351,7 @@ export type Event = { id: number; tick: number } & (
     }
   | {
       type: "artilleryLaunch";
+      ambient?: boolean;
       actor: number;
       mission: number;
       shell: number;
@@ -358,6 +359,7 @@ export type Event = { id: number; tick: number } & (
     }
   | {
       type: "artilleryImpact";
+      ambient?: boolean;
       actor: number;
       mission: number;
       shell: number;
@@ -650,10 +652,15 @@ export class Game {
       teamSize?: number;
       humanPlayerIds?: readonly number[];
       assaults?: boolean;
+      ambientArtillery?: boolean;
     } = {},
   ) {
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
     this.map = runtimeMap(options.map ?? industrialMap);
+    this.artillery = createArtilleryState(
+      seed,
+      options.ambientArtillery ?? this.map.id === "trenches",
+    );
     this.assaults.enabled =
       (options.assaults ?? true) && this.map.id === "trenches";
     this.collision.setMap?.(this.map);
@@ -1364,13 +1371,18 @@ export class Game {
     }
     this.projectiles = active;
   }
-  private damage(victim: Soldier, amount: number, source: number, team: Team) {
+  private damage(
+    victim: Soldier,
+    amount: number,
+    source: number,
+    team: Team | null,
+  ) {
     victim.hp = Math.max(0, victim.hp - amount);
     this.emit({ type: "damage", actor: victim.id, source });
     if (!victim.hp) {
       victim.deaths++;
       const shooter = this.players.find((p) => p.id === source);
-      if (victim.team !== team) {
+      if (team !== null && victim.team !== team) {
         if (shooter) shooter.kills++;
         if (this.scoring === "eliminations") {
           this.scores[team]++;
@@ -1602,7 +1614,7 @@ export class Game {
       hits,
     });
   }
-  explode(at: V3, actor: number, team: Team, profile: ExplosionProfile) {
+  explode(at: V3, actor: number, team: Team | null, profile: ExplosionProfile) {
     const hits: { target: number; damage: number }[] = [];
     for (const p of this.players) {
       if (

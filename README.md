@@ -97,6 +97,10 @@ Bots react to nearby physical shell flight and impacts, then seek earth cover or
 
 Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` and `artilleryEnd` events link mission/shell IDs; snapshots include team cooldowns, missions, shells and retreat state. Recorder summaries count calls, impacts and retreats. Runtime terrain cuts remain sparse/serializable with a revision-based numeric lookup cache for movement and rays.
 
+### Stray heavy artillery
+
+On Trench front, a single heavy shell also falls spontaneously every **8–22 seconds**, at irregular intervals. These land at random battlefield positions, independently of either team's calls, with no countdown or ground marker. Their blast radius is **24 m** (twice the guided shell's 12 m), with twice-size flash/dust and a roughly **5 m crater radius**, retaining the existing irregular shapes and cut depth. Peak damage stays 240; the larger radius carries damage farther. Intact earth still blocks blasts and partial exposure reduces damage. Heavy shells threaten both teams, preserve spawn protection, and award no kills or team points. They avoid the spawn assembly areas and never aim at a particular soldier. Team artillery charges and guided barrages are unchanged.
+
 ## Crouching
 
 **Press C** to crouch; press it again to stand. Crouch stays on after releasing the key and across pause/resume. Crouch walking is **2.25 m/s**, half normal walking speed, and holding Shift does not sprint while crouched. The soldier bends their knees, lowers their body/rifle and camera, and keeps their boots planted. There is no persistent stance status line.

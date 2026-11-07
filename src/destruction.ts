@@ -48,6 +48,15 @@ export const artilleryExplosionProfile: ExplosionProfile = {
   bankDepth: 1.6,
   craterVariation: 0.18,
 };
+// Heavy stray shells double the footprint, retaining trench-friendly cut depth.
+export const ambientArtilleryExplosionProfile: ExplosionProfile = {
+  ...artilleryExplosionProfile,
+  kind: "artillery-ambient",
+  radius: artilleryExplosionProfile.radius * 2,
+  structuralRadius: artilleryExplosionProfile.structuralRadius * 2,
+  craterRadius: artilleryExplosionProfile.craterRadius * 2,
+  terrainReach: artilleryExplosionProfile.terrainReach * 2,
+};
 export { terrainResolution, terrainPatchSize } from "./map";
 export interface Destructible {
   id: string;
