@@ -102,13 +102,15 @@ describe("battlefield presentation", () => {
       g,
       event({ type: "artilleryLaunch", from: { x: 0, y: 35, z: 0 } }),
     );
-    expect(cues[2].kind).toBe("whistle");
-    expect(cues[2].at.y).toBe(35);
+    const whistle = cues.find((c) => c.kind === "whistle")!;
+    expect(whistle).toBeDefined();
+    expect(whistle.at.y).toBe(35);
+    const beforeDistantShot = cues.length;
     feedback.event(
       g,
       event({ type: "fire", actor: 9, from: { x: 200, y: 2, z: 0 } }),
     );
-    expect(cues.length).toBe(3);
+    expect(cues.length).toBe(beforeDistantShot);
   });
   it("plays cracks only for unobstructed simulation near-miss events belonging to the local listener, with a cooldown", () => {
     const { g, feedback, cues } = scene();

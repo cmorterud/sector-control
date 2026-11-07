@@ -18,36 +18,38 @@ const event = (g: Game, data: object) =>
 it("announces real nearby friendly actions sparsely without changing simulation state", () => {
   const { g, c } = scene(),
     snapshot = g.snapshot();
-  expect(c.react(g, event(g, { type: "reload", actor: 0 }))).toMatchObject({
+  for (const actor of [0, 1, 2])
+    expect(c.react(g, event(g, { type: "reload", actor }))).toBeUndefined();
+  expect(c.react(g, event(g, { type: "smokeThrow", actor: 0 }))).toMatchObject({
     actor: { id: 0 },
-    line: "reloading",
+    line: "smoke",
   });
   for (let i = 0; i < 50; i++)
     expect(
-      c.react(g, event(g, { type: "reload", actor: i % 2 })),
+      c.react(g, event(g, { type: "smokeThrow", actor: i % 2 })),
     ).toBeUndefined();
   expect(g.snapshot()).toEqual(snapshot);
   g.tick = 361;
-  expect(c.react(g, event(g, { type: "reload", actor: 1 }))).toMatchObject({
-    line: "reloading",
+  expect(c.react(g, event(g, { type: "smokeThrow", actor: 1 }))).toMatchObject({
+    line: "smoke",
   });
   g.tick = 1000;
-  expect(c.react(g, event(g, { type: "reload", actor: 2 }))).toBeUndefined();
+  expect(
+    c.react(g, event(g, { type: "smokeThrow", actor: 2 })),
+  ).toBeUndefined();
   g.players[1].x = 50;
   expect(
     c.react(g, event(g, { type: "smokeThrow", actor: 1 })),
   ).toBeUndefined();
 });
-it("lets a public incoming barrage warning use another nearby soldier after a short speech gap", () => {
+it("announces an audible shell, never a hidden order, using another speaker after a short gap", () => {
   const { g, c } = scene();
-  c.react(g, event(g, { type: "reload", actor: 0 }));
+  c.react(g, event(g, { type: "smokeThrow", actor: 0 }));
   const call = () =>
     event(g, {
-      type: "artilleryCall",
+      type: "artilleryLaunch",
       actor: 2,
-      team: "red",
-      target: { x: 4, z: 0 },
-      radius: 12,
+      from: { x: 4, y: 35, z: 0 },
     });
   g.tick = 74;
   expect(c.react(g, call())).toBeUndefined();
@@ -59,9 +61,21 @@ it("lets a public incoming barrage warning use another nearby soldier after a sh
   g.tick = 76;
   expect(c.react(g, call())).toBeUndefined();
   c.reset();
-  expect(c.react(g, { ...call(), team: "blue" } as Event)).toBeUndefined();
+  expect(c.react(g, { ...call(), actor: 0 } as Event)).toBeUndefined();
   expect(
-    c.react(g, { ...call(), target: { x: 80, z: 80 } } as Event),
+    c.react(g, { ...call(), from: { x: 80, y: 35, z: 80 } } as Event),
+  ).toBeUndefined();
+  expect(
+    c.react(
+      g,
+      event(g, {
+        type: "artilleryCall",
+        actor: 2,
+        team: "red",
+        target: { x: 4, z: 0 },
+        radius: 30,
+      }),
+    ),
   ).toBeUndefined();
 });
 it("requires actual sight for an enemy grenade warning and respects death, mute and restart", () => {
@@ -86,7 +100,7 @@ it("requires actual sight for an enemy grenade warning and respects death, mute 
   c.reset();
   expect(c.react(g, thrown())).toMatchObject({ line: "grenade" });
 });
-it("ships eight non-empty mono PCM speech clips without requiring speech synthesis at runtime or in CI", () => {
+it("ships six non-empty mono PCM speech clips without requiring speech synthesis at runtime or in CI", () => {
   for (const line of voiceLines)
     for (const variant of [0, 1]) {
       const bytes = readFileSync(

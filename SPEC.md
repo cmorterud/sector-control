@@ -70,14 +70,20 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 
 ### Latest prototype additions
 - Minority bot machine gunners use short rapid bursts with awareness, erratic aim and recoil; human rifles remain semi-automatic.
-- Q opens a broad-sector tactical artillery map; blind calls from cover have greater placement uncertainty. Shared charge, range, warning and dense salvo timing remain.
+- Q opens a broad-sector tactical artillery map; blind calls from cover have greater placement uncertainty. Shared charge, range and dense salvo timing remain; enemy countdowns and ground warning markers are removed.
 - Artillery craters vary in shape/depth and locally round off blasted firing-step ends.
 - Future only: a creeping barrage with a slowly advancing fire line.
 
-- Artillery shells descend in 0.8 seconds, with irregular per-mission arrival gaps across the existing four-second barrage window; warning remains four seconds.
+- Artillery shells descend in 0.8 seconds, with irregular per-mission arrival gaps across the existing four-second barrage window; the hidden call-to-impact transit remains four seconds. Nearby physical shells/impacts cue bots and incoming voices.
 
 ## Current trench mode — domination (November 6)
 
 Four initially neutral flags: A(−22.5,−33), B(−22.5,35) in Blue’s front line; C(28.5,−27), D(24.5,31) in Red’s. Six-meter radius, feet within 1.1 m of flag ground and unobstructed chest-height ray; alive, grounded soldiers only. Neutral capture 450 ticks; enemy neutralization 450 then capture 450, no numerical superiority bonus. Both teams present freeze capture and income; empty ownership persists. Every 90 ticks each owned, uncontested flag scores one point. First to 300 or higher score at eight minutes; ties draw. Kills affect personal K/D only. Rear spawns unchanged.
 
 Flags are decorative, rebased to deformed ground; capture checks use actual shared terrain/collision. HUD/world/tactical map show public ownership and contests; scoreboard includes captures. Bot assaults target enemy flags, landed survivors capture then defend steps, nearby riflemen retake threatened home flags. Existing artillery evasion, suppression, awareness and machine-gunner covering roles retain priority. Industrial keeps its original capture/scoring rules. Creeping barrage remains deferred.
+
+## Branching trenches and artillery protection — November 7
+
+Six alternate connections and six turning shelter necks extend the four original lines; six recessed 6 × 6 m open-topped bays behind the rear lines provide earth-screened cover. All hundred firing stations, rear entries and continuous front parapets remain.
+
+Artillery retains its original 240 damage / 12 m falloff radius. Partial exposure scales damage by visible body probes; intact earth fully shields blocked bodies, while direct trench hits remain dangerous. Crater radius is 2.5 m (formerly 3.5), terrain reach 3.5 m and bank depth 1.6 m; bowl depth stays 1.3 m and structural damage/reach 260/7 m. Grenade damage is unchanged. Bare/snapped trees, exposed roots and sparse small crowns plus low cosmetic equipment dress the battlefield; branches have no invisible foliage concealment, trunks remain destructible and excavation clears equipment footing.

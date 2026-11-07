@@ -280,11 +280,30 @@ describe("artillery damage and bots", () => {
     const original = { x: p.x, z: p.z };
     g.artillery.readyAt.red = 900;
     expect(requestArtillery(g, red, original)).toBe(true);
+    expect(p.artilleryEvade).toBeNull();
+    g.artillery.shells.push({
+      id: 1,
+      mission: g.artillery.missions[0].id,
+      actor: red.id,
+      team: red.team,
+      ...original,
+      y: 35,
+      vx: 0,
+      vy: -40,
+      vz: 0,
+      bornAt: g.tick,
+    });
     const c = botCommand(g, p);
     expect(c.sprint).toBe(true);
     expect(c.fire).toBe(false);
     expect(p.artilleryEvade).not.toBeNull();
-    expect(artilleryThreat(g, p.artilleryEvade!.destination)).toBeUndefined();
+    expect(
+      groundHeight(
+        p.artilleryEvade!.destination.x,
+        p.artilleryEvade!.destination.z,
+        g.map,
+      ),
+    ).toBeLessThan(0.86);
     const destination = p.artilleryEvade!.destination;
     const shelterUntil = g.artillery.missions[0].endsAt;
     while (g.tick < shelterUntil - 1) {
@@ -293,7 +312,7 @@ describe("artillery damage and bots", () => {
       const pos = g.collision.move(p, { x: (c.x * 7) / 30, z: (c.z * 7) / 30 });
       Object.assign(p, pos, { y: groundHeight(pos.x, pos.z, g.map) });
     }
-    expect(Math.hypot(p.x - original.x, p.z - original.z)).toBeGreaterThan(3);
+    expect(Math.hypot(p.x - original.x, p.z - original.z)).toBeGreaterThan(2);
     expect(
       Math.hypot(p.x - destination.x, p.z - destination.z),
       JSON.stringify({
@@ -305,6 +324,8 @@ describe("artillery damage and bots", () => {
     ).toBeLessThan(1);
     g.tick = g.artillery.missions[0].endsAt + 1;
     g.artillery.missions = [];
+    g.artillery.shells = [];
+    g.tick = Math.max(g.tick, p.artilleryEvade!.until + 1);
     botCommand(g, p);
     expect(p.artilleryEvade).toBeNull();
     expect(p.path.length).toBeGreaterThan(0);

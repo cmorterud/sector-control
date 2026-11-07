@@ -351,3 +351,28 @@ Cosmetic rim rubble uses the same scar outline, deterministic angular/radial off
 Three new regressions cover rebaking/irregular radial profiles/bounded cuts, nine physically lowered shoulder centers with unchanged cover-anchor and rubble count, and actual Ammo off-grid agreement on a large irregular scar and a small hollow. Existing traversability, protection, explosion/reset and full-battle checks remain.
 
 Validation: 245 tests / strict TS, production build and whitespace checks pass. Pristine native crossing records 1.224–2.443 m foot heights with no airborne action or runtime destruction at 60 FPS/zero errors. A normal 100-soldier sixty-second autoplay battle records 58.85 FPS/17.7 ms p95/zero errors, four captures, five landed trench arrivals and sixteen artillery impacts. Both videos decode; exact artifacts and limitations are in PLAYTEST_REVIEW.md.
+
+
+## Battle-scarred scenery — November 6
+
+Vegetation carries deterministic bare/snapped/sparse treeStyle metadata; most trees are leafless, some have short broken trunks, and a few retain smaller muted crowns. Original trunk dimensions/colliders use the shortened height. Rendering adds varied broken branches, exposed roots and splintered tips, with dark wood tones. treeHasCrown synchronizes foliage concealment and falling-tree leaf effects; sparse optical envelopes shrink with the visible crowns, while unspecified legacy trees retain their original treatment. Existing felling/log/stump destruction stays active. Trench-lining support posts vary in height and have split tips within the existing bank silhouette.
+
+A bounded deterministic battlefieldProps list places low helmets, packs and loose planks at flat corridor edges. It avoids blocked/uneven footing, remains cosmetic and uses the existing static duckboard batch. Excavation hides affected clutter and refreshes that batch; rebuilding the map restores it. Three regressions cover scarred-tree distribution/heights/ground anchoring, leafless versus sparse optical cover with solid trunks, and repeatable bounded equipment placement.
+
+## Branching trenches and cover-led artillery survival — November 7
+
+Twelve additional branchRoutes create six alternate communication connections and six turning shelter necks. Six 6 × 6 m shelterBays sit behind the rear lines, screened by retained earth. Shared terrain metadata drives carved cells, navigation anchors, artillery retreat candidates and tactical-map paths/rooms. Original four lines, rear entry ramps, continuous front parapets and all hundred firing posts remain. The raster carve accounts for even-coordinate routes and protects fixed-cover footing; each authored segment and end-to-end navigation is tested.
+
+Enemy mission countdown text and ground warning rings are removed. The tactical map still shows the caller’s coarse target zones and cooldown. Physical shells, whistles, impacts, dirt and blast sound remain. Bot evasion and incoming voice lines respond to actual nearby shell flight/impacts, never a newly issued mission or planned impact coordinates. A short physical-impact memory expires; bots can step off firing positions, crouch and seek screened bays.
+
+Latest user direction preserves the original 240 maximum artillery damage and 12 m falloff radius (roughly 7 m lethal reach against an unshielded 100 HP soldier). Earth cover now attenuates artillery by the fraction of three body probes actually exposed; fully blocked bodies take no damage. Standing on a firing step can expose a head; crouching or moving to the floor improves protection. Direct trench hits remain lethal. Grenade damage rules remain unchanged. Damage is evaluated before that shell excavates cover.
+
+The artillery crater radius shrinks from 3.5 to 2.5 m, terrain reach from 5 to 3.5 m and bank-cut depth from 3.2 to 1.6 m. Bowl depth stays 1.3 m, structural damage/reach 260/7 m, with existing irregular shapes, slump cleanup, matching meshes/collision and repeated destruction. The historical large grazing-strike remnant regression explicitly retains its original profile, while live-profile tests check current smaller bowls.
+
+A conservative cached authored-height/elevation ceiling skips dense earth sampling in TestCollision only for rays entirely above the highest possible terrain and inside map borders. Exact box slabs still run first; runtime excavation only lowers terrain. Low rays, raised relief, boundary collisions and tall solid cover retain checks. This addresses the expanded-layout headless eight-minute test cost without increasing its 60-second limit.
+
+The later user request removes the spoken Reloading callout, its two WAV assets and the generator entry. Reload events never produce chatter or consume speech cooldowns. Incoming, Grenade and Smoke remain, with six bundled variants; weapon mechanics and reload animation/sounds remain unchanged.
+
+Final local validation: strict TypeScript and all 255 tests pass serially in 49.99 s; production build and whitespace checks pass. The existing engine bundle-size advisory remains.
+
+Final native 100-soldier sixty-second recording has sixteen artillery impacts, four captures and zero errors at 59.43 FPS; all video/stereo audio decode without diagnostics. The scenery fixture records bare-tree felling and clutter excavation at 59.73 FPS/zero errors. The final reload-audio removal preserves every shared command/event from the earlier run. Q-map shows loops and six bays. Full artifacts and limitations are in PLAYTEST_REVIEW.md.

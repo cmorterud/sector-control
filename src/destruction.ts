@@ -15,6 +15,7 @@ export interface ExplosionProfile {
   kind: string;
   radius: number;
   damage: number;
+  partialCover?: boolean;
   structuralRadius: number;
   structuralDamage: number;
   craterRadius: number;
@@ -38,12 +39,13 @@ export const artilleryExplosionProfile: ExplosionProfile = {
   kind: "artillery",
   radius: 12,
   damage: 240,
+  partialCover: true,
   structuralRadius: 7,
   structuralDamage: 260,
-  craterRadius: 3.5,
+  craterRadius: 2.5,
   craterDepth: 1.3,
-  terrainReach: 5,
-  bankDepth: 3.2,
+  terrainReach: 3.5,
+  bankDepth: 1.6,
   craterVariation: 0.18,
 };
 export { terrainResolution, terrainPatchSize } from "./map";

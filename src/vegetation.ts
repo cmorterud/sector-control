@@ -8,6 +8,9 @@ import {
 import type { Destructible } from "./destruction";
 import type { V3 } from "./simulation";
 
+export const treeHasCrown = (b: Box) =>
+  b.treeStyle !== "bare" && b.treeStyle !== "snapped";
+
 export function vegetationFor(map: MapDefinition): Box[] {
   const items: Box[] = [];
   const clear = (x: number, z: number, r: number) => {
@@ -65,7 +68,9 @@ export function vegetationFor(map: MapDefinition): Box[] {
     [11, 55],
   ];
   for (const [i, [x, z]] of trees.entries())
-    if (clear(x, z, 2.6))
+    if (clear(x, z, 2.6)) {
+      const treeStyle =
+        i % 5 === 4 ? "sparse" : i % 3 === 0 ? "snapped" : "bare";
       items.push({
         id: `tree-${i}`,
         kind: "tree",
@@ -73,9 +78,11 @@ export function vegetationFor(map: MapDefinition): Box[] {
         z,
         w: 0.8 + (i % 3) * 0.1,
         d: 0.8 + (i % 3) * 0.1,
-        h: 6.2 + (i % 4) * 0.7,
+        h: (6.2 + (i % 4) * 0.7) * (treeStyle === "snapped" ? 0.55 : 1),
         baseY: groundHeight(x, z, map),
+        treeStyle,
       });
+    }
   for (let x = -72; x <= 72; x += 8)
     for (let z = -57; z <= 57; z += 7) {
       const n = Math.abs(Math.sin(x * 12.93 + z * 4.17));
@@ -176,8 +183,14 @@ export function foliageBlocks(map: MapDefinition, from: V3, to: V3): boolean {
   for (const b of map.vegetation ?? []) {
     const object = map.destruction?.objects[b.id!];
     const stage = object?.stage ?? 0;
-    if (stage === 2 || (b.kind === "tree" && stage > 0) || b.h < 0.6) continue;
-    const radius = b.kind === "tree" ? b.h * 0.3 : b.w * 0.55;
+    if (
+      stage === 2 ||
+      (b.kind === "tree" && (stage > 0 || !treeHasCrown(b))) ||
+      b.h < 0.6
+    )
+      continue;
+    const sparse = b.treeStyle === "sparse";
+    const radius = b.kind === "tree" ? b.h * (sparse ? 0.23 : 0.3) : b.w * 0.55;
     if (
       Math.max(from.x, to.x) < b.x - radius ||
       Math.min(from.x, to.x) > b.x + radius ||
@@ -187,8 +200,9 @@ export function foliageBlocks(map: MapDefinition, from: V3, to: V3): boolean {
       continue;
     const base = b.baseY ?? 0;
     const h = b.h * (stage === 1 ? 0.6 : 1);
-    const cy = base + (b.kind === "tree" ? h * 0.65 : h * 0.55);
-    const ry = b.kind === "tree" ? h * 0.4 : h * 0.6;
+    const cy =
+      base + (b.kind === "tree" ? h * (sparse ? 0.7 : 0.65) : h * 0.55);
+    const ry = b.kind === "tree" ? h * (sparse ? 0.25 : 0.4) : h * 0.6;
     const x = (from.x - b.x) / radius,
       y = (from.y - cy) / ry,
       z = (from.z - b.z) / radius;

@@ -20,6 +20,7 @@ export type Box = Vec & {
     | "log"
     | "stump";
   baseY?: number;
+  treeStyle?: "bare" | "snapped" | "sparse";
 };
 export const sectors = [
   { id: "A", x: -28, z: -16 },
@@ -107,6 +108,8 @@ export interface MapDefinition {
     firingPositions?: (Vec & { team: "blue" | "red" })[];
     trenchLines?: TrenchLine[];
     communicationRoutes?: CommunicationRoute[];
+    branchRoutes?: CommunicationRoute[];
+    shelterBays?: (Vec & { team: "blue" | "red" })[];
     cellSize: number;
     columns: number;
     rows: number;

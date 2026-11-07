@@ -55,6 +55,7 @@ import {
 } from "./destruction";
 import { rosterWeapon, weaponProfiles, type WeaponKind } from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
+import { terrainRayCeiling } from "./terrain-ray-bounds";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
@@ -519,6 +520,14 @@ export class TestCollision implements CollisionWorld {
       }
       if (entry <= exit) nearest = Math.min(nearest, entry);
     }
+    if (
+      minX > -this.map.width / 2 + 0.5 &&
+      maxX < this.map.width / 2 - 0.5 &&
+      minZ > -this.map.depth / 2 + 0.5 &&
+      maxZ < this.map.depth / 2 - 0.5 &&
+      minY > terrainRayCeiling(this.map, minX, maxX, minZ, maxZ)
+    )
+      return nearest;
     const n = Math.max(
       1,
       Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) * 5),
@@ -1608,13 +1617,16 @@ export class Game {
         p.z - at.z,
       );
       if (distance >= profile.radius) continue;
-      const visible = hitHeights(p).some(
+      const probes = hitHeights(p);
+      const exposed = probes.filter(
         (height) =>
           this.collision.ray(at, { x: p.x, y: p.y + height, z: p.z }) >= 0.999,
-      );
-      if (!visible) continue;
+      ).length;
+      if (!exposed) continue;
       const damage = Math.ceil(
-        profile.damage * (1 - distance / profile.radius),
+        profile.damage *
+          (1 - distance / profile.radius) *
+          (profile.partialCover ? exposed / probes.length : 1),
       );
       hits.push({ target: p.id, damage });
       this.damage(p, damage, actor, team);
@@ -1689,7 +1701,10 @@ function graph(map: MapDefinition) {
     for (const z of [r.z - r.d / 2 - 0.8, r.z + r.d / 2 + 0.8]) add(lowX, z);
   }
   // Authored communication bends can fall between the regular nav lattice.
-  for (const route of map.terrain?.communicationRoutes ?? [])
+  for (const route of [
+    ...(map.terrain?.communicationRoutes ?? []),
+    ...(map.terrain?.branchRoutes ?? []),
+  ])
     for (let i = 0; i < route.points.length - 1; i++) {
       const a = route.points[i],
         b = route.points[i + 1];

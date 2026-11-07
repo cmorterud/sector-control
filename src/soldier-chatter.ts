@@ -1,12 +1,7 @@
 import { eyeHeightOf } from "./crouch";
 import { dist } from "./map";
 import type { Game, Event, Soldier } from "./simulation";
-export const voiceLines = [
-  "reloading",
-  "incoming",
-  "grenade",
-  "smoke",
-] as const;
+export const voiceLines = ["incoming", "grenade", "smoke"] as const;
 export type VoiceLine = (typeof voiceLines)[number];
 export const chatterRules = {
   nearby: 24,
@@ -36,18 +31,22 @@ export class SoldierChatter {
       !p.mantle &&
       dist(p, listener) <= chatterRules.nearby;
     let actor: Soldier | undefined, line: VoiceLine | undefined;
-    if (e.type === "reload" || e.type === "smokeThrow") {
+    if (e.type === "smokeThrow") {
       actor = g.players.find((p) => p.id === e.actor && nearby(p));
-      line = e.type === "reload" ? "reloading" : "smoke";
+      line = "smoke";
       if (actor && actor.id !== 0 && (actor.id * 11 + g.tick) % 7 > 2) return;
-    } else if (e.type === "artilleryCall" && e.team !== listener.team) {
+    } else if (
+      (e.type === "artilleryLaunch" || e.type === "artilleryImpact") &&
+      g.players.find((p) => p.id === e.actor)?.team !== listener.team
+    ) {
+      const sound = e.type === "artilleryLaunch" ? e.from : e.at;
       line = "incoming";
       actor = g.players
         .filter(
           (p) =>
             nearby(p) &&
             g.tick >= (this.actors.get(p.id) ?? 0) &&
-            dist(p, e.target) < e.radius,
+            dist(p, sound) < 24,
         )
         .sort(
           (a, b) =>

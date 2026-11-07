@@ -36,6 +36,8 @@ import {
 } from "./destruction";
 import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
 import { scarRubble } from "./terrain-relief";
+import { treeHasCrown } from "./vegetation";
+import { battlefieldProps } from "./battlefield-dressing";
 import {
   industrialMap,
   groundHeight,
@@ -177,6 +179,7 @@ export class Renderer implements CollisionWorld {
     x: number;
     z: number;
     radius: number;
+    batched?: boolean;
   }[] = [];
   constructor(
     public canvas: HTMLCanvasElement,
@@ -437,6 +440,91 @@ export class Renderer implements CollisionWorld {
     }
     this.worldParent = this.mapRoot;
     this.batchGroup = this.boardBatch;
+    for (const prop of battlefieldProps(this.map)) {
+      const root = this.joint(
+        "abandoned trench equipment",
+        this.mapRoot,
+        prop.x,
+        prop.y,
+        prop.z,
+      );
+      root.setLocalEulerAngles(0, prop.yaw, 0);
+      this.groundDecor.push({
+        root,
+        x: prop.x,
+        z: prop.z,
+        radius: 0.7,
+        batched: true,
+      });
+      if (prop.kind === "helmet") {
+        const dome = this.cube(
+          "discarded helmet",
+          0,
+          0.09,
+          0,
+          0.32,
+          0.16,
+          0.34,
+          "#555844",
+          false,
+          root,
+        );
+        dome.render!.type = "sphere";
+        this.cube(
+          "helmet brim",
+          0,
+          0.025,
+          0,
+          0.4,
+          0.025,
+          0.42,
+          "#484c3e",
+          false,
+          root,
+        );
+      } else if (prop.kind === "pack") {
+        this.cube(
+          "discarded pack",
+          0,
+          0.09,
+          0,
+          0.34,
+          0.16,
+          0.4,
+          "#625b46",
+          false,
+          root,
+        );
+        this.cube(
+          "pack strap",
+          0.07,
+          0.174,
+          0,
+          0.045,
+          0.012,
+          0.42,
+          "#433e30",
+          false,
+          root,
+        );
+      } else {
+        for (let i = 0; i < 3; i++) {
+          const plank = this.cube(
+            "wood",
+            (i - 1) * 0.12,
+            0.025 + i * 0.018,
+            0,
+            0.13,
+            0.04,
+            0.7 + i * 0.12,
+            "#665943",
+            false,
+            root,
+          );
+          plank.setLocalEulerAngles(0, i * 31 - 20, 0);
+        }
+      }
+    }
     for (const b of duckboards(this.map)) {
       const root = this.cube(
         "duckboard",
@@ -551,7 +639,7 @@ export class Renderer implements CollisionWorld {
       root,
       source: { ...b },
       height: b.h * (stage === 1 ? 0.6 : 1),
-      crown: stage === 0,
+      crown: stage === 0 && treeHasCrown(b),
       log,
       pieces: [`log-${b.id}`, `stump-${b.id}`],
       axis: log ? new pc.Vec3(dz, 0, -dx).normalize() : new pc.Vec3(0, 0, 1),
@@ -669,7 +757,14 @@ export class Renderer implements CollisionWorld {
   }
   private buildDestructible(object: Destructible) {
     const b = object.original;
-    const signature = JSON.stringify([object.stage, b.baseY, b.w, b.h, b.d]);
+    const signature = JSON.stringify([
+      object.stage,
+      b.baseY,
+      b.w,
+      b.h,
+      b.d,
+      b.treeStyle,
+    ]);
     if (this.objectStates.get(object.id) === signature) return false;
     this.objectStates.set(object.id, signature);
     this.objectVisuals.get(object.id)?.destroy();
@@ -744,36 +839,85 @@ export class Renderer implements CollisionWorld {
             b.w,
             h,
             b.d,
-            object.stage ? "#4c3c2c" : "#66503a",
+            object.stage ? "#4c3c2c" : b.treeStyle ? "#4f473d" : "#66503a",
           );
       }
       if (b.kind === "tree") {
-        for (const side of [-1, 1]) {
+        const bare = !treeHasCrown(b);
+        for (let i = 0; i < (b.treeStyle === "bare" ? 5 : 2); i++) {
+          const side = i % 2 ? 1 : -1;
           const branch = primitive(
             "tree branch",
             "cylinder",
             b.x + side * h * 0.09,
-            base + h * 0.55,
+            base + h * (0.43 + (i % 3) * 0.14),
             b.z,
             b.w * 0.35,
-            h * 0.42,
+            h * (bare ? 0.26 : 0.42),
             b.w * 0.35,
-            "#5a4833",
+            bare ? "#51473a" : "#5a4833",
           );
-          branch.setLocalEulerAngles(0, seed % 120, side * 48);
+          branch.setLocalEulerAngles(
+            0,
+            (seed + i * 73) % 180,
+            side * (38 + (i % 3) * 11),
+          );
         }
-        if (object.stage === 0)
+        if (b.treeStyle) {
+          for (let i = 0; i < 4; i++) {
+            const angle = ((seed + i * 90) * Math.PI) / 180;
+            const rootPart = primitive(
+              "exposed root",
+              "cylinder",
+              b.x + Math.sin(angle) * b.w * 0.6,
+              base + 0.07,
+              b.z + Math.cos(angle) * b.w * 0.6,
+              0.14,
+              0.65 + (i % 2) * 0.25,
+              0.12,
+              "#51483b",
+            );
+            rootPart.setLocalEulerAngles(83, seed + i * 90, 0);
+          }
           for (let i = 0; i < 3; i++) {
+            const tip = this.cube(
+              "splintered tree tip",
+              b.x + (i - 1) * b.w * 0.2,
+              base + h - 0.1,
+              b.z,
+              b.w * 0.16,
+              0.25 + (i % 2) * 0.16,
+              b.d * 0.32,
+              i % 2 ? "#76644a" : "#504334",
+              false,
+              root,
+            );
+            tip.setLocalEulerAngles(
+              (seed + i * 11) % 20,
+              seed % 180,
+              i * 9 - 8,
+            );
+          }
+        }
+        if (object.stage === 0 && treeHasCrown(b))
+          for (let i = 0; i < (b.treeStyle === "sparse" ? 2 : 3); i++) {
+            const sparse = b.treeStyle === "sparse";
             primitive(
               "tree crown",
               "sphere",
-              b.x + Math.sin(seed + i * 2.4) * b.h * 0.1,
-              base + b.h * (0.62 + (i % 2) * 0.12),
-              b.z + Math.cos(seed + i * 2.4) * b.h * 0.1,
-              b.h * 0.5,
-              b.h * 0.7,
-              b.h * 0.5,
-              i % 2 ? "#666b42" : "#56613d",
+              b.x + Math.sin(seed + i * 2.4) * b.h * (sparse ? 0.06 : 0.1),
+              base + b.h * (sparse ? 0.66 + i * 0.09 : 0.62 + (i % 2) * 0.12),
+              b.z + Math.cos(seed + i * 2.4) * b.h * (sparse ? 0.06 : 0.1),
+              b.h * (sparse ? 0.3 : 0.5),
+              b.h * (sparse ? 0.38 : 0.7),
+              b.h * (sparse ? 0.3 : 0.5),
+              sparse
+                ? i % 2
+                  ? "#68674c"
+                  : "#555b43"
+                : i % 2
+                  ? "#666b42"
+                  : "#56613d",
             );
           }
       } else if (b.kind === "brush") {
@@ -843,19 +987,38 @@ export class Renderer implements CollisionWorld {
       root,
     );
     if (b.kind === "wood") {
-      for (const dz of [-b.d / 2 + 0.08, b.d / 2 - 0.08])
+      const wear = [...object.id].reduce((n, c) => n + c.charCodeAt(0), 0);
+      for (const dz of [-b.d / 2 + 0.08, b.d / 2 - 0.08]) {
+        const postHeight = object.lining
+          ? h * (0.9 + (wear % 7) * 0.01)
+          : h + 0.06;
         this.cube(
           "wood post",
           b.x,
-          base + (h + 0.06) / 2,
+          base + postHeight / 2,
           b.z + dz,
           b.w + 0.05,
-          h + 0.06,
+          postHeight,
           0.12,
           "#493d2f",
           false,
           root,
         );
+        if (object.lining)
+          this.cube(
+            "split post tip",
+            b.x,
+            base + postHeight - 0.025,
+            b.z + dz,
+            b.w * 0.4,
+            0.12,
+            0.06,
+            "#8a7553",
+            false,
+            root,
+            wear % 2 ? 12 : -12,
+          );
+      }
     } else {
       for (let x = b.x - b.w / 2 + 0.4; x < b.x + b.w / 2; x += 0.8)
         this.cube(
@@ -919,13 +1082,18 @@ export class Renderer implements CollisionWorld {
       }
       if (changed) this.app.batcher!.generate([this.boardBatch]);
     }
+    let decorChanged = false;
     if (change.crater)
       for (const decor of this.groundDecor)
         if (
+          decor.root.enabled &&
           Math.hypot(decor.x - change.at.x, decor.z - change.at.z) <
-          decor.radius + change.crater.radius
-        )
+            decor.radius + change.crater.radius
+        ) {
           decor.root.enabled = false;
+          decorChanged ||= !!decor.batched;
+        }
+    if (decorChanged) this.app.batcher!.generate([this.boardBatch]);
   }
   private texture(
     name: string,
@@ -2315,12 +2483,12 @@ export class Renderer implements CollisionWorld {
     }
   }
   private drawArtillery(g: Game, alpha: number) {
-    const markers = g.artillery.missions.map((m) => ({
-      id: m.id,
-      target: m.target,
-      radius: m.dangerRadius ?? artilleryRules.dangerRadius,
-      color: m.team === "blue" ? "#e9bb69" : "#ee795c",
-    }));
+    const markers: {
+      id: number;
+      target: Vec;
+      radius: number;
+      color: string;
+    }[] = [];
     if (this.artilleryPreview)
       markers.push({
         id: -1,

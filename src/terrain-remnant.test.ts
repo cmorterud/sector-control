@@ -14,7 +14,15 @@ function scene() {
 }
 const at = { x: -23, z: 3.75, y: 0.025 };
 const blast = (g: Game) =>
-  g.explode(at, 0, "blue", { ...artilleryExplosionProfile, damage: 0 });
+  // Preserve the original large, deep grazing-strike reproduction even when
+  // the live artillery tuning changes to preserve more trench earth.
+  g.explode(at, 0, "blue", {
+    ...artilleryExplosionProfile,
+    damage: 0,
+    craterRadius: 3.5,
+    terrainReach: 5,
+    bankDepth: 3.2,
+  });
 
 it("slumps damaged narrow earth traverses instead of retaining tall jutting sheets", () => {
   const g = scene();

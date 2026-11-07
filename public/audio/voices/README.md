@@ -1,8 +1,7 @@
 # Soldier voice prototype
 
-Eight locally authored speech clips, two variants of each line:
+Six locally authored speech clips, two variants of each line:
 
-- Reloading!
 - Incoming! Get down!
 - Grenade!
 - Smoke out!

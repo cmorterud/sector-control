@@ -79,6 +79,7 @@ export interface ArtilleryState {
   shells: ArtilleryShell[];
   missionSequence: number;
   shellSequence: number;
+  reports: { mission: number; at: Vec; tick: number }[];
 }
 export interface ArtilleryEvade {
   mission: number;
@@ -98,6 +99,7 @@ export function createArtilleryState(): ArtilleryState {
     shells: [],
     missionSequence: 0,
     shellSequence: 0,
+    reports: [],
   };
 }
 function teamHasHuman(g: Game, p: Soldier): boolean {
@@ -239,6 +241,9 @@ export function requestArtillery(
   return true;
 }
 export function advanceArtillery(g: Game) {
+  g.artillery.reports = (g.artillery.reports ?? []).filter(
+    (r) => g.tick - r.tick < 90,
+  );
   for (const mission of g.artillery.missions) {
     while (
       mission.launched < artilleryRules.shellCount &&
@@ -323,6 +328,11 @@ export function advanceArtillery(g: Game) {
         shell.team,
         artilleryExplosionProfile,
       );
+      g.artillery.reports.push({
+        mission: shell.mission,
+        at: { x: at.x, z: at.z },
+        tick: g.tick,
+      });
       g.emit({
         type: "artilleryImpact",
         actor: shell.actor,
@@ -347,6 +357,19 @@ export function artilleryThreat(g: Game, p: Vec): FireMission | undefined {
     (m) =>
       dist(p, m.target) < (m.dangerRadius ?? artilleryRules.dangerRadius) + 2,
   );
+}
+// React to real nearby flight/impacts, never a newly ordered mission's hidden zone.
+export function perceivedArtillery(
+  g: Game,
+  p: Vec,
+): { id: number; at: Vec; endsAt: number } | undefined {
+  const shell = g.artillery.shells.find((s) => dist(s, p) < 22);
+  if (shell) return { id: shell.mission, at: shell, endsAt: g.tick + 90 };
+  const report = (g.artillery.reports ?? []).find(
+    (r) => g.tick - r.tick < 60 && dist(p, r.at) < 24,
+  );
+  if (report)
+    return { id: report.mission, at: report.at, endsAt: report.tick + 90 };
 }
 export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
   if (
@@ -376,7 +399,7 @@ export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
   return target ? { x: target.x, z: target.z } : null;
 }
 export function evadeArtillery(g: Game, p: Soldier): Command | null {
-  const threat = artilleryThreat(g, p);
+  const threat = perceivedArtillery(g, p);
   if (!p.artilleryEvade && !threat) return null;
   if (p.artilleryEvade && g.tick >= p.artilleryEvade.until) {
     p.artilleryEvade = null;
@@ -388,18 +411,32 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     threat &&
     (!p.artilleryEvade ||
       (p.artilleryEvade.mission !== threat.id &&
-        artilleryThreat(g, p.artilleryEvade.destination)))
+        dist(threat.at, p.artilleryEvade.destination) < 10))
   ) {
     const candidates: Vec[] = g.map.terrain?.firingPositions
       ? g.map.terrain.firingPositions
           .filter((s) => s.team === p.team)
           .map((s) => ({ x: s.x + (p.team === "blue" ? -3 : 3), z: s.z }))
+          .concat(
+            g.map.terrain.shelterBays?.filter((s) => s.team === p.team) ?? [],
+          )
       : Array.from({ length: 12 }, (_, i) => ({
           x: p.x + Math.sin((i * Math.PI) / 6) * 24,
           z: p.z + Math.cos((i * Math.PI) / 6) * 24,
         }));
     const safe = candidates.filter(
-      (v) => !blocked(v.x, v.z, 0.6, g.map) && !artilleryThreat(g, v),
+      (v) =>
+        !blocked(v.x, v.z, 0.6, g.map) &&
+        (dist(v, threat!.at) >= 10 ||
+          groundHeight(v.x, v.z, g.map) < groundHeight(p.x, p.z, g.map) - 0.3 ||
+          g.collision.ray(
+            {
+              x: threat!.at.x,
+              y: groundHeight(threat!.at.x, threat!.at.z, g.map) + 0.2,
+              z: threat!.at.z,
+            },
+            { x: v.x, y: groundHeight(v.x, v.z, g.map) + 0.8, z: v.z },
+          ) < 0.99),
     );
     safe.sort((a, b) => dist(p, a) - dist(p, b));
     let destination: Vec | undefined,
@@ -479,6 +516,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     c.yaw = Math.atan2(c.x, -c.z);
     c.sprint = true;
   } else c.yaw = p.yaw;
+  c.crouch = dist(p, evade.destination) < 1.2;
   c.reload = p.ammo < 30 && p.reserve > 0;
   p.mode = destination ? "Evade artillery" : "Artillery shelter";
   return c;

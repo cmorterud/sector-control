@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-LINES = {"reloading": "Reloading!", "incoming": "Incoming! Get down!", "grenade": "Grenade!", "smoke": "Smoke out!"}
+LINES = {"incoming": "Incoming! Get down!", "grenade": "Grenade!", "smoke": "Smoke out!"}
 VOICES = [("Daniel", 205), ("Eddy (English (UK))", 200)]
 OUT = ROOT / "public/audio/voices"
 OUT.mkdir(parents=True, exist_ok=True)

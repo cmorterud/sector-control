@@ -205,7 +205,7 @@ it("loads bundled speech once, spatializes one voice at a time and cancels it on
   vi.stubGlobal("fetch", fetch);
   const { a, c } = setup();
   await a.prepareVoices();
-  expect(fetch).toHaveBeenCalledTimes(8);
+  expect(fetch).toHaveBeenCalledTimes(6);
   const spoken = { ...cue, kind: "voice" as const, line: "incoming" as const };
   a.play(spoken);
   expect(a.stats.byKind.voice).toBe(1);
@@ -224,7 +224,7 @@ it("loads bundled speech once, spatializes one voice at a time and cancels it on
   a.resume();
   a.reset();
   await a.prepareVoices();
-  expect(fetch).toHaveBeenCalledTimes(8);
+  expect(fetch).toHaveBeenCalledTimes(6);
 });
 it("drops unavailable speech without disrupting effects or replaying stale calls after loading", async () => {
   let release: ((v: {
@@ -237,7 +237,7 @@ it("drops unavailable speech without disrupting effects or replaying stale calls
   );
   const { a } = setup(),
     pending = a.prepareVoices();
-  a.play({ ...cue, kind: "voice", line: "reloading" });
+  a.play({ ...cue, kind: "voice", line: "smoke" });
   expect(a.stats.voiceMissing).toBe(1);
   a.play(cue);
   expect(a.stats.byKind.rifle).toBe(1);
@@ -247,6 +247,6 @@ it("drops unavailable speech without disrupting effects or replaying stale calls
   await pending;
   expect(a.stats.byKind.voice ?? 0).toBe(0);
   a.resume();
-  a.play({ ...cue, kind: "voice", line: "reloading" });
+  a.play({ ...cue, kind: "voice", line: "smoke" });
   expect(a.stats.byKind.voice).toBe(1);
 });

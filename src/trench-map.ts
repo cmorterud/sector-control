@@ -83,6 +83,8 @@ const trenchLines: TrenchLine[] = [
   },
 ];
 const communicationRoutes: CommunicationRoute[] = [];
+const branchRoutes: CommunicationRoute[] = [];
+const shelterBays: (Vec & { team: "blue" | "red" })[] = [];
 for (const line of trenchLines) {
   const side = line.team === "blue" ? -1 : 1;
   const counts =
@@ -203,6 +205,91 @@ floors.push(
   { x: 27, z: 31, w: 4, d: 6 },
   { x: 49, z: 15, w: 4, d: 6 },
 );
+// Alternate rear connections form short loops around retained earth islands.
+// Recessed bays sit behind the rear line, reached through a two-turn neck.
+const carveRoute = (team: "blue" | "red", points: Vec[]) => {
+  branchRoutes.push({ team, entrance: points[0], points });
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i],
+      b = points[i + 1];
+    floors.push({
+      x: (a.x + b.x) / 2,
+      z: (a.z + b.z) / 2,
+      w: Math.abs(a.x - b.x) + (a.x === b.x && Math.abs(a.x) % 2 === 0 ? 4 : 2),
+      d: Math.abs(a.z - b.z) + 4,
+    });
+  }
+};
+for (const route of communicationRoutes) {
+  const side = route.team === "blue" ? -1 : 1,
+    middle = route.points[1].x,
+    rear = trenchLines.find((l) => l.team === route.team && l.role === "rear")!;
+  const atZ = (z: number) =>
+    rear.sections.find((s) => Math.abs(s.z - z) < s.length / 2) ??
+    rear.sections.reduce((a, b) =>
+      Math.abs(a.z - z) < Math.abs(b.z - z) ? a : b,
+    );
+  const z =
+    [-13, -17, -9, 9, 13, 17, -5]
+      .map((offset) => route.entrance.z + offset)
+      .find((z) => {
+        if (z - 2 < -depth / 2 + 2 || z + 2 > depth / 2 - 2) return false;
+        const section = atZ(z),
+          lo = Math.min(section.x, middle) - 0.8,
+          hi = Math.max(section.x, middle) + 0.8;
+        return (
+          !platforms.some(
+            (p) =>
+              p.x + p.w / 2 > lo &&
+              p.x - p.w / 2 < hi &&
+              Math.abs(p.z - z) < p.d / 2 + 1.2,
+          ) &&
+          !cover.some(
+            (b) =>
+              b.x + b.w / 2 > lo &&
+              b.x - b.w / 2 < hi &&
+              Math.abs(b.z - z) < b.d / 2 + 2,
+          )
+        );
+      }) ?? route.entrance.z - 9;
+  const section = atZ(z),
+    start = { x: section.x, z };
+  const sites =
+    route.team === "blue"
+      ? [
+          { x: -53, z: -53 },
+          { x: -49, z: 17 },
+          { x: -51, z: 49 },
+        ]
+      : [
+          { x: 53, z: -55 },
+          { x: 53, z: -15 },
+          { x: 53, z: 49 },
+        ];
+  const bay = {
+      ...sites[shelterBays.filter((b) => b.team === route.team).length],
+      team: route.team,
+    },
+    rearZ = bay.z + (bay.z < 0 ? 7 : -7),
+    bayRear = atZ(rearZ),
+    neckX = bayRear.x + side * 4,
+    approachZ = bay.z + (rearZ < bay.z ? -3 : 3);
+  carveRoute(route.team, [
+    start,
+    { x: middle, z },
+    { x: middle, z: route.points[2].z },
+  ]);
+  // The first point remains in an existing rear trench; no new field entrance.
+  carveRoute(route.team, [
+    { x: bayRear.x, z: rearZ },
+    { x: neckX, z: rearZ },
+    { x: neckX, z: approachZ },
+    { x: bay.x, z: approachZ },
+    bay,
+  ]);
+  floors.push({ ...bay, w: 6, d: 6 });
+  shelterBays.push(bay);
+}
 // Light rear-line screens sit away from entry ramps and can be blown apart.
 for (const side of [-1, 1])
   cover.push({
@@ -247,6 +334,14 @@ for (let row = 0; row < rows; row++)
     for (const platform of platforms)
       if (inside(x, z, platform)) h = platform.h;
     if (ramps.some((r) => inside(x, z, r))) h = 0;
+    if (
+      cover.some(
+        (b) =>
+          Math.abs(x - b.x) < b.w / 2 + 0.5 &&
+          Math.abs(z - b.z) < b.d / 2 + 0.5,
+      )
+    )
+      h = bankHeight;
     heights[row * columns + col] = h;
   }
 // Merge equal-height terrain cells into a small number of static earth blocks.
@@ -303,6 +398,8 @@ export const trenchMap: MapDefinition = {
     firingPositions,
     trenchLines,
     communicationRoutes,
+    branchRoutes,
+    shelterBays,
     cellSize,
     columns,
     rows,

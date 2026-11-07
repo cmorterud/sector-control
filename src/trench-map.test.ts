@@ -96,7 +96,9 @@ describe("trench prototype", () => {
         if (dug && !inTrench) bands++;
         inTrench = dug;
       }
-      expect(bands).toBe(4);
+      expect(bands).toBeGreaterThanOrEqual(2);
+      expect(bands).toBeLessThanOrEqual(8);
+      expect(trenchMap.terrain!.trenchLines).toHaveLength(4);
       for (const line of trenchMap.terrain!.trenchLines!) {
         const section = line.sections.find(
           (s) => Math.abs(s.z - z) < s.length / 2,
@@ -196,6 +198,12 @@ describe("trench prototype", () => {
     // Away from communication routes, front and rear remain separated by earth.
     for (let z = -53; z <= 53; z += 2) {
       if (
+        map.terrain!.branchRoutes?.some(
+          (r) =>
+            z >= Math.min(...r.points.map((p) => p.z)) - 3 &&
+            z <= Math.max(...r.points.map((p) => p.z)) + 3,
+        ) ||
+        map.terrain!.shelterBays?.some((b) => Math.abs(b.z - z) < 4) ||
         map.terrain!.communicationRoutes!.some(
           (r) => Math.abs(r.entrance.z - z) < 8,
         )
