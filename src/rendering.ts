@@ -35,6 +35,7 @@ import {
   type DestructionChange,
 } from "./destruction";
 import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
+import { scarRubble } from "./terrain-relief";
 import {
   industrialMap,
   groundHeight,
@@ -398,7 +399,7 @@ export class Renderer implements CollisionWorld {
     const terrain = this.map.terrain!;
     const previousBatch = this.batchGroup;
     this.batchGroup = -1;
-    for (const crater of terrain.craters) {
+    for (const [index, crater] of terrain.craters.entries()) {
       const root = this.joint("old shell scar", this.mapRoot);
       this.groundDecor.push({ root, ...crater });
       this.worldParent = root;
@@ -414,20 +415,24 @@ export class Renderer implements CollisionWorld {
         disk.setLocalPosition(crater.x, terrain.bankHeight + 0.015, crater.z);
         root.addChild(disk);
       }
-      for (let i = 0; i < 5; i++) {
-        const angle = (i * Math.PI * 2) / 5;
-        const x = crater.x + Math.sin(angle) * crater.radius;
-        const z = crater.z + Math.cos(angle) * crater.radius;
-        this.cube(
+      const scar = terrain.shellScars?.[index] ?? {
+        ...crater,
+        radiusX: crater.radius,
+        radiusZ: crater.radius,
+        depth: crater.depth ?? 0.6,
+      };
+      for (const clod of scarRubble(scar)) {
+        const part = this.cube(
           "crater rubble",
-          x,
-          groundHeight(x, z, this.map) + 0.16,
-          z,
-          0.7,
-          0.32,
-          0.65,
-          "#807052",
+          clod.x,
+          groundHeight(clod.x, clod.z, this.map) + clod.h / 2 - 0.025,
+          clod.z,
+          clod.w,
+          clod.h,
+          clod.d,
+          "#70624c",
         );
+        part.setLocalEulerAngles(0, clod.yaw, 0);
       }
     }
     this.worldParent = this.mapRoot;

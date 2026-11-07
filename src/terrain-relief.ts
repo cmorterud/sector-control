@@ -13,6 +13,43 @@ const smooth = (t: number) => {
   return u * u * (3 - 2 * u);
 };
 
+// A few broad lobes break the outline without creating sharp, unwalkable teeth.
+export function scarEdge(scar: Depression, angle: number) {
+  if (!scar.irregularity) return 1;
+  const phase = scar.phase ?? 0;
+  return (
+    1 +
+    (scar.irregularity ?? 0) *
+      (0.65 * Math.sin(angle * 3 + phase) +
+        0.35 * Math.sin(angle * 5 - phase * 1.7))
+  );
+}
+
+export function scarRubble(scar: Depression) {
+  const sample = (i: number) => {
+    const n =
+      Math.sin((i + 1) * 127.1 + scar.x * 17.3 + scar.z * 43.7) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  const rotation = scar.rotation ?? 0,
+    c = Math.cos(rotation),
+    s = Math.sin(rotation);
+  return Array.from({ length: 5 }, (_, i) => {
+    const angle = ((i + sample(i) * 0.7) * Math.PI * 2) / 5,
+      radius = scarEdge(scar, angle) * (0.82 + sample(i + 5) * 0.3),
+      x = Math.cos(angle) * scar.radiusX * radius,
+      z = Math.sin(angle) * scar.radiusZ * radius;
+    return {
+      x: scar.x + x * c - z * s,
+      z: scar.z + x * s + z * c,
+      w: 0.2 + sample(i + 10) * 0.4,
+      h: 0.1 + sample(i + 15) * 0.16,
+      d: 0.2 + sample(i + 20) * 0.3,
+      yaw: sample(i + 25) * 180,
+    };
+  });
+}
+
 // Broad, fixed landforms sampled on the existing mesh grid, rather than refining
 // the entire battlefield to crater resolution. No gameplay RNG or runtime noise.
 export function buildTrenchElevation(map: MapDefinition): TerrainElevation {
@@ -113,30 +150,43 @@ export function buildTrenchRelief(
 ): TerrainRelief {
   const cuts: Record<string, number> = {},
     patches: Record<string, true> = {};
-  for (const depression of depressions)
+  const authored: MapDefinition = {
+    ...map,
+    terrain: { ...map.terrain!, relief: undefined, elevation: undefined },
+  };
+  for (const depression of depressions) {
+    const rotation = depression.rotation ?? 0,
+      c = Math.cos(rotation),
+      s = Math.sin(rotation),
+      extentX =
+        Math.hypot(depression.radiusX * c, depression.radiusZ * s) *
+        (1 + (depression.irregularity ?? 0)),
+      extentZ =
+        Math.hypot(depression.radiusX * s, depression.radiusZ * c) *
+        (1 + (depression.irregularity ?? 0));
     for (
-      let ix = Math.ceil(
-        (depression.x - depression.radiusX) / terrainResolution,
-      );
-      ix <= Math.floor((depression.x + depression.radiusX) / terrainResolution);
+      let ix = Math.ceil((depression.x - extentX) / terrainResolution);
+      ix <= Math.floor((depression.x + extentX) / terrainResolution);
       ix++
     )
       for (
-        let iz = Math.ceil(
-          (depression.z - depression.radiusZ) / terrainResolution,
-        );
-        iz <=
-        Math.floor((depression.z + depression.radiusZ) / terrainResolution);
+        let iz = Math.ceil((depression.z - extentZ) / terrainResolution);
+        iz <= Math.floor((depression.z + extentZ) / terrainResolution);
         iz++
       ) {
         const x = ix * terrainResolution,
           z = iz * terrainResolution;
-        const r2 =
-          ((x - depression.x) / depression.radiusX) ** 2 +
-          ((z - depression.z) / depression.radiusZ) ** 2;
+        const dx = x - depression.x,
+          dz = z - depression.z,
+          nx = (dx * c + dz * s) / depression.radiusX,
+          nz = (-dx * s + dz * c) / depression.radiusZ,
+          edge = depression.irregularity
+            ? scarEdge(depression, Math.atan2(nz, nx))
+            : 1,
+          r2 = (nx * nx + nz * nz) / (edge * edge);
         if (r2 >= 1 || Math.abs(x) >= 15 || Math.abs(z) >= map.depth / 2 - 2)
           continue;
-        if (baseGroundHeight(x, z, map) < map.terrain!.bankHeight - 0.01)
+        if (baseGroundHeight(x, z, authored) < map.terrain!.bankHeight - 0.01)
           continue;
         let protection = smooth((15 - Math.abs(x)) / 3);
         for (const box of map.boxes) {
@@ -156,6 +206,7 @@ export function buildTrenchRelief(
               `${Math.floor((x + dx) / terrainPatchSize)},${Math.floor((z + dz) / terrainPatchSize)}`
             ] = true;
       }
+  }
   const originX = -16 / terrainResolution,
     originZ = -map.depth / 2 / terrainResolution;
   const columns = 32 / terrainResolution + 1,

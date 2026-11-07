@@ -62,7 +62,7 @@ Implementation baseline: the user-supplied Sector Control MVP specification, wit
 
 ## Authored starting terrain
 
-- Trench no man's land starts with six circular shell bowls (3–4 m radii, 0.55–0.7 m depths) and five broad elliptical depressions (0.12–0.18 m depths). This local shell-scar layer is capped at 0.85 m downward displacement.
+- Trench no man's land starts with six rotated, softly irregular elliptical shell bowls (roughly 3–4 m radii, 0.55–0.7 m depths), nine smaller shoulder hollows (0.18–0.24 m depths) and five broad elliptical depressions (0.12–0.18 m depths). This local shell-scar layer is capped at 0.85 m downward displacement.
 - The local shell-scar layer tapers out before |x| = 15 m, preserving at least three meters before the closest front parapet. Trenches, firing steps, ramps, spawns and existing cover footing retain their previous heights. Two legacy scar positions move clear of wire patches.
 - Broad signed landforms cover the open field and rear ground on the existing two-meter mesh grid: up to 0.95 m hollows, central crests below 0.06 m, and rear rises below 0.32 m. Smooth masks protect trench lips/floors/steps, rear entry ramps, spawn assembly areas, fixed cover and map edges. Gentle-slope vegetation follows actual ground.
 - Local shell relief uses a shared immutable quarter-meter grid, separate from the broad landforms and per-match explosion cuts. Actual terrain meshes/collision refine around both layers. Legacy flat scar disks are removed, and cosmetic rubble follows the ground. Grenades add excavation on top; restart restores the authored baseline.

@@ -76,6 +76,9 @@ export type Depression = Vec & {
   radiusX: number;
   radiusZ: number;
   depth: number;
+  rotation?: number;
+  irregularity?: number;
+  phase?: number;
 };
 export interface TrenchLine {
   team: "blue" | "red";
@@ -113,6 +116,7 @@ export interface MapDefinition {
     lining: (Vec & { w: number; d: number })[];
     craters: (Vec & { radius: number; depth?: number })[];
     depressions?: Depression[];
+    shellScars?: Depression[];
     elevation?: TerrainElevation;
     relief?: TerrainRelief;
   };

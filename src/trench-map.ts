@@ -328,13 +328,35 @@ export const trenchMap: MapDefinition = {
   },
 };
 
-trenchMap.terrain!.relief = buildTrenchRelief(trenchMap, [
-  ...trenchMap.terrain!.craters.map((crater) => ({
+trenchMap.terrain!.shellScars = [
+  ...trenchMap.terrain!.craters.map((crater, i) => ({
     ...crater,
-    radiusX: crater.radius,
-    radiusZ: crater.radius,
+    radiusX: crater.radius * (0.84 + (i % 3) * 0.12),
+    radiusZ: crater.radius * (1.08 - (i % 3) * 0.08),
     depth: crater.depth!,
+    rotation: i * 1.17 + 0.35,
+    irregularity: 0.1,
+    phase: i * 2.39,
   })),
+  ...[
+    { x: -7, z: -38, radiusX: 2.2, radiusZ: 1.5, depth: 0.22 },
+    { x: 8, z: -42, radiusX: 1.8, radiusZ: 2.3, depth: 0.18 },
+    { x: -1, z: -32, radiusX: 2.4, radiusZ: 1.6, depth: 0.24 },
+    { x: -3, z: -20, radiusX: 1.6, radiusZ: 2.2, depth: 0.2 },
+    { x: 3, z: -5, radiusX: 2.1, radiusZ: 1.4, depth: 0.18 },
+    { x: -1, z: 15, radiusX: 2.2, radiusZ: 1.7, depth: 0.24 },
+    { x: 7, z: 29, radiusX: 1.5, radiusZ: 2.1, depth: 0.18 },
+    { x: -6, z: 46, radiusX: 2.3, radiusZ: 1.5, depth: 0.22 },
+    { x: 5, z: 54, radiusX: 1.8, radiusZ: 2.4, depth: 0.2 },
+  ].map((scar, i) => ({
+    ...scar,
+    rotation: i * 1.39,
+    irregularity: 0.12,
+    phase: i * 1.73,
+  })),
+];
+trenchMap.terrain!.relief = buildTrenchRelief(trenchMap, [
+  ...trenchMap.terrain!.shellScars,
   ...trenchMap.terrain!.depressions!,
 ]);
 trenchMap.terrain!.elevation = buildTrenchElevation(trenchMap);
