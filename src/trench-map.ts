@@ -9,7 +9,7 @@ import {
   type TrenchLine,
   type CommunicationRoute,
 } from "./map";
-import { buildTrenchRelief } from "./terrain-relief";
+import { buildTrenchRelief, buildTrenchElevation } from "./terrain-relief";
 
 const bankHeight = 2.4;
 const spawnDistance = 60,
@@ -337,6 +337,7 @@ trenchMap.terrain!.relief = buildTrenchRelief(trenchMap, [
   })),
   ...trenchMap.terrain!.depressions!,
 ]);
+trenchMap.terrain!.elevation = buildTrenchElevation(trenchMap);
 
 // Timber belongs against solid earth, never across a communication trench or ramp.
 // Clip each decorative panel to the actual terrain boundary so its visible shape

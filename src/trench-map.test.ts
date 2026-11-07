@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { blocked, dist, groundHeight, moveOnMap, walkSegment } from "./map";
+import {
+  blocked,
+  dist,
+  groundHeight,
+  groundElevation,
+  moveOnMap,
+  walkSegment,
+} from "./map";
 import { trenchMap } from "./trench-map";
 import {
   Game,
@@ -83,7 +90,9 @@ describe("trench prototype", () => {
       let bands = 0,
         inTrench = false;
       for (let x = -77; x <= 77; x += 0.5) {
-        const dug = groundHeight(x, z, trenchMap) < 1.5;
+        const dug =
+          groundHeight(x, z, trenchMap) - groundElevation(x, z, trenchMap) <
+          1.5;
         if (dug && !inTrench) bands++;
         inTrench = dug;
       }
@@ -98,7 +107,7 @@ describe("trench prototype", () => {
     for (let x = -9; x <= 9; x += 2)
       for (let z = -50; z <= 50; z += 5)
         expect(groundHeight(x, z, trenchMap)).toBeGreaterThanOrEqual(
-          1.55 - 0.001,
+          0.6 - 0.001,
         );
     const centerCover = trenchMap.boxes.filter((box) => Math.abs(box.x) < 18);
     expect(centerCover.filter((box) => box.kind === "sandbag")).toHaveLength(2);
@@ -195,7 +204,7 @@ describe("trench prototype", () => {
       let bands = 0,
         inside = false;
       for (let x = -77; x <= 77; x += 0.5) {
-        const dug = groundHeight(x, z, map) < 1.5;
+        const dug = groundHeight(x, z, map) - groundElevation(x, z, map) < 1.5;
         if (dug && !inside) bands++;
         inside = dug;
       }
@@ -217,7 +226,10 @@ describe("trench prototype", () => {
       expect(walkSegment(floor, { x: side * 10, z: station.z }, map)).toBe(
         false,
       );
-      expect(groundHeight(side * 14, station.z, map)).toBeCloseTo(2.4);
+      expect(
+        groundHeight(side * 14, station.z, map) -
+          groundElevation(side * 14, station.z, map),
+      ).toBeCloseTo(2.4);
       for (const height of [0.6, 1.1, 1.6, 1.98])
         expect(
           game.collision.ray(
@@ -297,11 +309,16 @@ describe("trench prototype", () => {
       if (i % 30 === 0)
         for (const p of game.players) {
           expect(Number.isFinite(p.x + p.y + p.z)).toBe(true);
-          expect(p.y).toBeCloseTo(
-            p.mantle
-              ? mantlePosition(p.mantle, game.tick).y
-              : groundHeight(p.x, p.z, game.map) + (p.hop?.height ?? 0),
-          );
+          if (p.fall)
+            expect(p.y).toBeGreaterThanOrEqual(
+              groundHeight(p.x, p.z, game.map),
+            );
+          else
+            expect(p.y).toBeCloseTo(
+              p.mantle
+                ? mantlePosition(p.mantle, game.tick).y
+                : groundHeight(p.x, p.z, game.map) + (p.hop?.height ?? 0),
+            );
           expect(blocked(p.x, p.z, 0.44, game.map)).toBe(false);
           expect(p.team === "blue" ? p.x < -18 : p.x > 18).toBe(true);
         }

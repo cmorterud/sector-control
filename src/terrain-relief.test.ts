@@ -4,6 +4,7 @@ import {
   authoredTerrainCut,
   baseGroundHeight,
   groundHeight,
+  groundElevation,
   walkSegment,
   type MapDefinition,
 } from "./map";
@@ -40,7 +41,8 @@ it("never raises terrain and preserves parapets, trench floors, spawns and cover
       const before = groundHeight(x, z, unscarred),
         after = groundHeight(x, z, trenchMap);
       expect(after).toBeLessThanOrEqual(before + 0.00001);
-      if (Math.abs(x) >= 15 || before < 2.39) expect(after).toBe(before);
+      if (Math.abs(x) >= 15 || before - groundElevation(x, z, unscarred) < 2.39)
+        expect(after).toBe(before);
       if (after < before - 0.01) changed++;
     }
   expect(changed).toBeGreaterThan(500);

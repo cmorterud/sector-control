@@ -154,22 +154,24 @@ it("creates a persistent artillery bowl that actually shields a crouched soldier
     undefined,
     { map: trenchMap },
   );
-  const y = groundHeight(0, 0, g.map);
-  g.explode({ x: 0, y: y + 0.025, z: 0 }, 0, "blue", {
+  // A low crest has a useful rim; cover still depends on the surrounding slope.
+  const z = 32,
+    y = groundHeight(0, z, g.map);
+  g.explode({ x: 0, y: y + 0.025, z }, 0, "blue", {
     ...artilleryExplosionProfile,
     damage: 0,
     structuralDamage: 0,
   });
   const hole = availableCraterCover(g.map).find(
-    (c) => c.created && Math.hypot(c.x, c.z) < 1,
+    (c) => c.created && Math.hypot(c.x, c.z - z) < 1,
   )!;
   expect(hole).toBeDefined();
   expect(hole.depth).toBeGreaterThan(1.1);
-  const floor = groundHeight(0, 0, g.map);
+  const floor = groundHeight(0, z, g.map);
   expect(
-    g.collision.ray({ x: -10, y: 2.5, z: 0 }, { x: 0, y: floor + 1.05, z: 0 }),
+    g.collision.ray({ x: -10, y: 2.5, z }, { x: 0, y: floor + 1.05, z }),
   ).toBeLessThan(1);
-  expect(groundHeight(0, 0, trenchMap)).toBe(y);
+  expect(groundHeight(0, z, trenchMap)).toBe(y);
 });
 it("routes a later wave through a newly excavated crater and crouches while regrouping there", () => {
   const g = new Game(

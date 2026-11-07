@@ -1,6 +1,7 @@
 import {
   groundHeight,
   baseGroundHeight,
+  groundElevation,
   type Box,
   type MapDefinition,
 } from "./map";
@@ -22,16 +23,22 @@ export function vegetationFor(map: MapDefinition): Box[] {
       )
     )
       return false;
+    const center = baseGroundHeight(x, z, map);
     return [
       [0, 0],
       [-r, 0],
       [r, 0],
       [0, -r],
       [0, r],
-    ].every(
-      ([dx, dz]) =>
-        Math.abs(baseGroundHeight(x + dx, z + dz, map) - 2.4) < 0.03,
-    );
+    ].every(([dx, dz]) => {
+      const height = baseGroundHeight(x + dx, z + dz, map);
+      // Keep plants off trench faces/craters, but allow their original sites
+      // on gentle rolling ground. Their roots use the actual surface height.
+      return (
+        Math.abs(height - groundElevation(x + dx, z + dz, map) - 2.4) < 0.03 &&
+        Math.abs(height - center) < 0.4
+      );
+    });
   };
   const trees = [
     [-68, -51],

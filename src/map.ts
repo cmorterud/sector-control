@@ -53,6 +53,14 @@ export type Ramp = Vec & {
   direction: 1 | -1;
 };
 export type TerrainRect = Vec & { w: number; d: number; h: number };
+export interface TerrainElevation {
+  originX: number;
+  originZ: number;
+  spacing: number;
+  columns: number;
+  rows: number;
+  values: Float32Array;
+}
 export interface TerrainRelief {
   grid?: {
     originX: number;
@@ -105,6 +113,7 @@ export interface MapDefinition {
     lining: (Vec & { w: number; d: number })[];
     craters: (Vec & { radius: number; depth?: number })[];
     depressions?: Depression[];
+    elevation?: TerrainElevation;
     relief?: TerrainRelief;
   };
 }
@@ -136,11 +145,21 @@ function authoredMapHeight(
       );
       return ramp.low + (ramp.high - ramp.low) * t;
     }
-  const col = Math.floor((x + map.width / 2) / terrain.cellSize);
-  const row = Math.floor((z + map.depth / 2) / terrain.cellSize);
+  const gx = (x + map.width / 2) / terrain.cellSize,
+    gz = (z + map.depth / 2) / terrain.cellSize,
+    col = Math.floor(gx),
+    row = Math.floor(gz);
   if (col < 0 || col >= terrain.columns || row < 0 || row >= terrain.rows)
     return terrain.bankHeight;
-  return terrain.heights[row * terrain.columns + col];
+  const height = terrain.heights[row * terrain.columns + col];
+  // Floors, steps and ramps are protected from elevation. Reuse the authored
+  // cell lookup for open ground instead of doing a second grid lookup per ray.
+  return (
+    height +
+    (terrain.elevation && height >= terrain.bankHeight - 0.01
+      ? elevationCell(terrain.elevation, col, row, gx - col, gz - row)
+      : 0)
+  );
 }
 export function baseGroundHeight(
   x: number,
@@ -148,6 +167,41 @@ export function baseGroundHeight(
   map: MapDefinition = industrialMap,
 ): number {
   return authoredMapHeight(x, z, map) - authoredTerrainCut(x, z, map);
+}
+// The same diagonal as terrainGeometry's two-meter surface quads. Interpolating
+// this cached field keeps movement, ray queries and the coarse mesh in agreement.
+export function groundElevation(
+  x: number,
+  z: number,
+  map: MapDefinition,
+): number {
+  const field = map.terrain?.elevation;
+  if (!field) return 0;
+  const gx = (x - field.originX) / field.spacing,
+    gz = (z - field.originZ) / field.spacing;
+  if (gx < 0 || gz < 0 || gx > field.columns - 1 || gz > field.rows - 1)
+    return 0;
+  const ix = Math.min(field.columns - 2, Math.floor(gx)),
+    iz = Math.min(field.rows - 2, Math.floor(gz)),
+    tx = gx - ix,
+    tz = gz - iz;
+  return elevationCell(field, ix, iz, tx, tz);
+}
+function elevationCell(
+  field: TerrainElevation,
+  ix: number,
+  iz: number,
+  tx: number,
+  tz: number,
+) {
+  const i = iz * field.columns + ix,
+    a = field.values[i],
+    b = field.values[i + 1],
+    c = field.values[i + field.columns],
+    d = field.values[i + field.columns + 1];
+  return tx <= tz
+    ? a + (d - c) * tx + (c - a) * tz
+    : a + (b - a) * tx + (d - b) * tz;
 }
 export function authoredTerrainCut(
   x: number,

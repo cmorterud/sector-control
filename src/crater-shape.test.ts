@@ -18,6 +18,7 @@ const flat: MapDefinition = {
     rectangles: [],
     lining: [],
     relief: undefined,
+    elevation: undefined,
     craters: [],
     firingPositions: [],
     trenchLines: [],
@@ -96,7 +97,7 @@ it("rounds a struck firing-step end into the trench floor while preserving remot
     ).toBeLessThan(0.04);
   expect(walkSegment({ x: -19, z: 2.2 }, { x: -19, z: 6.5 }, g.map)).toBe(true);
   expect(groundHeight(-19, 35, g.map)).toBe(distant);
-  expect(groundHeight(-17, 12, g.map)).toBeCloseTo(2.4);
+  expect(groundHeight(-17, 12, g.map)).toBe(groundHeight(-17, 12, trenchMap));
   expect(p.fall).not.toBeNull();
   for (let i = 0; i < 45; i++) g.step(idle());
   for (let i = 0; i < 30; i++) g.step({ ...idle(), z: 1, yaw: Math.PI });
