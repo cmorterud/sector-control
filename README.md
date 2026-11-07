@@ -99,11 +99,11 @@ Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` an
 
 ## Crouching
 
-**Hold C** to crouch; release it to stand. Crouch walking is **2.25 m/s**, half normal walking speed, and holding Shift does not sprint while crouched. The soldier bends their knees, lowers their body/rifle and camera, and keeps their boots planted. There is no persistent stance status line.
+**Press C** to crouch; press it again to stand. Crouch stays on after releasing the key and across pause/resume. Crouch walking is **2.25 m/s**, half normal walking speed, and holding Shift does not sprint while crouched. The soldier bends their knees, lowers their body/rifle and camera, and keeps their boots planted. There is no persistent stance status line.
 
 Crouching changes the actual hit profile, bot sight/aim height, muzzle, grenade release and explosion cover checks. It hides a soldier below the parapet even on a firing step; rounds at standing head height pass overhead, while lower rounds can still hit. A lowered rifle strikes nearby cover normally, and blind tactical-map artillery requests remain available from cover.
 
-Space stands the soldier to hop or mantle when there is clearance. Crouching waits until an airborne action finishes, then resumes if C remains held. A solid overhead obstruction keeps the soldier crouched after C is released until there is room to stand. Adjacent earth banks are distinguished from ceilings. Death/respawn/restart reset stance. Commands/snapshots and typed `stance` transition events support recorded checks.
+Space stands the soldier to hop or mantle when there is clearance. Crouching waits until an airborne action finishes, then resumes if crouch is still toggled on. A solid overhead obstruction keeps the soldier crouched after toggling crouch off until there is room to stand. Adjacent earth banks are distinguished from ceilings. Death/respawn/restart reset stance. Commands/snapshots and typed `stance` transition events support recorded checks.
 
 ## Suppression, smoke and squad prototype
 

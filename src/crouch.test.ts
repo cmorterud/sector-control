@@ -11,7 +11,7 @@ import {
   type CollisionWorld,
   type Projectile,
 } from "./simulation";
-import { canStand, eyeHeightOf, cameraHeightOf } from "./crouch";
+import { CrouchToggle, canStand, eyeHeightOf, cameraHeightOf } from "./crouch";
 import { industrialMap, type MapDefinition } from "./map";
 import { trenchMap } from "./trench-map";
 import { requestArtillery } from "./artillery";
@@ -56,7 +56,40 @@ const round = (y: number): Projectile => ({
   bornAt: 0,
 });
 
-describe("held crouching", () => {
+describe("human crouch toggle", () => {
+  it("stays crouched between presses, ignores key repeat, and stands on the next press", () => {
+    const g = scene(),
+      input = new CrouchToggle(),
+      p = g.players[0];
+    const step = () => g.step({ ...idle(), crouch: input.active });
+    input.press();
+    for (let i = 0; i < 60; i++) {
+      input.press(true);
+      step();
+    }
+    expect(p.crouched).toBe(true);
+    input.press();
+    step();
+    expect(p.crouched).toBe(false);
+  });
+  it("resumes a latched crouch after a hop and clears the latch for a fresh life/match", () => {
+    const g = scene(),
+      input = new CrouchToggle(),
+      p = g.players[0];
+    input.press();
+    g.step({ ...idle(), crouch: input.active });
+    g.step({ ...idle(), crouch: input.active, mantle: true });
+    expect(p.hop).not.toBeNull();
+    expect(p.crouched).toBe(false);
+    for (let i = 0; i < 40; i++) g.step({ ...idle(), crouch: input.active });
+    expect(p.crouched).toBe(true);
+    input.reset();
+    g.step({ ...idle(), crouch: input.active });
+    expect(p.crouched).toBe(false);
+  });
+});
+
+describe("desired crouch stance", () => {
   it("records only stance transitions, lowers eye/camera/muzzle, and stands when released", () => {
     const g = scene(),
       p = g.players[0],

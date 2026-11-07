@@ -388,3 +388,10 @@ A partially cut bank beside a narrow step exposed a pre-existing sampler limitat
 Validation: all 258 tests / strict TypeScript pass in 63.26 s with the existing integration time limits, followed by production build (4.08 s) and whitespace checks. Native evidence follows in PLAYTEST_REVIEW.md.
 
 Native validation: the final direct 45-second walk traverses the rear entry and full central communication dogleg to the front floor at 60 FPS/zero errors. The normal100-soldier60-second battle records four captures, seven enemy-trench-arrival events and sixteen artillery impacts at59.03 FPS/zero errors. Both video/stereo audio decode. Full evidence, the repaired corner-gap diagnostic and scope limits are in PLAYTEST_REVIEW.md.
+
+
+## Sticky crouch — November 7, 2026
+
+Human input uses a CrouchToggle latch, toggled only by non-repeating C keydown. Keyup and pause input clearing retain the latch; a new match or local death/respawn clears it. The simulation still receives desired crouch state every tick, preserving bot behavior, clearance, half-speed movement and airborne handling. Updated HUD/menu/README controls. Two regression tests exercise real simulation stance transitions, repeat filtering and latch retention across a hop/reset. Strict TypeScript, all fourteen crouch tests and Vite build pass. Native recorded evidence is in PLAYTEST_REVIEW.md.
+
+The host Homebrew Node26 binary currently needs old installed dylibs while opt links point at newer majors. Local checks run with process-only DYLD_FALLBACK_LIBRARY_PATH pointing at Cellar/ada-url/3.4.4/lib, simdjson/4.6.4/lib and simdutf/9.0.0/lib, invoking Node directly; no host settings or dependency files were changed.

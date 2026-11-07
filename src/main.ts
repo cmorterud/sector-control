@@ -14,7 +14,7 @@ import {
 import { BattleAudio } from "./battle-audio";
 import { BattlefieldFeedback } from "./battlefield";
 import { weaponAim } from "./recoil";
-import { eyeHeightOf } from "./crouch";
+import { CrouchToggle, eyeHeightOf } from "./crouch";
 import { PlaytestRecorder } from "./playtest";
 import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
 import { trenchMap } from "./trench-map";
@@ -33,6 +33,7 @@ let renderer: Renderer,
   accumulator = 0,
   uiTime = 0;
 const keys = new Set<string>();
+const crouchInput = new CrouchToggle();
 let triggerDown = false;
 let fire = false,
   aim = false,
@@ -66,7 +67,7 @@ const requestedTeamSize = params.has("teamSize")
   ? Number(params.get("teamSize"))
   : undefined;
 document.querySelector(".controls")!.textContent +=
-  "　 G GRENADE　 F SMOKE　 C CROUCH　 SPACE HOP / MANTLE　 Q TACTICAL MAP";
+  "　 G GRENADE　 F SMOKE　 C TOGGLE CROUCH　 SPACE HOP / MANTLE　 Q TACTICAL MAP";
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function sound(freq: number, length = 0.08, volume = 0.04) {
   audio?.tone(freq, length, volume);
@@ -154,6 +155,7 @@ function start() {
   hitUntil = damageUntil = 0;
   artilleryNotice = "";
   artilleryNoticeUntil = 0;
+  crouchInput.reset();
   clear();
   resume();
   sound(500, 0.3);
@@ -175,6 +177,8 @@ function pause() {
   if (restart) restart.onclick = start;
 }
 function handle(e: Event) {
+  if ((e.type === "death" || e.type === "respawn") && e.actor === 0)
+    crouchInput.reset();
   renderer.effect(e);
   battlefield.event(game, e);
   if (e.type === "smokeThrow" && e.actor === 0) sound(300, 0.12, 0.035);
@@ -329,7 +333,7 @@ function command(): Command {
   c.z = x * Math.sin(yaw) - z * Math.cos(yaw);
   c.yaw = yaw;
   c.pitch = pitch;
-  c.crouch = keys.has("KeyC");
+  c.crouch = crouchInput.active;
   c.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
   c.fire = fire && !tacticalMap.open;
   fire = false;
@@ -351,6 +355,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
   if (paused) return;
   keys.add(e.code);
+  if (e.code === "KeyC" && game.players[0].hp > 0) crouchInput.press(e.repeat);
   if (e.code === "KeyQ" && !e.repeat) {
     fire = aim = grenade = smoke = mantle = false;
     tacticalMap.toggle();
@@ -486,7 +491,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag in the trench. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Hold C to crouch and move slowly behind cover; release it to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 20 seconds, then a shared 50-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag in the trench. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 20 seconds, then a shared 50-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

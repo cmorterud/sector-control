@@ -1,6 +1,17 @@
 import { groundHeight } from "./map";
 import type { Game, Soldier, Command } from "./simulation";
 
+// Human input stays latched between key presses; bots still send desired stance.
+export class CrouchToggle {
+  active = false;
+  press(repeat = false) {
+    if (!repeat) this.active = !this.active;
+  }
+  reset() {
+    this.active = false;
+  }
+}
+
 export const crouchRules = {
   drop: 0.55,
   speed: 2.25,
