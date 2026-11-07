@@ -1,6 +1,12 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import { Entity, Vec3 } from "playcanvas";
 import { Renderer } from "./rendering";
+import {
+  soldierStyle,
+  reloadMotion,
+  casualtyRules,
+} from "./soldier-presentation";
+import { weaponProfiles } from "./weapons";
 import {
   Game,
   idle,
@@ -13,11 +19,17 @@ import { trenchMap } from "./trench-map";
 // Exercise the real rig and animation transforms without a WebGL context.
 // Mesh creation is replaced by bare transform nodes; joint/IK code is unchanged.
 type Rig = {
+  body: Entity;
+  hips: Entity;
+  magazine: Entity;
+  reloadMagazine: Entity;
+  style: ReturnType<typeof soldierStyle>;
+  phase: number;
   upper: Entity;
   rifle: Entity;
   supportHand: Entity;
   arms: { shoulder: Entity; elbow: Entity }[];
-  legs: { ankle: Entity }[];
+  legs: { hip: Entity; knee: Entity; ankle: Entity }[];
 };
 type Harness = {
   app: { root: Entity };
@@ -27,6 +39,7 @@ type Harness = {
   blastFlinches: Map<number, { tick: number; strength: number }>;
   cube: Renderer["cube"];
   createSoldier(p: Soldier): void;
+  collapseSoldier(p: Soldier, age: number): void;
   animateSoldier(
     p: Soldier,
     x: number,
@@ -38,6 +51,7 @@ type Harness = {
 function rigFor(p: Soldier) {
   const renderer = Object.create(Renderer.prototype) as Harness;
   renderer.app = { root: new Entity("test world") };
+  Object.assign(renderer.app.root, { _enabledInHierarchy: true });
   renderer.map = trenchMap;
   renderer.people = [];
   renderer.soldiers = [];
@@ -203,6 +217,9 @@ it("kicks the barrel and shoulder back while keeping the support wrist on the gr
   r.animateSoldier(p, p.x, p.z, 1 / 60, 99);
   const rest = rig.rifle.getLocalPosition().clone();
   const restDirection = rig.rifle.forward.clone();
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 159);
+  const futureIdle = rig.rifle.forward.clone();
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 99);
   game.fire(p);
   let previousZ = Infinity;
   for (const age of [0, 0.5, 1, 2, 4, 8]) {
@@ -223,7 +240,7 @@ it("kicks the barrel and shoulder back while keeping the support wrist on the gr
   for (let i = 0; i < 60; i++) game.step(idle());
   r.animateSoldier(p, p.x, p.z, 1 / 60, game.tick - 1);
   expect(rig.rifle.getLocalPosition().z).toBeCloseTo(rest.z, 4);
-  expect(rig.rifle.forward.y).toBeCloseTo(restDirection.y, 4);
+  expect(rig.rifle.forward.y).toBeCloseTo(futureIdle.y, 4);
 });
 
 it("tucks falling legs and keeps the rifle grip attached while the root drops", () => {
@@ -268,6 +285,9 @@ it("braces after a nearby blast without detaching the support hand, then settles
   r.blastFlinches = new Map([[p.id, { tick: 100, strength: 1 }]]);
   r.animateSoldier(p, p.x, p.z, 1 / 60, 99);
   const rest = rig.upper.forward.clone();
+  const control = rigFor(p);
+  control.animateSoldier(p, p.x, p.z, 1 / 60, 130);
+  const futureIdle = control.soldiers[0].upper.forward.clone();
   r.animateSoldier(p, p.x, p.z, 1 / 60, 103);
   expect(rig.upper.forward.distance(rest)).toBeGreaterThan(0.02);
   const wrist = rig.arms[0].elbow
@@ -275,6 +295,108 @@ it("braces after a nearby blast without detaching the support hand, then settles
     .transformPoint(new Vec3(0, -0.46, 0));
   expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
   r.animateSoldier(p, p.x, p.z, 1 / 60, 130);
-  expect(rig.upper.forward.distance(rest)).toBeLessThan(0.0001);
+  expect(rig.upper.forward.distance(futureIdle)).toBeLessThan(0.0001);
   expect(r.blastFlinches.size).toBe(0);
+});
+
+it("varies cadence and idle upper-body motion without moving planted boots or simulation state", () => {
+  const g = new Game(
+      new TestCollision(trenchMap),
+      false,
+      3000,
+      12345,
+      undefined,
+      { map: trenchMap },
+    ),
+    p = g.players[0];
+  p.landedAt = -1000;
+  const a = rigFor(p),
+    b = rigFor(p);
+  b.soldiers[0].style = soldierStyle(17);
+  const before = structuredClone(p);
+  a.animateSoldier(p, p.x, p.z, 1 / 60, 100);
+  const ankle = a.soldiers[0].legs[0].ankle.getPosition().clone(),
+    facing = a.soldiers[0].upper.forward.clone();
+  a.animateSoldier(p, p.x, p.z, 1 / 60, 160);
+  expect(
+    a.soldiers[0].legs[0].ankle.getPosition().distance(ankle),
+  ).toBeLessThan(0.0001);
+  expect(a.soldiers[0].upper.forward.distance(facing)).toBeGreaterThan(0.001);
+  for (let i = 1; i <= 20; i++) {
+    a.animateSoldier(p, p.x + i * 0.08, p.z, 1 / 60, 160 + i);
+    b.animateSoldier(p, p.x + i * 0.08, p.z, 1 / 60, 160 + i);
+  }
+  expect(Math.abs(a.soldiers[0].phase - b.soldiers[0].phase)).toBeGreaterThan(
+    0.01,
+  );
+  expect(p).toEqual(before);
+  for (const name of [
+    "helmet brim",
+    "web belt",
+    "ammunition pouch",
+    "webbing strap",
+    "pack flap",
+    "rolled blanket",
+  ])
+    expect(a.people[0].findByName(name)).toBeTruthy();
+});
+it("animates rifle and machine-gun magazine exchanges with the support wrist attached, then restores the firing pose", () => {
+  for (const weapon of ["rifle", "machineGun"] as const) {
+    const g = new Game(new TestCollision(trenchMap), false),
+      p = g.players[0];
+    p.weapon = weapon;
+    p.reloadAt = 100 + weaponProfiles[weapon].reloadTicks;
+    p.landedAt = -1000;
+    const r = rigFor(p),
+      rig = r.soldiers[0],
+      hands = [];
+    const magazineChanges = vi.spyOn(rig.magazine, "enabled", "set"),
+      carriedChanges = vi.spyOn(rig.reloadMagazine, "enabled", "set");
+    for (let i = 0; i < 100; i++) {
+      const tick = 100 + (i / 100) * weaponProfiles[weapon].reloadTicks;
+      r.animateSoldier(p, p.x, p.z, 1 / 60, tick);
+      const wrist = rig.arms[0].elbow
+        .getWorldTransform()
+        .transformPoint(new Vec3(0, -0.46, 0));
+      expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(
+        0.0001,
+      );
+      const motion = reloadMotion(p, tick)!;
+      expect(rig.magazine.getLocalScale().length() > 0).toBe(!motion.removed);
+      expect(rig.reloadMagazine.getLocalScale().length() > 0).toBe(
+        motion.carrying,
+      );
+      if (i === 40 || i === 79)
+        hands.push(rig.arms[1].elbow.getPosition().clone());
+    }
+    expect(hands[0].distance(hands[1])).toBeGreaterThan(0.1);
+    p.reloadAt = 0;
+    r.animateSoldier(p, p.x, p.z, 1 / 60, 200);
+    expect(rig.magazine.enabled).toBe(true);
+    expect(rig.reloadMagazine.getLocalScale().length()).toBe(0);
+    expect(magazineChanges).not.toHaveBeenCalled();
+    expect(carriedChanges).not.toHaveBeenCalled();
+  }
+});
+it("buckles and topples progressively while retaining equipment and the support grip", () => {
+  const g = new Game(new TestCollision(trenchMap), false),
+    p = g.players[0],
+    r = rigFor(p),
+    rig = r.soldiers[0];
+  const snapshot = structuredClone(p);
+  r.collapseSoldier(p, 0);
+  const upright = rig.body.getLocalRotation().clone();
+  r.collapseSoldier(p, 0.2);
+  expect(Math.abs(rig.legs[0].knee.getLocalEulerAngles().x)).toBeGreaterThan(
+    50,
+  );
+  expect(Math.abs(rig.body.getLocalEulerAngles().z)).toBeLessThan(10);
+  r.collapseSoldier(p, casualtyRules.fallSeconds);
+  expect(Math.abs(rig.body.getLocalEulerAngles().z)).toBeGreaterThan(60);
+  expect(rig.body.getLocalRotation().equals(upright)).toBe(false);
+  const wrist = rig.arms[0].elbow
+    .getWorldTransform()
+    .transformPoint(new Vec3(0, -0.46, 0));
+  expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
+  expect(p).toEqual(snapshot);
 });

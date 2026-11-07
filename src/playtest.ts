@@ -16,6 +16,7 @@ export class CaptureCadence {
 export class PlaytestLog {
   readonly version = 3;
   presentation?: {
+    soldiers?: Record<string, number>;
     feedback: Record<string, number>;
     audio?: {
       played: number;
@@ -25,12 +26,14 @@ export class PlaytestLog {
       spatial: number;
       occluded: number;
       byKind: Record<string, number>;
+      voiceMissing?: number;
     };
     recent: {
       tick: number;
       kind: string;
       distance: number;
       occluded: boolean;
+      line?: string;
     }[];
   };
   readonly startedAt = new Date().toISOString();

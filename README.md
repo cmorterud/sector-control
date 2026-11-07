@@ -43,6 +43,14 @@ Each uncontested flag earns its owner **one point every three seconds**. First t
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
+## Soldiers and battlefield voices
+
+Soldiers now vary their stride timing, upper-body sway and idle breathing, with smoother movement transitions. Reloads visibly lower the weapon, exchange its magazine or ammunition box and work the action; the right hand moves between belt and weapon while the left stays on its grip. Rounded helmets with brims, webbing, pouches, pack flaps and rolled blankets add detail while retaining team colors.
+
+A killed soldier buckles and falls over roughly 0.85 seconds. Nearby bodies remain for about 20 seconds, fading at the end; at most 24 are retained. They follow excavated ground and are cosmetic, so they do not block movement, shots or objectives. Respawning soldiers are independent of the retained body. Pausing freezes the presentation and a fresh match clears it.
+
+Nearby friendly soldiers occasionally call **“Reloading!”, “Incoming! Get down!”, “Grenade!”** or **“Smoke out!”** in response to actual events. Distance, solid cover, global/individual cooldowns and one spoken line at a time keep chatter sparse. Enemy grenade warnings require sight. These are short bundled synthetic voice clips, with two variants per line, played through the normal spatial mixer and included in playtest audio. No microphone or live speech service is used. The start/pause menu has a **Soldier voices** toggle; Battlefield volume also controls voices.
+
 ## Battlefield appearance
 
 Trench terrain now has mottled damp soil, fine mud detail and locally darker exposed earth after excavation. Timber lining and duckboards have worn grain. Materials stay attached to the rebuilt terrain, including vertical bank faces and craters.

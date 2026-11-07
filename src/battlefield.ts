@@ -1,3 +1,4 @@
+import { SoldierChatter, type VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
   groundHeight,
@@ -18,7 +19,8 @@ export type SoundKind =
   | "artillery"
   | "whistle"
   | "debris"
-  | "timber";
+  | "timber"
+  | "voice";
 export type SoundCue = {
   kind: SoundKind;
   at: V3;
@@ -27,6 +29,7 @@ export type SoundCue = {
   occluded?: boolean;
   distance: number;
   seed: number;
+  line?: VoiceLine;
 };
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
@@ -75,6 +78,7 @@ export function footSurface(
 
 // Presentation only: never writes commands, simulation state or gameplay RNG.
 export class BattlefieldFeedback {
+  readonly chatter = new SoldierChatter();
   private feet = new Map<number, { x: number; z: number; stride: number }>();
   private shock = { tick: -1000, strength: 0 };
   private boards: Vec[] = [];
@@ -92,16 +96,19 @@ export class BattlefieldFeedback {
     blastReactions: 0,
     peakBlastStrength: 0,
     occluded: 0,
+    callouts: 0,
   };
   recent: {
     tick: number;
     kind: SoundKind;
     distance: number;
     occluded: boolean;
+    line?: VoiceLine;
   }[] = [];
   constructor(private play: (cue: SoundCue) => void) {}
   reset(g: Game) {
     this.feet.clear();
+    this.chatter.reset();
     this.boards = duckboards(g.map);
     this.shock = { tick: -1000, strength: 0 };
     this.nextCrack = 0;
@@ -118,6 +125,7 @@ export class BattlefieldFeedback {
     local = false,
     occlusion = true,
     seed = g.tick,
+    line?: VoiceLine,
   ) {
     const p = g.players[0];
     const ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
@@ -130,12 +138,40 @@ export class BattlefieldFeedback {
       kind,
       distance: Math.round(distance),
       occluded,
+      ...(line ? { line } : {}),
     });
     if (this.recent.length > 160) this.recent.shift();
-    this.play({ kind, at: { ...at }, volume, local, distance, occluded, seed });
+    this.play({
+      kind,
+      at: { ...at },
+      volume,
+      local,
+      distance,
+      occluded,
+      seed,
+      ...(line ? { line } : {}),
+    });
   }
   event(g: Game, e: Event) {
     const p = g.players[0];
+    const call = this.chatter.react(g, e);
+    if (call) {
+      this.cue(
+        g,
+        "voice",
+        {
+          x: call.actor.x,
+          y: call.actor.y + eyeHeightOf(call.actor),
+          z: call.actor.z,
+        },
+        0.72,
+        call.actor.id === 0,
+        true,
+        call.actor.id,
+        call.line,
+      );
+      this.stats.callouts++;
+    }
     if (e.type === "respawn" && e.actor === 0) {
       this.shock = { tick: -1000, strength: 0 };
       this.nextCrack = 0;

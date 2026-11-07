@@ -75,6 +75,9 @@ class Context {
   };
   createMediaStreamDestination = () =>
     Object.assign(this.node(), { stream: { gameAudio: true } });
+  decodeAudioData(_data: ArrayBuffer) {
+    return Promise.resolve({ duration: 0.8 });
+  }
   createBuffer(_channels: number, length: number) {
     return { getChannelData: () => new Float32Array(length) };
   }
@@ -192,4 +195,58 @@ it("uses unpitched explosion layers and guarantees a blast voice when rifle chat
   expect(a.stats.byKind.grenade).toBe(1);
   expect(a.stats.stolen).toBe(1);
   expect(a.stats.peakVoices).toBe(40);
+});
+
+it("loads bundled speech once, spatializes one voice at a time and cancels it on pause or mute", async () => {
+  const fetch = vi.fn(async () => ({
+    ok: true,
+    arrayBuffer: async () => new ArrayBuffer(16),
+  }));
+  vi.stubGlobal("fetch", fetch);
+  const { a, c } = setup();
+  await a.prepareVoices();
+  expect(fetch).toHaveBeenCalledTimes(8);
+  const spoken = { ...cue, kind: "voice" as const, line: "incoming" as const };
+  a.play(spoken);
+  expect(a.stats.byKind.voice).toBe(1);
+  expect(c.oscillators).toBe(0);
+  a.play(spoken);
+  expect(a.stats.byKind.voice).toBe(1);
+  expect(c.nodes.some((n) => n.positionX.value === 10)).toBe(true);
+  a.chatter(false);
+  a.play(spoken);
+  expect(a.stats.byKind.voice).toBe(1);
+  a.chatter(true);
+  a.play(spoken);
+  expect(a.stats.byKind.voice).toBe(2);
+  a.pause();
+  expect(c.nodes.filter((n) => n.onended !== null)).toHaveLength(0);
+  a.resume();
+  a.reset();
+  await a.prepareVoices();
+  expect(fetch).toHaveBeenCalledTimes(8);
+});
+it("drops unavailable speech without disrupting effects or replaying stale calls after loading", async () => {
+  let release: ((v: {
+    ok: boolean;
+    arrayBuffer: () => Promise<ArrayBuffer>;
+  }) => void)[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => new Promise((resolve) => release.push(resolve))),
+  );
+  const { a } = setup(),
+    pending = a.prepareVoices();
+  a.play({ ...cue, kind: "voice", line: "reloading" });
+  expect(a.stats.voiceMissing).toBe(1);
+  a.play(cue);
+  expect(a.stats.byKind.rifle).toBe(1);
+  a.pause();
+  for (const done of release)
+    done({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+  await pending;
+  expect(a.stats.byKind.voice ?? 0).toBe(0);
+  a.resume();
+  a.play({ ...cue, kind: "voice", line: "reloading" });
+  expect(a.stats.byKind.voice).toBe(1);
 });

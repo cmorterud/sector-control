@@ -54,6 +54,7 @@ let audio: BattleAudio | undefined;
 const battlefield = new BattlefieldFeedback((cue) => audio?.play(cue));
 let audioVolume = 0.65;
 let cameraReactions = true;
+let soldierVoices = true;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
 const params = new URLSearchParams(location.search),
@@ -93,11 +94,16 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label><label><input id="soldier-voices" type="checkbox" ${soldierVoices ? "checked" : ""}> Soldier voices</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
   el("primary").onclick = action;
   el("volume").oninput = (e) => {
     audioVolume = Number((e.target as HTMLInputElement).value) / 100;
     audio?.volume(audioVolume);
+  };
+  el("soldier-voices").onchange = (e) => {
+    soldierVoices = (e.target as HTMLInputElement).checked;
+    battlefield.chatter.enabled = soldierVoices;
+    audio?.chatter(soldierVoices);
   };
   el("camera-reactions").onchange = (e) =>
     (cameraReactions = (e.target as HTMLInputElement).checked);
@@ -105,6 +111,8 @@ function menu(
 function resume() {
   audio ??= new BattleAudio();
   audio.volume(audioVolume);
+  audio.chatter(soldierVoices);
+  void audio.prepareVoices();
   audio.resume();
   if (demo) {
     paused = false;
@@ -445,6 +453,7 @@ function frame(now: number) {
             feedback: { ...battlefield.stats },
             audio: audio ? structuredClone(audio.stats) : undefined,
             recent: [...battlefield.recent],
+            soldiers: { ...renderer.soldierStats },
           };
         recording?.tick(game, input);
         accumulator -= 1 / 30;

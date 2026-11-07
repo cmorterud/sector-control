@@ -1,8 +1,9 @@
+import { voiceLines, type VoiceLine } from "./soldier-chatter";
 import type { SoundCue } from "./battlefield";
 import { treeFallTime } from "./environment-effects";
 import type { V3 } from "./simulation";
 
-// Synthesized game audio only; no files, microphone or network requests.
+// Local synthesized effects and bundled voice clips; no microphone or speech service.
 export class BattleAudio {
   readonly context: AudioContext;
   readonly capture: MediaStreamAudioDestinationNode;
@@ -12,6 +13,10 @@ export class BattleAudio {
   private noise: AudioBuffer;
   private voices = new Map<() => void, number>();
   private running = false;
+  private speech?: () => void;
+  private voicesEnabled = true;
+  private speechBuffers = new Map<string, AudioBuffer>();
+  private speechLoading?: Promise<void>;
   stats = {
     stolen: 0,
     played: 0,
@@ -20,6 +25,7 @@ export class BattleAudio {
     spatial: 0,
     occluded: 0,
     byKind: {} as Record<string, number>,
+    voiceMissing: 0,
   };
   constructor() {
     const c = (this.context = new AudioContext());
@@ -42,6 +48,31 @@ export class BattleAudio {
     this.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  prepareVoices() {
+    this.speechLoading ??= Promise.all(
+      voiceLines.flatMap((line) =>
+        [0, 1].map(async (variant) => {
+          try {
+            const response = await fetch(
+              `/audio/voices/${line}-${variant}.wav`,
+            );
+            if (!response.ok) return;
+            const buffer = await this.context.decodeAudioData(
+              await response.arrayBuffer(),
+            );
+            this.speechBuffers.set(`${line}-${variant}`, buffer);
+          } catch {
+            /* Missing speech must not interrupt the game or replay late. */
+          }
+        }),
+      ),
+    ).then(() => {});
+    return this.speechLoading;
+  }
+  chatter(enabled: boolean) {
+    this.voicesEnabled = enabled;
+    if (!enabled) this.speech?.();
   }
   volume(value: number) {
     this.master.gain.setTargetAtTime(
@@ -69,6 +100,7 @@ export class BattleAudio {
       spatial: 0,
       occluded: 0,
       byKind: {},
+      voiceMissing: 0,
     };
     this.muffle(0);
   }
@@ -96,21 +128,32 @@ export class BattleAudio {
   }
   play(cue: SoundCue) {
     if (!this.running) return;
+    const speech = cue.kind === "voice";
+    if (speech && (!this.voicesEnabled || this.speech)) return;
+    const spoken = speech
+      ? this.speechBuffers.get(`${cue.line}-${Math.abs(cue.seed) % 2}`)
+      : undefined;
+    if (speech && !spoken) {
+      this.stats.voiceMissing++;
+      return;
+    }
+    const speechRate = 0.97 + (Math.abs(cue.seed) % 5) * 0.012;
     const important =
+      speech ||
       cue.local ||
       ["crack", "artillery", "grenade", "whistle", "timber"].includes(cue.kind);
     const priority = ["artillery", "grenade"].includes(cue.kind)
       ? 3
-      : cue.local || cue.kind === "crack"
+      : speech || cue.local || cue.kind === "crack"
         ? 2
         : ["whistle", "timber"].includes(cue.kind)
           ? 1
           : 0;
     if (this.voices.size >= (important ? 40 : 28)) {
-      const victim = [...this.voices.entries()].find(
-        ([, rank]) => rank < priority,
-      );
-      if (victim && priority === 3) {
+      const victim = [...this.voices.entries()]
+        .sort((a, b) => a[1] - b[1])
+        .find(([, rank]) => rank < priority);
+      if (victim && (priority === 3 || speech)) {
         victim[0]();
         this.stats.stolen++;
       } else {
@@ -129,23 +172,25 @@ export class BattleAudio {
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
-    const length = explosion
-      ? cue.kind === "artillery"
-        ? 2.4
-        : 1.6
-      : whistle
-        ? 0.75
-        : rifle
-          ? cue.kind === "machineGun"
-            ? 0.11 + distant * 0.25
-            : 0.16 + distant * 0.42
-          : crack
-            ? 0.065
-            : foot
-              ? 0.16
-              : cue.kind === "timber"
-                ? 1.5
-                : 0.65;
+    const length = speech
+      ? spoken!.duration / speechRate
+      : explosion
+        ? cue.kind === "artillery"
+          ? 2.4
+          : 1.6
+        : whistle
+          ? 0.75
+          : rifle
+            ? cue.kind === "machineGun"
+              ? 0.11 + distant * 0.25
+              : 0.16 + distant * 0.42
+            : crack
+              ? 0.065
+              : foot
+                ? 0.16
+                : cue.kind === "timber"
+                  ? 1.5
+                  : 0.65;
     const delay =
       cue.local || crack || foot || whistle
         ? 0
@@ -171,7 +216,9 @@ export class BattleAudio {
                 ? 2400
                 : cue.kind === "timber"
                   ? 1700
-                  : 8500 * (1 - distant * 0.85);
+                  : speech
+                    ? 4600 * (1 - distant * 0.5)
+                    : 8500 * (1 - distant * 0.85);
     if (cue.occluded)
       filter.frequency.value = Math.min(
         filter.frequency.value,
@@ -230,6 +277,8 @@ export class BattleAudio {
         0.015,
       );
     }
+    if (speech)
+      envelope.gain.setValueAtTime(Math.max(0.0001, volume), end - 0.045);
     envelope.gain.exponentialRampToValueAtTime(0.0001, end);
     filter.connect(envelope);
     const nodes: AudioNode[] = [filter, envelope];
@@ -238,7 +287,15 @@ export class BattleAudio {
       const pan = c.createPanner();
       pan.panningModel = "equalpower";
       pan.distanceModel = "inverse";
-      pan.refDistance = explosion ? 12 : whistle ? 30 : crack ? 2 : 5;
+      pan.refDistance = explosion
+        ? 12
+        : whistle
+          ? 30
+          : crack
+            ? 2
+            : speech
+              ? 7
+              : 5;
       pan.rolloffFactor = 1;
       pan.maxDistance = 160;
       pan.positionX.value = cue.at.x;
@@ -248,6 +305,30 @@ export class BattleAudio {
       nodes.push(pan);
       output = pan;
     } else envelope.connect(this.world);
+    if (speech) {
+      const source = c.createBufferSource();
+      source.buffer = spoken!;
+      source.playbackRate.value = speechRate;
+      source.connect(filter);
+      let cleaned = false;
+      const stop = () => {
+        if (cleaned) return;
+        cleaned = true;
+        source.onended = null;
+        source.stop();
+        source.disconnect();
+        for (const n of nodes) n.disconnect();
+        this.voices.delete(stop);
+        if (this.speech === stop) this.speech = undefined;
+      };
+      source.onended = stop;
+      this.speech = stop;
+      this.voices.set(stop, priority);
+      this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
+      source.start(start);
+      source.stop(end);
+      return;
+    }
     const noise = c.createBufferSource();
     noise.buffer = this.noise;
     noise.playbackRate.value = 0.92 + Math.abs(Math.sin(cue.seed * 2.4)) * 0.16;
