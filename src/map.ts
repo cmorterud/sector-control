@@ -164,7 +164,9 @@ function authoredMapHeight(
   return (
     height +
     (terrain.elevation && height >= terrain.bankHeight - 0.01
-      ? elevationCell(terrain.elevation, col, row, gx - col, gz - row)
+      ? terrain.elevation.spacing === terrain.cellSize
+        ? elevationCell(terrain.elevation, col, row, gx - col, gz - row)
+        : groundElevation(x, z, map)
       : 0)
   );
 }
@@ -331,18 +333,28 @@ function sampleTerrainCuts(
       ),
     );
     const low = Math.min(...bases);
-    const heights = [a, b, c, d].map((cut, i) =>
-      Math.max(-0.9, bases[i] - cut),
-    );
-    if (
-      Math.max(...bases) - low > 0.3 &&
-      bases.some((base, i) => base > low + 0.3 && heights[i] < base - 0.15)
-    )
-      return Math.max(
-        0,
-        baseGroundHeight(x, z, runtimeMap) -
-          interpolate(heights[0], heights[1], heights[2], heights[3]),
-      );
+    if (Math.max(...bases) - low > 0.3) {
+      const heights = [a, b, c, d].map((cut, i) => {
+        const dx = i % 2,
+          dz = Math.floor(i / 2);
+        // A partly cut bank can still stand above its neighboring floor/ramp.
+        // Cap each shared sample to this cell's side of the authored cliff;
+        // otherwise interpolation tries to raise the floor, then a query-time
+        // clamp creates a curved lip that disagrees with the mesh triangles.
+        const sideBase = baseGroundHeight(
+          (ix + dx) * terrainResolution + (dx ? -0.00001 : 0.00001),
+          (iz + dz) * terrainResolution + (dz ? -0.00001 : 0.00001),
+          runtimeMap,
+        );
+        return Math.max(-0.9, Math.min(sideBase, bases[i] - cut));
+      });
+      if (bases.some((base, i) => base > low + 0.3 && heights[i] < base - 0.15))
+        return Math.max(
+          0,
+          baseGroundHeight(x, z, runtimeMap) -
+            interpolate(heights[0], heights[1], heights[2], heights[3]),
+        );
+    }
   }
   return interpolate(a, b, c, d);
 }
@@ -418,7 +430,7 @@ export function walkSegment(
   b: Vec,
   map: MapDefinition = industrialMap,
 ): boolean {
-  const n = Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / 0.35));
+  const n = Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / 0.25));
   let height = groundHeight(a.x, a.z, map);
   for (let i = 0; i <= n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,

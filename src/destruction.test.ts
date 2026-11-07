@@ -88,8 +88,8 @@ it("accumulates excavation, widens deep bowls to keep them walkable, and bounds 
 
 it("deforms trench floors and parapet tops without erasing the adjacent bank in one blast", () => {
   const game = gameFor(trenchMap);
-  blast(game, 23, -1);
-  expect(groundHeight(23, -1, game.map)).toBeLessThan(-0.25);
+  blast(game, 21, -1);
+  expect(groundHeight(21, -1, game.map)).toBeLessThan(-0.25);
   expect(groundHeight(17, -1, game.map)).toBeCloseTo(2.4);
   blast(game, 17, -1);
   expect(groundHeight(17, -1, game.map)).toBeGreaterThan(1.8);
@@ -307,7 +307,7 @@ it("keeps an unrelated mantle running when an explosion changes distant terrain"
 
 it("repeated parapet hits can open a walkable breach without requiring a mantle", () => {
   const game = gameFor(trenchMap);
-  const a = { x: -23, z: -1 },
+  const a = { x: -21, z: -1 },
     b = { x: -12, z: -1 };
   expect(walkSegment(a, b, game.map)).toBe(false);
   for (let i = 0; i < 24; i++) blast(game, -17.75, -1);

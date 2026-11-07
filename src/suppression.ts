@@ -73,7 +73,7 @@ export function suppressionCommand(g: Game, p: Soldier): Command | null {
     !p.hop
   ) {
     const station = firingPosition(g, p);
-    const shelter = { x: p.x + (p.team === "blue" ? -3 : 3), z: p.z };
+    const shelter = { x: p.x + (p.team === "blue" ? -2.5 : 2.5), z: p.z };
     if (
       station &&
       dist(p, station) < 2 &&

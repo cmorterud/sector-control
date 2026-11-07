@@ -37,7 +37,7 @@ describe("walking off terrain edges", () => {
       let airborne = false,
         previous = p.y;
       for (let i = 0; i < 50; i++) {
-        const c = { ...idle(), x: i < 12 ? dx : 0 };
+        const c = { ...idle(), x: i < (landing ? 8 : 12) ? dx : 0 };
         g.step(c);
         log.recordTick(g, c, i / 30);
         airborne ||= !!p.fall;
@@ -104,14 +104,15 @@ describe("walking off terrain edges", () => {
   it("prevents turning into an earth wall below its crest while falling", () => {
     const { g, p } = scene();
     for (let i = 0; i < 12; i++) g.step({ ...idle(), x: -1 });
-    while (p.y > 1.4) g.step(idle());
+    for (let i = 0; i < 60 && p.y > 1.4; i++) g.step(idle());
+    expect(p.y).toBeLessThanOrEqual(1.4);
     expect(p.fall).not.toBeNull();
     for (let i = 0; i < 20; i++) g.step({ ...idle(), x: 1 });
     expect(p.x).toBeLessThan(-18);
     expect(p.y).toBe(0);
   });
   it("follows walkable slopes normally and falls when an explosion removes supporting ground", () => {
-    const { g, p } = scene(-45, -1);
+    const { g, p } = scene(-43, -1);
     for (let i = 0; i < 20; i++) {
       g.step({ ...idle(), x: 1 });
       expect(p.fall).toBeNull();

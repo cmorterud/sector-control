@@ -101,10 +101,10 @@ export class ArtilleryMap {
     }
     for (const bay of g.map.terrain?.shelterBays ?? []) {
       const room = document.createElementNS(svg.namespaceURI, "rect");
-      room.setAttribute("x", String(bay.x + g.map.width / 2 - 3));
-      room.setAttribute("y", String(bay.z + g.map.depth / 2 - 3));
-      room.setAttribute("width", "6");
-      room.setAttribute("height", "6");
+      room.setAttribute("x", String(bay.x + g.map.width / 2 - 2));
+      room.setAttribute("y", String(bay.z + g.map.depth / 2 - 2));
+      room.setAttribute("width", "4");
+      room.setAttribute("height", "4");
       room.setAttribute("fill", bay.team === "blue" ? "#64bdd6" : "#e38e77");
       svg.append(room);
     }

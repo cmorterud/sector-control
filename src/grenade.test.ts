@@ -233,7 +233,7 @@ describe("grenades", () => {
     expect(enemy.hp).toBe(100);
     const trench = scene(trenchMap);
     trench.players[0].x = -67;
-    const behindBank = soldier(trench, 23);
+    const behindBank = soldier(trench, 21);
     behindBank.z = -1;
     bomb(trench, { x: 17, y: 2.55, z: -1 });
     trench.step(idle());

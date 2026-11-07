@@ -77,13 +77,14 @@ export function buildTrenchElevation(map: MapDefinition): TerrainElevation {
       const cx = Math.floor((x + map.width / 2) / terrain.cellSize),
         cz = Math.floor((z + map.depth / 2) / terrain.cellSize);
       for (
-        let iz = Math.max(0, cz - 4);
-        iz <= Math.min(terrain.rows - 1, cz + 4);
+        let iz = Math.max(0, cz - Math.ceil(8 / terrain.cellSize));
+        iz <= Math.min(terrain.rows - 1, cz + Math.ceil(8 / terrain.cellSize));
         iz++
       )
         for (
-          let ix = Math.max(0, cx - 4);
-          ix <= Math.min(terrain.columns - 1, cx + 4);
+          let ix = Math.max(0, cx - Math.ceil(8 / terrain.cellSize));
+          ix <=
+          Math.min(terrain.columns - 1, cx + Math.ceil(8 / terrain.cellSize));
           ix++
         ) {
           if (
@@ -101,7 +102,7 @@ export function buildTrenchElevation(map: MapDefinition): TerrainElevation {
             }),
           );
         }
-      let protection = smooth((clearance - 2) / 4);
+      let protection = smooth((clearance - 3) / 4);
       for (const ramp of terrain.ramps)
         protection = Math.min(
           protection,

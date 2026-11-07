@@ -87,3 +87,7 @@ Flags are decorative, rebased to deformed ground; capture checks use actual shar
 Six alternate connections and six turning shelter necks extend the four original lines; six recessed 6 × 6 m open-topped bays behind the rear lines provide earth-screened cover. All hundred firing stations, rear entries and continuous front parapets remain.
 
 Artillery retains its original 240 damage / 12 m falloff radius. Partial exposure scales damage by visible body probes; intact earth fully shields blocked bodies, while direct trench hits remain dangerous. Crater radius is 2.5 m (formerly 3.5), terrain reach 3.5 m and bank depth 1.6 m; bowl depth stays 1.3 m and structural damage/reach 260/7 m. Grenade damage is unchanged. Bare/snapped trees, exposed roots and sparse small crowns plus low cosmetic equipment dress the battlefield; branches have no invisible foliage concealment, trunks remain destructible and excavation clears equipment footing.
+
+## Tighter trench cross-sections — November 7
+
+Support/communication corridors and connecting elbows are two meters wide; firing trenches are four meters overall (two-meter floor, one-meter ramp and one-meter step). Rear entries narrow to four meters and six screened bays to 4 × 4 m. The four asymmetric lines and continuous front parapets remain. One-meter authored terrain cells resolve the new edges, while distant open terrain retains its two-meter mesh. Navigation anchors, firing posts, retreat/duck targets, flags and decoration follow the revised geometry.

@@ -8,8 +8,33 @@ import { TerrainPhysics } from "./physics";
 import { terrainGeometry } from "./terrain-geometry";
 
 function scene() {
-  return new Game(new TestCollision(trenchMap), false, 3000, 12345, undefined, {
-    map: trenchMap,
+  // Reproduce the original wide corridors and their two-meter earth traverse
+  // independently of the live map's now-narrower trench layout.
+  const t = trenchMap.terrain!,
+    heights = t.heights.slice();
+  for (let row = 0; row < t.rows; row++)
+    for (let col = 0; col < t.columns; col++) {
+      const x = -trenchMap.width / 2 + (col + 0.5) * t.cellSize;
+      const z = -trenchMap.depth / 2 + (row + 0.5) * t.cellSize;
+      if (x >= -32 && x < -18 && z >= -8 && z < 8)
+        heights[row * t.columns + col] =
+          x < -26 || x >= -24 || z < -4 ? 0 : 2.4;
+    }
+  const map = {
+    ...trenchMap,
+    boxes: [],
+    vegetation: [],
+    terrain: {
+      ...t,
+      heights,
+      lining: [],
+      ramps: t.ramps.filter(
+        (r) => Math.abs(r.z + 1) > 0.1 || Math.abs(r.x) > 25,
+      ),
+    },
+  };
+  return new Game(new TestCollision(map), false, 3000, 12345, undefined, {
+    map,
   });
 }
 const at = { x: -23, z: 3.75, y: 0.025 };

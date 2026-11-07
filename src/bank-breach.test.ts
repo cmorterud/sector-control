@@ -35,16 +35,14 @@ it("takes a rounded side chunk out of either bank, keeps distant walls, and open
 });
 it("an artillery side strike makes a real walkable opening with matching Ammo terrain collision", () => {
   const g = scene(),
-    at = { x: -18.5, y: 0.6, z: -27 };
-  const a = { x: -18.6, y: 0.5, z: -27 },
-    b = { x: -17.5, y: 0.5, z: -27 };
+    at = { x: -18.5, y: 1.2, z: -1 };
+  const a = { x: -18.6, y: 1.2, z: -1 },
+    b = { x: -17.5, y: 1.2, z: -1 };
   expect(g.collision.ray(a, b)).toBeLessThan(1);
-  expect(walkSegment({ x: -20, z: -27 }, { x: -10, z: -27 }, g.map)).toBe(
-    false,
-  );
+  expect(walkSegment({ x: -21, z: -1 }, { x: -10, z: -1 }, g.map)).toBe(false);
   g.explode(at, 0, "blue", { ...artilleryExplosionProfile, damage: 0 });
   expect(g.collision.ray(a, b)).toBe(1);
-  expect(walkSegment({ x: -20, z: -27 }, { x: -10, z: -27 }, g.map)).toBe(true);
+  expect(walkSegment({ x: -21, z: -1 }, { x: -10, z: -1 }, g.map)).toBe(true);
   const change = g.events.find((e) => e.type === "destruction");
   expect(change?.type).toBe("destruction");
   const physics = new TerrainPhysics(),

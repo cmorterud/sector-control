@@ -27,13 +27,19 @@ export function vegetationFor(map: MapDefinition): Box[] {
     )
       return false;
     const center = baseGroundHeight(x, z, map);
-    return [
+    const offsets: number[][] = [
       [0, 0],
       [-r, 0],
       [r, 0],
       [0, -r],
       [0, r],
-    ].every(([dx, dz]) => {
+    ];
+    // Sample inside the footprint as well as its edge: a narrow trench can
+    // pass between the old five probes and leave a solid trunk across a route.
+    for (let dx = -Math.floor(r); dx <= Math.floor(r); dx++)
+      for (let dz = -Math.floor(r); dz <= Math.floor(r); dz++)
+        if (Math.hypot(dx, dz) <= r) offsets.push([dx, dz]);
+    return offsets.every(([dx, dz]) => {
       const height = baseGroundHeight(x + dx, z + dz, map);
       // Keep plants off trench faces/craters, but allow their original sites
       // on gentle rolling ground. Their roots use the actual surface height.

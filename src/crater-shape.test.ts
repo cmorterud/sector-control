@@ -82,7 +82,7 @@ it("uses local shape variation without consuming the combat random stream", () =
   expect(a.map.destruction!.craters[1].radius).toBeLessThan(8);
 });
 
-it("rounds a struck firing-step end into the trench floor while preserving remote ledges and a walking exit", () => {
+it("excavates a tight firing bay while preserving remote ledges and an exit back onto the floor", () => {
   const g = scene(trenchMap),
     p = g.players[0];
   Object.assign(p, { x: -19, z: 3.2, y: 0.85, hp: 100, protectedUntil: 0 });
@@ -91,15 +91,19 @@ it("rounds a struck firing-step end into the trench floor while preserving remot
   ).toBeGreaterThan(0.8);
   const distant = groundHeight(-19, 35, g.map);
   burst(g, -19, 3.2);
-  for (let x = -19.75; x <= -18.25; x += 0.25)
+  expect(groundHeight(-19, 3.2, g.map)).toBeLessThan(0.4);
+  for (let x = -18.875; x <= -18.25; x += 0.25)
     expect(
       Math.abs(groundHeight(x, 3.999, g.map) - groundHeight(x, 4.001, g.map)),
     ).toBeLessThan(0.04);
-  expect(walkSegment({ x: -19, z: 2.2 }, { x: -19, z: 6.5 }, g.map)).toBe(true);
+  // Leave the narrower firing step via its ramp, then walk along the floor.
+  expect(walkSegment({ x: -19, z: 2.2 }, { x: -21, z: 2.2 }, g.map)).toBe(true);
+  expect(walkSegment({ x: -21, z: 2.2 }, { x: -21, z: 6.5 }, g.map)).toBe(true);
   expect(groundHeight(-19, 35, g.map)).toBe(distant);
   expect(groundHeight(-17, 12, g.map)).toBe(groundHeight(-17, 12, trenchMap));
   expect(p.fall).not.toBeNull();
   for (let i = 0; i < 45; i++) g.step(idle());
+  for (let i = 0; i < 14; i++) g.step({ ...idle(), x: -1, yaw: -Math.PI / 2 });
   for (let i = 0; i < 30; i++) g.step({ ...idle(), z: 1, yaw: Math.PI });
   expect(p.z).toBeGreaterThan(5.8);
   expect(p.fall).toBeNull();
@@ -115,12 +119,15 @@ it("keeps actual Ammo collision aligned with the rounded step pocket", () => {
   try {
     for (const key of Object.keys(g.map.destruction!.patches))
       physics.setPatch(key, terrainGeometry(g.map, key), entity);
-    for (const z of [2.2, 3.9, 4.1, 5.5]) {
-      const x = -19;
-      const f = physics.ray({ x, y: 4, z }, { x, y: -2, z });
-      expect(f).toBeLessThan(1);
-      expect(4 - 6 * f).toBeCloseTo(groundHeight(x, z, g.map), 2);
-    }
+    for (const z of [2.2, 3.9, 4.1, 5.5])
+      for (const x of [-20.1, -19.5, -19.00001, -19, -18.99999, -18.5]) {
+        const f = physics.ray({ x, y: 4, z }, { x, y: -2, z });
+        expect(f).toBeLessThan(1);
+        expect(4 - 6 * f, `${x},${z}`).toBeCloseTo(
+          groundHeight(x, z, g.map),
+          2,
+        );
+      }
   } finally {
     physics.destroy();
     entity.destroy();

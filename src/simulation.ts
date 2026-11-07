@@ -1701,6 +1701,16 @@ function graph(map: MapDefinition) {
     for (const z of [r.z - r.d / 2 - 0.8, r.z + r.d / 2 + 0.8]) add(lowX, z);
   }
   // Authored communication bends can fall between the regular nav lattice.
+  for (const line of map.terrain?.trenchLines ?? [])
+    line.sections.forEach((s, index) => {
+      for (let z = s.z - s.length / 2 + 0.5; z < s.z + s.length / 2; z += 1)
+        add(s.x, z);
+      const next = line.sections[index + 1];
+      if (!next) return;
+      const end = s.z + s.length / 2;
+      for (let x = Math.min(s.x, next.x); x <= Math.max(s.x, next.x); x += 1)
+        add(x, end);
+    });
   for (const route of [
     ...(map.terrain?.communicationRoutes ?? []),
     ...(map.terrain?.branchRoutes ?? []),

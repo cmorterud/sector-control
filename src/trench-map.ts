@@ -16,7 +16,7 @@ const spawnDistance = 60,
   rearCoverDistance = 55;
 const width = 160,
   depth = 128,
-  cellSize = 2;
+  cellSize = 1;
 const columns = width / cellSize,
   rows = depth / cellSize;
 const floors: (Vec & { w: number; d: number })[] = [];
@@ -91,37 +91,46 @@ for (const line of trenchLines) {
     line.team === "blue" ? [8, 8, 4, 8, 8, 7, 7] : [7, 7, 6, 6, 6, 6, 6, 6];
   line.sections.forEach((section, i) => {
     const { x, z, length } = section;
-    floors.push({ x, z, w: 6, d: length });
+    floors.push({
+      x: x - (line.role === "front" ? side : 0),
+      z,
+      w: line.role === "front" ? 4 : 2,
+      d: length,
+    });
     const next = line.sections[i + 1];
     if (next)
       floors.push({
         x: (x + next.x) / 2,
         z: z + length / 2,
-        w: Math.abs(x - next.x) + 6,
-        d: 6,
+        w: Math.abs(x - next.x) + 2,
+        d: 2,
       });
     for (const edge of [-1, 1])
       liningCandidates.push({
-        x: x + edge * 3.06,
+        x:
+          x +
+          (line.role === "front" && edge === -side
+            ? -side * 3.06
+            : edge * 1.06),
         z,
         w: 0.12,
-        d: Math.max(2, length - 6),
+        d: Math.max(2, length - 2),
       });
-    if (line.role === "front" || i % 2 === 0) {
+    if (line.role === "front") {
       const stepZ = section.stepZ ?? z;
       // Longer steps fit the doubled roster; the tight Blue setback keeps four posts.
       const stepDepth = line.role === "front" && counts[i] > 4 ? 10 : 6;
       platforms.push({
-        x: x - side * 2,
+        x: x - side * 2.5,
         z: stepZ,
-        w: 2,
+        w: 1,
         d: stepDepth,
         h: 0.85,
       });
       ramps.push({
-        x,
+        x: x - side * 1.5,
         z: stepZ,
-        w: 2,
+        w: 1,
         d: stepDepth,
         low: 0,
         high: 0.85,
@@ -135,7 +144,7 @@ for (const line of trenchLines) {
         if (row >= counts[segment]) return;
         firingPositions.push({
           team: line.team,
-          x: section.x - side * 2,
+          x: section.x - side * 2.5,
           z:
             (section.stepZ ?? section.z) +
             (row - (counts[segment] - 1) / 2) * 1.2,
@@ -156,20 +165,20 @@ for (const team of ["blue", "red"] as const) {
       x: (f + middle) / 2,
       z: z - 5,
       w: Math.abs(f - middle) + 2,
-      d: 4,
+      d: 2,
     });
-    floors.push({ x: middle, z, w: 6, d: 14 });
+    floors.push({ x: middle, z, w: 2, d: 12 });
     floors.push({
       x: (r + middle) / 2,
       z: z + 5,
       w: Math.abs(r - middle) + 2,
-      d: 4,
+      d: 2,
     });
-    const entrance = { x: r + side * 8, z };
+    const entrance = { x: r + side * 6, z };
     ramps.push({
       ...entrance,
       w: 10,
-      d: 10,
+      d: 4,
       low: 0,
       high: bankHeight,
       direction: side,
@@ -196,15 +205,6 @@ for (const team of ["blue", "red"] as const) {
       kind: "bunker",
     });
 }
-// Small shelter bays interrupt the regular corridor footprint without opening a parapet.
-floors.push(
-  { x: -33, z: -49, w: 4, d: 6 },
-  { x: -29, z: 17, w: 4, d: 8 },
-  { x: -45, z: -31, w: 4, d: 6 },
-  { x: 31, z: -27, w: 4, d: 6 },
-  { x: 27, z: 31, w: 4, d: 6 },
-  { x: 49, z: 15, w: 4, d: 6 },
-);
 // Alternate rear connections form short loops around retained earth islands.
 // Recessed bays sit behind the rear line, reached through a two-turn neck.
 const carveRoute = (team: "blue" | "red", points: Vec[]) => {
@@ -215,8 +215,8 @@ const carveRoute = (team: "blue" | "red", points: Vec[]) => {
     floors.push({
       x: (a.x + b.x) / 2,
       z: (a.z + b.z) / 2,
-      w: Math.abs(a.x - b.x) + (a.x === b.x && Math.abs(a.x) % 2 === 0 ? 4 : 2),
-      d: Math.abs(a.z - b.z) + 4,
+      w: Math.abs(a.x - b.x) + 2,
+      d: Math.abs(a.z - b.z) + 2,
     });
   }
 };
@@ -273,7 +273,7 @@ for (const route of communicationRoutes) {
     rearZ = bay.z + (bay.z < 0 ? 7 : -7),
     bayRear = atZ(rearZ),
     neckX = bayRear.x + side * 4,
-    approachZ = bay.z + (rearZ < bay.z ? -3 : 3);
+    approachZ = bay.z + (rearZ < bay.z ? -2 : 2);
   carveRoute(route.team, [
     start,
     { x: middle, z },
@@ -287,7 +287,7 @@ for (const route of communicationRoutes) {
     { x: bay.x, z: approachZ },
     bay,
   ]);
-  floors.push({ ...bay, w: 6, d: 6 });
+  floors.push({ ...bay, w: 4, d: 4 });
   shelterBays.push(bay);
 }
 // Light rear-line screens sit away from entry ramps and can be blown apart.
@@ -387,10 +387,10 @@ export const trenchMap: MapDefinition = {
     red: { x: spawnDistance, z: -1 },
   },
   sectors: [
-    { id: "A", x: -22.5, z: -33, home: "blue" },
-    { id: "B", x: -22.5, z: 35, home: "blue" },
-    { id: "C", x: 28.5, z: -27, home: "red" },
-    { id: "D", x: 24.5, z: 31, home: "red" },
+    { id: "A", x: -21, z: -33, home: "blue" },
+    { id: "B", x: -21, z: 35, home: "blue" },
+    { id: "C", x: 27, z: -27, home: "red" },
+    { id: "D", x: 23, z: 31, home: "red" },
   ],
   boxes: cover,
   terrain: {

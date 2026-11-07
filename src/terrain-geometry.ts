@@ -118,11 +118,45 @@ export function terrainGeometry(
   }
   for (let cellX = x0; cellX < x1; cellX += 2)
     for (let cellZ = z0; cellZ < z1; cellZ += 2) {
+      const terrain = map.terrain;
+      let authoredStep = 2;
+      if (terrain && terrain.cellSize < 2) {
+        const size = terrain.cellSize;
+        const col = Math.floor((cellX + map.width / 2) / size);
+        const row = Math.floor((cellZ + map.depth / 2) / size);
+        const first = terrain.heights[row * terrain.columns + col];
+        let boundary = false;
+        // Both sides of a corner must have matching edge vertices. Refining
+        // only the low cell leaves a diagonal gap (or false wall) where its
+        // neighbor's two-meter cliff edge spans a one-meter turn.
+        for (let dz = -1; dz <= 2 / size; dz++)
+          for (let dx = -1; dx <= 2 / size; dx++)
+            if (
+              row + dz >= 0 &&
+              row + dz < terrain.rows &&
+              col + dx >= 0 &&
+              col + dx < terrain.columns
+            )
+              boundary ||=
+                terrain.heights[(row + dz) * terrain.columns + col + dx] !==
+                first;
+        if (
+          boundary ||
+          terrain.ramps.some(
+            (r) =>
+              r.x + r.w / 2 > cellX - size &&
+              r.x - r.w / 2 < cellX + 2 + size &&
+              r.z + r.d / 2 > cellZ - size &&
+              r.z - r.d / 2 < cellZ + 2 + size,
+          )
+        )
+          authoredStep = size;
+      }
       const step = refined.has(
         `${Math.floor((cellX - x0) / 2)},${Math.floor((cellZ - z0) / 2)}`,
       )
         ? terrainResolution
-        : 2;
+        : authoredStep;
       for (let x = cellX; x < Math.min(x1, cellX + 2) - epsilon; x += step)
         for (let z = cellZ; z < Math.min(z1, cellZ + 2) - epsilon; z += step) {
           const right = Math.min(x1, cellX + 2, x + step),

@@ -14,14 +14,14 @@ export function battlefieldProps(map: MapDefinition): BattlefieldProp[] {
       b = route.points[2];
     if (!a || !b) continue;
     for (const side of [-1, 1]) {
-      const x = (a.x + b.x) / 2 + side * 1.7,
-        z = (a.z + b.z) / 2 + side * 1.1,
+      const x = (a.x + b.x) / 2 + side * 0.55,
+        z = (a.z + b.z) / 2 + side * 0.6,
         y = groundHeight(x, z, map);
       if (blocked(x, z, 0.45, map) || y > 0.1) continue;
       if (
         [
-          [-0.5, 0],
-          [0.5, 0],
+          [-0.25, 0],
+          [0.25, 0],
           [0, -0.5],
           [0, 0.5],
         ].some(

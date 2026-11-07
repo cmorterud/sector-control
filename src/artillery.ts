@@ -416,7 +416,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     const candidates: Vec[] = g.map.terrain?.firingPositions
       ? g.map.terrain.firingPositions
           .filter((s) => s.team === p.team)
-          .map((s) => ({ x: s.x + (p.team === "blue" ? -3 : 3), z: s.z }))
+          .map((s) => ({ x: s.x + (p.team === "blue" ? -2.5 : 2.5), z: s.z }))
           .concat(
             g.map.terrain.shelterBays?.filter((s) => s.team === p.team) ?? [],
           )
@@ -454,7 +454,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
       }
     }
     if (!destination) {
-      destination = { x: p.x + (p.team === "blue" ? -3 : 3), z: p.z };
+      destination = { x: p.x + (p.team === "blue" ? -2.5 : 2.5), z: p.z };
       route = walkSegment(p, destination, g.map) ? [destination] : [];
       if (!route.length) destination = { x: p.x, z: p.z };
     }
@@ -490,7 +490,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
       // Back off onto the trench floor, then resume the existing safe route.
       const away = p.team === "blue" ? -1 : 1;
       const detour = [
-        { x: p.x + away * 3, z: p.z },
+        { x: p.x + away * 2.5, z: p.z },
         { x: p.x, z: p.z + 1.5 },
         { x: p.x, z: p.z - 1.5 },
       ].find((v) => !blocked(v.x, v.z, 0.6, g.map) && walkSegment(p, v, g.map));

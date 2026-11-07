@@ -225,7 +225,7 @@ describe("trench prototype", () => {
       map = game.map;
     for (const station of map.terrain!.firingPositions!) {
       const side = station.team === "blue" ? -1 : 1;
-      const floor = { x: station.x + side * 4, z: station.z };
+      const floor = { x: station.x + side * 2, z: station.z };
       expect(groundHeight(floor.x, floor.z, map)).toBe(0);
       const stopped = moveOnMap(floor, { x: -side * 14, z: 0 }, map);
       // Setbacks can now drop into their adjacent elbow, but the front bank stays sealed.
@@ -257,7 +257,8 @@ describe("trench prototype", () => {
         .terrain!.ramps.filter((r) => r.high === 2.4)
         .every((r) => Math.abs(r.x) > 40),
     ).toBe(true);
-    expect(groundHeight(-45, -1, map)).toBeCloseTo(1.2);
+    const entry = map.terrain!.ramps.find((r) => r.high === 2.4 && r.z === -1)!;
+    expect(groundHeight(entry.x, entry.z, map)).toBeCloseTo(1.2);
   });
 
   it("occludes low trench rays with earth while allowing shots above the bank", () => {
