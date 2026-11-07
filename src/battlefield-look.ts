@@ -131,22 +131,15 @@ export function soilColor(
   dark: boolean,
   cut: number,
 ): number[] {
-  const mottling = lookNoise(x * 0.22, z * 0.22),
-    wet = lookNoise(x * 0.065 + 40, z * 0.065 + 17);
-  const damp = y < 1 ? 0.86 : 1;
-  const shade =
-    (0.82 + mottling * 0.27 - Math.max(0, 0.48 - wet) * 0.35) *
-    (dark ? 0.86 : 1) *
-    damp;
-  const fresh = Math.min(1, cut * 1.1);
+  const damp = y < 1 ? 0.9 : 1;
+  // Map-sized materials provide old weathered variation. Runtime excavation adds
+  // warm exposed clay and a darker deep center, rather than recoloring old scars.
+  const fresh = Math.min(1, cut * 1.3);
+  const shade = (dark ? 0.86 : 1) * damp;
   const strata = dark
     ? 1 + Math.sin(y * 11 + lookNoise(x * 0.4, z * 0.4) * 2) * 0.045
     : 1;
-  const soil = [
-    0.57 - fresh * 0.105,
-    0.515 - fresh * 0.105,
-    0.405 - fresh * 0.075,
-  ];
+  const soil = [0.65 - fresh * 0.07, 0.59 - fresh * 0.15, 0.48 - fresh * 0.19];
   return soil.map((v) => (v * shade * strata) ** 2.2);
 }
 export const maxBlastClouds = 10;

@@ -1,4 +1,9 @@
 import {
+  groundSurfacePixels,
+  groundPuddles,
+  groundRubble,
+} from "./ground-surface";
+import {
   soldierStyle,
   reloadMotion,
   collapseMotion,
@@ -174,6 +179,7 @@ export class Renderer implements CollisionWorld {
   >();
   private objectVisuals = new Map<string, pc.Entity>();
   private objectStates = new Map<string, string>();
+  private waterMeshes: pc.Mesh[] = [];
   private groundDecor: {
     root: pc.Entity;
     x: number;
@@ -439,6 +445,7 @@ export class Renderer implements CollisionWorld {
       }
     }
     this.worldParent = this.mapRoot;
+    this.buildGroundDressing();
     this.batchGroup = this.boardBatch;
     for (const prop of battlefieldProps(this.map)) {
       const root = this.joint(
@@ -555,6 +562,8 @@ export class Renderer implements CollisionWorld {
     this.objectVisuals.clear();
     this.objectStates.clear();
     this.groundDecor = [];
+    for (const mesh of this.waterMeshes) mesh.destroy();
+    this.waterMeshes = [];
     this.boardVisuals = [];
     this.mapRoot.destroy();
     this.terrainPhysics = new TerrainPhysics();
@@ -1124,24 +1133,101 @@ export class Renderer implements CollisionWorld {
   private surfaceMaterial(kind: SurfaceKind, tint: string) {
     const key = `surface-${kind}-${tint}`;
     if (!this.materials.has(key)) {
+      const ground = kind === "mud";
+      const size = ground ? 1024 : 256;
       if (!this.textures.has(`${kind}-diffuse`)) {
-        const data = surfacePixels(kind);
+        const data = ground
+          ? groundSurfacePixels(this.map, size)
+          : surfacePixels(kind);
         for (const channel of ["diffuse", "normal", "gloss"] as const)
-          this.texture(`${kind}-${channel}`, 256, 256, () => data[channel]);
+          this.texture(
+            `${kind}-${channel}`,
+            size,
+            size,
+            () => data[channel],
+            !ground,
+          );
       }
       const m = new pc.StandardMaterial();
       m.diffuse = color(tint);
       m.diffuseMap = this.textures.get(`${kind}-diffuse`)!;
       m.normalMap = this.textures.get(`${kind}-normal`)!;
-      m.bumpiness = kind === "mud" ? 0.55 : 0.7;
+      m.bumpiness = ground ? 0.4 : 0.7;
       m.glossMap = this.textures.get(`${kind}-gloss`)!;
       m.glossMapChannel = "r";
       m.gloss = 0.6;
-      m.specular = color(kind === "mud" ? "#4b5052" : "#252728");
+      m.specular = color(ground ? "#67716d" : "#252728");
+      if (ground) {
+        for (const channel of ["diffuse", "normal", "gloss"] as const) {
+          m[`${channel}MapTiling`].set(3 / this.map.width, 3 / this.map.depth);
+          m[`${channel}MapOffset`].set(0.5, 0.5);
+        }
+        const detail = surfacePixels("mud");
+        m.normalDetailMap = this.texture(
+          "ground-fine-normal",
+          256,
+          256,
+          () => detail.normal,
+        );
+        m.normalDetailMapTiling.set(0.81, 0.81);
+        m.normalDetailMapRotation = 37;
+        m.normalDetailMapBumpiness = 0.16;
+      }
       m.update();
       this.materials.set(key, m);
     }
     return this.materials.get(key)!;
+  }
+  private buildGroundDressing() {
+    this.batchGroup = this.boardBatch;
+    for (const [i, b] of groundRubble(this.map).entries()) {
+      const root = this.joint("worn-route rubble", this.mapRoot);
+      this.worldParent = root;
+      const part = this.cube(
+        "earth and stone",
+        b.x,
+        b.y + b.h / 2,
+        b.z,
+        b.w,
+        b.h,
+        b.d,
+        i % 3 ? "#6f6551" : "#8a7b61",
+      );
+      part.setLocalEulerAngles(0, b.yaw, 0);
+      part.render!.castShadows = false;
+      this.groundDecor.push({
+        root,
+        x: b.x,
+        z: b.z,
+        radius: 0.35,
+        batched: true,
+      });
+    }
+    this.worldParent = this.mapRoot;
+    this.batchGroup = -1;
+    let material = this.materials.get("shallow muddy water");
+    if (!material) {
+      material = new pc.StandardMaterial();
+      material.diffuse = color("#41483c");
+      material.specular = color("#afc1c4");
+      material.gloss = 0.92;
+      material.emissive = color("#121a1c");
+      material.update();
+      this.materials.set("shallow muddy water", material);
+    }
+    for (const p of groundPuddles(this.map)) {
+      const root = this.joint("shallow puddle", this.mapRoot);
+      const mesh = new pc.Mesh(this.app.graphicsDevice);
+      mesh.setPositions(p.positions);
+      mesh.setNormals(p.positions.map((_, i) => (i % 3 === 1 ? 1 : 0)));
+      mesh.setIndices(p.indices);
+      mesh.update(pc.PRIMITIVE_TRIANGLES);
+      const instance = new pc.MeshInstance(mesh, material, root);
+      instance.castShadow = false;
+      root.addComponent("render", { meshInstances: [instance] });
+      this.waterMeshes.push(mesh);
+      this.groundDecor.push({ root, x: p.x, z: p.z, radius: p.radius });
+    }
   }
   private buildOvercastSky() {
     const sky = new pc.Entity("overcast sky");

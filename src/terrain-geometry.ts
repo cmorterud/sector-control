@@ -50,16 +50,7 @@ export function terrainGeometry(
       uvs.push((dark ? (acrossX ? x : z) : x) / 3, (dark ? y : z) / 3);
       positions.push(x, y, z);
       if (map.terrain)
-        colors.push(
-          ...soilColor(
-            x,
-            y,
-            z,
-            dark,
-            terrainCut(x, z, map) + authoredTerrainCut(x, z, map) * 0.45,
-          ),
-          1,
-        );
+        colors.push(...soilColor(x, y, z, dark, terrainCut(x, z, map)), 1);
       else
         colors.push(
           ...[0.46, 0.49, 0.43].map(

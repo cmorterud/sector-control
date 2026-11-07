@@ -101,6 +101,10 @@ Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` an
 
 On Trench front, a single heavy shell also falls spontaneously every **8–22 seconds**, at irregular intervals. These land at random battlefield positions, independently of either team's calls, with no countdown or ground marker. Their blast radius is **24 m** (twice the guided shell's 12 m), with twice-size flash/dust and a roughly **5 m crater radius**, retaining the existing irregular shapes and cut depth. Peak damage stays 240; the larger radius carries damage farther. Intact earth still blocks blasts and partial exposure reduces damage. Heavy shells threaten both teams, preserve spawn protection, and award no kills or team points. They avoid the spawn assembly areas and never aim at a particular soldier. Team artillery charges and guided barrages are unchanged.
 
+### Ground appearance
+
+Trench front uses a continuous battlefield-sized material: broad irregular wet mud, lighter dry earth and sparse faded-green areas, with two differently rotated/scaled mud layers blended across them. Fine surface normals remain visible nearby without the former three-metre repeating color tile. Worn paths connect spawn approaches to rear entries and faint broken tracks cross the field. Thirty small cosmetic stones/clods sit near the approaches; up to nine shallow, glossy puddles fit inside existing hollows. Explosions remove affected dressing and reveal warmer, darker fresh-cut soil; authored old craters keep their weathered surface. This changes presentation without altering terrain heights, movement, blast rules or navigation.
+
 ## Crouching
 
 **Press C** to crouch; press it again to stand. Crouch stays on after releasing the key and across pause/resume. Crouch walking is **2.25 m/s**, half normal walking speed, and holding Shift does not sprint while crouched. The soldier bends their knees, lowers their body/rifle and camera, and keeps their boots planted. There is no persistent stance status line.
