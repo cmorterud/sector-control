@@ -42,6 +42,7 @@ import {
   mantleLanding,
   mantleRoute,
   walkSegment,
+  terrainPatchSize,
   type Vec,
   type MapDefinition,
 } from "./map";
@@ -461,9 +462,60 @@ type EventInput = Event extends infer E
     : never
   : never;
 export class TestCollision implements CollisionWorld {
+  private boxBuckets?: {
+    boxes: MapDefinition["boxes"];
+    length: number;
+    cells: Map<string, MapDefinition["boxes"]>;
+  };
   constructor(public map: MapDefinition = industrialMap) {}
   setMap(map: MapDefinition) {
     this.map = map;
+    this.boxBuckets = undefined;
+  }
+  updateWorld(change: DestructionChange) {
+    if (change.geometry !== false) this.boxBuckets = undefined;
+  }
+  // Broad phase only: retain the exact existing slab and terrain intersections.
+  // Most projectile/grenade sweeps touch one eight-meter cell, not every lining.
+  private rayBoxes(minX: number, maxX: number, minZ: number, maxZ: number) {
+    const x0 = Math.floor(minX / 8),
+      x1 = Math.floor(maxX / 8),
+      z0 = Math.floor(minZ / 8),
+      z1 = Math.floor(maxZ / 8);
+    if ((x1 - x0 + 1) * (z1 - z0 + 1) > 16) return this.map.boxes;
+    let index = this.boxBuckets;
+    if (
+      !index ||
+      index.boxes !== this.map.boxes ||
+      index.length !== this.map.boxes.length
+    ) {
+      const cells = new Map<string, MapDefinition["boxes"]>();
+      for (const box of this.map.boxes) {
+        for (
+          let x = Math.floor((box.x - box.w / 2) / 8);
+          x <= Math.floor((box.x + box.w / 2) / 8);
+          x++
+        )
+          for (
+            let z = Math.floor((box.z - box.d / 2) / 8);
+            z <= Math.floor((box.z + box.d / 2) / 8);
+            z++
+          ) {
+            const key = `${x},${z}`,
+              bucket = cells.get(key);
+            if (bucket) bucket.push(box);
+            else cells.set(key, [box]);
+          }
+      }
+      index = { boxes: this.map.boxes, length: this.map.boxes.length, cells };
+      this.boxBuckets = index;
+    }
+    if (x0 === x1 && z0 === z1) return index.cells.get(`${x0},${z0}`) ?? [];
+    const boxes = new Set<MapDefinition["boxes"][number]>();
+    for (let x = x0; x <= x1; x++)
+      for (let z = z0; z <= z1; z++)
+        for (const box of index.cells.get(`${x},${z}`) ?? []) boxes.add(box);
+    return boxes;
   }
   move(p: Vec, d: Vec): Vec {
     if (this.map.terrain) return moveOnMap(p, d, this.map);
@@ -482,7 +534,7 @@ export class TestCollision implements CollisionWorld {
       minZ = Math.min(a.z, b.z),
       maxZ = Math.max(a.z, b.z);
     // Exact slabs matter for short grenade sweeps and very thin timber panels.
-    for (const box of this.map.boxes) {
+    for (const box of this.rayBoxes(minX, maxX, minZ, maxZ)) {
       // Most bullet/near-miss/canister sweeps are short. Reject distant boxes
       // before allocating slab endpoints and testing all three axes.
       if (
@@ -1655,6 +1707,7 @@ export class Game {
       this.emit({ type: "destruction", actor, change });
       return;
     }
+    invalidateNavigationSegments(this.map, change);
     navigation.delete(this.map);
     this.collision.updateWorld?.(change);
     for (const p of this.players) {
@@ -1685,6 +1738,59 @@ const navigation = new WeakMap<
   MapDefinition,
   { nodes: Vec[]; edges: number[][] }
 >();
+// Reuse unchanged graph-edge walk checks across local explosions. Directed keys
+// preserve the original sample order and exact route tie-breaking.
+const navigationSegments = new WeakMap<
+  MapDefinition,
+  {
+    revision: number;
+    checks: Map<
+      string,
+      { pass: boolean; minX: number; maxX: number; minZ: number; maxZ: number }
+    >;
+  }
+>();
+function invalidateNavigationSegments(
+  map: MapDefinition,
+  change: DestructionChange,
+) {
+  const memo = navigationSegments.get(map);
+  if (!memo) return;
+  let minX = Infinity,
+    maxX = -Infinity,
+    minZ = Infinity,
+    maxZ = -Infinity;
+  const include = (x0: number, x1: number, z0: number, z1: number) => {
+    minX = Math.min(minX, x0);
+    maxX = Math.max(maxX, x1);
+    minZ = Math.min(minZ, z0);
+    maxZ = Math.max(maxZ, z1);
+  };
+  for (const key of change.patches) {
+    const [x, z] = key.split(",").map(Number);
+    include(
+      x * terrainPatchSize,
+      (x + 1) * terrainPatchSize,
+      z * terrainPatchSize,
+      (z + 1) * terrainPatchSize,
+    );
+  }
+  for (const object of change.objects) {
+    const b = map.destruction?.objects[object.id]?.original;
+    if (b) include(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
+  }
+  if (!Number.isFinite(minX)) memo.checks.clear();
+  else
+    for (const [key, check] of memo.checks)
+      if (
+        check.minX <= maxX &&
+        check.maxX >= minX &&
+        check.minZ <= maxZ &&
+        check.maxZ >= minZ
+      )
+        memo.checks.delete(key);
+  memo.revision = map.destruction?.revision ?? 0;
+}
 function graph(map: MapDefinition) {
   const cached = navigation.get(map);
   if (cached) return cached;
@@ -1750,6 +1856,27 @@ function graph(map: MapDefinition) {
     if (list) list.push(i);
     else buckets.set(key, [i]);
   });
+  const revision = map.destruction?.revision ?? 0;
+  let memo = navigationSegments.get(map);
+  if (!memo || memo.revision !== revision) {
+    memo = { revision, checks: new Map() };
+    navigationSegments.set(map, memo);
+  }
+  const edgePasses = (a: Vec, b: Vec) => {
+    const key = `${a.x},${a.z}:${b.x},${b.z}`;
+    let check = memo.checks.get(key);
+    if (!check) {
+      check = {
+        pass: walkSegment(a, b, map),
+        minX: Math.min(a.x, b.x) - 0.61,
+        maxX: Math.max(a.x, b.x) + 0.61,
+        minZ: Math.min(a.z, b.z) - 0.61,
+        maxZ: Math.max(a.z, b.z) + 0.61,
+      };
+      memo.checks.set(key, check);
+    }
+    return check.pass;
+  };
   const edges = nodes.map((a, i) => {
     const result: number[] = [];
     const cx = Math.floor(a.x / step),
@@ -1760,7 +1887,7 @@ function graph(map: MapDefinition) {
           if (
             j !== i &&
             dist(a, nodes[j]) <= step * 1.45 &&
-            walkSegment(a, nodes[j], map)
+            edgePasses(a, nodes[j])
           )
             result.push(j);
     return result;
