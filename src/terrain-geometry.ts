@@ -1,3 +1,4 @@
+import { soilColor } from "./battlefield-look";
 import {
   groundHeight,
   terrainCut,
@@ -10,6 +11,7 @@ export interface TerrainGeometry {
   positions: number[];
   indices: number[];
   colors: number[];
+  uvs: number[];
 }
 export function terrainPatchKeys(map: MapDefinition) {
   const keys: string[] = [];
@@ -37,29 +39,43 @@ export function terrainGeometry(
     z1 = Math.min(map.depth / 2, (iz + 1) * terrainPatchSize);
   const positions: number[] = [],
     indices: number[] = [],
-    colors: number[] = [];
+    colors: number[] = [],
+    uvs: number[] = [];
   const quad = (points: number[][], dark = false) => {
     const start = positions.length / 3;
+    const acrossX =
+      Math.abs(points[1][0] - points[0][0]) >
+      Math.abs(points[1][2] - points[0][2]);
     for (const [x, y, z] of points) {
+      uvs.push((dark ? (acrossX ? x : z) : x) / 3, (dark ? y : z) / 3);
       positions.push(x, y, z);
-      const shade =
-        Math.max(
-          0.45,
-          1 -
-            terrainCut(x, z, map) * 1.5 -
-            authoredTerrainCut(x, z, map) * 0.65,
-        ) * (dark ? 0.7 : 1);
-      const soil = map.terrain
-        ? y > 1
-          ? [0.45, 0.4, 0.28]
-          : [0.32, 0.26, 0.19]
-        : [0.46, 0.49, 0.43];
-      colors.push(
-        (soil[0] * shade) ** 2.2,
-        (soil[1] * shade) ** 2.2,
-        (soil[2] * shade) ** 2.2,
-        1,
-      );
+      if (map.terrain)
+        colors.push(
+          ...soilColor(
+            x,
+            y,
+            z,
+            dark,
+            terrainCut(x, z, map) + authoredTerrainCut(x, z, map) * 0.45,
+          ),
+          1,
+        );
+      else
+        colors.push(
+          ...[0.46, 0.49, 0.43].map(
+            (v) =>
+              (v *
+                Math.max(
+                  0.45,
+                  1 -
+                    terrainCut(x, z, map) * 1.5 -
+                    authoredTerrainCut(x, z, map) * 0.65,
+                ) *
+                (dark ? 0.7 : 1)) **
+              2.2,
+          ),
+          1,
+        );
     }
     indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
   };
@@ -151,5 +167,5 @@ export function terrainGeometry(
               quad([p, q, [q[0], lowQ, q[2]], [p[0], lowP, p[2]]], true);
         }
     }
-  return { positions, indices, colors };
+  return { positions, indices, colors, uvs };
 }

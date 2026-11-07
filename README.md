@@ -43,6 +43,12 @@ Each uncontested flag earns its owner **one point every three seconds**. First t
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
+## Battlefield appearance
+
+Trench terrain now has mottled damp soil, fine mud detail and locally darker exposed earth after excavation. Timber lining and duckboards have worn grain. Materials stay attached to the rebuilt terrain, including vertical bank faces and craters.
+
+Cool overcast light, softer shadows, a clouded sky and light distance haze give the battlefield depth. Explosions throw a brief dirt column and tumbling clods, followed by irregular dust that spreads, drifts and fades. Concealing smoke uses soft textured billows. Its existing visibility rules remain the same; explosion dust remains cosmetic. These effects pause with the game, reset with the match and have bounded overlapping particles.
+
 ## Battlefield sound and reactions
 
 Rifles, explosions and incoming shells now have directional sound, distance filtering and cover muffling. Nearby rounds produce sharp spatial cracks using the actual unobstructed near-miss events. Rifle tails soften with distance; artillery has a falling whistle, a sudden broadband crack and an unpitched low rumble. Explosions can take a voice from quieter rifle chatter so their sound is not lost in a crowded mix. Sounds are synthesized locally as a prototype.

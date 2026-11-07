@@ -1,3 +1,10 @@
+import {
+  surfacePixels,
+  dustPixels,
+  overcastPixels,
+  maxBlastClouds,
+  type SurfaceKind,
+} from "./battlefield-look";
 import { blastPlume } from "./blast-plume";
 import {
   treeFallPose,
@@ -94,6 +101,9 @@ export class Renderer implements CollisionWorld {
   private fallingTrees: FallingTree[] = [];
   private fragments: { entity: pc.Entity; state: Debris }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
+  private textures = new Map<string, pc.Texture>();
+  private overcastSky?: pc.Entity;
+  private blastSequence = 0;
   previous: V3[] = [];
   private mapBatch = -1;
   private actorBatch = -1;
@@ -116,6 +126,7 @@ export class Renderer implements CollisionWorld {
     age: number;
     radius: number;
     power: number;
+    seed: number;
     flash: pc.Entity;
     wave: pc.Entity;
     smoke: pc.Entity[];
@@ -168,14 +179,14 @@ export class Renderer implements CollisionWorld {
     const trenches = map.id === "trenches";
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
-    this.app.scene.ambientLight = color(trenches ? "#8b8c7e" : "#899294");
+    this.app.scene.ambientLight = color(trenches ? "#98a4af" : "#899294");
     this.app.scene.fog.type = "linear";
-    this.app.scene.fog.color = color(trenches ? "#a2a18c" : "#9ca6a5");
-    this.app.scene.fog.start = 35;
-    this.app.scene.fog.end = trenches ? 140 : 115;
+    this.app.scene.fog.color = color(trenches ? "#a4b0b7" : "#9ca6a5");
+    this.app.scene.fog.start = trenches ? 48 : 35;
+    this.app.scene.fog.end = trenches ? 175 : 115;
     this.camera = new pc.Entity("camera");
     this.camera.addComponent("camera", {
-      clearColor: color(trenches ? "#a2a18c" : "#9ca6a5"),
+      clearColor: color(trenches ? "#a4b0b7" : "#9ca6a5"),
       fov: 70,
       nearClip: 0.08,
       farClip: trenches ? 210 : 180,
@@ -184,8 +195,10 @@ export class Renderer implements CollisionWorld {
     const sun = new pc.Entity("sun");
     sun.addComponent("light", {
       type: "directional",
-      color: color("#ffdfa8"),
-      intensity: trenches ? 1.2 : 1.5,
+      color: color(trenches ? "#e2e8ed" : "#ffdfa8"),
+      intensity: trenches ? 0.85 : 1.5,
+      shadowIntensity: trenches ? 0.65 : 1,
+      shadowType: trenches ? pc.SHADOW_PCF5 : pc.SHADOW_PCF3,
       castShadows: true,
       shadowDistance: trenches ? 50 : 65,
       shadowResolution: 2048,
@@ -194,6 +207,7 @@ export class Renderer implements CollisionWorld {
     });
     sun.setEulerAngles(45, -35, 0);
     this.app.root.addChild(sun);
+    if (trenches) this.buildOvercastSky();
     this.buildMap();
     window.addEventListener("resize", () => this.app.resizeCanvas());
     // Simulation calls collision queries synchronously; no automatic physics advancement.
@@ -430,11 +444,21 @@ export class Renderer implements CollisionWorld {
     const entity = this.joint(`terrain ${key}`, this.mapRoot);
     const mesh = new pc.Mesh(this.app.graphicsDevice);
     mesh.setPositions(data.positions);
-    mesh.setNormals(pc.calculateNormals(data.positions, data.indices));
+    const normals = pc.calculateNormals(data.positions, data.indices);
+    mesh.setNormals(normals);
+    mesh.setUvs(0, data.uvs);
+    if (this.map.terrain)
+      mesh.setVertexStream(
+        pc.SEMANTIC_TANGENT,
+        pc.calculateTangents(data.positions, normals, data.uvs, data.indices),
+        4,
+      );
     mesh.setColors(data.colors);
     mesh.setIndices(data.indices);
     mesh.update(pc.PRIMITIVE_TRIANGLES);
-    const material = this.material("#ffffff");
+    const material = this.map.terrain
+      ? this.surfaceMaterial("mud", "#ffffff")
+      : this.material("#ffffff");
     material.diffuseVertexColor = true;
     material.update();
     const instance = new pc.MeshInstance(mesh, material, entity);
@@ -513,6 +537,10 @@ export class Renderer implements CollisionWorld {
       if (this.fragments.length >= maxDebris)
         this.fragments.shift()!.entity.destroy();
       const state = debrisPiece(at, kind, seed * 31 + i);
+      if (kind === "earth" && count >= 12) {
+        state.velocity.y *= 1.45;
+        state.life = 3;
+      }
       if (smallChips) {
         for (const axis of ["x", "y", "z"] as const) {
           state.size[axis] *= 0.3;
@@ -620,7 +648,7 @@ export class Renderer implements CollisionWorld {
     if (["tree", "brush", "log", "stump"].includes(b.kind)) {
       const primitive = (
         name: string,
-        type: "sphere" | "cylinder",
+        type: "sphere" | "cylinder" | "plane",
         x: number,
         y: number,
         z: number,
@@ -864,6 +892,97 @@ export class Renderer implements CollisionWorld {
         )
           decor.root.enabled = false;
   }
+  private texture(
+    name: string,
+    width: number,
+    height: number,
+    pixels: () => Uint8Array,
+    repeat = true,
+  ) {
+    if (!this.textures.has(name)) {
+      const t = new pc.Texture(this.app.graphicsDevice, {
+        name,
+        width,
+        height,
+        format: pc.PIXELFORMAT_RGBA8,
+        mipmaps: true,
+        minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+        magFilter: pc.FILTER_LINEAR,
+        anisotropy: 4,
+        addressU: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
+        addressV: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
+      });
+      (t.lock() as Uint8Array).set(pixels());
+      t.unlock();
+      this.textures.set(name, t);
+    }
+    return this.textures.get(name)!;
+  }
+  private surfaceMaterial(kind: SurfaceKind, tint: string) {
+    const key = `surface-${kind}-${tint}`;
+    if (!this.materials.has(key)) {
+      if (!this.textures.has(`${kind}-diffuse`)) {
+        const data = surfacePixels(kind);
+        for (const channel of ["diffuse", "normal", "gloss"] as const)
+          this.texture(`${kind}-${channel}`, 256, 256, () => data[channel]);
+      }
+      const m = new pc.StandardMaterial();
+      m.diffuse = color(tint);
+      m.diffuseMap = this.textures.get(`${kind}-diffuse`)!;
+      m.normalMap = this.textures.get(`${kind}-normal`)!;
+      m.bumpiness = kind === "mud" ? 0.55 : 0.7;
+      m.glossMap = this.textures.get(`${kind}-gloss`)!;
+      m.glossMapChannel = "r";
+      m.gloss = 0.6;
+      m.specular = color(kind === "mud" ? "#4b5052" : "#252728");
+      m.update();
+      this.materials.set(key, m);
+    }
+    return this.materials.get(key)!;
+  }
+  private buildOvercastSky() {
+    const sky = new pc.Entity("overcast sky");
+    const m = new pc.StandardMaterial();
+    m.diffuse = color("#000000");
+    m.emissive = color("#ffffff");
+    m.emissiveMap = this.texture("overcast", 512, 256, () => overcastPixels());
+    m.useLighting = false;
+    m.useFog = false;
+    m.depthWrite = false;
+    m.cull = pc.CULLFACE_FRONT;
+    m.update();
+    this.materials.set("overcast", m);
+    sky.addComponent("render", {
+      type: "sphere",
+      material: m,
+      castShadows: false,
+      receiveShadows: false,
+    });
+    sky.setLocalScale(300, 300, 300);
+    this.app.root.addChild(sky);
+    this.overcastSky = sky;
+  }
+  private dustMaterial(hex: string) {
+    const m = new pc.StandardMaterial();
+    m.diffuse = color("#000000");
+    m.emissive = color(hex);
+    const texture = this.texture("dust", 128, 128, () => dustPixels(), false);
+    m.emissiveMap = texture;
+    m.opacityMap = texture;
+    m.opacityMapChannel = "a";
+    m.blendType = pc.BLEND_NORMAL;
+    m.depthWrite = false;
+    m.cull = pc.CULLFACE_NONE;
+    m.useLighting = false;
+    m.opacity = 0;
+    m.update();
+    return m;
+  }
+  private faceCamera(entity: pc.Entity, roll = 0) {
+    entity.setRotation(this.camera.getRotation());
+    entity.rotateLocal(90, 0, 0);
+    entity.rotateLocal(0, roll, 0);
+  }
   material(c: string) {
     if (!this.materials.has(c)) {
       const m = new pc.StandardMaterial();
@@ -890,7 +1009,10 @@ export class Renderer implements CollisionWorld {
     const e = new pc.Entity(name);
     e.addComponent("render", {
       type: "box",
-      material: this.material(c),
+      material:
+        this.map.terrain && ["wood", "wood post", "duckboard"].includes(name)
+          ? this.surfaceMaterial("wood", c)
+          : this.material(c),
       castShadows: true,
       receiveShadows: true,
       batchGroupId: this.batchGroup,
@@ -1407,6 +1529,7 @@ export class Renderer implements CollisionWorld {
     this.artilleryMarkers.clear();
     this.artilleryPreview = null;
     this.blastFlinches.clear();
+    this.blastSequence = 0;
     this.cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
     this.previousGrenades.clear();
     for (const blast of this.blasts) {
@@ -1591,6 +1714,7 @@ export class Renderer implements CollisionWorld {
       this.camera.setEulerAngles(-90, 0, 0);
       this.app.scene.fog.type = "none";
     }
+    this.overcastSky?.setPosition(this.camera.getPosition());
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);
     this.drawArtillery(g, alpha);
@@ -1676,16 +1800,11 @@ export class Renderer implements CollisionWorld {
       let volume = this.smokeVolumes.get(cloud.id);
       if (!volume) {
         const root = this.joint("concealing smoke cloud", this.app.root),
-          material = new pc.StandardMaterial();
-        material.diffuse = color("#b6b8ac");
-        material.blendType = pc.BLEND_NORMAL;
-        material.depthWrite = false;
-        material.opacity = 0;
-        material.update();
+          material = this.dustMaterial("#c4c8c6");
         for (let i = 0; i < 15; i++) {
           const puff = this.joint("smoke volume", root);
           puff.addComponent("render", {
-            type: "sphere",
+            type: "plane",
             material,
             castShadows: false,
             receiveShadows: false,
@@ -1699,23 +1818,21 @@ export class Renderer implements CollisionWorld {
       const radius = smokeRules.radius * (0.3 + 0.7 * density),
         height = smokeRules.height * (0.5 + 0.5 * density);
       volume.root.setPosition(cloud.x, cloud.y, cloud.z);
-      volume.material.opacity = density * 0.84;
+      volume.material.opacity = density * 1.3;
       volume.material.update();
       for (let i = 0; i < volume.root.children.length; i++) {
         const puff = volume.root.children[i],
           angle = i * 2.4 + Math.sin(age * 0.25 + i) * 0.06;
-        const ring = i < 3 ? 0 : 0.45;
+        const ring = i < 3 ? 0 : 0.49;
         puff.setLocalPosition(
           Math.cos(angle) * radius * ring,
-          Math.sin(i * 1.7) * height * 0.2,
+          Math.sin(i * 1.7) * height * 0.16,
           Math.sin(angle) * radius * ring,
         );
         const swell = 1 + Math.sin(age * 0.8 + i) * 0.06;
-        puff.setLocalScale(
-          radius * 1.05 * swell,
-          height * 1.5 * swell,
-          radius * 1.05 * swell,
-        );
+        this.faceCamera(puff as pc.Entity, Math.sin(i * 2.4 + age * 0.15) * 9);
+        // Keep the visible billows within the existing optical envelope.
+        puff.setLocalScale(radius * 1.15 * swell, 1, height * 1.5 * swell);
       }
     }
   }
@@ -1834,7 +1951,12 @@ export class Renderer implements CollisionWorld {
     }
   }
   private blastEffect(at: V3, radius: number, power = 1) {
-    const root = this.joint("grenade blast", this.app.root);
+    if (this.blasts.length >= maxBlastClouds) {
+      const oldest = this.blasts.shift()!;
+      oldest.root.destroy();
+      for (const m of oldest.materials) m.destroy();
+    }
+    const root = this.joint("explosion dust", this.app.root);
     root.setPosition(at.x, at.y, at.z);
     const material = (hex: string, emissive = false) => {
       const m = new pc.StandardMaterial();
@@ -1852,11 +1974,12 @@ export class Renderer implements CollisionWorld {
     const materials = [
       material("#ffc46a", true),
       material("#c9ad79", true),
-      material("#756957"),
+      this.dustMaterial("#776d5e"),
+      this.dustMaterial("#9a9387"),
     ];
     const particle = (
       name: string,
-      type: "sphere" | "cylinder",
+      type: "sphere" | "cylinder" | "plane",
       m: pc.StandardMaterial,
     ) => {
       const e = this.joint(name, root);
@@ -1870,8 +1993,8 @@ export class Renderer implements CollisionWorld {
     };
     const flash = particle("blast flash", "sphere", materials[0]);
     const wave = particle("blast radius", "cylinder", materials[1]);
-    const smoke = Array.from({ length: 9 }, (_, i) => {
-      const e = particle("blast smoke", "sphere", materials[2]);
+    const smoke = Array.from({ length: 14 }, (_, i) => {
+      const e = particle("blast dust", "plane", materials[i < 3 ? 2 : 3]);
       const angle = (i / 9) * Math.PI * 2;
       e.setLocalPosition(Math.sin(angle) * 0.3, 0.1, Math.cos(angle) * 0.3);
       return e;
@@ -1881,6 +2004,7 @@ export class Renderer implements CollisionWorld {
       age: 0,
       radius,
       power,
+      seed: ++this.blastSequence,
       flash,
       wave,
       smoke,
@@ -1892,26 +2016,30 @@ export class Renderer implements CollisionWorld {
     this.blasts = this.blasts.filter((blast) => {
       blast.age += dt;
       const t = blast.age;
-      const life = 5 * blast.power;
+      const life = 4.5 * blast.power;
       if (t >= life) {
         blast.root.destroy();
         for (const material of blast.materials) material.destroy();
         return false;
       }
-      blast.flash.enabled = t < 0.25;
+      blast.flash.enabled = t < 0.13;
       const flashSize = (0.4 + t * 12) * blast.power;
       blast.flash.setLocalScale(flashSize, flashSize, flashSize);
-      blast.materials[0].opacity = Math.max(0, 0.9 * (1 - t / 0.25));
-      blast.wave.enabled = t < 0.6;
+      blast.materials[0].opacity = Math.max(0, 0.95 * (1 - t / 0.13));
+      blast.wave.enabled = t < 0.3;
       const diameter = blast.radius * 2 * Math.min(1, t / 0.4);
       blast.wave.setLocalPosition(0, 0.04, 0);
       blast.wave.setLocalScale(diameter, 0.035, diameter);
-      blast.materials[1].opacity = Math.max(0, 0.2 * (1 - t / 0.6));
-      blast.materials[2].opacity = Math.min(0.6, t * 4) * (1 - t / life);
+      blast.materials[1].opacity = Math.max(0, 0.08 * (1 - t / 0.3));
+      blast.materials[2].opacity =
+        Math.min(1.15, t * 12) * Math.max(0, 1 - t / 2.1);
+      blast.materials[3].opacity =
+        Math.min(0.95, t * 5) * (1 - t / life) ** 1.3;
       for (let i = 0; i < blast.smoke.length; i++) {
-        const plume = blastPlume(t, i, blast.power);
+        const plume = blastPlume(t, i, blast.power, blast.seed);
         blast.smoke[i].setLocalPosition(plume.x, plume.y, plume.z);
-        blast.smoke[i].setLocalScale(plume.size, plume.height, plume.size);
+        this.faceCamera(blast.smoke[i], plume.roll);
+        blast.smoke[i].setLocalScale(plume.size, 1, plume.height);
       }
       for (const material of blast.materials) material.update();
       return true;
