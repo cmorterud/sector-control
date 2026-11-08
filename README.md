@@ -4,6 +4,12 @@ Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decision
 
 Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front and Village front are 50v50 domination maps with four flags. Matches last up to eight minutes.
 
+## Public trial
+
+Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. Each visitor plays an independent match against bots.
+
+This is a frozen production-build snapshot of game commit `8d1d9be`, published November 8, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
+
 ## Run
 
 Requires Node.js 22.12+ (developed with Node 26).
