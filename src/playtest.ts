@@ -60,6 +60,19 @@ export class PlaytestLog {
       slowFramesOver33ms: this.frames.filter((ms) => ms > 1000 / 30).length,
       errors: [...this.errors],
       shots: this.events.filter((e) => e.type === "fire").length,
+      meleeAttacks: this.events.filter(
+        (e) => e.type === "melee" && e.phase === "start",
+      ).length,
+      bayonetCharges: this.events.filter(
+        (e) => e.type === "melee" && e.phase === "start" && e.kind === "charge",
+      ).length,
+      meleeHits: this.events.filter(
+        (e) =>
+          e.type === "melee" && e.phase === "strike" && (e.damage ?? 0) > 0,
+      ).length,
+      meleeKills: this.events.filter(
+        (e) => e.type === "melee" && e.phase === "strike" && e.killed,
+      ).length,
       machineGunShots: this.events.filter(
         (e) => e.type === "fire" && e.weapon === "machineGun",
       ).length,

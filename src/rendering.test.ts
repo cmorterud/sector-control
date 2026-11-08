@@ -1,4 +1,5 @@
 import { armLengths, boltMotion } from "./weapons";
+import { meleeRules } from "./melee";
 import { it, expect, vi } from "vitest";
 import { Entity, Vec3 } from "playcanvas";
 import { Renderer } from "./rendering";
@@ -80,6 +81,50 @@ function rigFor(p: Soldier) {
   renderer.createSoldier(p);
   return renderer;
 }
+
+it("thrusts and butt-strikes with both wrists on the weapon, then restores the pose without changing simulation state", () => {
+  for (const kind of ["bayonet", "charge", "butt"] as const) {
+    const g = new Game(new TestCollision(trenchMap), false),
+      p = g.players[0];
+    p.weapon = kind === "butt" ? "machineGun" : "serviceRifle";
+    const rule = meleeRules[kind];
+    p.melee = {
+      kind,
+      startTick: 100,
+      strikeTick: 100 + rule.windup,
+      endTick: 100 + rule.duration,
+      yaw: 0,
+      struck: false,
+    };
+    const r = rigFor(p),
+      rig = r.soldiers[0],
+      before = structuredClone(p);
+    expect(!!r.people[0].findByName("bayonet blade")).toBe(kind !== "butt");
+    for (let age = 0; age <= rule.duration; age++) {
+      r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + age);
+      const left = rig.arms[0].elbow
+        .getWorldTransform()
+        .transformPoint(new Vec3(0, -armLengths.forearm, 0));
+      expect(
+        left.distance(rig.supportHand.getPosition()),
+        `${kind} frame${age}`,
+      ).toBeLessThan(0.001);
+      const right = rig.arms[1].elbow
+        .getWorldTransform()
+        .transformPoint(new Vec3(0, -armLengths.forearm, 0));
+      const trigger = rig.rifle
+        .getWorldTransform()
+        .transformPoint(new Vec3(0, -0.03, 0.14));
+      expect(right.distance(trigger), `${kind} right frame${age}`).toBeLessThan(
+        0.001,
+      );
+    }
+    expect(p).toEqual(before);
+    p.melee = null;
+    r.animateSoldier(p, p.x, p.z, 1 / 60, 200);
+    expect(rig.arms[0].shoulder.getLocalPosition().z).toBeCloseTo(-0.12);
+  }
+});
 
 it("braces the free hand on the bank, keeps the support hand on the rifle, and clears the bank with tucked feet", () => {
   const game = new Game(

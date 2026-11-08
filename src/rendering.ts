@@ -1,3 +1,4 @@
+import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
@@ -1849,6 +1850,33 @@ export class Renderer implements CollisionWorld {
         rifle,
       );
     }
+    if (service) {
+      const blade = part(
+        "bayonet blade",
+        0,
+        -0.05,
+        -0.82,
+        0.025,
+        0.3,
+        0.045,
+        "#aeb6ad",
+        rifle,
+        "stock",
+      );
+      blade.setLocalEulerAngles(90, 0, 0);
+      this.cube(
+        "bayonet guard",
+        0,
+        -0.05,
+        -0.68,
+        0.07,
+        0.025,
+        0.025,
+        "#565d53",
+        false,
+        rifle,
+      );
+    }
     const bolt = this.joint("bolt", rifle, 0.05, 0.045, 0.13);
     if (service) {
       const stem = part(
@@ -2104,6 +2132,8 @@ export class Renderer implements CollisionWorld {
     tick: number,
   ) {
     const rig = this.soldiers[p.id];
+    rig.arms[0].shoulder.setLocalPosition(-0.27, 0.41, -0.12);
+    rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, 0);
     let magazineVisible = true,
       carryingMagazine = false;
     const dx = x - rig.x,
@@ -2405,6 +2435,43 @@ export class Renderer implements CollisionWorld {
       rig.arms[1].shoulder.setLocalEulerAngles(150 - 110 * smooth(t), 0, -15);
       rig.arms[1].elbow.setLocalEulerAngles(55 * (1 - t), 0, 0);
     }
+    if (p.melee && p.hp > 0 && !p.mantle) {
+      const pose = meleePose(p.melee, tick);
+      const butt = p.melee.kind === "butt";
+      rig.body.rotateLocal(pose.lean, 0, 0);
+      rig.upper.rotateLocal(0, -8 * pose.ready + 12 * pose.thrust, 0);
+      rig.arms[0].shoulder.setLocalPosition(
+        -0.27,
+        0.41,
+        -0.12 - 0.13 * pose.thrust,
+      );
+      rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, -0.13 * pose.thrust);
+      rig.rifle.setLocalPosition(
+        weaponMount.x - (butt ? 0.1 : 0.02) * pose.ready,
+        weaponMount.y + rifleHeight(this.map) - 1.45 - 0.04 * pose.ready,
+        weaponMount.z + 0.1 * pose.ready - 0.13 * pose.thrust,
+      );
+      rig.rifle.setLocalEulerAngles(
+        0,
+        butt ? 60 * pose.ready + 35 * pose.thrust : 0,
+        -8 * pose.ready,
+      );
+      const hand = rig.rifle
+        .getLocalTransform()
+        .transformPoint(new pc.Vec3(0, -0.03, 0.14));
+      this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm);
+      carryingMagazine = false;
+    }
+    if (
+      p.hp > 0 &&
+      tick - p.staggerAt >= 0 &&
+      tick - p.staggerAt < 12 &&
+      !p.mantle
+    ) {
+      const reaction = Math.sin((Math.PI * (tick - p.staggerAt)) / 12);
+      rig.body.rotateLocal(-14 * reaction, 0, 4 * reaction);
+      rig.upper.rotateLocal(-8 * reaction, 0, 0);
+    }
     const flinch = this.blastFlinches?.get(p.id);
     if (flinch && p.hp > 0 && !p.mantle) {
       const age = Math.max(0, (tick - flinch.tick) / 30);
@@ -2426,8 +2493,10 @@ export class Renderer implements CollisionWorld {
     this.attachSupportArm(rig);
   }
   private collapseSoldier(p: Soldier, age: number) {
-    const rig = this.soldiers[p.id],
-      pose = collapseMotion(age, p.id);
+    const rig = this.soldiers[p.id];
+    rig.arms[0].shoulder.setLocalPosition(-0.27, 0.41, -0.12);
+    rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, 0);
+    const pose = collapseMotion(age, p.id);
     rig.body.setLocalPosition(0, 0.94 - pose.drop, 0.12 * pose.fall);
     rig.body.setLocalEulerAngles(pose.lean, 0, pose.roll);
     rig.upper.setLocalPosition(0, 0.08, 0);

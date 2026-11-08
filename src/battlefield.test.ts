@@ -26,6 +26,58 @@ function scene(trench = true) {
 }
 const event = (e: object) => ({ tick: 0, id: 1, ...e }) as Event;
 describe("battlefield presentation", () => {
+  it("plays close melee swings and contact sounds without speech or distant chatter", () => {
+    const { g, p, feedback, cues } = scene();
+    const at = { x: p.x, y: p.y + 1.2, z: p.z };
+    feedback.event(
+      g,
+      event({
+        type: "melee",
+        phase: "start",
+        kind: "bayonet",
+        actor: 0,
+        target: null,
+        at,
+      }),
+    );
+    feedback.event(
+      g,
+      event({
+        type: "melee",
+        phase: "strike",
+        kind: "bayonet",
+        actor: 0,
+        target: 1,
+        damage: 65,
+        at,
+      }),
+    );
+    feedback.event(
+      g,
+      event({
+        type: "melee",
+        phase: "strike",
+        kind: "bayonet",
+        actor: 0,
+        target: null,
+        damage: 0,
+        at,
+      }),
+    );
+    feedback.event(
+      g,
+      event({
+        type: "melee",
+        phase: "start",
+        kind: "butt",
+        actor: 99,
+        target: null,
+        at: { ...at, x: p.x + 40 },
+      }),
+    );
+    expect(cues.map((c) => c.kind)).toEqual(["meleeSwing", "meleeHit"]);
+    expect(feedback.stats.callouts).toBe(0);
+  });
   it("plays service reports and local bolt/clip mechanics without distant mechanism chatter or speech", () => {
     const { g, p, feedback, cues } = scene();
     feedback.event(

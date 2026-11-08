@@ -9,6 +9,8 @@ import { eyeHeightOf } from "./crouch";
 import type { Event, Game, V3 } from "./simulation";
 
 export type SoundKind =
+  | "meleeSwing"
+  | "meleeHit"
   | "serviceRifle"
   | "bolt"
   | "clip"
@@ -200,6 +202,26 @@ export class BattlefieldFeedback {
       this.stats.rifles++;
       if (Math.hypot(p.x - e.from.x, p.z - e.from.z) > 35)
         this.stats.distantRifles++;
+    }
+    if (
+      e.type === "melee" &&
+      (e.phase === "start" || (e.phase === "strike" && e.target !== null))
+    ) {
+      const actor = g.players.find((q) => q.id === e.actor);
+      const at =
+        e.phase === "start" && actor
+          ? { x: actor.x, y: actor.y + 1.3, z: actor.z }
+          : e.at;
+      if (Math.hypot(at.x - p.x, at.z - p.z) < 18)
+        this.cue(
+          g,
+          e.phase === "start" ? "meleeSwing" : "meleeHit",
+          at,
+          e.phase === "start" ? 0.16 : 0.32,
+          e.actor === 0 || e.target === 0,
+          true,
+          e.id,
+        );
     }
     if (e.type === "weaponAction") {
       const actor = g.players.find((q) => q.id === e.actor);

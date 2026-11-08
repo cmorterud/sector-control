@@ -172,33 +172,38 @@ export class BattleAudio {
       cue.kind === "rifle" ||
       cue.kind === "serviceRifle" ||
       cue.kind === "machineGun";
+    const melee = cue.kind === "meleeSwing" || cue.kind === "meleeHit";
     const mechanism = cue.kind === "bolt" || cue.kind === "clip";
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
-    const length = speech
-      ? spoken!.duration / speechRate
-      : explosion
-        ? cue.kind === "artillery"
-          ? 2.4
-          : 1.6
-        : mechanism
-          ? cue.kind === "clip"
-            ? 0.16
-            : 0.09
-          : whistle
-            ? 0.75
-            : rifle
-              ? cue.kind === "machineGun"
-                ? 0.11 + distant * 0.25
-                : 0.16 + distant * 0.42
-              : crack
-                ? 0.065
-                : foot
-                  ? 0.16
-                  : cue.kind === "timber"
-                    ? 1.5
-                    : 0.65;
+    const length = melee
+      ? cue.kind === "meleeSwing"
+        ? 0.17
+        : 0.11
+      : speech
+        ? spoken!.duration / speechRate
+        : explosion
+          ? cue.kind === "artillery"
+            ? 2.4
+            : 1.6
+          : mechanism
+            ? cue.kind === "clip"
+              ? 0.16
+              : 0.09
+            : whistle
+              ? 0.75
+              : rifle
+                ? cue.kind === "machineGun"
+                  ? 0.11 + distant * 0.25
+                  : 0.16 + distant * 0.42
+                : crack
+                  ? 0.065
+                  : foot
+                    ? 0.16
+                    : cue.kind === "timber"
+                      ? 1.5
+                      : 0.65;
     const delay =
       cue.local || crack || foot || whistle
         ? 0
@@ -208,31 +213,35 @@ export class BattleAudio {
     const filter = c.createBiquadFilter();
     filter.type = crack || whistle || mechanism ? "bandpass" : "lowpass";
     filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
-    filter.frequency.value = mechanism
-      ? cue.kind === "clip"
-        ? 2800
-        : 1800
-      : cue.kind === "serviceRifle"
-        ? 13000 * (1 - distant * 0.85)
-        : whistle
-          ? 1700
-          : crack
-            ? 2800
-            : explosion
-              ? cue.kind === "artillery"
-                ? 12000
-                : 8500
-              : cue.kind === "mud"
-                ? 550
-                : cue.kind === "wood"
-                  ? 1900
-                  : foot
-                    ? 2400
-                    : cue.kind === "timber"
-                      ? 1700
-                      : speech
-                        ? 4600 * (1 - distant * 0.5)
-                        : 8500 * (1 - distant * 0.85);
+    filter.frequency.value = melee
+      ? cue.kind === "meleeSwing"
+        ? 2400
+        : 650
+      : mechanism
+        ? cue.kind === "clip"
+          ? 2800
+          : 1800
+        : cue.kind === "serviceRifle"
+          ? 13000 * (1 - distant * 0.85)
+          : whistle
+            ? 1700
+            : crack
+              ? 2800
+              : explosion
+                ? cue.kind === "artillery"
+                  ? 12000
+                  : 8500
+                : cue.kind === "mud"
+                  ? 550
+                  : cue.kind === "wood"
+                    ? 1900
+                    : foot
+                      ? 2400
+                      : cue.kind === "timber"
+                        ? 1700
+                        : speech
+                          ? 4600 * (1 - distant * 0.5)
+                          : 8500 * (1 - distant * 0.85);
     if (cue.occluded)
       filter.frequency.value = Math.min(
         filter.frequency.value,

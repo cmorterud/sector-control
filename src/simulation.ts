@@ -1,4 +1,12 @@
 import {
+  startMelee,
+  cancelMelee,
+  meleeMovement,
+  advanceMelee,
+  botMeleeIntent,
+  type MeleeAttack,
+} from "./melee";
+import {
   freshAwareness,
   awarenessSample,
   canNotice,
@@ -83,6 +91,7 @@ export interface Command {
   grenade: boolean;
   artillery?: Vec & { area?: boolean };
   smoke?: boolean;
+  melee?: boolean;
   crouch?: boolean;
 }
 export const idle = (): Command => ({
@@ -248,6 +257,12 @@ export function mantlePosition(m: Mantle, tick: number): V3 {
   return { ...m.to };
 }
 export interface Soldier extends Vec {
+  melee: MeleeAttack | null;
+  nextMelee: number;
+  meleeHeld: boolean;
+  meleeThreat: { target: number; since: number; lastTick: number } | null;
+  staggerAt: number;
+  staggerUntil: number;
   weapon: WeaponKind;
   crouched: boolean;
   y: number;
@@ -446,6 +461,16 @@ export type Event = { id: number; tick: number } & (
       at: V3;
       target: number | null;
       hit: boolean;
+    }
+  | {
+      type: "melee";
+      phase: "start" | "strike" | "end" | "cancel";
+      actor: number;
+      kind: MeleeAttack["kind"];
+      target: number | null;
+      at: V3;
+      damage?: number;
+      killed?: boolean;
     }
   | {
       type: "weaponAction";
@@ -760,6 +785,12 @@ export class Game {
         ),
         team,
         teamIndex: i % this.teamSize,
+        melee: null,
+        nextMelee: 0,
+        meleeHeld: false,
+        meleeThreat: null,
+        staggerAt: -1000,
+        staggerUntil: 0,
         mantle: null,
         crouched: false,
         hop: null,
@@ -870,6 +901,12 @@ export class Game {
           : -Math.PI / 2
         : 0;
     p.hp = 100;
+    p.melee = null;
+    p.nextMelee = this.tick;
+    p.meleeHeld = false;
+    p.meleeThreat = null;
+    p.staggerAt = -1000;
+    p.staggerUntil = 0;
     p.crouched = false;
     p.ammo = weaponProfiles[p.weapon].magazine;
     p.reserve = weaponProfiles[p.weapon].reserve;
@@ -925,11 +962,16 @@ export class Game {
       if (p.hp <= 0) {
         if (this.tick >= p.respawnAt) {
           const held = p.triggerHeld;
+          const meleeHeld = p.meleeHeld;
           this.respawn(p);
-          if (p.id === 0) p.triggerHeld = held;
+          if (p.id === 0) {
+            p.triggerHeld = held;
+            p.meleeHeld = meleeHeld;
+          }
         } else {
           p.triggerHeld = p.id === 0 && human.fire;
           p.triggerPressed = false;
+          p.meleeHeld = p.id === 0 && !!human.melee;
           continue;
         }
       }
@@ -942,7 +984,11 @@ export class Game {
       p.triggerPressed = c.fire && !p.triggerHeld;
       p.triggerHeld = c.fire;
       recoverRecoil(p);
+      if (p.melee) c.crouch = p.crouched;
       updateCrouch(this, p, c);
+      if (c.melee && !p.meleeHeld) startMelee(this, p, c);
+      p.meleeHeld = !!c.melee;
+      const meleeSpeed = meleeMovement(this, p, c);
       if (c.artillery) requestArtillery(this, p, c.artillery);
       if (
         !c.fire ||
@@ -957,6 +1003,8 @@ export class Game {
       if (
         (c.grenade || c.smoke) &&
         !p.mantle &&
+        !p.melee &&
+        this.tick >= p.staggerUntil &&
         !p.reloadAt &&
         (c.smoke ? p.smokes > 0 : p.grenades > 0) &&
         this.tick >= p.nextGrenade
@@ -964,6 +1012,8 @@ export class Game {
         this.throwGrenade(p, !!c.smoke);
       if (
         c.mantle &&
+        !p.melee &&
+        this.tick >= p.staggerUntil &&
         !p.crouched &&
         !p.mantle &&
         !p.hop &&
@@ -992,7 +1042,15 @@ export class Game {
         }
       } else {
         const len = Math.max(1, Math.hypot(c.x, c.z)),
-          speed = p.crouched ? crouchRules.speed : c.sprint && !c.aim ? 7 : 4.5;
+          speed =
+            this.tick < p.staggerUntil
+              ? 1.2
+              : (meleeSpeed ??
+                (p.crouched
+                  ? crouchRules.speed
+                  : c.sprint && !c.aim
+                    ? 7
+                    : 4.5));
         p.vx += ((c.x / len) * speed - p.vx) * 0.24;
         p.vz += ((c.z / len) * speed - p.vz) * 0.24;
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
@@ -1017,6 +1075,8 @@ export class Game {
       }
       if (
         c.reload &&
+        !p.melee &&
+        this.tick >= p.staggerUntil &&
         !p.mantle &&
         !p.reloadAt &&
         p.ammo < weaponProfiles[p.weapon].magazine &&
@@ -1025,7 +1085,7 @@ export class Game {
         p.reloadAt = this.tick + weaponProfiles[p.weapon].reloadTicks;
         this.emit({ type: "reload", actor: p.id });
       }
-      if (p.weapon === "serviceRifle") {
+      if (p.weapon === "serviceRifle" && !p.melee) {
         const age = this.tick - p.lastShotAt;
         const remaining = p.reloadAt - this.tick;
         const action = p.reloadAt
@@ -1044,9 +1104,14 @@ export class Game {
         if (action) this.emit({ type: "weaponAction", actor: p.id, action });
       }
     }
+    advanceMelee(this, (target, amount, source, team) =>
+      this.damage(target, amount, source, team),
+    );
     for (const p of this.players)
       if (
         p.hp > 0 &&
+        !p.melee &&
+        this.tick >= p.staggerUntil &&
         !p.mantle &&
         this.tick >= p.throwUntil &&
         p.triggerPressed &&
@@ -1110,6 +1175,10 @@ export class Game {
         Math.max(this.scores.blue, this.scores.red) >= this.scoreLimit)
     ) {
       this.phase = "ended";
+      for (const p of this.players) {
+        cancelMelee(this, p);
+        p.meleeThreat = null;
+      }
       this.projectiles = [];
       this.grenades = [];
       this.artillery.missions = [];
@@ -1465,6 +1534,8 @@ export class Game {
     victim.hp = Math.max(0, victim.hp - amount);
     this.emit({ type: "damage", actor: victim.id, source });
     if (!victim.hp) {
+      cancelMelee(this, victim);
+      victim.meleeThreat = null;
       victim.deaths++;
       const shooter = this.players.find((p) => p.id === source);
       if (team !== null && victim.team !== team) {
@@ -2172,6 +2243,7 @@ export function botCommand(g: Game, p: Soldier): Command {
     0,
     1,
   );
+  if (botMeleeIntent(g, p, target, c)) return c;
   const objective = station ?? g.sectors[p.objective];
   while (
     p.path.length &&
