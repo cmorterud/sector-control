@@ -35,8 +35,11 @@ export function reloadMotion(
   return {
     progress,
     lower,
-    carrying: progress >= 0.25 && progress < 0.64,
-    removed: progress >= 0.2 && progress < 0.69,
+    carrying:
+      p.weapon === "serviceRifle"
+        ? progress >= 0.28 && progress < 0.68
+        : progress >= 0.25 && progress < 0.64,
+    removed: p.weapon !== "serviceRifle" && progress >= 0.2 && progress < 0.69,
   };
 }
 export function collapseMotion(age: number, id: number) {

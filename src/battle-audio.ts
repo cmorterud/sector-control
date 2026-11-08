@@ -168,7 +168,11 @@ export class BattleAudio {
     const c = this.context;
     const explosion = cue.kind === "artillery" || cue.kind === "grenade";
     const foot = ["mud", "wood", "concrete"].includes(cue.kind);
-    const rifle = cue.kind === "rifle" || cue.kind === "machineGun";
+    const rifle =
+      cue.kind === "rifle" ||
+      cue.kind === "serviceRifle" ||
+      cue.kind === "machineGun";
+    const mechanism = cue.kind === "bolt" || cue.kind === "clip";
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
@@ -178,19 +182,23 @@ export class BattleAudio {
         ? cue.kind === "artillery"
           ? 2.4
           : 1.6
-        : whistle
-          ? 0.75
-          : rifle
-            ? cue.kind === "machineGun"
-              ? 0.11 + distant * 0.25
-              : 0.16 + distant * 0.42
-            : crack
-              ? 0.065
-              : foot
-                ? 0.16
-                : cue.kind === "timber"
-                  ? 1.5
-                  : 0.65;
+        : mechanism
+          ? cue.kind === "clip"
+            ? 0.16
+            : 0.09
+          : whistle
+            ? 0.75
+            : rifle
+              ? cue.kind === "machineGun"
+                ? 0.11 + distant * 0.25
+                : 0.16 + distant * 0.42
+              : crack
+                ? 0.065
+                : foot
+                  ? 0.16
+                  : cue.kind === "timber"
+                    ? 1.5
+                    : 0.65;
     const delay =
       cue.local || crack || foot || whistle
         ? 0
@@ -198,27 +206,33 @@ export class BattleAudio {
     const start = c.currentTime + delay;
     const end = start + length;
     const filter = c.createBiquadFilter();
-    filter.type = crack || whistle ? "bandpass" : "lowpass";
+    filter.type = crack || whistle || mechanism ? "bandpass" : "lowpass";
     filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
-    filter.frequency.value = whistle
-      ? 1700
-      : crack
+    filter.frequency.value = mechanism
+      ? cue.kind === "clip"
         ? 2800
-        : explosion
-          ? cue.kind === "artillery"
-            ? 12000
-            : 8500
-          : cue.kind === "mud"
-            ? 550
-            : cue.kind === "wood"
-              ? 1900
-              : foot
-                ? 2400
-                : cue.kind === "timber"
-                  ? 1700
-                  : speech
-                    ? 4600 * (1 - distant * 0.5)
-                    : 8500 * (1 - distant * 0.85);
+        : 1800
+      : cue.kind === "serviceRifle"
+        ? 13000 * (1 - distant * 0.85)
+        : whistle
+          ? 1700
+          : crack
+            ? 2800
+            : explosion
+              ? cue.kind === "artillery"
+                ? 12000
+                : 8500
+              : cue.kind === "mud"
+                ? 550
+                : cue.kind === "wood"
+                  ? 1900
+                  : foot
+                    ? 2400
+                    : cue.kind === "timber"
+                      ? 1700
+                      : speech
+                        ? 4600 * (1 - distant * 0.5)
+                        : 8500 * (1 - distant * 0.85);
     if (cue.occluded)
       filter.frequency.value = Math.min(
         filter.frequency.value,
@@ -331,7 +345,9 @@ export class BattleAudio {
     }
     const noise = c.createBufferSource();
     noise.buffer = this.noise;
-    noise.playbackRate.value = 0.92 + Math.abs(Math.sin(cue.seed * 2.4)) * 0.16;
+    noise.playbackRate.value =
+      (cue.kind === "serviceRifle" ? 0.78 : 0.92) +
+      Math.abs(Math.sin(cue.seed * 2.4)) * 0.16;
     noise.loop = true;
     noise.connect(filter);
     noise.start(start, Math.abs(Math.sin(cue.seed)) * 0.15);
@@ -369,7 +385,9 @@ export class BattleAudio {
             : explosion
               ? 95
               : rifle
-                ? 155
+                ? cue.kind === "serviceRifle"
+                  ? 95
+                  : 155
                 : 260,
         start,
       );

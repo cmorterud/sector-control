@@ -27,9 +27,9 @@ Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-sec
 
 Walk over a trench edge to drop in naturally; no Space press is needed. Gravity carries you onto the firing step or floor, with a small landing pose. Press **Space** to hop on open ground or mantle upward to climb out. Hopping over an edge continues the arc down to the ground below.
 
-Rifles are **semi-automatic** for players and bots: one round per press, with a maximum mechanical rate of 300 rounds/minute. Holding the mouse does not repeat fire; a press during reload or cooldown must be released before trying again.
+Trench riflemen, including the player, carry a **bolt-action service rifle** with a long wooden stock, five rounds and 60 reserve. Click once to fire; the right hand opens, pulls and closes the bolt before another shot is possible (1.2 seconds between shots). Press R for a 3.2-second clip reload. Service rounds deal 50 damage and have stronger recoil, a deeper report and mechanical bolt/clip sounds. Industrial keeps its 30-round semi-auto rifle. Holding the mouse does not repeat fire; a press during reload or cycling must be released before trying again.
 
-**Machine gunners:** four bots per team in 50v50 (two in 25v25) carry a longer weapon with an ammunition box. They fire four-to-six-round bursts at 600 rounds/minute, then pause for 1.5–3 seconds. They retain recognition delay, imperfect aim, recoil, suppression and sight-loss interruption, with more aim wander than riflemen. Their magazines hold 60 rounds with 240 reserve and a three-second reload. They stay with the covering force rather than joining assault squads. Human players keep their semi-auto rifle; small 5v5 rosters stay rifle-only.
+**Machine gunners:** four bots per team in 50v50 (two in 25v25) carry a longer wooden-stock weapon with a pan magazine and folded bipod. They fire four-to-six-round bursts at 600 rounds/minute, then pause for 1.5–3 seconds. They retain recognition delay, imperfect aim, recoil, suppression and sight-loss interruption, with more aim wander than riflemen. Their magazines hold 60 rounds with 240 reserve and a three-second reload. They stay with the covering force rather than joining assault squads. Human players keep their map’s rifle; small 5v5 rosters stay rifle-only.
 
 Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or space your shots and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.
 
@@ -45,7 +45,7 @@ Bots still cover from firing steps and cross in small smoke-screened squads. Ass
 
 ## Soldiers
 
-Soldiers now vary their stride timing, upper-body sway and idle breathing, with smoother movement transitions. Reloads visibly lower the weapon, exchange its magazine or ammunition box and work the action; the right hand moves between belt and weapon while the left stays on its grip. Rounded helmets with brims, webbing, pouches, pack flaps and rolled blankets add detail while retaining team colors.
+Soldiers have rounded, tapered limbs and tailored coats, smaller human-shaped heads, curved steel helmets, puttees and oval boots. Muted team-colored uniforms, armbands, webbing, pouches, packs and rolled blankets retain team readability. The models are stylized procedural figures. Stride timing, upper-body sway and idle breathing vary between soldiers. Reloads visibly load a service-rifle clip or exchange the other weapons’ magazines; the right hand works the action while the left stays on its grip. Walking, crouching, mantling, blast reactions and falling bodies retain their articulated poses.
 
 A killed soldier buckles and falls over roughly 0.85 seconds. Nearby bodies remain for about 20 seconds, fading at the end; at most 24 are retained. They follow excavated ground and are cosmetic, so they do not block movement, shots or objectives. Respawning soldiers are independent of the retained body. Pausing freezes the presentation and a fresh match clears it.
 

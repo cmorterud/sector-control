@@ -1,3 +1,5 @@
+import { characterGeometry, type CharacterShape } from "./character-geometry";
+import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
   groundSurfacePixels,
   groundPuddles,
@@ -68,8 +70,8 @@ import {
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-const supportUpperLength = 0.42;
-const supportForearmLength = 0.46;
+const supportUpperLength = armLengths.upper;
+const supportForearmLength = armLengths.forearm;
 type SoldierRig = {
   body: pc.Entity;
   hips: pc.Entity;
@@ -78,6 +80,7 @@ type SoldierRig = {
   arms: { shoulder: pc.Entity; elbow: pc.Entity }[];
   rifle: pc.Entity;
   supportHand: pc.Entity;
+  bolt: pc.Entity;
   magazine: pc.Entity;
   reloadMagazine: pc.Entity;
   magazineScale: pc.Vec3;
@@ -1483,6 +1486,42 @@ export class Renderer implements CollisionWorld {
     joint.setLocalPosition(x, y, z);
     return joint;
   }
+  private organic(
+    name: string,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    tint: string,
+    parent: pc.Entity,
+    shape: CharacterShape = "soft",
+  ) {
+    const entity = this.cube(name, x, y, z, w, h, d, tint, false, parent);
+    if (this.app.graphicsDevice && entity.render) {
+      this.kitMeshes ??= new Map();
+      const key = `organic-${shape}`;
+      if (!this.kitMeshes.has(key)) {
+        const data = characterGeometry(shape),
+          mesh = new pc.Mesh(this.app.graphicsDevice);
+        mesh.setPositions(data.positions);
+        mesh.setNormals(data.normals);
+        mesh.setIndices(data.indices);
+        mesh.update(pc.PRIMITIVE_TRIANGLES);
+        mesh.incRefCount();
+        this.kitMeshes.set(key, mesh);
+      }
+      entity.render.meshInstances = [
+        new pc.MeshInstance(
+          this.kitMeshes.get(key)!,
+          this.material(tint),
+          entity,
+        ),
+      ];
+    }
+    return entity;
+  }
   private createSoldier(p: Soldier) {
     const root = this.joint(`soldier-${p.id}`, this.app.root);
     root.setPosition(p.x, p.y, p.z);
@@ -1490,297 +1529,423 @@ export class Renderer implements CollisionWorld {
     const body = this.joint("body", root, 0, 0.94);
     const hips = this.joint("hips", body);
     const upper = this.joint("upper body", body, 0, 0.08);
-    const shirt = p.team === "blue" ? "#46a9d8" : "#de6e5f";
-    const trousers = "#414e48";
-    const equipment = "#343f3c";
-    this.cube("pelvis", 0, -0.015, 0, 0.49, 0.2, 0.33, trousers, false, hips);
-    this.cube("torso", 0, 0.26, 0, 0.59, 0.5, 0.35, shirt, false, upper);
-    this.cube("vest", 0, 0.27, -0.2, 0.48, 0.4, 0.13, equipment, false, upper);
-    this.cube(
+    const shirt = p.team === "blue" ? "#597f91" : "#9f685a";
+    const trousers = p.team === "blue" ? "#4d5853" : "#62594b";
+    const equipment = "#68634d",
+      skin = "#bba185",
+      leather = "#403b30";
+    const part = (
+      name: string,
+      x: number,
+      y: number,
+      z: number,
+      w: number,
+      h: number,
+      d: number,
+      c: string,
+      parent: pc.Entity,
+      shape: CharacterShape = "soft",
+    ) => this.organic(name, x, y, z, w, h, d, c, parent, shape);
+    part("pelvis", 0, -0.015, 0, 0.43, 0.24, 0.3, trousers, hips);
+    part("torso", 0, 0.25, 0, 0.55, 0.55, 0.34, shirt, upper, "tunic");
+    part("vest", 0, 0.27, -0.166, 0.39, 0.34, 0.035, equipment, upper, "tunic");
+    part(
       "backpack",
       0,
-      0.28,
+      0.27,
       0.22,
-      0.4,
-      0.38,
-      0.19,
+      0.32,
+      0.36,
+      0.17,
       equipment,
-      false,
       upper,
+      "tunic",
     );
-    this.cube("neck", 0, 0.55, 0, 0.18, 0.16, 0.18, "#c1af90", false, upper);
-    this.cube("head", 0, 0.66, 0, 0.35, 0.35, 0.35, "#c1af90", false, upper);
-    const helmetTint = p.team === "blue" ? "#4f7179" : "#826556";
-    const helmet = this.cube(
-      "helmet",
-      0,
-      0.83,
-      0,
-      0.43,
-      0.2,
-      0.44,
-      helmetTint,
-      false,
-      upper,
-    );
-    if (helmet.render) helmet.render.type = "sphere";
-    this.cube(
-      "helmet brim",
-      0,
-      0.77,
-      -0.015,
-      0.53,
-      0.045,
-      0.53,
-      helmetTint,
-      false,
-      upper,
-    );
-    this.cube(
-      "helmet band",
-      0,
-      0.79,
-      0,
-      0.435,
-      0.035,
-      0.45,
-      "#38413a",
-      false,
-      upper,
-    );
-    this.cube(
-      "web belt",
-      0,
-      0.04,
-      0,
-      0.61,
-      0.08,
-      0.39,
-      "#6b6650",
-      false,
-      upper,
-    );
+    part("neck", 0, 0.53, 0, 0.13, 0.17, 0.14, skin, upper, "limb");
+    part("head", 0, 0.66, -0.005, 0.255, 0.32, 0.27, skin, upper, "head");
+    part("nose", 0, 0.665, -0.145, 0.043, 0.067, 0.075, skin, upper);
+    part("chin", 0, 0.55, -0.075, 0.14, 0.075, 0.12, skin, upper);
     for (const side of [-1, 1]) {
-      this.cube(
-        "webbing strap",
-        side * 0.19,
-        0.29,
-        -0.19,
-        0.04,
-        0.4,
-        0.03,
-        "#7e7a61",
-        false,
-        upper,
-      );
-      this.cube(
-        "ammunition pouch",
-        side * 0.23,
-        0.1,
-        -0.24,
-        0.15,
-        0.18,
-        0.12,
-        p.weapon === "machineGun" ? "#676d49" : "#8b8060",
-        false,
+      part("ear", side * 0.131, 0.665, 0, 0.045, 0.085, 0.06, skin, upper);
+      part(
+        "eye",
+        side * 0.052,
+        0.695,
+        -0.132,
+        0.025,
+        0.012,
+        0.012,
+        "#444236",
         upper,
       );
     }
-    this.cube(
-      "pack flap",
+    const helmetTint = p.team === "blue" ? "#586c68" : "#796d57";
+    part("helmet", 0, 0.83, 0, 0.375, 0.2, 0.395, helmetTint, upper, "helmet");
+    part(
+      "helmet brim",
       0,
-      0.39,
-      0.327,
-      0.34,
-      0.09,
+      0.752,
+      -0.012,
+      0.465,
       0.035,
-      "#6a6b55",
-      false,
+      0.475,
+      helmetTint,
       upper,
+      "disc",
     );
-    const roll = this.cube(
+    part(
+      "helmet band",
+      0,
+      0.77,
+      0,
+      0.378,
+      0.028,
+      0.398,
+      leather,
+      upper,
+      "disc",
+    );
+    part("web belt", 0, 0.025, 0, 0.56, 0.075, 0.38, equipment, upper, "disc");
+    for (const side of [-1, 1]) {
+      part(
+        "webbing strap",
+        side * 0.16,
+        0.28,
+        -0.169,
+        0.038,
+        0.41,
+        0.027,
+        "#8b8061",
+        upper,
+        "limb",
+      );
+      part(
+        "ammunition pouch",
+        side * 0.2,
+        0.07,
+        -0.205,
+        0.12,
+        0.16,
+        0.1,
+        "#817152",
+        upper,
+        "tunic",
+      );
+    }
+    part("pack flap", 0, 0.405, 0.29, 0.29, 0.1, 0.04, "#8a8166", upper);
+    const blanket = part(
       "rolled blanket",
       0,
-      0.53,
-      0.27,
-      0.48,
-      0.15,
-      0.17,
-      "#71715b",
-      false,
+      0.52,
+      0.23,
+      0.13,
+      0.42,
+      0.13,
+      "#79745d",
       upper,
+      "limb",
     );
-    if (roll.render) roll.render.type = "sphere";
+    blanket.setLocalEulerAngles(0, 0, 90);
     const legs = [-1, 1].map((side) => {
-      const hip = this.joint("hip", hips, side * 0.17);
-      this.cube("thigh", 0, -0.21, 0, 0.25, 0.42, 0.28, trousers, false, hip);
+      const hip = this.joint("hip", hips, side * 0.145);
+      part("thigh", 0, -0.21, 0, 0.225, 0.46, 0.25, trousers, hip, "limb");
       const knee = this.joint("knee", hip, 0, -0.42);
-      this.cube("shin", 0, -0.185, 0, 0.21, 0.37, 0.24, trousers, false, knee);
+      part("knee joint", 0, 0, 0, 0.185, 0.18, 0.2, trousers, knee);
+      part("shin", 0, -0.185, 0, 0.17, 0.4, 0.2, trousers, knee, "limb");
+      part("puttee", 0, -0.23, 0, 0.19, 0.29, 0.215, "#77715a", knee, "limb");
       const ankle = this.joint("ankle", knee, 0, -0.4);
-      this.cube("boot", 0, 0, -0.075, 0.25, 0.14, 0.4, "#27312e", false, ankle);
+      part("boot", 0, -0.04, -0.065, 0.205, 0.145, 0.32, leather, ankle);
       return { hip, knee, ankle };
     });
     const arms = [-1, 1].map((side) => {
       const support = side < 0;
-      const upperLength = support ? supportUpperLength : 0.3;
-      const forearmLength = support ? supportForearmLength : 0.28;
       const shoulder = this.joint(
         "shoulder",
         upper,
-        support ? -0.3 : 0.39,
+        support ? -0.27 : 0.29,
         0.41,
         support ? -0.12 : 0,
       );
-      this.cube(
+      part("shoulder cap", 0, 0, 0, 0.195, 0.18, 0.21, shirt, shoulder);
+      part(
         "upper arm",
         0,
-        -upperLength / 2,
+        -armLengths.upper / 2,
         0,
-        0.22,
-        upperLength,
-        0.24,
+        0.18,
+        armLengths.upper + 0.045,
+        0.2,
         shirt,
-        false,
         shoulder,
+        "limb",
       );
-      const elbow = this.joint("elbow", shoulder, 0, -upperLength);
-      this.cube(
+      part(
+        "team armband",
+        0,
+        -0.12,
+        0,
+        0.185,
+        0.065,
+        0.205,
+        p.team === "blue" ? "#428fae" : "#b45e4c",
+        shoulder,
+        "disc",
+      );
+      const elbow = this.joint("elbow", shoulder, 0, -armLengths.upper);
+      part("elbow joint", 0, 0, 0, 0.15, 0.145, 0.17, shirt, elbow);
+      part(
         "forearm",
         0,
-        -forearmLength / 2,
+        -armLengths.forearm / 2,
         0,
-        0.19,
-        forearmLength,
-        0.21,
+        0.145,
+        armLengths.forearm + 0.04,
+        0.17,
         shirt,
-        false,
         elbow,
+        "limb",
       );
       if (!support)
-        this.cube(
+        part(
           "hand",
           0,
-          -0.28,
+          -armLengths.forearm,
           0,
-          0.18,
+          0.115,
           0.15,
-          0.19,
-          "#c1af90",
-          false,
+          0.145,
+          skin,
           elbow,
         );
       return { shoulder, elbow };
     });
-    const rifle = this.joint("weapon", upper, 0.32, 0.36, -0.55);
-    this.cube("rifle", 0, 0, 0, 0.14, 0.16, 0.76, "#232d2e", false, rifle);
-    this.cube(
-      "barrel",
-      0,
-      0.025,
-      -0.45,
-      0.07,
-      0.08,
-      0.25,
-      "#232d2e",
-      false,
-      rifle,
+    const rifle = this.joint(
+      "weapon",
+      upper,
+      weaponMount.x,
+      weaponMount.y,
+      weaponMount.z,
     );
-    this.cube(
-      "foregrip",
-      0,
-      -0.11,
-      -0.1,
-      0.08,
-      0.2,
-      0.11,
-      "#232d2e",
-      false,
-      rifle,
-    );
-    if (p.weapon === "machineGun") {
-      this.cube(
-        "machine gun barrel shroud",
+    const service = p.weapon === "serviceRifle",
+      gunner = p.weapon === "machineGun";
+    if (service || gunner) {
+      const stock = part(
+        "wooden stock",
+        0,
+        -0.045,
+        0.04,
+        0.105,
+        0.94,
+        0.14,
+        "#715037",
+        rifle,
+        "stock",
+      );
+      stock.setLocalEulerAngles(90, 0, 0);
+      const receiver = part(
+        "receiver",
         0,
         0.025,
-        -0.53,
-        0.11,
-        0.11,
-        0.48,
-        "#293133",
+        0.04,
+        0.075,
+        0.34,
+        0.075,
+        "#353c3a",
+        rifle,
+        "disc",
+      );
+      receiver.setLocalEulerAngles(90, 0, 0);
+      const barrel = part(
+        "barrel",
+        0,
+        0.025,
+        gunner ? -0.55 : -0.53,
+        gunner ? 0.09 : 0.04,
+        gunner ? 0.44 : 0.34,
+        gunner ? 0.09 : 0.04,
+        "#303735",
+        rifle,
+        "disc",
+      );
+      barrel.setLocalEulerAngles(90, 0, 0);
+      for (const z of [-0.35, -0.13]) {
+        const band = part(
+          "barrel band",
+          0,
+          -0.018,
+          z,
+          0.105,
+          0.035,
+          0.13,
+          "#414741",
+          rifle,
+          "disc",
+        );
+        band.setLocalEulerAngles(90, 0, 0);
+      }
+      this.cube(
+        "front sight",
+        0,
+        0.08,
+        service ? -0.65 : -0.72,
+        0.025,
+        0.065,
+        0.025,
+        "#262e2c",
         false,
         rifle,
       );
       this.cube(
-        "machine gun ammo box",
-        -0.15,
-        -0.11,
+        "rear sight",
+        0,
+        0.075,
+        0.08,
+        0.04,
+        0.045,
         0.06,
-        0.25,
-        0.25,
-        0.23,
-        "#555d3d",
+        "#323a36",
         false,
         rifle,
       );
-      for (const side of [-1, 1])
-        this.cube(
-          "folded bipod",
-          side * 0.07,
-          -0.06,
-          -0.36,
-          0.035,
-          0.035,
-          0.4,
-          "#424b48",
+      const trigger = part(
+        "trigger guard",
+        0,
+        -0.105,
+        0.18,
+        0.055,
+        0.09,
+        0.14,
+        "#393d34",
+        rifle,
+        "disc",
+      );
+      trigger.setLocalEulerAngles(90, 0, 0);
+      if (gunner)
+        for (const side of [-1, 1])
+          this.cube(
+            "folded bipod",
+            side * 0.07,
+            -0.05,
+            -0.4,
+            0.025,
+            0.035,
+            0.4,
+            "#424b48",
+            false,
+            rifle,
+          );
+    } else {
+      this.cube("rifle", 0, 0, 0, 0.14, 0.16, 0.76, "#232d2e", false, rifle);
+      this.cube(
+        "barrel",
+        0,
+        0.025,
+        -0.45,
+        0.07,
+        0.08,
+        0.25,
+        "#232d2e",
+        false,
+        rifle,
+      );
+    }
+    const bolt = this.joint("bolt", rifle, 0.05, 0.045, 0.13);
+    if (service) {
+      const stem = part(
+        "bolt handle",
+        0.05,
+        0,
+        0,
+        0.025,
+        0.1,
+        0.025,
+        "#8b8d7f",
+        bolt,
+        "disc",
+      );
+      stem.setLocalEulerAngles(0, 0, -90);
+      part("bolt knob", 0.105, 0, 0, 0.045, 0.045, 0.045, "#535c53", bolt);
+    }
+    const magazine = gunner
+      ? part(
+          "weapon magazine",
+          0,
+          0.13,
+          0,
+          0.32,
+          0.065,
+          0.32,
+          "#454d3d",
+          rifle,
+          "disc",
+        )
+      : this.cube(
+          "weapon magazine",
+          0,
+          service ? -0.085 : -0.16,
+          0.14,
+          service ? 0.065 : 0.1,
+          service ? 0.025 : 0.23,
+          0.16,
+          "#343d37",
           false,
           rifle,
         );
+    const reloadMagazine = service
+      ? this.joint(
+          "stripper clip",
+          arms[1].elbow,
+          0,
+          -armLengths.forearm - 0.025,
+          0,
+        )
+      : part(
+          "carried magazine",
+          0,
+          -armLengths.forearm - 0.025,
+          0,
+          gunner ? 0.32 : 0.1,
+          gunner ? 0.065 : 0.23,
+          gunner ? 0.32 : 0.16,
+          "#4e5442",
+          arms[1].elbow,
+          gunner ? "disc" : "soft",
+        );
+    if (service) {
+      this.cube(
+        "clip bridge",
+        0,
+        0,
+        0,
+        0.085,
+        0.015,
+        0.025,
+        "#6f7568",
+        false,
+        reloadMagazine,
+      );
+      for (let i = 0; i < 5; i++)
+        part(
+          "brass cartridge",
+          (i - 2) * 0.016,
+          0.035,
+          0,
+          0.013,
+          0.07,
+          0.013,
+          "#b29b58",
+          reloadMagazine,
+          "limb",
+        );
     }
-    const magazine = this.cube(
-      "weapon magazine",
-      0,
-      -0.16,
-      0.14,
-      p.weapon === "machineGun" ? 0.23 : 0.1,
-      0.23,
-      0.16,
-      "#343d37",
-      false,
-      rifle,
-    );
-    const reloadMagazine = this.cube(
-      "carried magazine",
-      0,
-      -0.31,
-      0,
-      p.weapon === "machineGun" ? 0.23 : 0.1,
-      0.23,
-      0.16,
-      "#343d37",
-      false,
-      arms[1].elbow,
-    );
-
-    // The hand belongs to the weapon, so gait, recoil and reload cannot detach it.
     const supportHand = this.joint(
       "left hand grip",
       rifle,
       -0.035,
-      -0.14,
-      -0.1,
+      service ? -0.06 : -0.1,
+      service ? -0.16 : -0.1,
     );
-    this.cube(
-      "left hand",
-      0,
-      0,
-      0,
-      0.18,
-      0.16,
-      0.2,
-      "#c1af90",
-      false,
-      supportHand,
-    );
+    part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
     if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p);
     this.people.push(root);
     this.soldiers.push({
@@ -1791,6 +1956,7 @@ export class Renderer implements CollisionWorld {
       arms,
       rifle,
       supportHand,
+      bolt,
       magazine,
       reloadMagazine,
       magazineScale: magazine.getLocalScale().clone(),
@@ -2053,9 +2219,9 @@ export class Renderer implements CollisionWorld {
     );
     rig.arms[1].elbow.setLocalEulerAngles(25 + rig.sprint * 10, 0, 0);
     rig.rifle.setLocalPosition(
-      0.32,
-      0.36 - rig.sprint * 0.08 + rifleHeight(this.map) - 1.45,
-      -0.55 + kick * 0.09,
+      weaponMount.x,
+      weaponMount.y - rig.sprint * 0.08 + rifleHeight(this.map) - 1.45,
+      weaponMount.z + kick * 0.09,
     );
     rig.rifle.setLocalEulerAngles(
       -rig.sprint * 20 +
@@ -2123,9 +2289,9 @@ export class Renderer implements CollisionWorld {
       }
       // Keep the rifle in the left hand; the free right hand braces against the ledge.
       rig.rifle.setLocalPosition(
-        0.32 - 0.16 * effort,
+        weaponMount.x - 0.12 * effort,
         0.36 - 0.18 * effort,
-        -0.55 + 0.3 * effort,
+        weaponMount.z + 0.3 * effort,
       );
       rig.rifle.setLocalEulerAngles(-40 * effort, 0, 25 * effort);
       const contact = up
@@ -2141,41 +2307,56 @@ export class Renderer implements CollisionWorld {
         .clone()
         .invert()
         .transformPoint(worldHand);
-      this.poseArm(rig, 1, hand, 0.3, 0.28, contact);
+      this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm, contact);
     }
     if (this.map.terrain && !p.mantle) {
       const trigger = rig.rifle
         .getLocalTransform()
         .transformPoint(new pc.Vec3(0, -0.03, 0.14));
-      this.poseArm(rig, 1, trigger, 0.3, 0.28);
+      this.poseArm(rig, 1, trigger, armLengths.upper, armLengths.forearm);
     }
     const loading = reloadMotion(p, tick);
     if (loading && !p.mantle && p.throwUntil <= tick) {
       const { progress: t, lower } = loading;
       rig.rifle.setLocalPosition(
-        0.32 - 0.08 * lower,
+        weaponMount.x - 0.05 * lower,
         0.36 - 0.14 * lower + rifleHeight(this.map) - 1.45,
-        -0.55 + 0.15 * lower,
+        weaponMount.z + 0.15 * lower,
       );
       rig.rifle.setLocalEulerAngles(-24 * lower, 10 * lower, -28 * lower);
       const trigger = rig.rifle
         .getLocalTransform()
         .transformPoint(new pc.Vec3(0, -0.03, 0.14));
+      const service = p.weapon === "serviceRifle";
       const well = rig.rifle
         .getLocalTransform()
-        .transformPoint(new pc.Vec3(0.025, -0.23, 0.14));
+        .transformPoint(
+          service
+            ? new pc.Vec3(0.025, 0.16, 0.06)
+            : new pc.Vec3(0.025, -0.23, 0.14),
+        );
       const belt = new pc.Vec3(0.23, 0.02, -0.27);
       const bolt = rig.rifle
         .getLocalTransform()
         .transformPoint(new pc.Vec3(0.1, 0.08, 0.22));
-      const keys = [
-        { t: 0, p: trigger },
-        { t: 0.18, p: well },
-        { t: 0.4, p: belt },
-        { t: 0.64, p: well },
-        { t: 0.79, p: bolt },
-        { t: 1, p: trigger },
-      ];
+      const keys = service
+        ? [
+            { t: 0, p: trigger },
+            { t: 0.14, p: bolt },
+            { t: 0.32, p: belt },
+            { t: 0.48, p: well },
+            { t: 0.65, p: well.clone().add(new pc.Vec3(0, -0.09, 0)) },
+            { t: 0.84, p: bolt },
+            { t: 1, p: trigger },
+          ]
+        : [
+            { t: 0, p: trigger },
+            { t: 0.18, p: well },
+            { t: 0.4, p: belt },
+            { t: 0.64, p: well },
+            { t: 0.79, p: bolt },
+            { t: 1, p: trigger },
+          ];
       const end = keys.findIndex((k) => k.t >= t),
         b = keys[Math.max(1, end)],
         a = keys[Math.max(0, end - 1)];
@@ -2184,9 +2365,39 @@ export class Renderer implements CollisionWorld {
         b.p,
         smooth((t - a.t) / (b.t - a.t)),
       );
-      this.poseArm(rig, 1, hand, 0.3, 0.28);
+      this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm);
       magazineVisible = !loading.removed;
       carryingMagazine = loading.carrying;
+    }
+    const cycling = boltMotion(p, tick);
+    const ease = (v: number) => smooth(clamp01(v));
+    const boltLift =
+      loading && p.weapon === "serviceRifle"
+        ? ease(loading.progress / 0.12) *
+          (1 - ease((loading.progress - 0.78) / 0.16))
+        : (cycling?.lift ?? 0);
+    const boltPull =
+      loading && p.weapon === "serviceRifle"
+        ? ease((loading.progress - 0.1) / 0.12) *
+          (1 - ease((loading.progress - 0.73) / 0.15))
+        : (cycling?.pull ?? 0);
+    rig.bolt.setLocalPosition(0.05, 0.045, 0.13 + boltPull * 0.13);
+    rig.bolt.setLocalEulerAngles(0, 0, 65 * boltLift);
+    if (cycling && !p.mantle && p.throwUntil <= tick) {
+      rig.rifle.rotateLocal(-5 * cycling.reach, 0, -6 * cycling.reach);
+      const hand = rig.rifle
+        .getLocalTransform()
+        .transformPoint(
+          rig.bolt.getLocalTransform().transformPoint(new pc.Vec3(0.105, 0, 0)),
+        );
+      this.poseArm(
+        rig,
+        1,
+        hand,
+        armLengths.upper,
+        armLengths.forearm,
+        cycling.reach,
+      );
     }
     if (p.throwUntil > tick && !p.mantle) {
       const t = clamp01(1 - (p.throwUntil - tick) / 15);
@@ -2234,15 +2445,15 @@ export class Renderer implements CollisionWorld {
     rig.magazine.setLocalScale(rig.magazineScale);
     rig.reloadMagazine.setLocalScale(0, 0, 0);
     rig.rifle.setLocalPosition(
-      0.32,
-      0.36 + rifleHeight(this.map) - 1.45,
-      -0.55,
+      weaponMount.x,
+      weaponMount.y + rifleHeight(this.map) - 1.45,
+      weaponMount.z,
     );
     rig.rifle.setLocalEulerAngles(-8 * pose.fall, 0, -10 * pose.fall);
     const hand = rig.rifle
       .getLocalTransform()
       .transformPoint(new pc.Vec3(0, -0.03, 0.14));
-    this.poseArm(rig, 1, hand, 0.3, 0.28);
+    this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm);
     this.attachSupportArm(rig);
   }
   private retainCasualty(p: Soldier) {

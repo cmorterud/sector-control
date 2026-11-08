@@ -1,3 +1,4 @@
+import { armLengths, boltMotion } from "./weapons";
 import { it, expect, vi } from "vitest";
 import { Entity, Vec3 } from "playcanvas";
 import { Renderer } from "./rendering";
@@ -27,6 +28,7 @@ type Rig = {
   phase: number;
   upper: Entity;
   rifle: Entity;
+  bolt: Entity;
   supportHand: Entity;
   arms: { shoulder: Entity; elbow: Entity }[];
   legs: { hip: Entity; knee: Entity; ankle: Entity }[];
@@ -103,14 +105,14 @@ it("braces the free hand on the bank, keeps the support hand on the rifle, and c
     r.animateSoldier(p, pos.x, pos.z, 1 / 60, tick);
     const supportWrist = rig.arms[0].elbow
       .getWorldTransform()
-      .transformPoint(new Vec3(0, -0.46, 0));
+      .transformPoint(new Vec3(0, -armLengths.forearm, 0));
     expect(supportWrist.distance(rig.supportHand.getPosition())).toBeLessThan(
       0.0001,
     );
     if (phase === 0.46) {
       const wrist = rig.arms[1].elbow
         .getWorldTransform()
-        .transformPoint(new Vec3(0, -0.28, 0));
+        .transformPoint(new Vec3(0, -armLengths.forearm, 0));
       const ledge = new Vec3(
         m.edge.x + Math.cos(m.yaw) * 0.32,
         m.edge.y + 0.04,
@@ -189,7 +191,7 @@ it("crouches with bent knees and planted boots, keeps the support hand attached,
       expect(leg.ankle.getPosition().y - p.y).toBeGreaterThan(0.07);
     const wrist = rig.arms[0].elbow
       .getWorldTransform()
-      .transformPoint(new Vec3(0, -0.46, 0));
+      .transformPoint(new Vec3(0, -armLengths.forearm, 0));
     expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
   }
   const helmet = nodes.get("helmet")!;
@@ -230,7 +232,7 @@ it("kicks the barrel and shoulder back while keeping the support wrist on the gr
     previousZ = z;
     const wrist = rig.arms[0].elbow
       .getWorldTransform()
-      .transformPoint(new Vec3(0, -0.46, 0));
+      .transformPoint(new Vec3(0, -armLengths.forearm, 0));
     expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
     if (age === 0) {
       expect(z - rest.z).toBeGreaterThan(0.08);
@@ -266,7 +268,7 @@ it("tucks falling legs and keeps the rifle grip attached while the root drops", 
     expect(leg.ankle.getPosition().y).toBeGreaterThan(p.y + 0.07);
   const wrist = rig.arms[0].elbow
     .getWorldTransform()
-    .transformPoint(new Vec3(0, -0.46, 0));
+    .transformPoint(new Vec3(0, -armLengths.forearm, 0));
   expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
 });
 
@@ -292,7 +294,7 @@ it("braces after a nearby blast without detaching the support hand, then settles
   expect(rig.upper.forward.distance(rest)).toBeGreaterThan(0.02);
   const wrist = rig.arms[0].elbow
     .getWorldTransform()
-    .transformPoint(new Vec3(0, -0.46, 0));
+    .transformPoint(new Vec3(0, -armLengths.forearm, 0));
   expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
   r.animateSoldier(p, p.x, p.z, 1 / 60, 130);
   expect(rig.upper.forward.distance(futureIdle)).toBeLessThan(0.0001);
@@ -340,8 +342,8 @@ it("varies cadence and idle upper-body motion without moving planted boots or si
   ])
     expect(a.people[0].findByName(name)).toBeTruthy();
 });
-it("animates rifle and machine-gun magazine exchanges with the support wrist attached, then restores the firing pose", () => {
-  for (const weapon of ["rifle", "machineGun"] as const) {
+it("animates magazine exchanges and service-rifle clips with the support wrist attached, then restores the firing pose", () => {
+  for (const weapon of ["rifle", "serviceRifle", "machineGun"] as const) {
     const g = new Game(new TestCollision(trenchMap), false),
       p = g.players[0];
     p.weapon = weapon;
@@ -357,7 +359,7 @@ it("animates rifle and machine-gun magazine exchanges with the support wrist att
       r.animateSoldier(p, p.x, p.z, 1 / 60, tick);
       const wrist = rig.arms[0].elbow
         .getWorldTransform()
-        .transformPoint(new Vec3(0, -0.46, 0));
+        .transformPoint(new Vec3(0, -armLengths.forearm, 0));
       expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(
         0.0001,
       );
@@ -378,6 +380,43 @@ it("animates rifle and machine-gun magazine exchanges with the support wrist att
     expect(carriedChanges).not.toHaveBeenCalled();
   }
 });
+it("opens, retracts and closes the service bolt with the right wrist on its knob and the left wrist on the stock", () => {
+  const g = new Game(
+      new TestCollision(trenchMap),
+      false,
+      3000,
+      12345,
+      undefined,
+      { map: trenchMap },
+    ),
+    p = g.players[0];
+  p.lastShotAt = 100;
+  const r = rigFor(p),
+    rig = r.soldiers[0];
+  const before = structuredClone(p);
+  for (const age of [9, 17, 20, 27, 28]) {
+    r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + age);
+    const motion = boltMotion(p, 100 + age)!;
+    expect(rig.bolt.getLocalPosition().z).toBeCloseTo(
+      0.13 + 0.13 * motion.pull,
+    );
+    const knob = rig.bolt
+      .getWorldTransform()
+      .transformPoint(new Vec3(0.105, 0, 0));
+    const right = rig.arms[1].elbow
+      .getWorldTransform()
+      .transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    expect(right.distance(knob)).toBeLessThan(0.001);
+    const left = rig.arms[0].elbow
+      .getWorldTransform()
+      .transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    expect(left.distance(rig.supportHand.getPosition())).toBeLessThan(0.001);
+  }
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 136);
+  expect(rig.bolt.getLocalPosition().z).toBeCloseTo(0.13);
+  expect(rig.bolt.getLocalEulerAngles().z).toBeCloseTo(0);
+  expect(p).toEqual(before);
+});
 it("buckles and topples progressively while retaining equipment and the support grip", () => {
   const g = new Game(new TestCollision(trenchMap), false),
     p = g.players[0],
@@ -396,7 +435,7 @@ it("buckles and topples progressively while retaining equipment and the support 
   expect(rig.body.getLocalRotation().equals(upright)).toBe(false);
   const wrist = rig.arms[0].elbow
     .getWorldTransform()
-    .transformPoint(new Vec3(0, -0.46, 0));
+    .transformPoint(new Vec3(0, -armLengths.forearm, 0));
   expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
   expect(p).toEqual(snapshot);
 });

@@ -4,7 +4,9 @@ import type { SoundCue } from "./battlefield";
 class Param {
   value = 0;
   ramps: { value: number; time: number }[] = [];
+  starts: number[] = [];
   setValueAtTime(n: number) {
+    this.starts.push(n);
     this.value = n;
   }
   exponentialRampToValueAtTime(n: number, time = 0) {
@@ -105,6 +107,20 @@ const cue: SoundCue = {
   distance: 10,
   seed: 1,
 };
+it("gives service rifles a deeper report and uses short unpitched bolt and clip mechanisms", () => {
+  const { a, c } = setup();
+  a.play({ ...cue, kind: "serviceRifle", local: true });
+  expect(c.nodes.some((n) => n.frequency.starts.includes(95))).toBe(true);
+  expect(a.stats.byKind.serviceRifle).toBe(1);
+  const pitched = c.oscillators;
+  a.play({ ...cue, kind: "bolt", local: true });
+  a.play({ ...cue, kind: "clip", local: true });
+  expect(c.oscillators).toBe(pitched);
+  expect(a.stats.byKind.bolt).toBe(1);
+  expect(a.stats.byKind.clip).toBe(1);
+  expect(c.nodes.some((n) => n.frequency.value === 1800)).toBe(true);
+  expect(c.nodes.some((n) => n.frequency.value === 2800)).toBe(true);
+});
 it("gives falling timber a delayed landing thud without a pitched oscillator", () => {
   const { a, c } = setup();
   a.play({ ...cue, kind: "timber", local: true });

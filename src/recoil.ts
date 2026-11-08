@@ -26,7 +26,10 @@ export function recoverRecoil(p: Soldier) {
 }
 
 export function kickRecoil(p: Soldier, tick: number) {
-  const brace = (p.command.aim ? 0.8 : 1) * (p.crouched ? 0.85 : 1);
+  const brace =
+    (p.command.aim ? 0.8 : 1) *
+    (p.crouched ? 0.85 : 1) *
+    (p.weapon === "serviceRifle" ? 1.8 : 1);
   p.recoilPitch = Math.min(
     recoilRules.maxPitch,
     p.recoilPitch + recoilRules.pitchKick * brace,

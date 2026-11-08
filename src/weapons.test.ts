@@ -5,7 +5,89 @@ import { industrialMap } from "./map";
 import { rosterWeapon } from "./weapons";
 import { semiAutoIntent } from "./awareness";
 
-it("keeps riflemen the majority and humans on semi-auto rifles", () => {
+it("cycles a five-round service rifle between individual clicks, preserves traveling shot damage and reloads from reserve", () => {
+  const map = { ...industrialMap, boxes: [] };
+  const g = new Game(new TestCollision(map), false, 3000, 12345, undefined, {
+    map,
+  });
+  const p = g.players[0];
+  p.weapon = "serviceRifle";
+  g.respawn(p);
+  const shots: number[] = [],
+    actions: string[] = [];
+  for (let i = 0; i < 190; i++) {
+    g.step({ ...idle(), fire: i % 2 === 0 });
+    for (const e of g.events) {
+      if (e.type === "fire") shots.push(e.tick);
+      if (e.type === "weaponAction") actions.push(e.action);
+    }
+  }
+  expect(shots).toEqual([1, 37, 73, 109, 145]);
+  expect(p.ammo).toBe(0);
+  expect(p.reserve).toBe(60);
+  expect(actions.filter((a) => a === "boltOpen")).toHaveLength(5);
+  expect(actions.filter((a) => a === "boltClose")).toHaveLength(5);
+  g.step({ ...idle(), reload: true });
+  expect(p.reloadAt - g.tick).toBe(96);
+  const loading: string[] = [];
+  for (let i = 0; i < 95; i++) {
+    g.step({ ...idle(), fire: i % 2 === 0 });
+    for (const e of g.events)
+      if (e.type === "weaponAction") loading.push(e.action);
+  }
+  expect(loading).toEqual(["boltOpen", "clip", "boltClose"]);
+  expect(p.ammo).toBe(0);
+  g.step(idle());
+  expect(p.ammo).toBe(5);
+  expect(p.reserve).toBe(55);
+  g.step({ ...idle(), fire: true });
+  expect(g.projectiles[0].damage).toBe(50);
+  g.respawn(p);
+  expect(p.ammo).toBe(5);
+  expect(p.reserve).toBe(60);
+});
+
+it("retains a traveling service round's damage after the shooter changes weapon or dies", () => {
+  const map = { ...industrialMap, boxes: [] };
+  const g = new Game(
+    { ray: () => 1, move: (p) => p },
+    true,
+    3000,
+    12345,
+    undefined,
+    { map, teamSize: 1, assaults: false },
+  );
+  g.artillery.enabled = false;
+  g.botSettings.engagementRange = 0;
+  const [p, target] = g.players;
+  Object.assign(p, {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    weapon: "serviceRifle",
+    protectedUntil: 0,
+  });
+  Object.assign(target, {
+    x: 0.18,
+    y: 0,
+    z: -12,
+    hp: 100,
+    protectedUntil: 0,
+    nextThink: 1e9,
+  });
+  g.step({ ...idle(), fire: true });
+  expect(target.hp).toBe(100);
+  expect(g.projectiles[0].damage).toBe(50);
+  p.weapon = "machineGun";
+  p.hp = 0;
+  p.respawnAt = 1e9;
+  for (let i = 0; i < 20; i++) g.step(idle());
+  expect(target.hp).toBe(50);
+});
+
+it("keeps riflemen the majority and trench humans on bolt-action service rifles", () => {
   for (const size of [5, 25, 50]) {
     const roles = Array.from({ length: size }, (_, i) =>
       rosterWeapon(i, size, false),
@@ -34,7 +116,7 @@ it("keeps riflemen the majority and humans on semi-auto rifles", () => {
     expect(gunners).toHaveLength(4);
     expect(gunners.every((p) => p.ammo === 60 && p.reserve === 240)).toBe(true);
   }
-  expect(g.players[0].weapon).toBe("rifle");
+  expect(g.players[0].weapon).toBe("serviceRifle");
 });
 
 it("emits rapid four-to-six-round bursts separated by long pauses, with suppression slowing them", () => {

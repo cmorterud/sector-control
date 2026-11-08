@@ -19,6 +19,11 @@ function duel(aimError = 0.02) {
     { map: trenchMap, teamSize: 1 },
   );
   game.botSettings.aimError = aimError;
+  // Isolate the established semi-auto bloom contract from service-rifle cadence.
+  for (const p of game.players) {
+    p.weapon = "rifle";
+    game.respawn(p);
+  }
   // Measure rifle accuracy without barrages changing cover or consuming RNG.
   game.artillery.enabled = false;
   game.botSettings.reactionTicks = 0;

@@ -26,6 +26,33 @@ function scene(trench = true) {
 }
 const event = (e: object) => ({ tick: 0, id: 1, ...e }) as Event;
 describe("battlefield presentation", () => {
+  it("plays service reports and local bolt/clip mechanics without distant mechanism chatter or speech", () => {
+    const { g, p, feedback, cues } = scene();
+    feedback.event(
+      g,
+      event({
+        type: "fire",
+        actor: 0,
+        weapon: "serviceRifle",
+        from: { x: p.x, y: p.y + 1.5, z: p.z },
+      }),
+    );
+    for (const action of ["boltOpen", "clip", "boltClose"])
+      feedback.event(g, event({ type: "weaponAction", actor: 0, action }));
+    g.players.push({ ...structuredClone(p), id: 1, x: p.x + 20 });
+    feedback.event(
+      g,
+      event({ type: "weaponAction", actor: 1, action: "boltOpen" }),
+    );
+    expect(cues.map((c) => c.kind)).toEqual([
+      "serviceRifle",
+      "bolt",
+      "clip",
+      "bolt",
+    ]);
+    expect(cues.every((c) => c.local)).toBe(true);
+    expect(feedback.stats.callouts).toBe(0);
+  });
   it("keeps battlefield effects audible without spoken smoke, grenade or incoming callouts", () => {
     const { g, p, feedback, cues } = scene(false);
     Object.assign(p, { x: 0, y: 0, z: 0 });

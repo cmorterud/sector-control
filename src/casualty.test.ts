@@ -129,7 +129,7 @@ it("bakes a collapsed rig into one non-colliding mesh, bounds bodies, follows ex
   const palette: number[] = [];
   first.mesh.getColors(palette);
   expect(new Set(palette.map((v) => v.toFixed(3))).size).toBeGreaterThan(8);
-  const pouch = new pc.Color().fromString("#8b8060");
+  const pouch = new pc.Color().fromString("#817152");
   expect(
     palette.some(
       (v, i) =>

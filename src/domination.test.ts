@@ -247,7 +247,7 @@ it("keeps home defenders near threatened flags and sends landed attackers to cap
     (p) =>
       p.team === "blue" &&
       p.id !== 0 &&
-      p.weapon === "rifle" &&
+      p.weapon === "serviceRifle" &&
       p.teamIndex % 2 === 0 &&
       dist(posts[p.teamIndex], flag) < 8,
   )!;

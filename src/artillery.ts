@@ -605,7 +605,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     c.sprint = true;
   } else c.yaw = p.yaw;
   c.crouch = dist(p, evade.destination) < 1.2;
-  c.reload = p.ammo < 30 && p.reserve > 0;
+  c.reload = p.ammo < (p.weapon === "serviceRifle" ? 5 : 30) && p.reserve > 0;
   p.mode = destination ? "Evade artillery" : "Artillery shelter";
   return c;
 }

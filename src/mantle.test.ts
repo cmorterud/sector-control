@@ -23,7 +23,7 @@ describe("terrain mantle", () => {
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true, fire: true });
     events.push(...game.events);
     expect(p.mantle).not.toBeNull();
-    expect(p.ammo).toBe(30);
+    expect(p.ammo).toBe(5);
     expect(p.y).toBe(0);
     const endTick = p.mantle!.endTick;
     while (game.tick < endTick) {

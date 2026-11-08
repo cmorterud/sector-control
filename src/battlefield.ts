@@ -9,6 +9,9 @@ import { eyeHeightOf } from "./crouch";
 import type { Event, Game, V3 } from "./simulation";
 
 export type SoundKind =
+  | "serviceRifle"
+  | "bolt"
+  | "clip"
   | "rifle"
   | "machineGun"
   | "crack"
@@ -82,6 +85,7 @@ export class BattlefieldFeedback {
   private shock = { tick: -1000, strength: 0 };
   private boards: Vec[] = [];
   private nextCrack = 0;
+  private nextMechanism = 0;
   private lastLife = -1;
   stats = {
     footsteps: 0,
@@ -110,6 +114,7 @@ export class BattlefieldFeedback {
     this.boards = duckboards(g.map);
     this.shock = { tick: -1000, strength: 0 };
     this.nextCrack = 0;
+    this.nextMechanism = 0;
     this.lastLife = g.players[0].deaths;
     for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[])
       this.stats[key] = 0;
@@ -181,9 +186,13 @@ export class BattlefieldFeedback {
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
         g,
-        e.weapon === "machineGun" ? "machineGun" : "rifle",
+        e.weapon === "machineGun"
+          ? "machineGun"
+          : e.weapon === "serviceRifle"
+            ? "serviceRifle"
+            : "rifle",
         e.from,
-        e.actor === 0 ? 0.4 : 0.3,
+        e.actor === 0 ? (e.weapon === "serviceRifle" ? 0.5 : 0.4) : 0.3,
         e.actor === 0,
         true,
         e.id,
@@ -191,6 +200,26 @@ export class BattlefieldFeedback {
       this.stats.rifles++;
       if (Math.hypot(p.x - e.from.x, p.z - e.from.z) > 35)
         this.stats.distantRifles++;
+    }
+    if (e.type === "weaponAction") {
+      const actor = g.players.find((q) => q.id === e.actor);
+      if (
+        actor &&
+        actor.hp > 0 &&
+        Math.hypot(actor.x - p.x, actor.z - p.z) <= 10 &&
+        (actor.id === 0 || g.tick >= this.nextMechanism)
+      ) {
+        this.cue(
+          g,
+          e.action === "clip" ? "clip" : "bolt",
+          { x: actor.x, y: actor.y + 1.3, z: actor.z },
+          actor.id === 0 ? 0.17 : 0.08,
+          actor.id === 0,
+          true,
+          e.id,
+        );
+        this.nextMechanism = g.tick + 4;
+      }
     }
     if (e.type === "nearMiss" && e.actor === 0 && g.tick >= this.nextCrack) {
       this.cue(

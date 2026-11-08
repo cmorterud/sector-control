@@ -54,7 +54,12 @@ import {
   type DestructionChange,
   type ExplosionProfile,
 } from "./destruction";
-import { rosterWeapon, weaponProfiles, type WeaponKind } from "./weapons";
+import {
+  rosterWeapon,
+  weaponProfiles,
+  weaponMount,
+  type WeaponKind,
+} from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
 export type Team = "blue" | "red";
@@ -134,6 +139,7 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   );
 }
 export interface Projectile extends V3 {
+  damage?: number;
   suppressed?: number[];
   id: number;
   actor: number;
@@ -441,6 +447,11 @@ export type Event = { id: number; tick: number } & (
       target: number | null;
       hit: boolean;
     }
+  | {
+      type: "weaponAction";
+      actor: number;
+      action: "boltOpen" | "boltClose" | "clip";
+    }
   | { type: "damage"; actor: number; source: number }
   | { type: "death" | "respawn" | "reload"; actor: number }
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
@@ -745,6 +756,7 @@ export class Game {
           i % this.teamSize,
           this.teamSize,
           this.humanPlayerIds.includes(i),
+          this.map.id === "trenches",
         ),
         team,
         teamIndex: i % this.teamSize,
@@ -1013,6 +1025,24 @@ export class Game {
         p.reloadAt = this.tick + weaponProfiles[p.weapon].reloadTicks;
         this.emit({ type: "reload", actor: p.id });
       }
+      if (p.weapon === "serviceRifle") {
+        const age = this.tick - p.lastShotAt;
+        const remaining = p.reloadAt - this.tick;
+        const action = p.reloadAt
+          ? remaining === 90
+            ? "boltOpen"
+            : remaining === 48
+              ? "clip"
+              : remaining === 12
+                ? "boltClose"
+                : null
+          : age === 9
+            ? "boltOpen"
+            : age === 28
+              ? "boltClose"
+              : null;
+        if (action) this.emit({ type: "weaponAction", actor: p.id, action });
+      }
     }
     for (const p of this.players)
       if (
@@ -1277,10 +1307,11 @@ export class Game {
       y: camera.y + (aim.y - camera.y) * first,
       z: camera.z + (aim.z - camera.z) * first,
     };
+    const muzzle = weaponProfiles[p.weapon].muzzle;
     const from = {
-      x: p.x + Math.cos(yaw) * 0.32 + dir.x * 1.08,
+      x: p.x + Math.cos(yaw) * weaponMount.x + dir.x * muzzle,
       y: p.y + rifleHeight(this.map, p),
-      z: p.z + Math.sin(yaw) * 0.32 + dir.z * 1.08,
+      z: p.z + Math.sin(yaw) * weaponMount.x + dir.z * muzzle,
     };
     const length = Math.max(
       0.001,
@@ -1288,6 +1319,7 @@ export class Game {
     );
     const shot: Projectile = {
       id: ++this.projectileSequence,
+      damage: weaponProfiles[p.weapon].damage,
       actor: p.id,
       team: p.team,
       ...from,
@@ -1459,7 +1491,8 @@ export class Game {
       !!victim &&
       victim.team !== shot.team &&
       this.tick >= victim.protectedUntil;
-    if (hit && victim) this.damage(victim, 25, shot.actor, shot.team);
+    if (hit && victim)
+      this.damage(victim, shot.damage ?? 25, shot.actor, shot.team);
     if (!victim) {
       const change = damageVegetation(this.map, at);
       if (change) this.applyDestruction(shot.actor, change);
@@ -2018,7 +2051,9 @@ export function botCommand(g: Game, p: Soldier): Command {
   if (duck) return duck;
   const c = idle();
   c.artillery = botArtilleryTarget(g, p) ?? undefined;
-  c.reload = p.ammo < 1 || (p.ammo < 15 && p.target < 0);
+  c.reload =
+    p.ammo < 1 ||
+    (p.ammo < (p.weapon === "serviceRifle" ? 2 : 15) && p.target < 0);
   c.yaw = p.yaw;
   c.pitch = p.pitch;
   const station = firingPosition(g, p);
