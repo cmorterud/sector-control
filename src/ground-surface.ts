@@ -44,6 +44,17 @@ function context(map: MapDefinition) {
   }
   return c;
 }
+// Paving shares the mud atlas and deformed surface, rather than leaving
+// a separate road mesh floating over an excavated crater.
+export function villageRoad(map: MapDefinition, x: number, z: number) {
+  if (map.id !== "village") return 0;
+  const edge = (lookNoise(x * 0.28 + 53, z * 0.28) - 0.5) * 1.1;
+  const main = 1 - smooth(2.6 + edge, 4.1 + edge, Math.abs(x));
+  const cross =
+    (1 - smooth(2 + edge, 3.4 + edge, Math.abs(z))) *
+    (1 - smooth(29, 36, Math.abs(x)));
+  return Math.max(main, cross);
+}
 export function groundField(map: MapDefinition, x: number, z: number) {
   const c = context(map);
   const wx = x + (lookNoise(x * 0.028 + 17, z * 0.028) - 0.5) * 9;
@@ -149,6 +160,17 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         ],
         i,
       );
+      const road = villageRoad(map, x, z);
+      if (road > 0) {
+        const pavingRow = Math.floor(z / 0.43),
+          px = (((x / 0.6 + (pavingRow % 2) * 0.5) % 1) + 1) % 1,
+          pz = (((z / 0.43) % 1) + 1) % 1;
+        const joint = Math.min(px, 1 - px, pz, 1 - pz) < 0.075;
+        const stone = (joint ? 0.46 : 0.76) + lookNoise(x * 5, z * 5) * 0.12;
+        const mix = road * (0.65 + lookNoise(x * 0.7, z * 0.7) * 0.35);
+        for (let c = 0; c < 3; c++)
+          diffuse[i + c] = diffuse[i + c] * (1 - mix) + stone * 255 * mix;
+      }
       const shine = 18 + wet * 112 + wear * wet * 65;
       gloss.set([shine, shine, shine, 255], i);
       heights[row * size + col] =

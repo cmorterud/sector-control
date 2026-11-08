@@ -220,7 +220,7 @@ export class Renderer implements CollisionWorld {
       200,
     ).id;
     this.batchGroup = this.mapBatch;
-    const trenches = map.id === "trenches";
+    const trenches = map.id !== "industrial";
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
     this.app.scene.ambientLight = color(trenches ? "#98a4af" : "#899294");
@@ -260,7 +260,7 @@ export class Renderer implements CollisionWorld {
   }
   private buildMap() {
     const map = this.map;
-    const trenches = map.id === "trenches";
+    const trenches = map.id !== "industrial";
     this.mapRoot = this.joint("battlefield", this.app.root);
     this.worldParent = this.mapRoot;
     this.batchGroup = this.mapBatch;

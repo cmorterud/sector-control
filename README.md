@@ -2,7 +2,7 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front is 50v50 domination fought across four trench flags. Matches last up to eight minutes.
+Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front and Village front are 50v50 domination maps with four flags. Matches last up to eight minutes.
 
 ## Run
 
@@ -46,6 +46,16 @@ Capture **A and B** in Blue’s front trench and **C and D** in Red’s. All fou
 Each uncontested flag earns its owner **one point every three seconds**. First to **300** wins; otherwise the higher score after eight minutes wins, with ties drawn. Kills remain personal scoreboard statistics and earn no team points. The HUD shows ownership, contested flags and capture progress; the Q tactical map also marks public flag ownership. Named landmarks help orient the four areas: **A Farmhouse**, **B Shattered Wood**, **C Gun Pit**, and **D Broken Bunker**. Flags remain in their original trench positions; the ruins, shattered trees and abandoned gun stand nearby without closing the existing trench routes.
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
+
+## Village front prototype
+
+Choose **Village front** in the start menu or open [the village map](http://localhost:5173/?map=village). It keeps the trench map's 50v50 roster, service rifles, machine gunners, grenades, bayonets and artillery, with the same domination rules.
+
+The 144 × 112 m battlefield has four flags: **A Orchard**, **B Schoolhouse**, **C Market Court** and **D East Gate**. Seven open-roof building ruins, garden walls and broken sandbags create shorter fights and several routes to a cobbled central road. A sparse shattered orchard offers a longer northern flank. Each team starts behind two short sunken trench lines with communication turns and walkable entry/exit slopes. Unlike Trench front, these approaches lead out into the village without requiring a mantle.
+
+Masonry sections and partial roofs use the existing destruction system: blasts open walls, collapse supported roof fragments and leave real low rubble cover. Terrain and trees remain destructible. The tactical map shows the road, surviving masonry, sunken approaches and public flags. A few riflemen spend their normal smoke supplies to screen exposed road crossings individually; no new squad system is introduced. Village bots retain valid routes between objective changes and replan around destruction or blocked approaches.
+
+This is a layout/balance prototype. A native 90-second 100-soldier recording verified combat, four captures, artillery and collapses, but averaged only **9.24 FPS** on the loaded development machine. An isolated release-engine run without effects/audio/recording reached 55.21 FPS; these are different workloads, not proof of a fixed full-game slowdown. Full presentation profiling and manual village traversal remain follow-ups. See PLAYTEST_REVIEW.md.
 
 ## Soldiers
 

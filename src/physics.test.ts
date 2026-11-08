@@ -154,3 +154,51 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
     root.destroy();
   }
 });
+
+it("releases replaced terrain mesh data immediately and preserves collision across repeated rebuilds", async () => {
+  const { default: Ammo } = await import("sync-ammo/dist/ammo.module.js");
+  const { vi } = await import("vitest");
+  const physics = new TerrainPhysics(),
+    root = new Entity("rebuild lifecycle");
+  const release = vi.spyOn(Ammo, "destroy");
+  try {
+    for (let i = 0; i < 80; i++) {
+      const y = (i % 5) * 0.2;
+      const old = (
+        physics as unknown as {
+          patches: Map<string, { shape: object; triangles: object }>;
+        }
+      ).patches.get("0,0");
+      physics.setPatch(
+        "0,0",
+        {
+          positions: [0, y, 0, 4, y, 0, 4, y, 4, 0, y, 4],
+          indices: [0, 2, 1, 0, 3, 2],
+          colors: [],
+          uvs: [],
+        },
+        root,
+      );
+      if (old) {
+        expect(release).toHaveBeenCalledWith(old.shape);
+        expect(release).toHaveBeenCalledWith(old.triangles);
+      }
+      expect(
+        physics.ray({ x: 2, y: 2, z: 2 }, { x: 2, y: -2, z: 2 }),
+      ).toBeCloseTo((2 - y) / 4, 5);
+    }
+    // Engine source caching must stay unused: changing shapes have explicit lifetimes.
+    expect(physics.world._triMeshCache.size).toBe(0);
+    const current = (
+      physics as unknown as {
+        patches: Map<string, { shape: object; triangles: object }>;
+      }
+    ).patches.get("0,0")!;
+    physics.destroy();
+    expect(release).toHaveBeenCalledWith(current.shape);
+    expect(release).toHaveBeenCalledWith(current.triangles);
+  } finally {
+    release.mockRestore();
+    root.destroy();
+  }
+});

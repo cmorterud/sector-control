@@ -63,6 +63,27 @@ export class ArtilleryMap {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${g.map.width} ${g.map.depth}`);
     svg.setAttribute("preserveAspectRatio", "none");
+    if (g.map.id === "village") {
+      for (const d of [
+        `M${g.map.width / 2},0 v${g.map.depth}`,
+        `M${g.map.width / 2 - 34},${g.map.depth / 2} h68`,
+      ]) {
+        const road = document.createElementNS(svg.namespaceURI, "path");
+        road.setAttribute("d", d);
+        road.setAttribute("stroke", "#b1a587");
+        road.setAttribute("stroke-width", "5");
+        svg.append(road);
+      }
+      for (const b of g.map.boxes.filter((b) => b.kind === "masonry")) {
+        const ruin = document.createElementNS(svg.namespaceURI, "rect");
+        ruin.setAttribute("x", String(b.x - b.w / 2 + g.map.width / 2));
+        ruin.setAttribute("y", String(b.z - b.d / 2 + g.map.depth / 2));
+        ruin.setAttribute("width", String(b.w));
+        ruin.setAttribute("height", String(b.d));
+        ruin.setAttribute("fill", "#514c42");
+        svg.append(ruin);
+      }
+    }
     for (const line of g.map.terrain?.trenchLines ?? [])
       for (const s of line.sections) {
         const path = document.createElementNS(svg.namespaceURI, "path");

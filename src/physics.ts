@@ -15,15 +15,16 @@ export function createPhysicsWorld() {
   return new AmmoPhysicsWorld();
 }
 
-// Own the terrain backend so restart also releases its cached triangle data.
+// Terrain changes replace geometry permanently. Own its native mesh data rather
+// than putting each revision in the engine's lifetime geometry-source cache.
 export class TerrainPhysics {
   world = createPhysicsWorld();
-  private sequence = 0;
   private patches = new Map<
     string,
     {
       body: ReturnType<AmmoPhysicsWorld["createBody"]>;
-      shape: ReturnType<AmmoPhysicsWorld["createShape"]>;
+      shape: object;
+      triangles: object;
     }
   >();
   setPatch(key: string, data: TerrainGeometry, entity: Entity) {
@@ -31,26 +32,34 @@ export class TerrainPhysics {
     if (old) {
       this.world.removeBody(old.body);
       this.world.destroyBody(old.body);
-      this.world.destroyShape(old.shape);
+      Ammo.destroy(old.shape);
+      Ammo.destroy(old.triangles);
     }
-    const shape = this.world.createShape({
-      type: "mesh",
-      sources: [
-        {
-          id: ++this.sequence,
-          positions: data.positions,
-          stride: 3,
-          indices: data.indices,
-          base: 0,
-          count: data.indices.length,
-          convexHull: false,
-          checkDuplicates: true,
-          scale: null,
-          position: new Vec3(),
-          rotation: new Quat(),
-        },
-      ],
-    });
+    const triangles = new Ammo.btTriangleMesh();
+    const point = new Ammo.btVector3();
+    const vertices = new Map<string, number>();
+    const indices: number[] = [];
+    try {
+      for (let i = 0; i < data.positions.length; i += 3) {
+        const x = data.positions[i],
+          y = data.positions[i + 1],
+          z = data.positions[i + 2];
+        const key = `${x}:${y}:${z}`;
+        let index = vertices.get(key);
+        if (index === undefined) {
+          point.setValue(x, y, z);
+          index = triangles.findOrAddVertex(point, false) as number;
+          vertices.set(key, index);
+        }
+        indices.push(index);
+      }
+      triangles.getIndexedMeshArray().at(0).m_numTriangles =
+        data.indices.length / 3;
+      for (const index of data.indices) triangles.addIndex(indices[index]);
+    } finally {
+      Ammo.destroy(point);
+    }
+    const shape = new Ammo.btBvhTriangleMeshShape(triangles, true);
     const body = this.world.createBody({
       type: "static",
       mass: 0,
@@ -60,7 +69,7 @@ export class TerrainPhysics {
       entity,
     });
     this.world.addBody(body, BODYGROUP_STATIC, BODYMASK_ALL);
-    this.patches.set(key, { body, shape });
+    this.patches.set(key, { body, shape, triangles });
   }
   ray(
     a: { x: number; y: number; z: number },
@@ -72,10 +81,11 @@ export class TerrainPhysics {
     );
   }
   destroy() {
-    for (const { body, shape } of this.patches.values()) {
+    for (const { body, shape, triangles } of this.patches.values()) {
       this.world.removeBody(body);
       this.world.destroyBody(body);
-      this.world.destroyShape(shape);
+      Ammo.destroy(shape);
+      Ammo.destroy(triangles);
     }
     this.patches.clear();
     this.world.destroy();

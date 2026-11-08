@@ -1,3 +1,4 @@
+import { villageRoad } from "./ground-surface";
 import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
@@ -75,6 +76,11 @@ export function footSurface(
   boards = duckboards(map),
 ): "wood" | "mud" | "concrete" {
   if (!map.terrain) return "concrete";
+  if (
+    villageRoad(map, p.x, p.z) > 0.7 &&
+    groundHeight(p.x, p.z, map) > baseGroundHeight(p.x, p.z, map) - 0.15
+  )
+    return "concrete";
   const board = boards.find(
     (b) => Math.abs(p.x - b.x) <= 0.65 && Math.abs(p.z - b.z) <= 0.9,
   );

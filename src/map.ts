@@ -103,11 +103,12 @@ export interface CommunicationRoute {
   points: Vec[];
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches";
+  id: "industrial" | "trenches" | "village";
   name: string;
   width: number;
   depth: number;
   navSpacing: number;
+  navigationPoints?: Vec[];
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];

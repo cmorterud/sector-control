@@ -1,3 +1,4 @@
+import { nearestCandidates } from "./navigation-nearest";
 import {
   startMelee,
   cancelMelee,
@@ -652,7 +653,7 @@ export class TestCollision implements CollisionWorld {
 export const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
 export function resolveTeamSize(map: MapDefinition, requested?: number) {
-  const fallback = map.id === "trenches" ? 50 : 5;
+  const fallback = map.id === "industrial" ? 5 : 50;
   return clamp(
     Number.isFinite(requested) ? Math.round(requested!) : fallback,
     1,
@@ -748,7 +749,7 @@ export class Game {
     this.map = runtimeMap(options.map ?? industrialMap);
     this.artillery = createArtilleryState(
       seed,
-      options.ambientArtillery ?? this.map.id === "trenches",
+      options.ambientArtillery ?? this.map.id !== "industrial",
     );
     this.assaults.enabled =
       (options.assaults ?? true) && this.map.id === "trenches";
@@ -781,7 +782,7 @@ export class Game {
           i % this.teamSize,
           this.teamSize,
           this.humanPlayerIds.includes(i),
-          this.map.id === "trenches",
+          this.map.id !== "industrial",
         ),
         team,
         teamIndex: i % this.teamSize,
@@ -895,7 +896,7 @@ export class Game {
     }
     p.y = groundHeight(p.x, p.z, this.map);
     p.yaw =
-      this.map.id === "trenches"
+      this.map.id !== "industrial"
         ? p.team === "blue"
           ? Math.PI / 2
           : -Math.PI / 2
@@ -1914,6 +1915,7 @@ function graph(map: MapDefinition) {
   for (let x = -map.width / 2 + step; x <= map.width / 2 - step; x += step)
     for (let z = -map.depth / 2 + step; z <= map.depth / 2 - step; z += step)
       add(x, z);
+  for (const point of map.navigationPoints ?? []) add(point.x, point.z);
   // Include the actual ends/middle of narrow ramps. A regular lattice alone can
   // strand one mirrored firing step when a node falls exactly on a bank edge.
   for (const r of map.terrain?.ramps ?? []) {
@@ -2011,11 +2013,8 @@ export function pathfind(
   if (walkSegment(a, b, map)) return [{ ...b }];
   const { nodes, edges } = graph(map);
   const closest = (p: Vec) =>
-    nodes
-      .map((n, i) => ({ i, d: dist(n, p) }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 48)
-      .find(({ i }) => walkSegment(p, nodes[i], map))?.i;
+    nearestCandidates(nodes, p).find(({ i }) => walkSegment(p, nodes[i], map))
+      ?.i;
   const start = closest(a),
     goal = closest(b);
   if (start === undefined || goal === undefined) return [];
@@ -2145,8 +2144,15 @@ export function botCommand(g: Game, p: Soldier): Command {
       }));
       ranks.sort((a, b) => a.weight - b.weight);
       const current = ranks.find((rank) => rank.i === p.objective)!;
+      const previousObjective = p.objective;
       if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
-      p.path = pathfind(p, g.sectors[p.objective], g.map);
+      if (
+        g.map.id !== "village" ||
+        previousObjective !== p.objective ||
+        !p.path.length ||
+        !walkSegment(p, p.path[0], g.map)
+      )
+        p.path = pathfind(p, g.sectors[p.objective], g.map);
     }
   }
   const range = Math.min(projectileRange - 1, g.botSettings.engagementRange);
@@ -2252,7 +2258,11 @@ export function botCommand(g: Game, p: Soldier): Command {
   )
     p.path.shift();
   const dest = p.path[0];
-  if (dest && dist(p, objective) > (station ? 0.15 : 4)) {
+  if (
+    dest &&
+    (dist(p, objective) > (station ? 0.15 : 4) ||
+      (g.map.id === "village" && !flagOccupant(g, p, g.sectors[p.objective])))
+  ) {
     const d = dist(p, dest);
     c.x = (dest.x - p.x) / Math.max(0.1, d);
     c.z = (dest.z - p.z) / Math.max(0.1, d);
@@ -2419,6 +2429,26 @@ export function botCommand(g: Game, p: Soldier): Command {
   ) {
     const landing = mantleLanding(p, c, g.map);
     c.mantle = !!landing && dist(landing, objective) + 0.3 < dist(p, objective);
+  }
+  // A few village riflemen screen an exposed road crossing individually. This
+  // spends their normal smoke supply; it does not introduce a squad controller.
+  if (
+    g.map.id === "village" &&
+    p.weapon === "serviceRifle" &&
+    p.id % 8 === 0 &&
+    p.smokes > 0 &&
+    p.reloadAt === 0 &&
+    g.tick >= p.throwUntil &&
+    Math.abs(p.x) > 6 &&
+    Math.abs(p.x) < 19 &&
+    p.x * objective.x < 0 &&
+    g.tick % 240 === p.id % 240 &&
+    !g.smokeClouds.some((cloud) => dist(p, cloud) < 16)
+  ) {
+    c.smoke = true;
+    c.fire = c.reload = false;
+    c.yaw = Math.atan2(objective.x - p.x, p.z - objective.z);
+    c.pitch = 0.38;
   }
   return assaultCommand(g, p, c);
 }
