@@ -14,6 +14,12 @@ import { TerrainPhysics } from "./physics";
 import { Game, TestCollision } from "./simulation";
 import { grenadeExplosionProfile } from "./destruction";
 
+// Terrain-only slope/earth fixtures exclude deliberately obstructing landmarks.
+const terrainOnly: MapDefinition = {
+  ...trenchMap,
+  boxes: trenchMap.boxes.filter((b) => !b.landmark),
+};
+
 const level: MapDefinition = {
   ...trenchMap,
   terrain: { ...trenchMap.terrain!, elevation: undefined },
@@ -64,7 +70,10 @@ it("preserves trench floors, firing steps, bank lips, entry ramps and fixed foot
           groundHeight(x + dx, z + dz, level),
         );
     }
-  for (const rect of [...t.ramps, ...trenchMap.boxes])
+  for (const rect of [
+    ...t.ramps,
+    ...trenchMap.boxes.filter((b) => !b.landmark),
+  ])
     for (const dx of [-rect.w / 2, 0, rect.w / 2])
       for (const dz of [-rect.d / 2, 0, rect.d / 2])
         expect(groundElevation(rect.x + dx, rect.z + dz, trenchMap)).toBe(0);
@@ -81,7 +90,7 @@ it("preserves trench floors, firing steps, bank lips, entry ramps and fixed foot
 
 it("uses walkable slopes and matching real Ammo triangles without globally refining terrain", () => {
   for (const z of [-56, -32, -8, 0, 8, 32, 56])
-    expect(walkSegment({ x: -14, z }, { x: 14, z }, trenchMap)).toBe(true);
+    expect(walkSegment({ x: -14, z }, { x: 14, z }, terrainOnly)).toBe(true);
   const field = trenchMap.terrain!.elevation!;
   const extremes = [0, 0];
   for (let i = 0; i < field.values.length; i++) {

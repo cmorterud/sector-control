@@ -108,6 +108,12 @@ export class PlaytestLog {
       ).length,
       artilleryEvades: this.events.filter((e) => e.type === "artilleryEvade")
         .length,
+      structuresCollapsed: this.events.reduce(
+        (n, e) =>
+          n +
+          (e.type === "destruction" ? (e.change.collapses?.length ?? 0) : 0),
+        0,
+      ),
       treesFelled: this.events
         .flatMap((e) => (e.type === "destruction" ? e.change.objects : []))
         .filter((o) => o.id.startsWith("tree-") && o.stage === 2).length,

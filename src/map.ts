@@ -1,3 +1,4 @@
+import type { Landmark } from "./landmarks";
 import type { DestructionState } from "./destruction";
 export const terrainResolution = 0.25;
 export const terrainPatchSize = 8;
@@ -18,7 +19,13 @@ export type Box = Vec & {
     | "tree"
     | "brush"
     | "log"
-    | "stump";
+    | "stump"
+    | "masonry"
+    | "concrete"
+    | "gun"
+    | "rubble";
+  landmark?: string;
+  supports?: string[];
   baseY?: number;
   treeStyle?: "bare" | "snapped" | "sparse";
 };
@@ -99,7 +106,8 @@ export interface MapDefinition {
   navSpacing: number;
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
-  sectors: (Vec & { id: string; home?: "blue" | "red" })[];
+  landmarks?: Landmark[];
+  sectors: (Vec & { id: string; name?: string; home?: "blue" | "red" })[];
   boxes: Box[];
   vegetation?: Box[];
   destruction?: DestructionState;
@@ -368,7 +376,10 @@ export function blocked(
     Math.abs(x) > map.width / 2 - 1 - r ||
     Math.abs(z) > map.depth / 2 - 1 - r ||
     map.boxes.some(
-      (b) => Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r,
+      (b) =>
+        Math.abs(x - b.x) < b.w / 2 + r &&
+        Math.abs(z - b.z) < b.d / 2 + r &&
+        (!b.supports || (b.baseY ?? 0) <= groundHeight(x, z, map) + 1.8),
     )
   );
 }
@@ -397,6 +408,7 @@ export function moveOnMap(
         Math.abs(nz - b.z) >= b.d / 2 + 0.45
       )
         return false;
+      if (b.supports && feet + 1.8 < (b.baseY ?? 0)) return false;
       if (b.id?.startsWith("lining-")) {
         // Step over the recessed timber crest, then fall beside its earth face.
         if ((p.y ?? ground) >= (b.baseY ?? 0) + b.h - 0.01) return false;

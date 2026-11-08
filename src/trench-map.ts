@@ -1,3 +1,4 @@
+import { buildLandmarks } from "./landmarks";
 import { vegetationFor } from "./vegetation";
 import {
   groundHeight,
@@ -486,4 +487,9 @@ for (const wall of liningCandidates) {
   addPanel(end);
 }
 
+const landmarkLayout = buildLandmarks(trenchMap);
+trenchMap.landmarks = landmarkLayout.landmarks;
+trenchMap.boxes.push(...landmarkLayout.parts);
+for (const sector of trenchMap.sectors)
+  sector.name = trenchMap.landmarks.find((l) => l.id === sector.id)?.name;
 trenchMap.vegetation = vegetationFor(trenchMap);

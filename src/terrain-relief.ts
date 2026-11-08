@@ -108,7 +108,7 @@ export function buildTrenchElevation(map: MapDefinition): TerrainElevation {
           protection,
           smooth((distanceToRect(x, z, ramp) - 2) / 4),
         );
-      for (const box of map.boxes)
+      for (const box of map.boxes.filter((b) => !b.landmark))
         protection = Math.min(
           protection,
           smooth((distanceToRect(x, z, box) - 2) / 3),
@@ -191,6 +191,7 @@ export function buildTrenchRelief(
           continue;
         let protection = smooth((15 - Math.abs(x)) / 3);
         for (const box of map.boxes) {
+          if (box.landmark) continue;
           const distance = Math.hypot(
             Math.max(0, Math.abs(x - box.x) - box.w / 2),
             Math.max(0, Math.abs(z - box.z) - box.d / 2),

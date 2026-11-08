@@ -692,11 +692,15 @@ export class Renderer implements CollisionWorld {
           ? i % 2
             ? "#687447"
             : "#82814d"
-          : kind === "wood"
+          : kind === "stone"
             ? i % 2
-              ? "#9b8054"
-              : "#685039"
-            : "#67513a",
+              ? "#9a8e7c"
+              : "#756a5e"
+            : kind === "wood"
+              ? i % 2
+                ? "#9b8054"
+                : "#685039"
+              : "#67513a",
         false,
         this.app.root,
       );
@@ -971,6 +975,150 @@ export class Renderer implements CollisionWorld {
           b.d * 0.94,
           "#b59d6b",
         );
+      this.objectVisuals.set(object.id, root);
+      this.batchGroup = previousBatch;
+      return true;
+    }
+    if (["masonry", "concrete", "rubble", "gun"].includes(b.kind)) {
+      const tint =
+        b.kind === "masonry"
+          ? object.stage
+            ? "#75584a"
+            : "#94705a"
+          : b.kind === "rubble"
+            ? "#82766a"
+            : b.kind === "gun"
+              ? "#424b43"
+              : "#8b8c80";
+      const solid = this.cube(
+        b.kind,
+        b.x,
+        base + h / 2,
+        b.z,
+        b.w,
+        h,
+        b.d,
+        tint,
+        true,
+        root,
+      );
+      if (b.kind === "gun") {
+        solid.render!.enabled = false;
+        const primitive = (
+          name: string,
+          type: "cylinder" | "box",
+          x: number,
+          y: number,
+          z: number,
+          w: number,
+          height: number,
+          d: number,
+          tint: string,
+        ) => {
+          const e = this.cube(name, x, y, z, w, height, d, tint, false, root);
+          e.render!.type = type;
+          return e;
+        };
+        for (const dz of [-0.72, 0.72]) {
+          const wheel = primitive(
+            "gun wheel",
+            "cylinder",
+            b.x + 0.4,
+            base + 0.52,
+            b.z + dz,
+            1.05,
+            0.16,
+            1.05,
+            "#554b3c",
+          );
+          wheel.setLocalEulerAngles(90, 0, 0);
+          this.cube(
+            "gun trail",
+            b.x + 0.65,
+            base + 0.2,
+            b.z + dz * 0.5,
+            1.8,
+            0.16,
+            0.14,
+            "#4b5142",
+            false,
+            root,
+          );
+        }
+        const barrel = primitive(
+          "abandoned gun barrel",
+          "cylinder",
+          b.x - 0.35,
+          base + h * 0.78,
+          b.z,
+          0.22,
+          2.9,
+          0.22,
+          "#37433d",
+        );
+        barrel.setLocalEulerAngles(0, 0, 94);
+        this.cube(
+          "gun shield",
+          b.x - 0.3,
+          base + h * 0.52,
+          b.z,
+          0.12,
+          h * 0.78,
+          1.55,
+          "#4a5547",
+          false,
+          root,
+        );
+      } else if (b.kind !== "rubble") {
+        const alongX = b.w > b.d;
+        const rows = Math.min(
+          9,
+          Math.floor(h / (b.kind === "masonry" ? 0.4 : 0.65)),
+        );
+        for (let row = 1; row <= rows; row++) {
+          const y = base + (row * h) / (rows + 1);
+          this.cube(
+            "weathered mortar",
+            b.x,
+            y,
+            b.z,
+            b.w + 0.012,
+            0.018,
+            b.d + 0.012,
+            b.kind === "masonry" ? "#5c5145" : "#60665e",
+            false,
+            root,
+          );
+          if (b.kind === "masonry") {
+            const offset = (row % 2 ? 0.22 : -0.22) * Math.max(b.w, b.d);
+            this.cube(
+              "broken brick joint",
+              b.x + (alongX ? offset : 0),
+              y - (h / (rows + 1)) * 0.45,
+              b.z + (!alongX ? offset : 0),
+              alongX ? 0.018 : b.w + 0.015,
+              (h / (rows + 1)) * 0.8,
+              alongX ? b.d + 0.015 : 0.018,
+              "#64584a",
+              false,
+              root,
+            );
+          }
+        }
+      } else {
+        this.cube(
+          "broken rubble cap",
+          b.x - b.w * 0.12,
+          base + h + 0.035,
+          b.z + b.d * 0.1,
+          b.w * 0.48,
+          0.07,
+          b.d * 0.55,
+          "#a09380",
+          false,
+          root,
+        );
+      }
       this.objectVisuals.set(object.id, root);
       this.batchGroup = previousBatch;
       return true;
@@ -2859,6 +3007,15 @@ export class Renderer implements CollisionWorld {
       });
     }
     if (e.type === "destruction") {
+      for (const [i, id] of (e.change.collapses ?? []).slice(0, 4).entries()) {
+        const b = this.map.destruction!.objects[id].original;
+        this.spawnDebris(
+          { x: b.x, y: (b.baseY ?? 0) + b.h * 0.55, z: b.z },
+          b.kind === "wood" ? "wood" : "stone",
+          8,
+          e.id + i * 41,
+        );
+      }
       if (e.change.kind === "rifle") {
         this.spawnDebris(e.change.at, "wood", 2, e.id, true);
       } else {

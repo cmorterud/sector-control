@@ -111,15 +111,23 @@ describe("trench prototype", () => {
         expect(groundHeight(x, z, trenchMap)).toBeGreaterThanOrEqual(
           0.6 - 0.001,
         );
-    const centerCover = trenchMap.boxes.filter((box) => Math.abs(box.x) < 18);
+    const centerCover = trenchMap.boxes.filter(
+      (box) => Math.abs(box.x) < 18 && !box.landmark,
+    );
     expect(centerCover.filter((box) => box.kind === "sandbag")).toHaveLength(2);
     expect(
       centerCover.every((box) => box.h <= 0.65 && box.kind !== "bunker"),
     ).toBe(true);
     const coverArea = centerCover.reduce((sum, box) => sum + box.w * box.d, 0);
     expect(coverArea).toBeLessThan(15);
+    const landmarkArea = trenchMap.boxes
+      .filter((box) => box.landmark && Math.abs(box.x) < 18)
+      .reduce((sum, b) => sum + b.w * b.d, 0);
+    expect(landmarkArea).toBeLessThan(80);
     for (const sector of trenchMap.sectors)
-      expect(trenchMap.boxes.some((box) => dist(box, sector) < 10)).toBe(false);
+      expect(
+        trenchMap.boxes.some((box) => !box.landmark && dist(box, sector) < 10),
+      ).toBe(false);
   });
 
   it("connects every spawn to its own firing station inside the front trench", () => {

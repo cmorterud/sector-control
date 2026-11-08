@@ -14,6 +14,12 @@ import { grenadeExplosionProfile } from "./destruction";
 import { TerrainPhysics } from "./physics";
 import { terrainGeometry } from "./terrain-geometry";
 
+// Terrain-only slope/earth fixtures exclude deliberately obstructing landmarks.
+const terrainOnly: MapDefinition = {
+  ...trenchMap,
+  boxes: trenchMap.boxes.filter((b) => !b.landmark),
+};
+
 const unscarred: MapDefinition = {
   ...trenchMap,
   terrain: { ...trenchMap.terrain!, relief: undefined },
@@ -29,7 +35,7 @@ it("starts with six actual shallow shell craters and gentle traversable depressi
     expect(groundHeight(crater.x, crater.z, trenchMap)).toBeLessThan(2);
     const a = { x: crater.x - crater.radius - 1, z: crater.z },
       b = { x: crater.x + crater.radius + 1, z: crater.z };
-    expect(walkSegment(a, b, trenchMap)).toBe(true);
+    expect(walkSegment(a, b, terrainOnly)).toBe(true);
   }
   expect(authoredTerrainCut(0, 0, trenchMap)).toBeGreaterThan(0.1);
 });
@@ -46,7 +52,7 @@ it("never raises terrain and preserves parapets, trench floors, spawns and cover
       if (after < before - 0.01) changed++;
     }
   expect(changed).toBeGreaterThan(500);
-  for (const box of trenchMap.boxes)
+  for (const box of trenchMap.boxes.filter((b) => !b.landmark))
     for (const dx of [-box.w / 2, 0, box.w / 2])
       for (const dz of [-box.d / 2, 0, box.d / 2])
         expect(groundHeight(box.x + dx, box.z + dz, trenchMap)).toBe(
@@ -99,8 +105,8 @@ it("matches actual Ammo ground hits to the pre-existing crater and keeps terrain
 
 it("lets grenades deepen authored craters and restores their original shape in a fresh match", () => {
   const create = () =>
-    new Game(new TestCollision(trenchMap), false, 600, 12345, undefined, {
-      map: trenchMap,
+    new Game(new TestCollision(terrainOnly), false, 600, 12345, undefined, {
+      map: terrainOnly,
     });
   const game = create(),
     x = 9,

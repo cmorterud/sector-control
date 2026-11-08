@@ -177,6 +177,8 @@ export class BattlefieldFeedback {
       this.nextCrack = 0;
     }
     if (e.type === "destruction") {
+      if (e.change.collapses?.length)
+        this.cue(g, "debris", e.change.at, 0.32, false, true, e.id);
       const fallen = e.change.objects
         .filter((o) => o.id.startsWith("tree-") && o.stage === 2)
         .map((o) => g.map.destruction!.objects[o.id].original)

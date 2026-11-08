@@ -1,3 +1,4 @@
+import { collapsedStructureParts, isStructure } from "./landmarks";
 import { fallenTreeParts, timberSupport } from "./vegetation";
 import { craterShape, craterSampler, type CraterShape } from "./crater-shape";
 import {
@@ -82,6 +83,7 @@ export interface DestructionState {
 }
 export interface DestructionChange {
   geometry?: boolean;
+  collapses?: string[];
   wallSamples?: number;
   revision: number;
   kind: string;
@@ -112,9 +114,17 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
     const id = original.id!;
     const maxHp =
       (
-        { sandbag: 160, tree: 180, brush: 18, log: 90, stump: 60 } as Partial<
-          Record<Box["kind"], number>
-        >
+        {
+          sandbag: 160,
+          tree: 180,
+          brush: 18,
+          log: 90,
+          stump: 60,
+          masonry: 180,
+          concrete: 340,
+          gun: 210,
+          rubble: 110,
+        } as Partial<Record<Box["kind"], number>>
       )[original.kind] ?? 40;
     map.destruction!.objects[id] = {
       id,
@@ -126,7 +136,20 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
     };
   };
   for (const box of map.boxes)
-    if (["sandbag", "wood", "tree", "brush", "log", "stump"].includes(box.kind))
+    if (
+      [
+        "sandbag",
+        "wood",
+        "tree",
+        "brush",
+        "log",
+        "stump",
+        "masonry",
+        "concrete",
+        "gun",
+        "rubble",
+      ].includes(box.kind)
+    )
       add(box);
   for (const b of map.vegetation ?? []) {
     add(b);
@@ -481,7 +504,12 @@ export function deformExplosion(
   }
   if (edits.size)
     state.terrainRevision = (state.terrainRevision ?? state.revision) + 1;
-  applyCoverChanges(map, objects, at, edits.size ? bounds : undefined);
+  const collapses = applyCoverChanges(
+    map,
+    objects,
+    at,
+    edits.size ? bounds : undefined,
+  );
   const crater = edits.size
     ? {
         id: state.craters.length + 1,
@@ -498,6 +526,7 @@ export function deformExplosion(
     revision: state.revision,
     kind: profile.kind,
     wallSamples,
+    ...(collapses.length ? { collapses } : {}),
     geometry: true,
     at: { ...at },
     crater,
@@ -514,6 +543,7 @@ function applyCoverChanges(
   bounds?: [number, number, number, number],
 ) {
   const state = map.destruction!;
+  const collapses: string[] = [];
   const apply = (change: DestructionChange["objects"][number]) => {
     const object = state.objects[change.id];
     const was = object.stage;
@@ -523,6 +553,22 @@ function applyCoverChanges(
     if (box && object.stage === 1) box.h = object.original.h * 0.6;
     if (object.stage === 2)
       map.boxes = map.boxes.filter((b) => b.id !== object.id);
+    if (isStructure(object.original) && was !== 2 && object.stage === 2) {
+      collapses.push(object.id);
+      for (const part of collapsedStructureParts(map, object)) {
+        const hp = 110;
+        state.objects[part.id!] = {
+          id: part.id!,
+          original: part,
+          hp,
+          maxHp: hp,
+          stage: 0,
+          lining: false,
+        };
+        map.boxes.push({ ...part });
+        changes.push({ id: part.id!, hp, stage: 0 });
+      }
+    }
     if (object.original.kind === "tree" && was !== 2 && object.stage === 2) {
       for (const part of fallenTreeParts(map, object, at)) {
         const hp = part.kind === "log" ? 90 : 60;
@@ -540,7 +586,28 @@ function applyCoverChanges(
     }
   };
   for (const change of changes.slice()) apply(change);
-  if (!bounds) return;
+  const collapseUnsupportedRoofs = () => {
+    for (const roof of Object.values(state.objects)) {
+      if (roof.stage === 2 || !roof.original.supports) continue;
+      const remaining = roof.original.supports.filter((id) => {
+        const support = state.objects[id];
+        return (
+          support &&
+          support.stage !== 2 &&
+          (support.original.baseY ?? 0) +
+            support.original.h * (support.stage === 1 ? 0.6 : 1) >=
+            (roof.original.baseY ?? 0) - 0.1
+        );
+      }).length;
+      if (remaining < 2) {
+        const change = { id: roof.id, hp: 0, stage: 2 };
+        changes.push(change);
+        apply(change);
+      }
+    }
+  };
+  collapseUnsupportedRoofs();
+  if (!bounds) return collapses;
   for (const object of Object.values(state.objects)) {
     if (object.stage === 2) continue;
     const b = object.original;
@@ -551,6 +618,34 @@ function applyCoverChanges(
       b.z - b.d / 2 - 0.5 > bounds[3]
     )
       continue;
+    if (isStructure(b) || b.kind === "rubble") {
+      const ground = groundHeight(b.x, b.z, map);
+      if (isStructure(b) && !b.supports && ground < (b.baseY ?? 0) - 0.45) {
+        const change = { id: object.id, hp: 0, stage: 2 };
+        changes.push(change);
+        apply(change);
+      } else if (b.kind === "rubble") {
+        const levels = [
+          ground,
+          groundHeight(b.x - b.w / 2, b.z, map),
+          groundHeight(b.x + b.w / 2, b.z, map),
+          groundHeight(b.x, b.z - b.d / 2, map),
+          groundHeight(b.x, b.z + b.d / 2, map),
+        ];
+        if (Math.max(...levels) - Math.min(...levels) > 0.45) {
+          const change = { id: object.id, hp: 0, stage: 2 };
+          changes.push(change);
+          apply(change);
+        } else if (Math.abs((b.baseY ?? 0) - Math.min(...levels)) > 0.05) {
+          b.baseY = Math.min(...levels) - 0.03;
+          const box = map.boxes.find((q) => q.id === b.id);
+          if (box) box.baseY = b.baseY;
+          if (!changes.some((q) => q.id === b.id))
+            changes.push({ id: object.id, hp: object.hp, stage: object.stage });
+        }
+      }
+      continue;
+    }
     if (object.lining) {
       const backingDirection =
         baseGroundHeight(b.x - 0.25, b.z, map) >
@@ -596,6 +691,8 @@ function applyCoverChanges(
         changes.push({ id: object.id, hp: object.hp, stage: object.stage });
     }
   }
+  collapseUnsupportedRoofs();
+  return collapses;
 }
 
 export function damageVegetation(

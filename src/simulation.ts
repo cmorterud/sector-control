@@ -299,6 +299,7 @@ export interface Soldier extends Vec {
   artilleryEvade: ArtilleryEvade | null;
 }
 export interface Sector extends Vec {
+  name?: string;
   id: string;
   home?: Team;
   control: number;

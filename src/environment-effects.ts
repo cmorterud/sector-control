@@ -20,7 +20,7 @@ export function treeFallPose(age: number) {
   };
 }
 
-export type DebrisKind = "earth" | "wood" | "leaf";
+export type DebrisKind = "earth" | "wood" | "leaf" | "stone";
 export type Debris = {
   at: V3;
   velocity: V3;
@@ -55,19 +55,25 @@ export function debrisPiece(at: V3, kind: DebrisKind, seed: number): Debris {
       z: random() * 360 - 180,
     },
     size:
-      kind === "wood"
+      kind === "stone"
         ? {
-            x: 0.06 + random() * 0.06,
-            y: 0.2 + random() * 0.4,
-            z: 0.05 + random() * 0.05,
+            x: 0.22 + random() * 0.3,
+            y: 0.18 + random() * 0.2,
+            z: 0.2 + random() * 0.24,
           }
-        : kind === "leaf"
-          ? { x: 0.12 + random() * 0.1, y: 0.025, z: 0.08 + random() * 0.08 }
-          : {
-              x: 0.1 + random() * 0.13,
-              y: 0.08 + random() * 0.12,
-              z: 0.1 + random() * 0.13,
-            },
+        : kind === "wood"
+          ? {
+              x: 0.06 + random() * 0.06,
+              y: 0.2 + random() * 0.4,
+              z: 0.05 + random() * 0.05,
+            }
+          : kind === "leaf"
+            ? { x: 0.12 + random() * 0.1, y: 0.025, z: 0.08 + random() * 0.08 }
+            : {
+                x: 0.1 + random() * 0.13,
+                y: 0.08 + random() * 0.12,
+                z: 0.1 + random() * 0.13,
+              },
     kind,
     age: 0,
     life: kind === "wood" ? 3.8 : kind === "leaf" ? 4.2 : 2.6,

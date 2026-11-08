@@ -125,6 +125,16 @@ export class ArtilleryMap {
         label.setAttribute("fill", "#172324");
         label.textContent = s.id;
         svg.append(dot, label);
+        if (s.name) {
+          const name = document.createElementNS(svg.namespaceURI, "text");
+          name.setAttribute("x", String(s.x + g.map.width / 2));
+          name.setAttribute("y", String(s.z + g.map.depth / 2 + 4.3));
+          name.setAttribute("text-anchor", "middle");
+          name.setAttribute("font-size", "1.65");
+          name.setAttribute("fill", "#172324");
+          name.textContent = s.name;
+          svg.append(name);
+        }
         this.flagMarkers.push({ id: s.id, dot });
       }
     this.grid.append(svg, this.you, this.marker);
