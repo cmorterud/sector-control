@@ -76,6 +76,12 @@ export class PlaytestLog {
       machineGunShots: this.events.filter(
         (e) => e.type === "fire" && e.weapon === "machineGun",
       ).length,
+      coverPositions: this.events.filter(
+        (e) => e.type === "botPosition" && e.cover > 0,
+      ).length,
+      stuckReplans: this.events.filter(
+        (e) => e.type === "botPosition" && e.reason === "stuck",
+      ).length,
       targetAcquisitions: this.events.filter(
         (e) => e.type === "botAttention" && e.phase === "acquired",
       ).length,

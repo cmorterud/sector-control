@@ -1,3 +1,9 @@
+import {
+  planVillageMove,
+  villageSpawn,
+  villageSteering,
+  type VillagePlan,
+} from "./village-tactics";
 import { nearestCandidates } from "./navigation-nearest";
 import {
   startMelee,
@@ -311,6 +317,7 @@ export interface Soldier extends Vec {
   captures: number;
   command: Command;
   objective: number;
+  villagePlan?: VillagePlan | null;
   path: Vec[];
   nextThink: number;
   target: number;
@@ -398,6 +405,21 @@ export type Event = { id: number; tick: number } & (
       cloud: number;
       at: V3;
       expiresAt: number;
+    }
+  | {
+      type: "botPosition";
+      actor: number;
+      objective: string;
+      goal: Vec;
+      cover: number;
+      capture: boolean;
+      reason:
+        | "deploy"
+        | "objective"
+        | "stuck"
+        | "underFire"
+        | "coverLost"
+        | "reposition";
     }
   | { type: "smokeEnd"; cloud: number }
   | { type: "suppression"; actor: number; source: number; level: number }
@@ -894,6 +916,12 @@ export class Game {
       p.x = s.x + ((p.teamIndex % columns) - (columns - 1) / 2) * 1.8;
       p.z = s.z + (Math.floor(p.teamIndex / columns) - (rows - 1) / 2) * 1.8;
     }
+    const deployment = villageSpawn(this, p);
+    if (deployment) {
+      p.x = deployment.x;
+      p.z = deployment.z;
+    }
+    if (this.map.id === "village") p.villagePlan = null;
     p.y = groundHeight(p.x, p.z, this.map);
     p.yaw =
       this.map.id !== "industrial"
@@ -2144,15 +2172,10 @@ export function botCommand(g: Game, p: Soldier): Command {
       }));
       ranks.sort((a, b) => a.weight - b.weight);
       const current = ranks.find((rank) => rank.i === p.objective)!;
-      const previousObjective = p.objective;
       if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
-      if (
-        g.map.id !== "village" ||
-        previousObjective !== p.objective ||
-        !p.path.length ||
-        !walkSegment(p, p.path[0], g.map)
-      )
-        p.path = pathfind(p, g.sectors[p.objective], g.map);
+      if (g.map.id === "village")
+        planVillageMove(g, p, (a, b) => pathfind(a, b, g.map));
+      else p.path = pathfind(p, g.sectors[p.objective], g.map);
     }
   }
   const range = Math.min(projectileRange - 1, g.botSettings.engagementRange);
@@ -2250,7 +2273,7 @@ export function botCommand(g: Game, p: Soldier): Command {
     1,
   );
   if (botMeleeIntent(g, p, target, c)) return c;
-  const objective = station ?? g.sectors[p.objective];
+  const objective = station ?? p.villagePlan?.goal ?? g.sectors[p.objective];
   while (
     p.path.length &&
     dist(p, p.path[0]) < (station ? (p.path.length === 1 ? 0.15 : 0.6) : 1) &&
@@ -2260,7 +2283,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   const dest = p.path[0];
   if (
     dest &&
-    (dist(p, objective) > (station ? 0.15 : 4) ||
+    (dist(p, objective) > (p.villagePlan ? 0.8 : station ? 0.15 : 4) ||
       (g.map.id === "village" && !flagOccupant(g, p, g.sectors[p.objective])))
   ) {
     const d = dist(p, dest);
@@ -2285,7 +2308,12 @@ export function botCommand(g: Game, p: Soldier): Command {
     if (station) c.yaw = p.team === "blue" ? Math.PI / 2 : -Math.PI / 2;
   }
   for (const q of g.players)
-    if (q !== p && q.hp > 0 && dist(p, q) < (station ? 0.75 : 1.4)) {
+    if (
+      (!p.villagePlan || q.team !== p.team) &&
+      q !== p &&
+      q.hp > 0 &&
+      dist(p, q) < (station ? 0.75 : 1.4)
+    ) {
       const d = Math.max(0.1, dist(p, q));
       c.x += ((p.x - q.x) / d) * 0.7;
       c.z += ((p.z - q.z) / d) * 0.7;
@@ -2393,9 +2421,11 @@ export function botCommand(g: Game, p: Soldier): Command {
         c.pitch += (awarenessSample(p, g.tick, 409) * 2 - 1) * scatter;
       }
     }
-    c.x *= 0.2;
-    c.z *= 0.2;
-    if (!station && g.tick % 90 < 30) {
+    const advance =
+      p.villagePlan && dist(p, p.villagePlan.goal) > 1.4 ? 0.75 : 0.2;
+    c.x *= advance;
+    c.z *= advance;
+    if (!station && !p.villagePlan && g.tick % 90 < 30) {
       c.x += Math.cos(c.yaw) * 0.5;
       c.z += Math.sin(c.yaw) * 0.5;
       p.mode = "Reposition";
@@ -2450,5 +2480,7 @@ export function botCommand(g: Game, p: Soldier): Command {
     c.yaw = Math.atan2(objective.x - p.x, p.z - objective.z);
     c.pitch = 0.38;
   }
+  if (g.map.id === "village")
+    villageSteering(g, p, c, target ? dist(p, target) : Infinity);
   return assaultCommand(g, p, c);
 }
