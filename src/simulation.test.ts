@@ -265,9 +265,9 @@ describe("combat and lifecycle", () => {
   it("expires rounds at sixty meters and clears them at match end", () => {
     const g = new Game(empty, false);
     g.fire(g.players[0]);
-    advance(g, 55);
+    advance(g, Math.ceil((60 / projectileSpeed) * 30) - 1);
     expect(g.projectiles).toHaveLength(1);
-    advance(g, 5);
+    advance(g, 1);
     expect(g.projectiles).toHaveLength(0);
     const short = new Game(empty, false, 1);
     short.step({ ...idle(), fire: true });
@@ -284,8 +284,12 @@ describe("combat and lifecycle", () => {
     g.botSettings.awareness = false;
     g.tick = 1;
     const c = botCommand(g, p);
-    expect(c.yaw).toBeGreaterThan(0.1);
-    expect(c.yaw).toBeLessThan(0.3);
+    expect(c.yaw).toBeGreaterThan(0.02);
+    expect(c.yaw).toBeLessThan(0.08);
+    p.weapon = "machineGun";
+    const slower = botCommand(g, p);
+    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.04);
+    expect(slower.yaw).toBeLessThan(0.3);
   });
   it("aligns the autoplay driver with the elevated shoulder camera", () => {
     const { g, p, enemy } = scene();

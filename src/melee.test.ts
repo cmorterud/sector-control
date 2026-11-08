@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { Game, idle, TestCollision, type Event } from "./simulation";
 import { industrialMap } from "./map";
-import { meleeRules, botMeleeIntent } from "./melee";
+import { meleeRules, botMeleeIntent, meleePose } from "./melee";
 import { PlaytestLog } from "./playtest";
 
 function duel() {
@@ -108,9 +108,9 @@ it("makes a running charge lethal but limits turning and movement during the lon
   p.vz = -7;
   g.step({ ...idle(), melee: true, sprint: true, z: -1 });
   expect(p.melee?.kind).toBe("charge");
-  expect(p.melee!.endTick - p.melee!.startTick).toBe(42);
+  expect(p.melee!.endTick).toBe(Number.MAX_SAFE_INTEGER);
   const first = p.z;
-  for (let i = 0; i < 12; i++) g.step({ ...idle(), z: -1 });
+  for (let i = 0; i < 12; i++) g.step({ ...idle(), z: -1, sprint: true });
   expect(q.hp).toBe(0);
   expect(p.z).toBeLessThan(first - 2);
   const before = p.yaw;
@@ -124,7 +124,9 @@ it("makes a running charge lethal but limits turning and movement during the lon
   blocked.p.vz = -7;
   blocked.g.step({ ...idle(), z: -1, sprint: true, melee: true });
   blocked.q.z = -3;
-  for (let i = 0; i < 13; i++) blocked.g.step(idle());
+  for (let i = 0; i < 13; i++)
+    blocked.g.step({ ...idle(), z: -1, sprint: true });
+  expect(blocked.p.melee).toBeNull();
   expect(blocked.p.z).toBe(0);
   expect(blocked.q.hp).toBe(100);
 });
@@ -316,4 +318,77 @@ it("a nearer friendly body blocks the thrust, and an interruption cancels an unf
   ).toBe(true);
   expect(pair.q.melee).toBeNull();
   expect(pair.q.staggerUntil).toBe(pair.g.tick + 9);
+});
+
+it("keeps the bayonet raised through a sustained sprint and strikes only the first later contact", () => {
+  const { g, p, q } = duel();
+  q.z = -35;
+  p.vz = -7;
+  const second = { ...structuredClone(q), id: 2, z: -35.7 };
+  g.players.push(second);
+  const events: Event[] = [];
+  g.step({ ...idle(), z: -1, sprint: true, melee: true });
+  events.push(...g.events);
+  for (let i = 0; i < 90; i++) {
+    g.step({ ...idle(), z: -1, sprint: true });
+    events.push(...g.events);
+  }
+  expect(p.melee?.kind).toBe("charge");
+  expect(p.melee?.struck).toBe(false);
+  expect(Math.hypot(p.vx, p.vz)).toBeGreaterThan(6.5);
+  expect(meleePose(p.melee!, g.tick).ready).toBe(1);
+  expect(
+    JSON.parse(JSON.stringify(g.snapshot())).players[0].melee.endTick,
+  ).toBe(Number.MAX_SAFE_INTEGER);
+  expect(
+    events.filter((e) => e.type === "melee" && e.phase === "strike"),
+  ).toHaveLength(0);
+  while (g.tick < 200) {
+    g.step({ ...idle(), z: -1, sprint: true });
+    events.push(...g.events);
+  }
+  expect(q.hp).toBe(0);
+  expect(second.hp).toBe(100);
+  expect(
+    events.filter((e) => e.type === "melee" && e.phase === "strike"),
+  ).toMatchObject([{ target: q.id, damage: 100 }]);
+  expect(p.melee).toBeNull();
+});
+it("lowers a sustained charge when sprint is released, and an ally or protected body absorbs one contact", () => {
+  const { g, p, q } = duel();
+  q.z = -45;
+  p.vz = -7;
+  g.step({ ...idle(), z: -1, sprint: true, melee: true });
+  for (let i = 0; i < 60; i++) g.step({ ...idle(), z: -1, sprint: true });
+  expect(p.melee?.struck).toBe(false);
+  g.step({ ...idle(), z: -1 });
+  expect(p.melee).toBeNull();
+  expect(p.nextMelee).toBeGreaterThan(g.tick);
+  for (const protect of [false, true]) {
+    const d = duel();
+    d.p.vz = -7;
+    d.q.z = -12;
+    if (protect) d.q.protectedUntil = 1e9;
+    else d.q.team = d.p.team;
+    const contacts: Event[] = [];
+    for (let i = 0; i < 55; i++) {
+      d.g.step({ ...idle(), z: -1, sprint: true, melee: i === 0 });
+      contacts.push(...d.g.events);
+    }
+    expect(d.q.hp).toBe(100);
+    expect(
+      contacts.filter((e) => e.type === "melee" && e.phase === "strike"),
+    ).toMatchObject([{ damage: 0, target: d.q.id }]);
+  }
+});
+
+it("keeps a readied charge active when forward input follows a sharp mouse turn, while limiting actual turning", () => {
+  const { g, p, q } = duel();
+  q.z = -45;
+  p.vz = -7;
+  g.step({ ...idle(), z: -1, sprint: true, melee: true });
+  g.step({ ...idle(), x: 1, yaw: Math.PI / 2, sprint: true });
+  expect(p.melee?.kind).toBe("charge");
+  expect(p.melee?.struck).toBe(false);
+  expect(p.yaw).toBeCloseTo(0.03);
 });

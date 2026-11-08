@@ -223,3 +223,28 @@ it("requires awareness and stops gunner bursts immediately when sight is lost", 
     );
   }
 });
+
+it("doubles both rifle velocities, retains machine-gun speed, and keeps in-flight speed after a weapon change", () => {
+  for (const [weapon, speed] of [
+    ["rifle", 64],
+    ["serviceRifle", 64],
+    ["machineGun", 32],
+  ] as const) {
+    const g = new Game(
+        new TestCollision({ ...industrialMap, boxes: [] }),
+        false,
+      ),
+      p = g.players[0];
+    p.weapon = weapon;
+    g.respawn(p);
+    g.fire(p);
+    const shot = g.projectiles[0],
+      start = { ...shot };
+    expect(Math.hypot(shot.vx, shot.vy, shot.vz)).toBeCloseTo(speed);
+    p.weapon = weapon === "machineGun" ? "serviceRifle" : "machineGun";
+    for (let i = 0; i < 3; i++) g.step(idle());
+    expect(
+      Math.hypot(shot.x - start.x, shot.y - start.y, shot.z - start.z),
+    ).toBeCloseTo(speed / 10);
+  }
+});

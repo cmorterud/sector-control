@@ -10,6 +10,7 @@ export interface MeleeAttack {
   endTick: number;
   yaw: number;
   struck: boolean;
+  sweepFrom?: { x: number; y: number; z: number };
 }
 export const meleeRules = {
   bayonet: { reach: 1.8, damage: 65, windup: 7, duration: 24, rest: 8 },
@@ -52,11 +53,12 @@ export function startMelee(g: Game, p: Soldier, c: Command) {
     kind,
     startTick: g.tick,
     strikeTick: g.tick + rule.windup,
-    endTick: g.tick + rule.duration,
+    endTick:
+      kind === "charge" ? Number.MAX_SAFE_INTEGER : g.tick + rule.duration,
     yaw: p.yaw,
     struck: false,
   };
-  p.nextMelee = p.melee.endTick + rule.rest;
+  p.nextMelee = g.tick + rule.duration + rule.rest;
   p.protectedUntil = 0;
   p.mode = kind === "charge" ? "Bayonet charge" : "Melee";
   g.emit({
@@ -79,6 +81,11 @@ export function cancelMelee(g: Game, p: Soldier) {
     target: null,
     at: location(p),
   });
+  if (p.melee.kind === "charge")
+    p.nextMelee = Math.max(
+      g.tick + meleeRules.charge.rest,
+      p.nextMelee > g.tick ? p.nextMelee : 0,
+    );
   p.melee = null;
 }
 
@@ -86,12 +93,18 @@ export function cancelMelee(g: Game, p: Soldier) {
 export function meleeMovement(g: Game, p: Soldier, c: Command) {
   const a = p.melee;
   if (!a) return undefined;
+  const forwardIntent = c.x * Math.sin(c.yaw) - c.z * Math.cos(c.yaw);
   a.yaw = turnToward(a.yaw, c.yaw, a.kind === "charge" ? 0.03 : 0.1);
   c.yaw = a.yaw;
   c.pitch = Math.max(-0.3, Math.min(0.3, c.pitch));
   c.fire = c.reload = c.grenade = c.smoke = c.mantle = c.aim = false;
   c.crouch = p.crouched;
-  if (a.kind === "charge" && g.tick < a.strikeTick) {
+  if (a.kind === "charge" && !a.struck) {
+    if (!c.sprint || forwardIntent < 0.65) {
+      cancelMelee(g, p);
+      return 1.4;
+    }
+    a.sweepFrom = location(p);
     c.x = Math.sin(a.yaw);
     c.z = -Math.cos(a.yaw);
     return 6.8;
@@ -99,18 +112,17 @@ export function meleeMovement(g: Game, p: Soldier, c: Command) {
   return a.kind === "charge" ? 1.4 : 2.5;
 }
 
-function contact(g: Game, p: Soldier) {
+function contact(g: Game, p: Soldier, from = location(p)) {
   const a = p.melee!,
-    reach = meleeRules[a.kind].reach,
-    from = location(p);
+    reach = meleeRules[a.kind].reach;
   // Nearest body in the thrust cone wins; allies and protected lives block it too.
   return g.players
     .filter((q) => {
       if (q === p || q.hp <= 0) return false;
-      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      const d = Math.hypot(q.x - from.x, q.z - from.z);
       if (
         d > reach ||
-        Math.abs(angleDelta(a.yaw, Math.atan2(q.x - p.x, p.z - q.z))) >
+        Math.abs(angleDelta(a.yaw, Math.atan2(q.x - from.x, from.z - q.z))) >
           meleeRules.halfAngle
       )
         return false;
@@ -147,8 +159,33 @@ export function advanceMelee(
       continue;
     }
     if (!a.struck && g.tick >= a.strikeTick) {
-      a.struck = true;
-      strikes.push({ p, a, target: contact(g, p) });
+      const target =
+        contact(g, p) ??
+        (a.kind === "charge" && a.sweepFrom
+          ? contact(g, p, a.sweepFrom)
+          : undefined);
+      if (a.kind !== "charge" || target) {
+        a.struck = true;
+        if (a.kind === "charge") {
+          a.strikeTick = g.tick;
+          a.endTick =
+            g.tick + meleeRules.charge.duration - meleeRules.charge.windup;
+          p.nextMelee = a.endTick + meleeRules.charge.rest;
+        }
+        strikes.push({ p, a, target });
+      }
+    }
+    if (
+      a.kind === "charge" &&
+      !a.struck &&
+      a.sweepFrom &&
+      g.tick > a.startTick &&
+      (p.x - a.sweepFrom.x) * Math.sin(a.yaw) -
+        (p.z - a.sweepFrom.z) * Math.cos(a.yaw) <
+        0.01
+    ) {
+      cancelMelee(g, p);
+      continue;
     }
     if (g.tick >= a.endTick) {
       g.emit({
@@ -241,6 +278,10 @@ export function meleePose(a: MeleeAttack, tick: number) {
     v = Math.max(0, Math.min(1, v));
     return v * v * (3 - 2 * v);
   };
+  if (a.kind === "charge" && !a.struck) {
+    const ready = ease(age / 6);
+    return { ready, thrust: ready * 0.2, lean: ready * 10 };
+  }
   const thrust = ease((age - (hit - 4)) / 4) * (1 - ease((age - hit) / 7));
   const ready =
     ease(age / 3) * (1 - ease((age - hit) / Math.max(1, end - hit)));

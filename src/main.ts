@@ -1,3 +1,4 @@
+import { EscapePause } from "./escape-pause";
 import { villageMap } from "./village-map";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
@@ -23,6 +24,9 @@ import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
+const escapePause = new EscapePause();
+let mouseCaptureNeeded = false,
+  mouseCapturePending = false;
 let renderer: Renderer,
   game: Game,
   paused = true,
@@ -111,19 +115,42 @@ function menu(
   el("camera-reactions").onchange = (e) =>
     (cameraReactions = (e.target as HTMLInputElement).checked);
 }
-function resume() {
+function unpause() {
+  paused = false;
+  last = performance.now();
+  accumulator = 0;
+  el("menu").classList.add("hidden");
+}
+function mouseCaptureFailed() {
+  mouseCapturePending = false;
+  // Escape resumes immediately. A denied recapture must not pause it again;
+  // wait for another fresh gameplay key/click instead of retrying on a timer.
+  if (mouseCaptureNeeded && !paused) return;
+  pause();
+  el("menu").querySelector("p")!.textContent =
+    "Mouse capture was denied. Click Resume to retry.";
+}
+function captureMouse() {
+  if (mouseCapturePending) return;
+  mouseCapturePending = true;
+  try {
+    const request = renderer.canvas.requestPointerLock();
+    if (request) void request.catch(mouseCaptureFailed);
+  } catch {
+    mouseCaptureFailed();
+  }
+}
+function resume(fromEscape = false) {
   audio ??= new BattleAudio();
   audio.volume(audioVolume);
   audio.resume();
-  if (demo) {
-    paused = false;
-    last = performance.now();
-    accumulator = 0;
-    el("menu").classList.add("hidden");
+  if (demo || fromEscape) {
+    mouseCaptureNeeded = !demo;
+    unpause();
     return;
   }
-  const request = renderer.canvas.requestPointerLock();
-  if (request) void request.catch(() => pause());
+  mouseCaptureNeeded = false;
+  captureMouse();
 }
 function start() {
   recording?.dispose();
@@ -162,6 +189,8 @@ function start() {
   sound(500, 0.3);
 }
 function pause() {
+  escapePause.paused(performance.now());
+  mouseCaptureNeeded = mouseCapturePending = false;
   paused = true;
   audio?.pause();
   clear();
@@ -169,9 +198,9 @@ function pause() {
   if (started && game.phase === "playing")
     menu(
       "Operation paused",
-      "The battlefield is paused. Resume when ready.",
+      "Press Escape or click Resume to continue.",
       "Resume operation",
-      resume,
+      () => resume(),
       '<button class="secondary" id="restart">Restart match</button>',
     );
   const restart = el("restart");
@@ -363,7 +392,43 @@ function command(): Command {
 window.addEventListener("keydown", (e) => {
   if (["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
     e.preventDefault();
+  if (e.code === "Escape") {
+    const action = escapePause.press(e, {
+      started,
+      playing: started && game.phase === "playing",
+      paused,
+    });
+    if (action === "resume") {
+      e.preventDefault();
+      resume(true);
+    } else if (action === "pause") {
+      pause();
+      document.exitPointerLock();
+    }
+    return;
+  }
   if (paused) return;
+  if (
+    mouseCaptureNeeded &&
+    !e.repeat &&
+    !e.ctrlKey &&
+    !e.metaKey &&
+    !e.altKey &&
+    [
+      "KeyW",
+      "KeyA",
+      "KeyS",
+      "KeyD",
+      "Space",
+      "KeyR",
+      "KeyC",
+      "KeyG",
+      "KeyF",
+      "KeyV",
+      "KeyQ",
+    ].includes(e.code)
+  )
+    captureMouse();
   keys.add(e.code);
   if (e.code === "KeyC" && game.players[0].hp > 0) crouchInput.press(e.repeat);
   if (e.code === "KeyQ" && !e.repeat) {
@@ -377,7 +442,10 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyF" && !e.repeat) smoke = true;
   if (e.code === "KeyV" && !e.repeat) melee = true;
 });
-window.addEventListener("keyup", (e) => keys.delete(e.code));
+window.addEventListener("keyup", (e) => {
+  keys.delete(e.code);
+  if (e.code === "Escape") escapePause.release();
+});
 window.addEventListener("mousemove", (e) => {
   if (paused) return;
   if (tacticalMap.open) {
@@ -389,6 +457,10 @@ window.addEventListener("mousemove", (e) => {
 });
 window.addEventListener("mousedown", (e) => {
   if (paused) return;
+  if (mouseCaptureNeeded && !tacticalMap.open && e.target === renderer.canvas) {
+    captureMouse();
+    return;
+  }
   if (tacticalMap.open) {
     fire = aim = false;
     if (e.button === 2) tacticalMap.close();
@@ -411,24 +483,20 @@ window.addEventListener("mouseup", (e) => {
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("pointerlockchange", () => {
   if (document.pointerLockElement === renderer?.canvas) {
-    paused = false;
-    last = performance.now();
-    accumulator = 0;
-    el("menu").classList.add("hidden");
+    mouseCaptureNeeded = mouseCapturePending = false;
+    unpause();
   } else if (started && game.phase === "playing") pause();
 });
-document.addEventListener("pointerlockerror", () => {
-  pause();
-  el("menu").querySelector("p")!.textContent =
-    "Mouse capture was denied. Click Resume to retry.";
-});
+document.addEventListener("pointerlockerror", mouseCaptureFailed);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && started) {
+    escapePause.release();
     document.exitPointerLock();
     if (game.phase === "playing") pause();
   }
 });
 window.addEventListener("blur", () => {
+  escapePause.release();
   if (!demo && started && game.phase === "playing") {
     document.exitPointerLock();
     pause();

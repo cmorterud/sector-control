@@ -92,7 +92,8 @@ it("thrusts and butt-strikes with both wrists on the weapon, then restores the p
       kind,
       startTick: 100,
       strikeTick: 100 + rule.windup,
-      endTick: 100 + rule.duration,
+      endTick:
+        kind === "charge" ? Number.MAX_SAFE_INTEGER : 100 + rule.duration,
       yaw: 0,
       struck: false,
     };
@@ -100,7 +101,10 @@ it("thrusts and butt-strikes with both wrists on the weapon, then restores the p
       rig = r.soldiers[0],
       before = structuredClone(p);
     expect(!!r.people[0].findByName("bayonet blade")).toBe(kind !== "butt");
-    for (let age = 0; age <= rule.duration; age++) {
+    for (const age of [
+      ...Array.from({ length: rule.duration + 1 }, (_, i) => i),
+      ...(kind === "charge" ? [120, 600] : []),
+    ]) {
       r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + age);
       const left = rig.arms[0].elbow
         .getWorldTransform()

@@ -129,7 +129,7 @@ export interface Grenade extends V3 {
   bornAt: number;
   explodeAt: number;
 }
-export const projectileSpeed = 32;
+export const projectileSpeed = weaponProfiles.rifle.projectileSpeed;
 export const projectileRange = 60;
 export const rifleHeight = (map: MapDefinition, p?: Soldier) =>
   (map.terrain ? 1.65 : 1.45) - stanceDrop(p);
@@ -1415,15 +1415,16 @@ export class Game {
       0.001,
       Math.hypot(aim.x - from.x, aim.y - from.y, aim.z - from.z),
     );
+    const speed = weaponProfiles[p.weapon].projectileSpeed;
     const shot: Projectile = {
       id: ++this.projectileSequence,
       damage: weaponProfiles[p.weapon].damage,
       actor: p.id,
       team: p.team,
       ...from,
-      vx: ((aim.x - from.x) / length) * projectileSpeed,
-      vy: ((aim.y - from.y) / length) * projectileSpeed,
-      vz: ((aim.z - from.z) / length) * projectileSpeed,
+      vx: ((aim.x - from.x) / length) * speed,
+      vy: ((aim.y - from.y) / length) * speed,
+      vz: ((aim.z - from.z) / length) * speed,
       remaining: projectileRange,
       bornAt: this.tick,
     };
@@ -1435,9 +1436,9 @@ export class Game {
       recoil: { pitch: p.recoilPitch, yaw: p.recoilYaw },
       from,
       to: {
-        x: from.x + (shot.vx / projectileSpeed) * projectileRange,
-        y: from.y + (shot.vy / projectileSpeed) * projectileRange,
-        z: from.z + (shot.vz / projectileSpeed) * projectileRange,
+        x: from.x + (shot.vx / speed) * projectileRange,
+        y: from.y + (shot.vy / speed) * projectileRange,
+        z: from.z + (shot.vz / speed) * projectileRange,
       },
     });
     let obstruction = this.collision.ray(pivot, from);
@@ -1493,12 +1494,14 @@ export class Game {
         active.push(shot);
         continue;
       }
-      const travel = Math.min(projectileSpeed / 30, shot.remaining);
+      const speed = Math.hypot(shot.vx, shot.vy, shot.vz);
+      if (speed < 1e-6 || !Number.isFinite(speed)) continue;
+      const travel = Math.min(speed / 30, shot.remaining);
       const from = { x: shot.x, y: shot.y, z: shot.z };
       const to = {
-        x: from.x + (shot.vx / projectileSpeed) * travel,
-        y: from.y + (shot.vy / projectileSpeed) * travel,
-        z: from.z + (shot.vz / projectileSpeed) * travel,
+        x: from.x + (shot.vx / speed) * travel,
+        y: from.y + (shot.vy / speed) * travel,
+        z: from.z + (shot.vz / speed) * travel,
       };
       let nearest = this.collision.ray(from, to);
       let victim: Soldier | undefined;
@@ -2346,12 +2349,13 @@ export function botCommand(g: Game, p: Soldier): Command {
     // Aim from delayed observations and estimated movement, not live target velocity.
     const rx = seen.x - p.x,
       rz = seen.z - p.z;
-    const a = velocity.x ** 2 + velocity.z ** 2 - projectileSpeed ** 2;
+    const speed = weaponProfiles[p.weapon].projectileSpeed;
+    const a = velocity.x ** 2 + velocity.z ** 2 - speed ** 2;
     const b = 2 * (rx * velocity.x + rz * velocity.z);
     const lead = clamp(
       (-b - Math.sqrt(Math.max(0, b * b - 4 * a * d * d))) / (2 * a),
       0,
-      projectileRange / projectileSpeed,
+      projectileRange / speed,
     );
     const estimate = g.botSettings.awareness
       ? Math.min(0.7, lead) *

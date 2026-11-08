@@ -62,7 +62,6 @@ import {
   type Soldier,
   type Team,
   projectileRange,
-  projectileSpeed,
   mantleProgress,
   smooth,
   hopSpeed,
@@ -2448,11 +2447,14 @@ export class Renderer implements CollisionWorld {
       rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, -0.13 * pose.thrust);
       rig.rifle.setLocalPosition(
         weaponMount.x - (butt ? 0.1 : 0.02) * pose.ready,
-        weaponMount.y + rifleHeight(this.map) - 1.45 - 0.04 * pose.ready,
+        weaponMount.y +
+          rifleHeight(this.map) -
+          1.45 +
+          (p.melee.kind === "charge" ? 0.08 : -0.04) * pose.ready,
         weaponMount.z + 0.1 * pose.ready - 0.13 * pose.thrust,
       );
       rig.rifle.setLocalEulerAngles(
-        0,
+        p.melee.kind === "charge" ? 8 * pose.ready : 0,
         butt ? 60 * pose.ready + 35 * pose.thrust : 0,
         -8 * pose.ready,
       );
@@ -3258,7 +3260,9 @@ export class Renderer implements CollisionWorld {
         1.2,
         Math.max(
           0.12,
-          projectileRange - p.remaining - (projectileSpeed / 30) * (1 - alpha),
+          projectileRange -
+            p.remaining -
+            (Math.hypot(p.vx, p.vy, p.vz) / 30) * (1 - alpha),
         ),
       );
       const tracer = entity.children[0];

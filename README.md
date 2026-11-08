@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open the printed localhost URL, then click **Begin operation** to capture the mouse. WASD moves, mouse aims, Shift sprints, right mouse aims down range, each left click fires one round, R reloads, Tab holds the scoreboard, and Escape pauses. Losing focus pauses the local simulation. Resume requires a click.
+Open the printed localhost URL, then click **Begin operation** to capture the mouse. WASD moves, mouse aims, Shift sprints, right mouse aims down range, each left click fires one round, R reloads, Tab holds the scoreboard, and Escape pauses. Press Escape again to resume, or click Resume. After Escape releases the mouse, the next movement/action key or a click on the game recaptures it automatically; that capture click does not fire a shot. Losing focus pauses the local simulation.
 
 ```sh
 npm run check
@@ -29,11 +29,13 @@ Walk over a trench edge to drop in naturally; no Space press is needed. Gravity 
 
 Trench riflemen, including the player, carry a **bolt-action service rifle** with a long wooden stock, five rounds and 60 reserve. Click once to fire; the right hand opens, pulls and closes the bolt before another shot is possible (1.2 seconds between shots). Press R for a 3.2-second clip reload. Service rounds deal 50 damage and have stronger recoil, a deeper report and mechanical bolt/clip sounds. Industrial keeps its 30-round semi-auto rifle. Holding the mouse does not repeat fire; a press during reload or cycling must be released before trying again.
 
+Service-rifle and semi-auto rifle rounds travel at **64 m/s**, twice their previous speed. Machine-gun rounds remain at 32 m/s. All retain a 60 m range, visible tracers, swept collision and damage on impact; bot lead follows each weapon’s speed.
+
 **Machine gunners:** four bots per team in 50v50 (two in 25v25) carry a longer wooden-stock weapon with a pan magazine and folded bipod. They fire four-to-six-round bursts at 600 rounds/minute, then pause for 1.5–3 seconds. They retain recognition delay, imperfect aim, recoil, suppression and sight-loss interruption, with more aim wander than riflemen. Their magazines hold 60 rounds with 240 reserve and a three-second reload. They stay with the covering force rather than joining assault squads. Human players keep their map’s rifle; small 5v5 rosters stay rifle-only.
 
 Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or space your shots and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.
 
-Press **V** for melee. Trench service rifles use a **bayonet thrust**: 65 damage, a short wind-up, 1.8 m reach and recovery between attacks. Build up forward sprint speed, then press V for a **bayonet charge**: 100 damage, limited turning and a longer recovery. You commit to moving forward briefly; solid walls still stop you. Machine guns and industrial rifles use a shorter, weaker weapon-butt strike (45 damage, 1.25 m reach). Holding V does not repeat attacks.
+Press **V** for melee. Trench service rifles use a **bayonet thrust**: 65 damage, a short wind-up, 1.8 m reach and recovery between attacks. Build up forward sprint speed, then press V for a **bayonet charge**: 100 damage and limited turning. Keep sprinting forward to hold the bayonet raised and readied until the first body contact, which lowers it and starts a longer recovery. Releasing sprint or forward movement, hitting solid cover, becoming airborne, or dying ends the charge. Allies and protected soldiers can absorb the first contact without damage. Machine guns and industrial rifles use a shorter, weaker weapon-butt strike (45 damage, 1.25 m reach). Holding V does not repeat attacks.
 
 Melee checks the victim's position at contact, so stepping away can make it miss. Earth and solid cover stop it, and friendly/protected soldiers block the thrust without taking damage. An attack interrupts firing, loading, throwing and climbing until recovery ends. You cannot begin while reloading, throwing, airborne or stunned. A landed blow briefly staggers a surviving soldier and can interrupt their wind-up. Bots use melee only against a nearby recognized enemy, after a close-range reaction delay; artillery evasion and suppression cover still take priority. No spoken callouts are added.
 
@@ -181,7 +183,7 @@ All simulation uses 30 Hz ticks, plain serializable state, shared human/bot comm
 
 Industrial starts on flat ground with axis-aligned obstacles. Both maps support runtime grenade excavation. The trench map adds a shared height field, recessed floors, firing steps, and inclined ramps. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
 
-Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Rifle rounds visibly travel at 32 m/s, expire after 60 meters, and deal damage on impact. Teammates block rounds without taking damage; protection is checked when the round arrives. Reserve ammo is finite until respawn.
+Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Rifle rounds visibly travel at 64 m/s, expire after 60 meters, and deal damage on impact. Teammates block rounds without taking damage; protection is checked when the round arrives. Reserve ammo is finite until respawn.
 
 ## Local release scope
 
