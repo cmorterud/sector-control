@@ -143,11 +143,19 @@ export function terrainGeometry(
         )
           authoredStep = size;
       }
-      const step = refined.has(
-        `${Math.floor((cellX - x0) / 2)},${Math.floor((cellZ - z0) / 2)}`,
-      )
-        ? terrainResolution
-        : authoredStep;
+      const banks = terrain?.banks;
+      const rounded =
+        banks?.cells[
+          Math.floor((cellZ + map.depth / 2) / 2) * banks.cellColumns +
+            Math.floor((cellX + map.width / 2) / 2)
+        ];
+      const step =
+        rounded ||
+        refined.has(
+          `${Math.floor((cellX - x0) / 2)},${Math.floor((cellZ - z0) / 2)}`,
+        )
+          ? terrainResolution
+          : authoredStep;
       for (let x = cellX; x < Math.min(x1, cellX + 2) - epsilon; x += step)
         for (let z = cellZ; z < Math.min(z1, cellZ + 2) - epsilon; z += step) {
           const right = Math.min(x1, cellX + 2, x + step),

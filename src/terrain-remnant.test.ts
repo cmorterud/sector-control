@@ -27,6 +27,7 @@ function scene() {
     terrain: {
       ...t,
       heights,
+      banks: undefined, // This fixture authors a different, deliberately square traverse.
       lining: [],
       ramps: t.ramps.filter(
         (r) => Math.abs(r.z + 1) > 0.1 || Math.abs(r.x) > 25,

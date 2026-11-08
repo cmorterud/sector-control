@@ -5,7 +5,7 @@ import { groundHeight, industrialMap } from "./map";
 import { artilleryTargetReason } from "./artillery";
 import { grenadeExplosionProfile } from "./destruction";
 import { PlaytestLog } from "./playtest";
-function scene(x = -17.6, z = -27) {
+function scene(x = -17, z = -27) {
   const g = new Game(
     new TestCollision(trenchMap),
     false,
@@ -28,16 +28,16 @@ function scene(x = -17.6, z = -27) {
 describe("walking off terrain edges", () => {
   it("falls onto trench floors and firing steps without Space, including through real runtime lining", () => {
     for (const [x, z, dx, landing] of [
-      [-17.6, -27, -1, 0],
-      [-17.6, -1, -1, 0.85],
-      [17.6, -1, 1, 0.85],
+      [-17, -27, -1, 0],
+      [-17, -1, -1, 0.85],
+      [17, -1, 1, 0.85],
     ]) {
       const { g, p } = scene(x, z),
         log = new PlaytestLog();
       let airborne = false,
         previous = p.y;
       for (let i = 0; i < 50; i++) {
-        const c = { ...idle(), x: i < (landing ? 8 : 12) ? dx : 0 };
+        const c = { ...idle(), x: i < (landing ? 13 : 17) ? dx : 0 };
         g.step(c);
         log.recordTick(g, c, i / 30);
         airborne ||= !!p.fall;
@@ -77,13 +77,13 @@ describe("walking off terrain edges", () => {
     expect(p.crouched).toBe(true);
   });
   it("continues an actual hop over an edge without snapping its root down to the new floor", () => {
-    const { g, p } = scene(-17.6, -27);
+    const { g, p } = scene(-17, -27);
     let peak = p.y;
     g.step({ ...idle(), x: -1, yaw: -Math.PI / 2, mantle: true });
     expect(p.hop).not.toBeNull();
     for (let i = 0; i < 50; i++) {
       const before = p.y;
-      g.step({ ...idle(), x: i < 12 ? -1 : 0 });
+      g.step({ ...idle(), x: i < 18 ? -1 : 0 });
       peak = Math.max(peak, p.y);
       expect(before - p.y).toBeLessThan(0.45);
     }
@@ -95,8 +95,8 @@ describe("walking off terrain edges", () => {
   it("still blocks walking uphill through the bank and through the rear wooden screen", () => {
     const { g, p } = scene(-18.6, -27);
     for (let i = 0; i < 30; i++) g.step({ ...idle(), x: 1 });
-    expect(p.x).toBeLessThan(-18);
-    expect(p.y).toBe(0);
+    expect(p.x).toBeLessThan(-17.8);
+    expect(p.y).toBeLessThan(0.23);
     Object.assign(p, { x: -53, z: -9, y: 2.4, vx: 0, vz: 0 });
     for (let i = 0; i < 30; i++) g.step({ ...idle(), x: 1 });
     expect(p.x).toBeLessThan(-51.5);
@@ -108,8 +108,8 @@ describe("walking off terrain edges", () => {
     expect(p.y).toBeLessThanOrEqual(1.4);
     expect(p.fall).not.toBeNull();
     for (let i = 0; i < 20; i++) g.step({ ...idle(), x: 1 });
-    expect(p.x).toBeLessThan(-18);
-    expect(p.y).toBe(0);
+    expect(p.x).toBeLessThan(-17.8);
+    expect(p.y).toBeCloseTo(0, 2);
   });
   it("follows walkable slopes normally and falls when an explosion removes supporting ground", () => {
     const { g, p } = scene(-43, -1);

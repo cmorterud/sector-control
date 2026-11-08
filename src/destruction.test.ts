@@ -259,12 +259,12 @@ it("one grenade strips lining and chips the bank while lower earth still stops s
   expect(lining).toBeDefined();
   blast(game, -18.5, -1, 1.2);
   expect(lining.stage).toBe(2);
-  expect(groundHeight(-17.5, -1, game.map)).toBeGreaterThan(1.3);
-  expect(groundHeight(-17.5, -1, game.map)).toBeLessThan(2);
+  expect(groundHeight(-16, -1, game.map)).toBeGreaterThan(1.3);
+  expect(groundHeight(-16, -1, game.map)).toBeLessThan(2);
   expect(
     game.collision.ray(
       { x: -18.5, y: 1.2, z: -1 },
-      { x: -17.5, y: 1.2, z: -1 },
+      { x: -16, y: 1.2, z: -1 },
     ),
   ).toBeLessThan(1);
 });
@@ -276,7 +276,7 @@ it("actual Ammo rays recognize a chipped parapet crest while the lower bank stil
   try {
     physics.setPatch("-3,-1", terrainGeometry(map, "-3,-1"), entity);
     const a = { x: -18.5, y: 2.25, z: -1 },
-      b = { x: -17.5, y: 2.25, z: -1 };
+      b = { x: -17.1, y: 2.25, z: -1 };
     expect(physics.ray(a, b)).toBeLessThan(1);
     const change = deformExplosion(
       map,

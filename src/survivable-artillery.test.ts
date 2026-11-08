@@ -75,7 +75,7 @@ it("lets actual trench earth shield the floor and crouched step while exposed he
     hp: 100,
   };
   g.players.push(p);
-  const at = { x: -17.5, y: 2.425, z: -1 };
+  const at = { x: -16.5, y: 2.425, z: -1 };
   g.explode(at, 0, "blue", cosmetic);
   expect(p.hp).toBe(100);
   Object.assign(p, { x: -19, y: 0.85, hp: 100 });

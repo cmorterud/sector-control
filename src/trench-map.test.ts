@@ -237,8 +237,8 @@ describe("trench prototype", () => {
       expect(groundHeight(floor.x, floor.z, map)).toBe(0);
       const stopped = moveOnMap(floor, { x: -side * 14, z: 0 }, map);
       // Setbacks can now drop into their adjacent elbow, but the front bank stays sealed.
-      expect(groundHeight(stopped.x, stopped.z, map)).toBeLessThan(0.851);
-      expect(Math.abs(stopped.x)).toBeGreaterThanOrEqual(17.99);
+      expect(groundHeight(stopped.x, stopped.z, map)).toBeLessThan(1.2);
+      expect(Math.abs(stopped.x)).toBeGreaterThanOrEqual(17.8);
       expect(walkSegment(floor, { x: side * 10, z: station.z }, map)).toBe(
         false,
       );
@@ -337,7 +337,7 @@ describe("trench prototype", () => {
                 : groundHeight(p.x, p.z, game.map) + (p.hop?.height ?? 0),
             );
           expect(blocked(p.x, p.z, 0.44, game.map)).toBe(false);
-          expect(p.team === "blue" ? p.x < -18 : p.x > 18).toBe(true);
+          expect(p.team === "blue" ? p.x < -17.8 : p.x > 17.8).toBe(true);
         }
     }
     expect(maxProjectiles).toBeLessThan(1000);

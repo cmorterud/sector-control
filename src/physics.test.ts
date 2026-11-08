@@ -1,6 +1,7 @@
 import { it, expect } from "vitest";
 import { Entity, Quat, Vec3, BODYGROUP_STATIC, BODYMASK_ALL } from "playcanvas";
-import { createPhysicsWorld } from "./physics";
+import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
+import { createPhysicsWorld, TerrainPhysics } from "./physics";
 import { Game, idle } from "./simulation";
 
 it("initializes real Ammo wall raycasts and stops a traveling round without stepping physics", () => {
@@ -76,59 +77,15 @@ it("initializes real Ammo wall raycasts and stops a traveling round without step
 it("uses real Ammo earth banks for trench protection, firing steps, ramps, and mantling", async () => {
   const { trenchMap } = await import("./trench-map");
   const { moveOnMap, groundHeight } = await import("./map");
-  const world = createPhysicsWorld();
-  const bodies: ReturnType<typeof world.createBody>[] = [];
-  const shapes: ReturnType<typeof world.createShape>[] = [];
-  const entities: Entity[] = [];
-  const addBox = (
-    x: number,
-    y: number,
-    z: number,
-    w: number,
-    h: number,
-    d: number,
-    angle = 0,
-  ) => {
-    const entity = new Entity("trench earth");
-    const shape = world.createShape({
-      type: "box",
-      halfExtents: new Vec3(w / 2, h / 2, d / 2),
-    });
-    const body = world.createBody({
-      type: "static",
-      mass: 0,
-      shape,
-      position: new Vec3(x, y, z),
-      rotation: new Quat().setFromEulerAngles(0, 0, angle),
-      entity,
-    });
-    world.addBody(body, BODYGROUP_STATIC, BODYMASK_ALL);
-    bodies.push(body);
-    shapes.push(shape);
-    entities.push(entity);
-  };
+  const physics = new TerrainPhysics(),
+    root = new Entity("rounded trench earth");
   try {
-    addBox(0, -0.3, 0, trenchMap.width, 0.6, trenchMap.depth);
-    for (const p of trenchMap.terrain!.rectangles)
-      addBox(p.x, p.h / 2, p.z, p.w, p.h, p.d);
-    for (const r of trenchMap.terrain!.ramps) {
-      const angle = Math.atan2(r.high - r.low, r.w);
-      addBox(
-        r.x,
-        (r.low + r.high) / 2 - 0.1 / Math.cos(angle),
-        r.z,
-        Math.hypot(r.w, r.high - r.low) + 0.12,
-        0.2,
-        r.d,
-        (r.direction * angle * 180) / Math.PI,
-      );
-    }
+    for (const key of terrainPatchKeys(trenchMap))
+      physics.setPatch(key, terrainGeometry(trenchMap, key), root);
     const ray = (
       a: { x: number; y: number; z: number },
       b: { x: number; y: number; z: number },
-    ) =>
-      world.raycastFirst(new Vec3(a.x, a.y, a.z), new Vec3(b.x, b.y, b.z))
-        ?.hitFraction ?? 1;
+    ) => physics.ray(a, b);
     for (const height of [0.6, 1.1, 1.6, 1.98])
       expect(
         ray({ x: 0, y: 3.85, z: -27 }, { x: -21, y: height, z: -27 }),
@@ -149,11 +106,9 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
           { ...route.points.at(-1)!, y: 1.65 },
         ),
       ).toBeLessThan(1);
-    const rampHit = world.raycastFirst(
-      new Vec3(-43, 5, -1),
-      new Vec3(-43, -1, -1),
-    );
-    expect(rampHit?.point.y).toBeCloseTo(1.2, 2);
+    expect(
+      5 - 6 * ray({ x: -43, y: 5, z: -1 }, { x: -43, y: -1, z: -1 }),
+    ).toBeCloseTo(1.2, 2);
     const game = new Game(
       { ray, move: (p, d) => moveOnMap(p, d, trenchMap) },
       false,
@@ -163,7 +118,7 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
       { map: trenchMap },
     );
     expect(
-      ray({ x: 24, y: 0.1, z: -1 }, { x: 24, y: -0.1, z: -1 }),
+      ray({ x: 21.1, y: 0.1, z: -1 }, { x: 21.1, y: -0.1, z: -1 }),
     ).toBeLessThan(1);
     Object.assign(game.players[0], { x: -18.5, y: 0, z: -27 });
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true });
@@ -195,12 +150,7 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
     expect(target.hp).toBeLessThan(100);
     expect(game.events.some((e) => e.type === "grenadeExplosion")).toBe(true);
   } finally {
-    for (const body of bodies) {
-      world.removeBody(body);
-      world.destroyBody(body);
-    }
-    for (const shape of shapes) world.destroyShape(shape);
-    world.destroy();
-    for (const entity of entities) entity.destroy();
+    physics.destroy();
+    root.destroy();
   }
 });

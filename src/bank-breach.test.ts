@@ -59,6 +59,7 @@ it("an artillery side strike makes a real walkable opening with matching Ammo te
 });
 it("does not excavate sideways through an intact concrete screen or change protected foundations", () => {
   const g = scene();
+  const before = groundHeight(-17.5, -1, g.map);
   g.map.boxes.push({
     id: "shield",
     kind: "barrier",
@@ -73,7 +74,7 @@ it("does not excavate sideways through an intact concrete screen or change prote
     ...grenadeExplosionProfile,
     damage: 0,
   });
-  expect(groundHeight(-17.5, -1, g.map)).toBeCloseTo(2.4);
+  expect(groundHeight(-17.5, -1, g.map)).toBe(before);
   expect(g.map.boxes.some((b) => b.id === "shield")).toBe(true);
 });
 

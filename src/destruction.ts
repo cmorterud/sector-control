@@ -173,7 +173,7 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
           z,
           w: wall.w,
           d: wall.d / segments,
-          h: source.terrain!.bankHeight - 0.1,
+          h: source.terrain!.banks ? 0.45 : source.terrain!.bankHeight - 0.1,
         },
         true,
       );

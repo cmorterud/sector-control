@@ -258,6 +258,8 @@ describe("crouching combat profile", () => {
     g.step({ ...idle(), crouch: true, fire: true, yaw: Math.PI / 2 });
     const fire = g.events.find((e) => e.type === "fire");
     expect(fire?.type === "fire" && fire.from.y).toBeCloseTo(1.95);
+    // The rounded shoulder lies just beyond the muzzle rather than inside it.
+    for (let i = 0; i < 3 && g.projectiles.length; i++) g.step(idle());
     expect(g.projectiles).toHaveLength(0);
     expect(g.events.some((e) => e.type === "impact" && e.target === null)).toBe(
       true,

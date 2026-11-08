@@ -69,6 +69,10 @@ export interface TerrainElevation {
   rows: number;
   values: Float32Array;
 }
+export interface TrenchBanks extends TerrainElevation {
+  cellColumns: number;
+  cells: Uint8Array;
+}
 export interface TerrainRelief {
   grid?: {
     originX: number;
@@ -129,6 +133,7 @@ export interface MapDefinition {
     depressions?: Depression[];
     shellScars?: Depression[];
     elevation?: TerrainElevation;
+    banks?: TrenchBanks;
     relief?: TerrainRelief;
   };
 }
@@ -167,6 +172,20 @@ function authoredMapHeight(
   if (col < 0 || col >= terrain.columns || row < 0 || row >= terrain.rows)
     return terrain.bankHeight;
   const height = terrain.heights[row * terrain.columns + col];
+  // The authored lane/step stays flat. Most soldier queries never need the
+  // denser shoulder field; ramps already returned their exact height above.
+  if (height < terrain.bankHeight - 0.01) return height;
+  const banks = terrain.banks;
+  if (
+    banks?.cells[Math.floor(row / 2) * banks.cellColumns + Math.floor(col / 2)]
+  ) {
+    const rounded = groundElevationField(x, z, banks);
+    if (Math.abs(rounded) < 1e-8) return 0;
+    return (
+      rounded +
+      (rounded >= terrain.bankHeight - 0.01 ? groundElevation(x, z, map) : 0)
+    );
+  }
   // Floors, steps and ramps are protected from elevation. Reuse the authored
   // cell lookup for open ground instead of doing a second grid lookup per ray.
   return (
@@ -194,6 +213,9 @@ export function groundElevation(
 ): number {
   const field = map.terrain?.elevation;
   if (!field) return 0;
+  return groundElevationField(x, z, field);
+}
+function groundElevationField(x: number, z: number, field: TerrainElevation) {
   const gx = (x - field.originX) / field.spacing,
     gz = (z - field.originZ) / field.spacing;
   if (gx < 0 || gz < 0 || gx > field.columns - 1 || gz > field.rows - 1)
@@ -396,7 +418,22 @@ export function moveOnMap(
     const ground = groundHeight(x, z, map),
       next = groundHeight(nx, nz, map);
     const feet = airborne ? p.y! : ground;
+    // A rounded bank is continuous: checking only this frame's small delta
+    // would let a slow soldier creep up a wall that stops a sprinting one.
+    // Keep the same 15 cm step budget at every movement speed.
+    const uphill =
+      map.terrain?.banks &&
+      !airborne &&
+      next > ground + 0.00001 &&
+      groundHeight(
+        x + Math.sign(nx - x) * 0.15,
+        z + Math.sign(nz - z) * 0.15,
+        map,
+      ) -
+        ground >
+        0.23;
     if (
+      uphill ||
       next - feet > 0.23 ||
       Math.abs(nx) > map.width / 2 - 1.45 ||
       Math.abs(nz) > map.depth / 2 - 1.45
@@ -479,9 +516,15 @@ export function mantleRoute(
     // Walkable slopes are not ledges; Space on a ramp should hop normally.
     if (Math.abs(step) < 0.3) continue;
     if (rise <= 0 || rise > 2.5) return null;
-    const landing = { x: x + dx * 0.85, z: z + dz * 0.85 };
+    const landingReach = map.terrain.banks ? 1.35 : 0.85;
+    const landing = { x: x + dx * landingReach, z: z + dz * landingReach };
     const height = groundHeight(landing.x, landing.z, map);
-    if (Math.abs(height - fromHeight - rise) > 0.12) return null;
+    if (
+      map.terrain.banks
+        ? height - fromHeight <= 0 || height - fromHeight > 2.5
+        : Math.abs(height - fromHeight - rise) > 0.12
+    )
+      return null;
     // Leave a full soldier footprint on a stable landing surface.
     for (const [ox, oz] of [
       [0, 0],

@@ -1,4 +1,5 @@
 import { buildLandmarks } from "./landmarks";
+import { buildTrenchBanks } from "./trench-banks";
 import { vegetationFor } from "./vegetation";
 import {
   groundHeight,
@@ -426,6 +427,7 @@ export const trenchMap: MapDefinition = {
   },
 };
 
+trenchMap.terrain!.banks = buildTrenchBanks(trenchMap);
 trenchMap.terrain!.shellScars = [
   ...trenchMap.terrain!.craters.map((crater, i) => ({
     ...crater,
@@ -479,7 +481,8 @@ for (const wall of liningCandidates) {
     const left = groundHeight(wall.x - 0.2, middle, trenchMap);
     const right = groundHeight(wall.x + 0.2, middle, trenchMap);
     const againstEarth =
-      Math.max(left, right) >= bankHeight - 0.05 &&
+      Math.max(left, right) >=
+        (trenchMap.terrain!.banks ? 0.3 : bankHeight - 0.05) &&
       Math.abs(left - right) > 0.3;
     if (againstEarth) start ??= z;
     else addPanel(z);

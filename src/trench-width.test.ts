@@ -9,10 +9,10 @@ import { TerrainPhysics } from "./physics";
 it("keeps two-meter floor lanes and a compact four-meter firing bay with a real ramp and step", () => {
   for (const x of [-21.8, -21, -20.2])
     expect(groundHeight(x, -1, trenchMap)).toBe(0);
-  expect(groundHeight(-22.1, -1, trenchMap)).toBeCloseTo(2.4);
+  expect(groundHeight(-22.9, -1, trenchMap)).toBeCloseTo(2.4);
   expect(groundHeight(-19.5, -1, trenchMap)).toBeCloseTo(0.425);
   expect(groundHeight(-18.5, -1, trenchMap)).toBeCloseTo(0.85);
-  expect(groundHeight(-17.9, -1, trenchMap)).toBeCloseTo(2.4);
+  expect(groundHeight(-17.1, -1, trenchMap)).toBeCloseTo(2.4);
   expect(walkSegment({ x: -21, z: -1 }, { x: -18.5, z: -1 }, trenchMap)).toBe(
     true,
   );
@@ -23,8 +23,8 @@ it("keeps two-meter floor lanes and a compact four-meter firing bay with a real 
     expect(groundHeight(x, z, trenchMap)).toBe(0);
     expect(groundHeight(x - 0.8, z, trenchMap)).toBe(0);
     expect(groundHeight(x + 0.8, z, trenchMap)).toBe(0);
-    expect(groundHeight(x - 1.1, z, trenchMap)).toBeCloseTo(2.4);
-    expect(groundHeight(x + 1.1, z, trenchMap)).toBeCloseTo(2.4);
+    expect(groundHeight(x - 1.9, z, trenchMap)).toBeCloseTo(2.4);
+    expect(groundHeight(x + 1.9, z, trenchMap)).toBeCloseTo(2.4);
   }
 });
 it("matches real Ammo to narrow floors, step ramps and banks without refining distant open ground", () => {
