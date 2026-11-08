@@ -294,19 +294,37 @@ button span {
   color: #aabbb5;
   font-size: 9px;
 }
+#labels {
+  position: absolute;
+  inset: 0;
+  opacity: 0.6;
+  mask-image: radial-gradient(
+    ellipse 160px 120px at 50% 50%,
+    #0002 0%,
+    #0005 40%,
+    #000 100%
+  );
+  transition: opacity 0.15s;
+}
+#labels.aiming {
+  opacity: 0.35;
+}
 .objective {
   position: absolute;
   transform: translate(-50%, -50%);
-  border: 1px solid currentColor;
   text-align: center;
-  min-width: 32px;
-  padding: 5px;
-  font-size: 20px;
-  background: #182a2aa0;
-  text-shadow: 0 1px 5px #000;
+  min-width: 22px;
+  padding: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px #000;
+}
+.objective.contested {
+  animation: none;
 }
 .objective small {
-  font-size: 8px;
+  font-size: 9px;
+  letter-spacing: 0;
 }
 #damage {
   position: absolute;

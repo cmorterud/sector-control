@@ -346,6 +346,7 @@ function hud(now: number) {
     el("scoreboard").innerHTML =
       `<section class="panel"><div class="eyebrow">LIVE OPERATION</div><h2>Scoreboard</h2>${table()}</section>`;
   } else el("scoreboard").classList.add("hidden");
+  el("labels").classList.toggle("aiming", aim);
   el("labels").innerHTML =
     game.scoring === "eliminations"
       ? ""
@@ -357,7 +358,7 @@ function hud(now: number) {
               z: s.z,
             });
             return v.z > 0
-              ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")}" style="left:${v.x}px;top:${v.y}px">${s.id}${s.name ? " · " + s.name : ""}<small>${s.contested ? "CONTESTED" : Math.round(dist(p, s)) + "m"}</small><div class="bar"><i class="${s.control < 0 ? "redbar" : ""}" style="width:${Math.abs(s.control) * 100}%"></i></div></div>`
+              ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")}" aria-label="${s.id}${s.name ? " · " + s.name : ""}${s.contested ? " · Contested" : ""}" style="left:${v.x}px;top:${v.y}px">${s.id}${s.contested ? " · !" : ""}<small>${Math.round(dist(p, s))}m</small></div>`
               : "";
           })
           .join("");
