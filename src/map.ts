@@ -262,6 +262,27 @@ const runtimeCutGrids = new WeakMap<
   DestructionState,
   { revision: number; relief: TerrainRelief }
 >();
+// Official explosion edits can patch the existing numeric grid. Rebuilding it
+// from every accumulated sparse sample for each shell grows with match age.
+export function updateTerrainCutGrid(
+  map: MapDefinition,
+  previous: number,
+  edits: Map<string, number>,
+) {
+  const state = map.destruction;
+  const cached = state && runtimeCutGrids.get(state);
+  if (!state || !cached || cached.revision !== previous || !cached.relief.grid)
+    return;
+  const grid = cached.relief.grid;
+  for (const [key, depth] of edits) {
+    const comma = key.indexOf(","),
+      col = Number(key.slice(0, comma)) - grid.originX,
+      row = Number(key.slice(comma + 1)) - grid.originZ;
+    if (col >= 0 && row >= 0 && col < grid.columns && row < grid.rows)
+      grid.values[row * grid.columns + col] = depth;
+  }
+  cached.revision = state.terrainRevision ?? state.revision;
+}
 export function terrainCut(x: number, z: number, map: MapDefinition): number {
   const state = map.destruction;
   const revision = state?.terrainRevision ?? state?.revision ?? 0;
@@ -329,6 +350,9 @@ function sampleTerrainCuts(
     c = state.cuts[`${ix},${iz + 1}`] ?? 0;
     d = state.cuts[`${ix + 1},${iz + 1}`] ?? 0;
   }
+  // Untouched cells cannot need the eroded-cliff correction below. Most floor
+  // and movement probes still land on four zero cuts, even late in a match.
+  if (a === 0 && b === 0 && c === 0 && d === 0) return 0;
   const interpolate = (a: number, b: number, c: number, d: number) =>
     tx <= tz
       ? a + (d - c) * tx + (c - a) * tz

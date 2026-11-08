@@ -1796,13 +1796,15 @@ function graph(map: MapDefinition) {
   const cached = navigation.get(map);
   if (cached) return cached;
   const step = map.navSpacing,
-    nodes: Vec[] = [];
+    nodes: Vec[] = [],
+    nodeKeys: string[] = [];
   const unique = new Set<string>();
   const add = (x: number, z: number) => {
     const key = `${x},${z}`;
     if (!unique.has(key) && !blocked(x, z, 0.7, map)) {
       unique.add(key);
       nodes.push({ x, z });
+      nodeKeys.push(key);
     }
   };
   for (let x = -map.width / 2 + step; x <= map.width / 2 - step; x += step)
@@ -1863,8 +1865,8 @@ function graph(map: MapDefinition) {
     memo = { revision, checks: new Map() };
     navigationSegments.set(map, memo);
   }
-  const edgePasses = (a: Vec, b: Vec) => {
-    const key = `${a.x},${a.z}:${b.x},${b.z}`;
+  const edgePasses = (a: Vec, b: Vec, i: number, j: number) => {
+    const key = `${nodeKeys[i]}:${nodeKeys[j]}`;
     let check = memo.checks.get(key);
     if (!check) {
       check = {
@@ -1888,7 +1890,7 @@ function graph(map: MapDefinition) {
           if (
             j !== i &&
             dist(a, nodes[j]) <= step * 1.45 &&
-            edgePasses(a, nodes[j])
+            edgePasses(a, nodes[j], i, j)
           )
             result.push(j);
     return result;

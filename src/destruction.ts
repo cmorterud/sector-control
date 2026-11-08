@@ -2,6 +2,7 @@ import { collapsedStructureParts, isStructure } from "./landmarks";
 import { fallenTreeParts, timberSupport } from "./vegetation";
 import { craterShape, craterSampler, type CraterShape } from "./crater-shape";
 import {
+  updateTerrainCutGrid,
   baseGroundHeight,
   groundHeight,
   terrainResolution,
@@ -502,8 +503,11 @@ export function deformExplosion(
           patchKey(x * terrainResolution + dx, z * terrainResolution + dz),
         );
   }
-  if (edits.size)
-    state.terrainRevision = (state.terrainRevision ?? state.revision) + 1;
+  if (edits.size) {
+    const previous = state.terrainRevision ?? state.revision;
+    state.terrainRevision = previous + 1;
+    updateTerrainCutGrid(map, previous, edits);
+  }
   const collapses = applyCoverChanges(
     map,
     objects,
