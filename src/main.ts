@@ -54,7 +54,6 @@ let audio: BattleAudio | undefined;
 const battlefield = new BattlefieldFeedback((cue) => audio?.play(cue));
 let audioVolume = 0.65;
 let cameraReactions = true;
-let soldierVoices = true;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
 const params = new URLSearchParams(location.search),
@@ -94,16 +93,11 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label><label><input id="soldier-voices" type="checkbox" ${soldierVoices ? "checked" : ""}> Soldier voices</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
   el("primary").onclick = action;
   el("volume").oninput = (e) => {
     audioVolume = Number((e.target as HTMLInputElement).value) / 100;
     audio?.volume(audioVolume);
-  };
-  el("soldier-voices").onchange = (e) => {
-    soldierVoices = (e.target as HTMLInputElement).checked;
-    battlefield.chatter.enabled = soldierVoices;
-    audio?.chatter(soldierVoices);
   };
   el("camera-reactions").onchange = (e) =>
     (cameraReactions = (e.target as HTMLInputElement).checked);
@@ -111,8 +105,6 @@ function menu(
 function resume() {
   audio ??= new BattleAudio();
   audio.volume(audioVolume);
-  audio.chatter(soldierVoices);
-  void audio.prepareVoices();
   audio.resume();
   if (demo) {
     paused = false;
@@ -491,7 +483,7 @@ try {
       : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag in the trench. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 20 seconds, then a shared 50-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag in the trench. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot. Press G to throw a grenade: three per spawn, three-second fuse. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? " Press Space to hop or climb out of a trench; walk over an edge to drop in. Use raised firing steps to shoot from cover." : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

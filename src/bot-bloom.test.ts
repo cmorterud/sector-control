@@ -19,6 +19,8 @@ function duel(aimError = 0.02) {
     { map: trenchMap, teamSize: 1 },
   );
   game.botSettings.aimError = aimError;
+  // Measure rifle accuracy without barrages changing cover or consuming RNG.
+  game.artillery.enabled = false;
   game.botSettings.reactionTicks = 0;
   const [target, shooter] = game.players;
   Object.assign(target, {

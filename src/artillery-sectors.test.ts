@@ -51,7 +51,7 @@ it("allows a blind call from the trench floor with bounded extra dispersion and 
   expect(m.impacts.every((v) => dist(v, m.target) <= 24.001)).toBe(true);
   expect(m.impacts.some((v) => dist(v, m.target) > 14)).toBe(true);
   expect(artilleryThreat(g, { x: m.target.x + 35, z: m.target.z })).toBe(m);
-  expect(g.artillery.readyAt.blue).toBe(g.tick + 1500);
+  expect(g.artillery.readyAt.blue).toBe(g.tick + 900);
   expect(requestArtillery(g, p, target)).toBe(false);
 });
 it("retains ownership/range/death/finite bounds rules and allows map-edge sectors without off-map shells", () => {

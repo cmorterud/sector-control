@@ -337,7 +337,10 @@ describe("trench prototype", () => {
                 : groundHeight(p.x, p.z, game.map) + (p.hop?.height ?? 0),
             );
           expect(blocked(p.x, p.z, 0.44, game.map)).toBe(false);
-          expect(p.team === "blue" ? p.x < -17.8 : p.x > 17.8).toBe(true);
+          // Intact parapets keep teams inside. Blasts can open real passages;
+          // after excavation the shared-height and collision checks above apply.
+          if (!game.map.destruction!.craters.length)
+            expect(p.team === "blue" ? p.x < -17.8 : p.x > 17.8).toBe(true);
         }
     }
     expect(maxProjectiles).toBeLessThan(1000);

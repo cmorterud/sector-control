@@ -43,13 +43,13 @@ Each uncontested flag earns its owner **one point every three seconds**. First t
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
-## Soldiers and battlefield voices
+## Soldiers
 
 Soldiers now vary their stride timing, upper-body sway and idle breathing, with smoother movement transitions. Reloads visibly lower the weapon, exchange its magazine or ammunition box and work the action; the right hand moves between belt and weapon while the left stays on its grip. Rounded helmets with brims, webbing, pouches, pack flaps and rolled blankets add detail while retaining team colors.
 
 A killed soldier buckles and falls over roughly 0.85 seconds. Nearby bodies remain for about 20 seconds, fading at the end; at most 24 are retained. They follow excavated ground and are cosmetic, so they do not block movement, shots or objectives. Respawning soldiers are independent of the retained body. Pausing freezes the presentation and a fresh match clears it.
 
-Nearby friendly soldiers occasionally call **“Incoming! Get down!”, “Grenade!”** or **“Smoke out!”** in response to actual events. Distance, solid cover, global/individual cooldowns and one spoken line at a time keep chatter sparse. Enemy grenade warnings require sight. These are short bundled synthetic voice clips, with two variants per line, played through the normal spatial mixer and included in playtest audio. No microphone or live speech service is used. The start/pause menu has a **Soldier voices** toggle; Battlefield volume also controls voices.
+Spoken soldier callouts are removed, including smoke, grenade and incoming-artillery lines. Weapon fire, explosions, incoming-shell whistles, footsteps and other battlefield effects remain audible.
 
 ## Battlefield appearance
 
@@ -89,13 +89,13 @@ Press **Q** to open a quick tactical map, then click a broad **16 m sector** to 
 
 You can request artillery from the trench floor or behind cover. Calls are approximate: the salvo center may drift up to **6 m with a clear view**, or **10 m when blind**, followed by the existing **14 m shell scatter**. You cannot refine a call into a precise point. Range remains **15–70 m**, evaluated to the sector center; unavailable sectors are dimmed with a reason. Charge/cooldown and human-team ownership still apply. Map-edge impacts stay inside the battlefield.
 
-Each team has one shared charge: first available **20 seconds** into the match, then **50 seconds** after each confirmed call. Death does not replenish it or cancel an ordered barrage. If a team has a human player, only that human can call its artillery, including while waiting to respawn. Teams made entirely of bots coordinate their own calls. In normal play this reserves Blue's charge for you; autoplay has no human-controlled soldiers, so both teams can call automatically.
+Each team has one shared charge: first available **10 seconds** into the match, then **30 seconds** after each confirmed call. Death does not replenish it or cancel an ordered barrage. If a team has a human player, only that human can call its artillery, including while waiting to respawn. Teams made entirely of bots coordinate their own calls. In normal play this reserves Blue's charge for you; autoplay has no human-controlled soldiers, so both teams can call automatically.
 
 An ordered barrage takes roughly **four seconds** to reach the battlefield, without an enemy countdown or ground warning ring. Listen for the actual incoming shells. Eight shells scatter within **14 m** of the target and land across the same **four-second first-to-last window**, with irregular gaps of roughly **0.23–0.93 seconds**. Visible shells descend in **0.8 seconds**, whistle, and burst on the first solid surface, including bunker roofs.
 
 Each shell retains **240 maximum damage with a 12 m falloff radius**: an unshielded soldier can still be killed within roughly seven meters. Intact earth fully shields blocked bodies, and partial cover scales artillery damage by how much of the body is exposed. Moving off the firing step or crouching behind the lip offers strong protection; a direct hit inside the trench remains deadly. Craters are smaller: nominal **2.5 m radius / 1.3 m depth**, terrain reach 3.5 m and bank-cut depth 1.6 m. Irregular shape, dust, flying dirt, structural damage and repeated excavation remain. Fixed buildings/bunkers protect their foundations. Self damage applies; teammates and protected spawns retain grenade protection. Artillery dust is cosmetic; dedicated smoke grenades conceal vision.
 
-Bots react to nearby physical shell flight and impacts, then seek earth cover or the screened rear shelter bays; they no longer know about calls before shells arrive. Voices likewise respond to physical incoming shells. Survivors return to nearby intact stations. **Future request: creeping barrage**, a fire line that advances slowly forward; deliberately deferred.
+Bots react to nearby physical shell flight and impacts, then seek earth cover or the screened rear shelter bays; they no longer know about calls before shells arrive. Survivors return to nearby intact stations. **Future request: creeping barrage**, a fire line that advances slowly forward; deliberately deferred.
 
 Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` and `artilleryEnd` events link mission/shell IDs; snapshots include team cooldowns, missions, shells and retreat state. Recorder summaries count calls, impacts and retreats. Runtime terrain cuts remain sparse/serializable with a revision-based numeric lookup cache for movement and rays.
 

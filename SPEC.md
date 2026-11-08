@@ -113,3 +113,9 @@ Brick sections have180HP, bunker concrete340HP, the abandoned gun210HP and new r
 A fixed quarter-meter shoulder field scoops the earth outside existing low lanes, with a0.64–0.8m profile varying smoothly along the edge. Rounded cross-sections and outside corners replace square earth cliffs; narrow floor lanes,0.85m firing steps, their ramps and2.4m full bank height remain. Rear entry ramps keep their exact grades. Only affected two-meter cells get the denser mesh; distant ground remains coarse. Rendering, actual Ammo, movement, projectiles, visibility and excavation share the sampled surface. Timber lining is shortened to0.45m beneath the earthen shoulders.
 
 Mantles seek a stable full-footprint landing beyond the rounded shoulder. Ground movement checks the same15cm uphill step budget even at very low speeds, preventing gradual wall climbing through tiny inputs. Walking down and hopping remain physical. Damage/capture rules are unchanged; the new terrain shape naturally changes local exposure. Start a fresh match.
+
+## Artillery availability and spoken callouts — November 7
+
+The shared team artillery charge unlocks at10seconds and replenishes30seconds after each confirmed call (previously20/50). Respawn still preserves charge timing; human-team ownership, active-mission lock, targeting scatter, shell timing/damage and spontaneous heavy shells keep their existing rules. Start/pause instructions reflect the shorter timings.
+
+Live battlefield feedback no longer emits spoken smoke, grenade or incoming-artillery callouts. The Soldier voices menu option and speech preload are removed. Rifle/MG fire, whistles, explosions, debris, footsteps and other effects keep their current mix.

@@ -28,8 +28,8 @@ const shellHeight = 35;
 const shellApproach = 12;
 const shellGravity = 10;
 export const artilleryRules = {
-  initialDelay: 20 * 30,
-  cooldown: 50 * 30,
+  initialDelay: 10 * 30,
+  cooldown: 30 * 30,
   warning: 4 * 30,
   shellCount: shellsPerBarrage,
   barrageDuration,

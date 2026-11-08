@@ -54,6 +54,21 @@ function ready(g: Game) {
 }
 
 describe("artillery missions", () => {
+  it("makes the first barrage available at ten seconds and replenishes the charge exactly thirty seconds after a call", () => {
+    const g = scene(),
+      p = g.players[0];
+    g.tick = 299;
+    expect(requestArtillery(g, p, target)).toBe(false);
+    g.step(idle());
+    expect(requestArtillery(g, p, target)).toBe(true);
+    expect(g.artillery.readyAt.blue).toBe(1200);
+    advance(g, 899);
+    expect(g.artillery.missions).toHaveLength(0);
+    expect(requestArtillery(g, p, target)).toBe(false);
+    g.step(idle());
+    expect(requestArtillery(g, p, target)).toBe(true);
+    expect(g.artillery.readyAt.blue).toBe(2100);
+  });
   it("varies shell gaps substantially, reproducibly and within the same barrage window", () => {
     const patterns = new Set<string>();
     for (let seed = 0; seed < 256; seed++) {
@@ -90,12 +105,12 @@ describe("artillery missions", () => {
     ready(g);
     expect(requestArtillery(g, p, target)).toBe(true);
     const cooldown = g.artillery.readyAt.blue;
-    expect(cooldown).toBe(g.tick + 1500);
+    expect(cooldown).toBe(g.tick + 900);
     expect(requestArtillery(g, { ...p, id: 1 }, target)).toBe(false);
     g.respawn(p);
     expect(g.artillery.readyAt.blue).toBe(cooldown);
     expect(g.events.filter((e) => e.type === "artilleryCall")).toHaveLength(1);
-    expect(scene().artillery.readyAt.blue).toBe(600);
+    expect(scene().artillery.readyAt.blue).toBe(300);
   });
   it("rejects hidden, blocked, airborne, dead, out-of-range and invalid markers without spending a charge", () => {
     const g = scene(trenchMap),
@@ -122,7 +137,7 @@ describe("artillery missions", () => {
     p.hop = null;
     g.map.boxes.push({ x: 0, z: -1, w: 3, d: 20, h: 10, kind: "building" });
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
-    expect(g.artillery.readyAt.blue).toBe(600);
+    expect(g.artillery.readyAt.blue).toBe(300);
     expect(g.artillery.missions).toHaveLength(0);
   });
   it("gives four seconds of warning and spreads eight moving shells over the same four-second impact window", () => {
@@ -360,7 +375,7 @@ describe("artillery damage and bots", () => {
       g.tick = 900 + teammate.id;
       expect(botArtilleryTarget(g, teammate)).toBeNull();
       expect(requestArtillery(g, teammate, enemy)).toBe(false);
-      expect(g.artillery.readyAt[team]).toBe(600);
+      expect(g.artillery.readyAt[team]).toBe(300);
       human.hp = 0;
       expect(requestArtillery(g, teammate, enemy)).toBe(false);
       expect(botArtilleryTarget(g, teammate)).toBeNull();

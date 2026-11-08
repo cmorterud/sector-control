@@ -1,4 +1,4 @@
-import { SoldierChatter, type VoiceLine } from "./soldier-chatter";
+import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
   groundHeight,
@@ -78,7 +78,6 @@ export function footSurface(
 
 // Presentation only: never writes commands, simulation state or gameplay RNG.
 export class BattlefieldFeedback {
-  readonly chatter = new SoldierChatter();
   private feet = new Map<number, { x: number; z: number; stride: number }>();
   private shock = { tick: -1000, strength: 0 };
   private boards: Vec[] = [];
@@ -108,7 +107,6 @@ export class BattlefieldFeedback {
   constructor(private play: (cue: SoundCue) => void) {}
   reset(g: Game) {
     this.feet.clear();
-    this.chatter.reset();
     this.boards = duckboards(g.map);
     this.shock = { tick: -1000, strength: 0 };
     this.nextCrack = 0;
@@ -154,24 +152,6 @@ export class BattlefieldFeedback {
   }
   event(g: Game, e: Event) {
     const p = g.players[0];
-    const call = this.chatter.react(g, e);
-    if (call) {
-      this.cue(
-        g,
-        "voice",
-        {
-          x: call.actor.x,
-          y: call.actor.y + eyeHeightOf(call.actor),
-          z: call.actor.z,
-        },
-        0.72,
-        call.actor.id === 0,
-        true,
-        call.actor.id,
-        call.line,
-      );
-      this.stats.callouts++;
-    }
     if (e.type === "respawn" && e.actor === 0) {
       this.shock = { tick: -1000, strength: 0 };
       this.nextCrack = 0;

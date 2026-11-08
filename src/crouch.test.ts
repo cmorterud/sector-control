@@ -247,7 +247,7 @@ describe("crouching combat profile", () => {
     expect(red.target).toBe(-1);
     g.tick = 900;
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(false);
-    expect(g.artillery.readyAt.blue).toBe(600);
+    expect(g.artillery.readyAt.blue).toBe(300);
     p.crouched = false;
     expect(requestArtillery(g, p, { x: 19, z: -1 })).toBe(true);
   });

@@ -26,6 +26,38 @@ function scene(trench = true) {
 }
 const event = (e: object) => ({ tick: 0, id: 1, ...e }) as Event;
 describe("battlefield presentation", () => {
+  it("keeps battlefield effects audible without spoken smoke, grenade or incoming callouts", () => {
+    const { g, p, feedback, cues } = scene(false);
+    Object.assign(p, { x: 0, y: 0, z: 0 });
+    g.players.push({ ...p, id: 1, x: 3 });
+    const snapshot = g.snapshot();
+    for (const e of [
+      { type: "smokeThrow", actor: 0, from: { x: 0, y: 1, z: 0 } },
+      { type: "grenadeThrow", actor: 1, from: { x: 3, y: 1, z: 0 } },
+      { type: "artilleryLaunch", actor: -1, from: { x: 4, y: 35, z: 0 } },
+      {
+        type: "artilleryImpact",
+        actor: -1,
+        at: { x: 4, y: 1, z: 0 },
+        radius: 12,
+        hits: [],
+      },
+      { type: "fire", actor: 1, from: { x: 3, y: 1, z: 0 } },
+    ]) {
+      feedback.event(g, event(e));
+      g.tick += 400;
+    }
+    expect(cues.map((c) => c.kind)).toEqual([
+      "whistle",
+      "artillery",
+      "debris",
+      "rifle",
+    ]);
+    expect(feedback.stats.callouts).toBe(0);
+    expect(feedback.recent.some((c) => c.kind === "voice")).toBe(false);
+    g.tick = snapshot.tick;
+    expect(g.snapshot()).toEqual(snapshot);
+  });
   it("uses the same visible duckboard footprints for wood steps, and excavation removes that surface", () => {
     const { g, p } = scene();
     const board = duckboards(g.map).find((b) => b.x === -41 && b.z === 8)!;
