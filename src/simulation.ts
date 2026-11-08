@@ -70,6 +70,7 @@ import {
   type ExplosionProfile,
 } from "./destruction";
 import {
+  serviceRifleAction,
   rosterWeapon,
   weaponProfiles,
   weaponMount,
@@ -1115,21 +1116,7 @@ export class Game {
         this.emit({ type: "reload", actor: p.id });
       }
       if (p.weapon === "serviceRifle" && !p.melee) {
-        const age = this.tick - p.lastShotAt;
-        const remaining = p.reloadAt - this.tick;
-        const action = p.reloadAt
-          ? remaining === 90
-            ? "boltOpen"
-            : remaining === 48
-              ? "clip"
-              : remaining === 12
-                ? "boltClose"
-                : null
-          : age === 9
-            ? "boltOpen"
-            : age === 28
-              ? "boltClose"
-              : null;
+        const action = serviceRifleAction(p, this.tick);
         if (action) this.emit({ type: "weaponAction", actor: p.id, action });
       }
     }

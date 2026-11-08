@@ -142,14 +142,14 @@ describe("combat and lifecycle", () => {
     expect(Math.hypot(initial.vx, initial.vy, initial.vz)).toBeCloseTo(
       projectileSpeed,
     );
-    advance(g, 3);
+    advance(g, 1);
     expect(
       Math.hypot(
         g.projectiles[0].x - initial.x,
         g.projectiles[0].y - initial.y,
         g.projectiles[0].z - initial.z,
       ),
-    ).toBeCloseTo(projectileSpeed / 10);
+    ).toBeCloseTo(projectileSpeed / 30);
     expect(enemy.hp).toBe(100);
     advance(g, 12);
     expect(enemy.hp).toBe(75);
@@ -183,14 +183,14 @@ describe("combat and lifecycle", () => {
   it("lets targets leave or enter a round's flight path after the shot", () => {
     const first = scene();
     first.g.fire(first.p);
-    advance(first.g, 3);
+    advance(first.g, 1);
     first.enemy.x = 3;
     advance(first.g, 15);
     expect(first.enemy.hp).toBe(100);
     const second = scene();
     second.enemy.x = 8;
     second.g.fire(second.p);
-    advance(second.g, 3);
+    advance(second.g, 1);
     second.enemy.x = 0;
     advance(second.g, 15);
     expect(second.enemy.hp).toBe(75);
@@ -284,11 +284,11 @@ describe("combat and lifecycle", () => {
     g.botSettings.awareness = false;
     g.tick = 1;
     const c = botCommand(g, p);
-    expect(c.yaw).toBeGreaterThan(0.02);
-    expect(c.yaw).toBeLessThan(0.08);
+    expect(c.yaw).toBeGreaterThan(-0.01);
+    expect(c.yaw).toBeLessThan(0.03);
     p.weapon = "machineGun";
     const slower = botCommand(g, p);
-    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.04);
+    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.08);
     expect(slower.yaw).toBeLessThan(0.3);
   });
   it("aligns the autoplay driver with the elevated shoulder camera", () => {
@@ -318,14 +318,14 @@ describe("combat and lifecycle", () => {
     g.step(c);
     expect(g.players[0].ammo).toBe(0);
   });
-  it("reloads after exactly sixty ticks, conserves reserve, and cannot shoot while reloading", () => {
+  it("reloads after exactly thirty ticks, conserves reserve, and cannot shoot while reloading", () => {
     const g = new Game(empty, false),
       p = g.players[0];
     p.ammo = 20;
     p.reserve = 7;
     g.step({ ...idle(), reload: true, fire: true });
     expect(p.ammo).toBe(20);
-    advance(g, 59);
+    advance(g, 29);
     expect(p.ammo).toBe(20);
     advance(g, 1);
     expect(p.ammo).toBe(27);

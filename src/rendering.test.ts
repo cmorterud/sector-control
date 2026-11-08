@@ -443,7 +443,7 @@ it("opens, retracts and closes the service bolt with the right wrist on its knob
   const r = rigFor(p),
     rig = r.soldiers[0];
   const before = structuredClone(p);
-  for (const age of [9, 17, 20, 27, 28]) {
+  for (const age of [4.5, 8.5, 10, 13.5, 14]) {
     r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + age);
     const motion = boltMotion(p, 100 + age)!;
     expect(rig.bolt.getLocalPosition().z).toBeCloseTo(
@@ -461,7 +461,7 @@ it("opens, retracts and closes the service bolt with the right wrist on its knob
       .transformPoint(new Vec3(0, -armLengths.forearm, 0));
     expect(left.distance(rig.supportHand.getPosition())).toBeLessThan(0.001);
   }
-  r.animateSoldier(p, p.x, p.z, 1 / 60, 136);
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 118);
   expect(rig.bolt.getLocalPosition().z).toBeCloseTo(0.13);
   expect(rig.bolt.getLocalEulerAngles().z).toBeCloseTo(0);
   expect(p).toEqual(before);

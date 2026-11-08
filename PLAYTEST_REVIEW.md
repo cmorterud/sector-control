@@ -626,3 +626,11 @@ Native Chrome reconnection returned `Sky Computer Use native pipe startup failed
 The final sustained-steering regression verifies that a sharp desired mouse turn with forward sprint input keeps the charge active while actual turning stays clamped. Melee/rig/Escape follow-up26/26passes3.71s and strictTS passes. The broader pre-follow-up325test run passes322in242.86s; only original timing limits fail(eight-minute96.78s/60s, hundred-post5.51s/5s,100-soldier17.52s/15s), with no behavior assertion failures. No budgets were widened. The new steering regression brings expected push-CI total to326. Build9.57s passed before that small input-direction fix; final build follows. Native browser acceptance is still blocked, as above.
 
 Final strict TypeScript/whitespace and production build pass after the sharp-turn correction(17.49s). The rebuilt preview is available on5175; refresh to load this version.
+
+## Faster reload/bolt animation and128m/s rifles — November 8, 2026
+
+Focused63tests/fivefiles pass13.02s and strict TypeScript passes. All reload profiles halve, service cycling halves36→18ticks, and rifle velocities double64→128m/s. Actual-rig checks follow the compressed bolt keyframes and all three normalized reloads, maintaining both grips. Live Game events verify the shorter firing cadence/refill endpoints and correctly timed boltOpen/clip/boltClose cues. Finite-flight and moving-target fixtures act before the faster impact; owner changes preserve a round's velocity, and real Ammo thin-cover sweeps still pass. No reaction delay, aim bloom or damage adjustment is introduced.
+
+Chrome native control still reports `Sky Computer Use native pipe startup failed`; this pass has automated rig/simulation/Ammo evidence, not a fresh manual playtest or video. Production preview5175 serves the rebuilt bundle on refresh. Full-suite/build results follow before commit; original test timeouts remain unchanged.
+
+Final validation: strictTypeScript/whitespace and all327tests/50files pass locally in93.01s with original limits. Production build passes12.21s. Updated actual-rig animation/Ammo/simulation evidence is automated; native pipe failure still blocks a fresh desktop recording.

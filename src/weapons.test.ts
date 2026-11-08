@@ -22,15 +22,15 @@ it("cycles a five-round service rifle between individual clicks, preserves trave
       if (e.type === "weaponAction") actions.push(e.action);
     }
   }
-  expect(shots).toEqual([1, 37, 73, 109, 145]);
+  expect(shots).toEqual([1, 19, 37, 55, 73]);
   expect(p.ammo).toBe(0);
   expect(p.reserve).toBe(60);
   expect(actions.filter((a) => a === "boltOpen")).toHaveLength(5);
   expect(actions.filter((a) => a === "boltClose")).toHaveLength(5);
   g.step({ ...idle(), reload: true });
-  expect(p.reloadAt - g.tick).toBe(96);
+  expect(p.reloadAt - g.tick).toBe(48);
   const loading: string[] = [];
-  for (let i = 0; i < 95; i++) {
+  for (let i = 0; i < 47; i++) {
     g.step({ ...idle(), fire: i % 2 === 0 });
     for (const e of g.events)
       if (e.type === "weaponAction") loading.push(e.action);
@@ -163,8 +163,8 @@ it("uses the gunner's actual magazine, reload time, rate, events and respawn inv
   const reload = idle();
   reload.reload = true;
   g.step(reload);
-  expect(p.reloadAt - g.tick).toBe(90);
-  for (let i = 0; i < 89; i++) g.step(idle());
+  expect(p.reloadAt - g.tick).toBe(45);
+  for (let i = 0; i < 44; i++) g.step(idle());
   expect(p.ammo).toBe(59);
   g.step(idle());
   expect(p.ammo).toBe(60);
@@ -226,8 +226,8 @@ it("requires awareness and stops gunner bursts immediately when sight is lost", 
 
 it("doubles both rifle velocities, retains machine-gun speed, and keeps in-flight speed after a weapon change", () => {
   for (const [weapon, speed] of [
-    ["rifle", 64],
-    ["serviceRifle", 64],
+    ["rifle", 128],
+    ["serviceRifle", 128],
     ["machineGun", 32],
   ] as const) {
     const g = new Game(
@@ -247,4 +247,46 @@ it("doubles both rifle velocities, retains machine-gun speed, and keeps in-fligh
       Math.hypot(shot.x - start.x, shot.y - start.y, shot.z - start.z),
     ).toBeCloseTo(speed / 10);
   }
+});
+
+it("aligns the faster bolt and clip sound events with the shortened mechanical cycle", () => {
+  const map = { ...industrialMap, boxes: [] };
+  const g = new Game(new TestCollision(map), false, 3000, 12345, undefined, {
+      map,
+    }),
+    p = g.players[0];
+  p.weapon = "serviceRifle";
+  g.respawn(p);
+  g.step({ ...idle(), fire: true });
+  const shotAt = g.tick,
+    cycle: { tick: number; action: string }[] = [];
+  expect(p.nextShot - shotAt).toBe(18);
+  for (let i = 0; i < 17; i++) {
+    g.step(idle());
+    for (const e of g.events)
+      if (e.type === "weaponAction")
+        cycle.push({ tick: e.tick - shotAt, action: e.action });
+  }
+  expect(cycle).toEqual([
+    { tick: 5, action: "boltOpen" },
+    { tick: 14, action: "boltClose" },
+  ]);
+  g.step({ ...idle(), fire: true });
+  expect(p.ammo).toBe(3);
+  g.step({ ...idle(), reload: true });
+  const reloadAt = g.tick,
+    loading: { tick: number; action: string }[] = [];
+  for (let i = 0; i < 48; i++) {
+    g.step(idle());
+    for (const e of g.events)
+      if (e.type === "weaponAction")
+        loading.push({ tick: e.tick - reloadAt, action: e.action });
+  }
+  expect(loading).toEqual([
+    { tick: 3, action: "boltOpen" },
+    { tick: 24, action: "clip" },
+    { tick: 42, action: "boltClose" },
+  ]);
+  expect(p.ammo).toBe(5);
+  expect(p.reloadAt).toBe(0);
 });
