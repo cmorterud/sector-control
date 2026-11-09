@@ -598,3 +598,61 @@ it("captures standing and crouching live rig anatomy for ragdolls without changi
   expect(pose.parts.every(b => Number.isFinite(b.position.x + b.position.y + b.position.z))).toBe(true);
   expect(p).toEqual(before);
 });
+
+it("raises and sways the first-person rifle throughout an active charge, retaining both wrists and clearing on contact or cancel", () => {
+  const g = new Game(new TestCollision(trenchMap), false), p = g.players[0], r = rigFor(p);
+  p.command = { ...idle(), firstPerson: true, sprint: true, z: -1 };
+  r.createFirstPersonRig();
+  r.animateSoldier(p, p.x, p.z, 1 / 60, 100);
+  r.drawFirstPerson(p, 100);
+  const neutralY = r.firstPersonRig.rifle.getLocalPosition().y;
+  p.melee = { kind: "charge", startTick: 100, strikeTick: 112, endTick: Number.MAX_SAFE_INTEGER, yaw: 0, struck: false };
+  const before = structuredClone(p);
+  r.drawFirstPerson(p, 100);
+  expect(r.firstPersonRig.rifle.getLocalPosition().y).toBeCloseTo(neutralY);
+  r.drawFirstPerson(p, 103);
+  expect(r.firstPersonRig.rifle.getLocalPosition().y).toBeCloseTo(neutralY + 0.055);
+  const positions: Vec3[] = [];
+  for (const [i, phase] of [0, Math.PI / 4, Math.PI / 2, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.5].entries()) {
+    Object.assign(r.soldiers[0], { phase, motion: 1 });
+    r.drawFirstPerson(p, 700 + i);
+    const rig = r.firstPersonRig;
+    positions.push(rig.rifle.getLocalPosition().clone());
+    expect(positions.at(-1)!.y).toBeGreaterThan(neutralY + 0.09);
+    const left = rig.arms[0].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    expect(left.distance(rig.supportHand.getPosition())).toBeLessThan(0.001);
+    const right = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    const trigger = rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.03, 0.14));
+    expect(right.distance(trigger)).toBeLessThan(0.001);
+  }
+  expect(Math.max(...positions.map(p => p.x)) - Math.min(...positions.map(p => p.x))).toBeGreaterThan(0.035);
+  expect(Math.max(...positions.map(p => p.y)) - Math.min(...positions.map(p => p.y))).toBeGreaterThan(0.009);
+  expect(Math.max(...positions.map(p => p.z)) - Math.min(...positions.map(p => p.z))).toBeGreaterThan(0.012);
+  expect(p).toEqual(before);
+  p.melee.struck = true;
+  p.melee.strikeTick = 705; p.melee.endTick = 735;
+  r.drawFirstPerson(p, 705);
+  expect(r.firstPersonRig.rifle.getLocalPosition().y).toBeCloseTo(neutralY);
+  p.melee = null;
+  r.drawFirstPerson(p, 740);
+  expect(r.firstPersonRig.rifle.getLocalPosition().y).toBeCloseTo(neutralY);
+});
+
+it("adds stride motion to the raised third-person charge without detaching the hands", () => {
+  const g = new Game(new TestCollision(trenchMap), false), p = g.players[0], r = rigFor(p);
+  p.command = { ...idle(), sprint: true, z: -1 };
+  p.melee = { kind: "charge", startTick: 100, strikeTick: 112, endTick: Number.MAX_SAFE_INTEGER, yaw: 0, struck: false };
+  const before = structuredClone(p), xs: number[] = [];
+  for (let i = 0; i < 36; i++) {
+    r.animateSoldier(p, p.x, p.z - (i + 1) * 6.8 / 60, 1 / 60, 120 + i / 2);
+    const rig = r.soldiers[0]; xs.push(rig.rifle.getLocalPosition().x);
+    expect(rig.rifle.getLocalPosition().y).toBeGreaterThan(0.45);
+    const left = rig.arms[0].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    const right = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    expect(left.distance(rig.supportHand.getPosition())).toBeLessThan(0.001);
+    const trigger = rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.03, 0.14));
+    expect(right.distance(trigger)).toBeLessThan(0.001);
+  }
+  expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.015);
+  expect(p).toEqual(before);
+});

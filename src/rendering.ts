@@ -13,6 +13,7 @@ import {
 import {
   soldierStyle,
   reloadMotion,
+  chargePresentation,
   casualtyRules,
 } from "./soldier-presentation";
 import {
@@ -2220,12 +2221,18 @@ export class Renderer implements CollisionWorld {
     const throwing = p.throwUntil > tick;
     const t = clamp01(1 - (p.throwUntil - tick) / 15);
     const melee = p.melee ? meleePose(p.melee, tick) : null;
+    const charge = chargePresentation(p, tick, source.phase, source.motion);
     const sway = ads ? 0 : Math.sin(source.phase) * source.motion * 0.008;
-    rig.rifle.setLocalPosition(position.x + sway + lower * 0.06,
-      position.y - lower * 0.12 - (throwing ? 0.15 : 0),
-      position.z + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18);
-    rig.rifle.setLocalEulerAngles(-24 * lower - (throwing ? 18 : 0),
-      10 * lower, -28 * lower);
+    rig.rifle.setLocalPosition(
+      position.x + sway + lower * 0.06 - charge.ready * 0.045 + charge.side * 0.016,
+      position.y - lower * 0.12 - (throwing ? 0.15 : 0) + charge.ready * 0.11 + charge.bob * 0.006,
+      position.z + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18 - charge.ready * 0.04 + charge.bob * 0.008,
+    );
+    rig.rifle.setLocalEulerAngles(
+      -24 * lower - (throwing ? 18 : 0) + charge.ready * 4 + charge.bob * 0.8,
+      10 * lower + charge.side,
+      -28 * lower - charge.ready * 5 + charge.side * 1.2,
+    );
     rig.bolt.setLocalPosition(source.bolt.getLocalPosition());
     rig.bolt.setLocalRotation(source.bolt.getLocalRotation());
     rig.magazine.setLocalScale(source.magazine.getLocalScale());
@@ -2558,6 +2565,7 @@ export class Renderer implements CollisionWorld {
     }
     if (p.melee && p.hp > 0 && !p.mantle) {
       const pose = meleePose(p.melee, tick);
+      const charge = chargePresentation(p, tick, rig.phase, rig.motion);
       const butt = p.melee.kind === "butt";
       rig.body.rotateLocal(pose.lean, 0, 0);
       rig.upper.rotateLocal(0, -8 * pose.ready + 12 * pose.thrust, 0);
@@ -2568,17 +2576,17 @@ export class Renderer implements CollisionWorld {
       );
       rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, -0.13 * pose.thrust);
       rig.rifle.setLocalPosition(
-        weaponMount.x - (butt ? 0.1 : 0.02) * pose.ready,
+        weaponMount.x - (butt ? 0.1 : 0.02) * pose.ready + charge.side * 0.012,
         weaponMount.y +
           rifleHeight(this.map) -
           1.45 +
-          (p.melee.kind === "charge" ? 0.08 : -0.04) * pose.ready,
-        weaponMount.z + 0.1 * pose.ready - 0.13 * pose.thrust,
+          (p.melee.kind === "charge" ? 0.08 : -0.04) * pose.ready + charge.ready * 0.04 + charge.bob * 0.006,
+        weaponMount.z + 0.1 * pose.ready - 0.13 * pose.thrust + charge.bob * 0.008,
       );
       rig.rifle.setLocalEulerAngles(
-        p.melee.kind === "charge" ? 8 * pose.ready : 0,
-        butt ? 60 * pose.ready + 35 * pose.thrust : 0,
-        -8 * pose.ready,
+        (p.melee.kind === "charge" ? 8 * pose.ready : 0) + charge.bob * 0.8,
+        (butt ? 60 * pose.ready + 35 * pose.thrust : 0) + charge.side,
+        -8 * pose.ready + charge.side * 1.2,
       );
       const hand = rig.rifle
         .getLocalTransform()

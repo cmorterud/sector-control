@@ -5,6 +5,20 @@ const ease = (v: number) => {
   v = clamp(v);
   return v * v * (3 - 2 * v);
 };
+// Presentation only: the active, unspent charge raises the rifle. Sway follows
+// actual travel phase, so pausing or pushing into cover cannot create fake steps.
+export function chargePresentation(p: Soldier, tick: number, phase: number, motion: number) {
+  const charge = p.hp > 0 && p.melee?.kind === "charge" && !p.melee.struck
+    ? p.melee : null;
+  const ready = charge ? ease((tick - charge.startTick) / 6) : 0;
+  const moving = ready * clamp(motion);
+  return {
+    ready,
+    side: Math.sin(phase) * moving,
+    bob: Math.sin(phase * 2) * moving,
+  };
+}
+
 export const casualtyRules = {
   lifetime: 20,
   max: 24,
