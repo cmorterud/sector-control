@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { detailedRifleParts, detailedBoltParts, rifleGeometry, rifleSurfacePixels, type RifleShape } from "./rifle-geometry";
 
-const shapes: RifleShape[] = ["stock", "handguard", "steel", "barrel", "band", "guard", "hood", "sling", "buttplate", "screw", "knob", "shroud", "notch"];
+const shapes: RifleShape[] = ["stock", "handguard", "steel", "barrel", "band", "guard", "hood", "sling", "buttplate", "screw", "knob", "shroud", "notch", "pin", "slot"];
 
 it("builds finite UV-mapped rifle meshes with outward faces and unit normals", () => {
   for (const shape of shapes) {
@@ -25,14 +25,24 @@ it("builds finite UV-mapped rifle meshes with outward faces and unit normals", (
 });
 
 it("provides roughly four times the previous service-rifle triangles while sharing a bounded catalog", () => {
-  // Previous gun-only count: 1,032 triangles (excludes hands and carried clip).
+  // Previous detailed gun-only count: 4,444 triangles (excludes hands/clip).
   // Fixed new meshes: front post, magazine, bayonet+guard, trigger, port, safety.
   const fixed = 204;
   const triangles = fixed + detailedRifleParts.reduce((sum, p) => sum + rifleGeometry(p.shape).indices.length / 3, 0)
     + detailedBoltParts.reduce((sum, p) => sum + rifleGeometry(p.shape).indices.length / 3, 0);
-  expect(triangles).toBeGreaterThanOrEqual(1032 * 3.8);
-  expect(triangles).toBeLessThanOrEqual(1032 * 4.6);
+  expect(triangles).toBeGreaterThanOrEqual(4444 * 3.8);
+  expect(triangles).toBeLessThanOrEqual(4444 * 4.4);
   expect(shapes.length).toBeLessThan(16);
+});
+
+it("carves the side finger grooves into the stock geometry", () => {
+  const g = rifleGeometry("stock");
+  const sides: number[] = [];
+  for (let i = 0; i < g.positions.length; i += 3)
+    if (Math.abs(g.positions[i + 1] + 0.12) < 1e-8 && Math.abs(g.positions[i + 2] + 0.02) < 1e-8)
+      sides.push(Math.abs(g.positions[i]));
+  expect(sides.length).toBeGreaterThanOrEqual(2);
+  expect(sides.every(x => x < 0.4 && x > 0.37)).toBe(true);
 });
 
 it("keeps the trigger guard, front hood and rear V-notch open along their viewing axes", () => {

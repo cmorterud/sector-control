@@ -1,7 +1,7 @@
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
 import { RagdollPhysics, type Ragdoll, type RagdollPart } from "./ragdoll";
-import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfacePixels, type RifleShape } from "./rifle-geometry";
+import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfacePixels, rifleTextureSize, type RifleShape } from "./rifle-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
   groundSurfacePixels,
@@ -1539,7 +1539,7 @@ export class Renderer implements CollisionWorld {
     w: number, h: number, d: number, tint: string,
     parent: pc.Entity, shape: RifleShape,
   ) {
-    const base = tint === "walnut" ? "#715037" : tint === "edge" ? "#858d85" : "#353c3a";
+    const base = tint === "walnut" ? "#715037" : tint === "edge" ? "#858d85" : tint === "dark" ? "#151b1c" : "#353c3a";
     const entity = this.cube(name, x, y, z, w, h, d, base, false, parent);
     if (!this.app.graphicsDevice || !entity.render) return entity;
     const key = `rifle-${shape}`;
@@ -1555,12 +1555,12 @@ export class Renderer implements CollisionWorld {
     if (!material) {
       material = new pc.StandardMaterial();
       material.diffuse = color(base);
-      material.gloss = tint === "walnut" ? 0.38 : 0.6;
-      material.specular = color(tint === "walnut" ? "#514439" : "#8c9897");
-      if (tint !== "edge") {
+      material.gloss = tint === "walnut" ? 0.38 : tint === "dark" ? 0.12 : 0.6;
+      material.specular = color(tint === "walnut" ? "#514439" : tint === "dark" ? "#252b2b" : "#8c9897");
+      if (tint === "walnut" || tint === "steel") {
         const kind = tint === "walnut" ? "walnut" : "steel";
         const texture = new pc.Texture(this.app.graphicsDevice, {
-          name: `rifle ${kind}`, width: 128, height: 128,
+          name: `rifle ${kind}`, width: rifleTextureSize, height: rifleTextureSize,
           format: pc.PIXELFORMAT_RGBA8, mipmaps: true,
           minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR,
           addressU: pc.ADDRESS_REPEAT, addressV: pc.ADDRESS_REPEAT,
@@ -1892,11 +1892,11 @@ export class Renderer implements CollisionWorld {
       0.008, 0.04, 0.018, "#202724", false, rifle);
     for (const side of [-1, 1]) {
       const ear = this.cube("rear sight ear", side * 0.018, sightHeight - 0.0125,
-        0.08, 0.008, 0.025, 0.025, "#202724", false, rifle);
+        service ? -0.13 : 0.08, 0.008, 0.025, 0.025, "#202724", false, rifle);
       if (service && ear.render) ear.removeComponent("render");
     }
     const bridge = this.cube("rear sight bridge", 0, sightHeight - 0.0315,
-      0.08, 0.044, 0.014, 0.025, "#202724", false, rifle);
+      service ? -0.13 : 0.08, 0.044, 0.014, 0.025, "#202724", false, rifle);
     if (service && bridge.render) bridge.removeComponent("render");
     if (service) {
       const blade = part(

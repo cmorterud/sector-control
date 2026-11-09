@@ -1,13 +1,34 @@
 import { characterGeometry } from "./character-geometry";
+import { BoxGeometry } from "playcanvas";
 
 type MeshData = ReturnType<typeof characterGeometry> & { uvs: number[] };
 type Ring = [number, number, number, number?];
 export type RifleShape = "stock" | "handguard" | "steel" | "barrel" |
-  "band" | "guard" | "hood" | "sling" | "buttplate" | "screw" | "knob" | "shroud" | "notch";
+  "band" | "guard" | "hood" | "sling" | "buttplate" | "screw" | "knob" | "shroud" | "notch" | "pin" | "slot";
+
+export const rifleTextureSize = 256;
+const limitedSlope = (a: number, b: number) => a * b <= 0 ? 0 : Math.sign(a) * Math.min(Math.abs(a), Math.abs(b));
+function refineProfile(profile: Ring[]): Ring[] {
+  const result: Ring[] = [];
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[Math.max(0, i - 1)], b = profile[i], c = profile[i + 1], d = profile[Math.min(profile.length - 1, i + 2)];
+    result.push(b);
+    const middle = [(b[0] + c[0]) / 2];
+    for (let axis = 1; axis < 4; axis++) {
+      const av = a[axis] ?? 0, bv = b[axis] ?? 0, cv = c[axis] ?? 0, dv = d[axis] ?? 0;
+      middle.push((bv + cv) / 2 + (limitedSlope(bv - av, cv - bv) - limitedSlope(cv - bv, dv - cv)) / 8);
+    }
+    result.push(middle as Ring);
+  }
+  result.push(profile[profile.length - 1]);
+  return result;
+}
 
 // These profiles describe the furniture and machined parts, independently of
 // the inexpensive cloth/limb meshes. All meshes are shared by every rifle.
 function lathe(profile: Ring[], sides: number, caps = true): MeshData {
+  profile = refineProfile(profile);
+  sides *= 2;
   const positions: number[] = [], normals: number[] = [], indices: number[] = [], uvs: number[] = [];
   for (let ring = 0; ring < profile.length; ring++) {
     const [y, rx, rz, offset = 0] = profile[ring];
@@ -18,9 +39,9 @@ function lathe(profile: Ring[], sides: number, caps = true): MeshData {
       const angle = side / sides * Math.PI * 2, c = Math.cos(angle), s = Math.sin(angle);
       positions.push(rx * c, y, offset + rz * s);
       const nx = dy * rz * c, ny = -(dx * rz * c * c + rx * (center + dz * s) * s), nz = dy * rx * s;
-      const length = Math.hypot(nx, ny, nz) || 1;
-      normals.push(nx / length, ny / length, nz / length);
-      uvs.push(side / sides, ring / (profile.length - 1));
+      const length = Math.hypot(nx, ny, nz);
+      normals.push(length ? nx / length : 0, length ? ny / length : ring ? 1 : -1, length ? nz / length : 0);
+      uvs.push(side / sides, y + 0.5);
       if (ring && side < sides) {
         const a = (ring - 1) * (sides + 1) + side, d = ring * (sides + 1) + side;
         indices.push(a, d, d + 1, a, d + 1, a + 1);
@@ -52,6 +73,7 @@ function merge(meshes: MeshData[]): MeshData {
 
 // Open elliptical loops: a real trigger guard, sling swivel and sight hood.
 function loop(segments: number, tubeSides: number, thickness: number): MeshData {
+  segments *= 2; tubeSides *= 2;
   const positions: number[] = [], normals: number[] = [], indices: number[] = [], uvs: number[] = [];
   for (let i = 0; i <= segments; i++) for (let j = 0; j <= tubeSides; j++) {
     const a = i / segments * Math.PI * 2, b = j / tubeSides * Math.PI * 2;
@@ -69,6 +91,10 @@ function loop(segments: number, tubeSides: number, thickness: number): MeshData 
 }
 
 export function rifleGeometry(shape: RifleShape): MeshData {
+  if (shape === "slot") {
+    const box = new BoxGeometry();
+    return { positions: box.positions, normals: box.normals, indices: box.indices, uvs: box.uvs };
+  }
   if (shape === "notch") {
     const result: MeshData = { positions: [], normals: [], indices: [], uvs: [] };
     for (const sign of [-1, 1]) {
@@ -90,13 +116,42 @@ export function rifleGeometry(shape: RifleShape): MeshData {
     }
     return result;
   }
-  if (shape === "stock") return lathe([
+  if (shape === "stock") {
+    const mesh = lathe([
     [-0.5, 0.25, 0.20, -0.08], [-0.47, 0.34, 0.23, -0.07],
     [-0.3, 0.40, 0.24, -0.04], [-0.12, 0.43, 0.27, -0.02],
     [0.06, 0.43, 0.29], [0.15, 0.29, 0.24, 0.04],
     [0.23, 0.26, 0.24, 0.08], [0.30, 0.34, 0.36, 0.10],
     [0.40, 0.48, 0.48, 0.20], [0.48, 0.50, 0.50, 0.25], [0.50, 0.47, 0.47, 0.25],
-  ], 24);
+    ], 24);
+    // Carve shallow finger channels into the wood itself, rather than drawing
+    // a stripe onto an unchanged cylindrical fore-end.
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const y = mesh.positions[i + 1], t = (y + 0.28) / 0.38;
+      if (t <= 0 || t >= 1) continue;
+      const angle = mesh.uvs[i / 3 * 2] * Math.PI * 2;
+      const c = Math.cos(angle);
+      mesh.positions[i] -= Math.sign(c) * 0.04 * Math.sin(t * Math.PI) ** 2 * Math.abs(c) ** 12;
+    }
+    const normals = new Array<number>(mesh.normals.length).fill(0);
+    for (let i = 0; i < mesh.indices.length; i += 3) {
+      const [a, b, c] = mesh.indices.slice(i, i + 3).map(index => index * 3);
+      const ux = mesh.positions[b] - mesh.positions[a], uy = mesh.positions[b + 1] - mesh.positions[a + 1], uz = mesh.positions[b + 2] - mesh.positions[a + 2];
+      const vx = mesh.positions[c] - mesh.positions[a], vy = mesh.positions[c + 1] - mesh.positions[a + 1], vz = mesh.positions[c + 2] - mesh.positions[a + 2];
+      for (const index of [a, b, c]) {
+        normals[index] += uy * vz - uz * vy; normals[index + 1] += uz * vx - ux * vz; normals[index + 2] += ux * vy - uy * vx;
+      }
+    }
+    for (let ring = 0; ring < 21; ring++) {
+      const a = ring * 49 * 3, b = a + 48 * 3;
+      for (let axis = 0; axis < 3; axis++) normals[a + axis] = normals[b + axis] = normals[a + axis] + normals[b + axis];
+    }
+    for (let i = 0; i < normals.length; i += 3) {
+      const length = Math.hypot(normals[i], normals[i + 1], normals[i + 2]);
+      if (length) for (let axis = 0; axis < 3; axis++) mesh.normals[i + axis] = normals[i + axis] / length;
+    }
+    return mesh;
+  }
   if (shape === "handguard") return lathe([
     [-0.5, 0.30, 0.30], [-0.44, 0.45, 0.43], [0, 0.50, 0.50],
     [0.44, 0.45, 0.43], [0.5, 0.30, 0.30],
@@ -116,26 +171,35 @@ export function rifleGeometry(shape: RifleShape): MeshData {
       [inside.indices[i + 1], inside.indices[i + 2]] = [inside.indices[i + 2], inside.indices[i + 1]];
     return merge([outside, mouth, inside]);
   }
-  const sides = shape === "screw" ? 12 : shape === "shroud" ? 20 : 32;
-  const data = characterGeometry(shape === "knob" ? "soft" : "disc", sides);
-  return { ...data, uvs: data.positions.flatMap((_, i, all) => i % 3 ? [] : [Math.atan2(all[i + 2], all[i]) / (2 * Math.PI) + 0.5, all[i + 1] + 0.5]) };
+  const sides = shape === "screw" || shape === "pin" ? 12 : shape === "shroud" ? 20 : 32;
+  return lathe(shape === "knob" ? [
+    [-0.5, 0, 0], [-0.43, 0.3, 0.3], [-0.25, 0.44, 0.44], [0, 0.5, 0.5],
+    [0.25, 0.44, 0.44], [0.43, 0.3, 0.3], [0.5, 0, 0],
+  ] : [
+    [-0.5, 0, 0], [-0.5, 0.45, 0.45], [-0.3, 0.5, 0.5], [0.3, 0.5, 0.5], [0.5, 0.45, 0.45], [0.5, 0, 0],
+  ], sides, false);
 }
 
 export type RiflePart = { name: string; shape: RifleShape; at: [number, number, number]; size: [number, number, number]; tint: string; rotation?: [number, number, number] };
 export const detailedRifleParts: RiflePart[] = [
   { name: "wooden stock", shape: "stock", at: [0, -0.045, 0.04], size: [0.105, 0.94, 0.18], tint: "walnut", rotation: [90, 0, 0] },
   { name: "upper handguard", shape: "handguard", at: [0, 0.022, -0.27], size: [0.072, 0.28, 0.042], tint: "walnut", rotation: [90, 0, 0] },
-  { name: "receiver", shape: "steel", at: [0, 0.025, 0.04], size: [0.075, 0.34, 0.075], tint: "steel", rotation: [90, 0, 0] },
-  { name: "barrel", shape: "barrel", at: [0, 0.025, -0.53], size: [0.04, 0.34, 0.04], tint: "steel", rotation: [90, 0, 0] },
-  ...[-0.35, -0.13].map(z => ({ name: "barrel band", shape: "band" as const, at: [0, -0.018, z] as [number, number, number], size: [0.105, 0.024, 0.13] as [number, number, number], tint: "steel", rotation: [90, 0, 0] as [number, number, number] })),
+  { name: "receiver", shape: "steel", at: [0, 0.025, 0.07], size: [0.075, 0.28, 0.075], tint: "steel", rotation: [90, 0, 0] },
+  { name: "barrel", shape: "barrel", at: [0, 0.025, -0.385], size: [0.04, 0.63, 0.04], tint: "steel", rotation: [90, 0, 0] },
+  ...[-0.35, -0.43].map(z => ({ name: "barrel band", shape: "band" as const, at: [0, z < -0.4 ? -0.023 : -0.018, z] as [number, number, number], size: [z < -0.4 ? 0.08 : 0.105, 0.024, z < -0.4 ? 0.14 : 0.13] as [number, number, number], tint: "steel", rotation: [90, 0, 0] as [number, number, number] })),
   { name: "open trigger guard", shape: "guard", at: [0, -0.105, 0.18], size: [0.012, 0.09, 0.14], tint: "steel" },
   { name: "buttplate", shape: "buttplate", at: [0, -0.09, 0.514], size: [0.101, 0.012, 0.173], tint: "steel", rotation: [90, 0, 0] },
   { name: "front sight hood", shape: "hood", at: [0, 0.115, -0.65], size: [0.018, 0.065, 0.065], tint: "steel", rotation: [0, 90, 0] },
   { name: "front sight base", shape: "buttplate", at: [0, 0.058, -0.65], size: [0.032, 0.035, 0.045], tint: "steel" },
-  { name: "V-notch rear sight", shape: "notch", at: [0, 0.1005, 0.08], size: [0.075, 0.035, 0.04], tint: "steel" },
-  { name: "rear sight base", shape: "buttplate", at: [0, 0.074, 0.08], size: [0.055, 0.025, 0.085], tint: "steel" },
+  { name: "V-notch rear sight", shape: "notch", at: [0, 0.1005, -0.13], size: [0.075, 0.035, 0.04], tint: "steel" },
+  { name: "rear sight base", shape: "buttplate", at: [0, 0.064, -0.13], size: [0.055, 0.045, 0.085], tint: "steel" },
   { name: "sling swivel", shape: "sling", at: [0, -0.1, -0.35], size: [0.01, 0.036, 0.05], tint: "steel" },
   ...[-0.09, 0.25].map(z => ({ name: "stock screw", shape: "screw" as const, at: [z > 0.2 ? 0.029 : 0.045, -0.06, z] as [number, number, number], size: [0.021, 0.005, 0.021] as [number, number, number], tint: "edge", rotation: [0, 0, 90] as [number, number, number] })),
+  { name: "cleaning rod", shape: "pin", at: [0, -0.006, -0.57], size: [0.008, 0.26, 0.008], tint: "steel", rotation: [90, 0, 0] },
+  { name: "rear sling washer", shape: "sling", at: [0.05, -0.08, 0.39], size: [0.006, 0.029, 0.029], tint: "edge" },
+  { name: "rear sling recess", shape: "pin", at: [0.0495, -0.08, 0.39], size: [0.017, 0.002, 0.017], tint: "dark", rotation: [0, 0, 90] },
+  ...[-0.09, 0.25].map(z => ({ name: "screw slot", shape: "slot" as const, at: [z > 0.2 ? 0.032 : 0.048, -0.06, z] as [number, number, number], size: [0.001, 0.003, 0.012] as [number, number, number], tint: "dark" })),
+  ...[-1, 1].map(side => ({ name: "receiver rail", shape: "slot" as const, at: [side * 0.026, 0.063, 0.04] as [number, number, number], size: [0.008, 0.008, 0.12] as [number, number, number], tint: "edge" })),
 ];
 export const boltGrip = { x: 0.105, y: -0.055, z: 0 };
 export const detailedBoltParts: RiflePart[] = [
@@ -146,14 +210,16 @@ export const detailedBoltParts: RiflePart[] = [
 ];
 
 // Deterministic close-up materials; no photos or simulation RNG are consumed.
-export function rifleSurfacePixels(kind: "walnut" | "steel", size = 128) {
+export function rifleSurfacePixels(kind: "walnut" | "steel", size = rifleTextureSize) {
   const pixels = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const hash = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
     const noise = hash - Math.floor(hash);
-    const grain = Math.sin(x * 0.72 + Math.sin(y * 0.04) * 2 + Math.sin(x * 0.12 + y * 0.018));
-    const shade = kind === "walnut" ? 0.86 + grain * 0.09 + noise * 0.05 : 0.92 + noise * 0.06 + Math.sin(y * 1.9) * 0.02;
-    const base = kind === "walnut" ? [112, 65, 34] : [82, 89, 87];
+    const u = x / size * Math.PI * 2, v = y / size * Math.PI * 2;
+    const grain = Math.sin(u * 25 + Math.sin(v * 2) * 1.8 + Math.sin(u * 5 + v) * 0.7);
+    const fine = Math.sin(u * 91 + Math.sin(v * 3));
+    const shade = kind === "walnut" ? 0.84 + grain * 0.09 + fine * 0.025 + noise * 0.05 : 0.92 + noise * 0.06 + Math.sin(y * 1.9) * 0.02;
+    const base = kind === "walnut" ? [126, 77, 41] : [82, 89, 87];
     pixels.set([...base.map(c => Math.round(c * shade)), 255], (y * size + x) * 4);
   }
   return pixels;

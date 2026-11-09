@@ -1,7 +1,7 @@
 import { armLengths, boltMotion } from "./weapons";
 import { meleeRules } from "./melee";
 import { it, expect, vi } from "vitest";
-import { Entity, Vec3 } from "playcanvas";
+import { Entity, Vec3, NullGraphicsDevice, StandardMaterial, TEXTURELOCK_READ } from "playcanvas";
 import { Renderer } from "./rendering";
 import {
   soldierStyle,
@@ -19,7 +19,7 @@ import { trenchMap } from "./trench-map";
 import { eyeHeightOf } from "./crouch";
 import { weaponAim } from "./recoil";
 import { viewDirection } from "./player-view";
-import { boltGrip } from "./rifle-geometry";
+import { boltGrip, rifleGeometry, rifleTextureSize, type RifleShape } from "./rifle-geometry";
 
 // Exercise the real rig and animation transforms without a WebGL context.
 // Mesh creation is replaced by bare transform nodes; joint/IK code is unchanged.
@@ -46,6 +46,7 @@ type Harness = {
   blastFlinches: Map<number, { tick: number; strength: number }>;
   cube: Renderer["cube"];
   createSoldier(p: Soldier): void;
+  riflePart(name: string, x: number, y: number, z: number, w: number, h: number, d: number, tint: string, parent: Entity, shape: RifleShape): Entity;
   createFirstPersonRig(): void;
   drawFirstPerson(p: Soldier, tick: number): void;
   firstPersonRig: Rig & { root: Entity };
@@ -94,6 +95,31 @@ function rigFor(p: Soldier) {
     Object.assign(e, { _app: renderer.app });
   return renderer;
 }
+
+it("uploads real wood pixels and shares detailed rifle buffers/materials between instances", () => {
+  const g = new Game(new TestCollision(trenchMap), false), r = rigFor(g.players[0]);
+  const device = new NullGraphicsDevice();
+  Object.assign(r.app, { graphicsDevice: device });
+  Object.assign(r, { kitMeshes: new Map(), materials: new Map(), textures: new Map() });
+  r.cube = (name, x, y, z, w, h, d, _tint, _solid, parent) => {
+    const e = new Entity(name); (parent ?? r.app.root).addChild(e);
+    e.setLocalPosition(x, y, z); e.setLocalScale(w, h, d);
+    Object.assign(e, { render: { meshInstances: [] } }); return e;
+  };
+  const a = r.riflePart("stock a", 0, 0, 0, 1, 1, 1, "walnut", r.app.root, "stock");
+  const b = r.riflePart("stock b", 0, 0, 0, 1, 1, 1, "walnut", r.app.root, "stock");
+  const first = a.render!.meshInstances[0], second = b.render!.meshInstances[0];
+  const mesh = first.mesh!;
+  expect(first.mesh).toBe(second.mesh); expect(first.material).toBe(second.material);
+  const indices: number[] = []; mesh.getIndices(indices);
+  expect(indices.length).toBe(rifleGeometry("stock").indices.length);
+  const material = first.material as StandardMaterial, texture = material.diffuseMap!;
+  const pixels = texture.lock({ mode: TEXTURELOCK_READ }) as Uint8Array;
+  expect(pixels.length).toBe(rifleTextureSize ** 2 * 4);
+  expect(pixels[3]).toBe(255); expect(new Set(pixels.filter((_, i) => i % 4 === 0)).size).toBeGreaterThan(16);
+  texture.unlock();
+  first.destroy(); second.destroy(); mesh.destroy(); texture.destroy(); material.destroy(); device.destroy();
+});
 
 it("aligns the actual cloned front post and rear notch with the camera through aim, recoil and crouch", () => {
   for (const weapon of ["rifle", "serviceRifle", "machineGun"] as const) {
