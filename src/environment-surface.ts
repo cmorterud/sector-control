@@ -55,9 +55,11 @@ vec3 earthWeights() {
 vec3 earthAlbedo() {
   vec3 w = earthWeights();
   vec3 p = vPositionW * 0.625;
-  return pow(texture2DBias(earthDiffuse, p.zy, -0.5).rgb * w.x +
+  // Both the atlas and earth albedo use sRGB textures. Samples are already
+  // linear here; blend them once without a second gamma conversion.
+  return texture2DBias(earthDiffuse, p.zy, -0.5).rgb * w.x +
     texture2DBias(earthDiffuse, p.xz, -0.5).rgb * w.y +
-    texture2DBias(earthDiffuse, p.xy, -0.5).rgb * w.z, vec3(2.2));
+    texture2DBias(earthDiffuse, p.xy, -0.5).rgb * w.z;
 }
 `;
 export const earthDiffusePS = `${earthSampling}

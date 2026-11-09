@@ -1326,6 +1326,9 @@ export class Renderer implements CollisionWorld {
       const m = new pc.StandardMaterial();
       m.diffuse = color(tint);
       m.diffuseMap = this.textures.get(`${kind}-diffuse`)!;
+      // Authored color texels are sRGB; decode both terrain layers in hardware.
+      // Normal/roughness textures remain linear data.
+      if (ground) m.diffuseMap.srgb = true;
       m.normalMap = this.textures.get(`${kind}-normal`)!;
       m.bumpiness = ground ? 0.4 : 0.7;
       m.glossMap = this.textures.get(`${kind}-gloss`)!;
@@ -1338,7 +1341,9 @@ export class Renderer implements CollisionWorld {
           m[`${channel}MapOffset`].set(0.5, 0.5);
         }
         const earth = earthPixels();
-        m.setParameter("earthDiffuse", this.texture("earth-diffuse", 512, 512, () => earth.diffuse));
+        const earthDiffuse = this.texture("earth-diffuse", 512, 512, () => earth.diffuse);
+        earthDiffuse.srgb = true;
+        m.setParameter("earthDiffuse", earthDiffuse);
         m.setParameter("earthNormal", this.texture("earth-normal", 512, 512, () => earth.normal));
         m.getShaderChunks().set("diffusePS", earthDiffusePS);
         m.getShaderChunks().set("glossPS", earthGlossPS);

@@ -70,6 +70,11 @@ it("uploads and shares the actual earth material maps and all three engine shade
   Object.assign(r, { app: { graphicsDevice: new pc.NullGraphicsDevice() }, map: trenchMap, materials: new Map(), textures: new Map() });
   const m = r.surfaceMaterial("mud", "#ffffff");
   expect(r.surfaceMaterial("mud", "#ffffff")).toBe(m);
+  expect(m.diffuseMap!.srgb).toBe(true);
+  expect(m.normalMap!.srgb).toBe(false);
+  expect(m.glossMap!.srgb).toBe(false);
+  expect(r.textures.get("earth-diffuse")!.srgb).toBe(true);
+  expect(r.textures.get("earth-normal")!.srgb).toBe(false);
   expect(m.getShaderChunks().get("diffusePS")).toBe(earthDiffusePS);
   expect(m.getShaderChunks().get("normalMapPS")).toBe(earthNormalPS);
   expect(m.getShaderChunks().get("glossPS")).toBe(earthGlossPS);
@@ -105,6 +110,7 @@ it("uploads and shares the actual earth material maps and all three engine shade
   expect(fragment).toContain("uniform sampler2D earthNormal");
   expect(fragment).toContain("void getAlbedo()");
   expect(fragment).toContain("void getGlossiness()");
+  expect(fragment).not.toMatch(/return pow\(texture2DBias\(earthDiffuse/);
   expect(fragment).not.toMatch(/\{STD_|#include/);
   for (const t of r.textures.values()) t.destroy();
   m.destroy(); r.app.graphicsDevice.destroy();
