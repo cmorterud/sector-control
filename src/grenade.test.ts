@@ -96,14 +96,17 @@ describe("grenades", () => {
     expect(game.players[0].grenades).toBe(2);
     expect(game.players[0].ammo).toBe(30);
     expect(grenade.vx).toBeGreaterThan(10);
-    expect(grenade.vy).toBeGreaterThan(10);
+    expect(grenade.vy).toBeGreaterThan(1);
+    expect(grenade.vy).toBeLessThan(3);
     expect(Math.abs(grenade.vz)).toBeLessThan(1e-6);
     expect(game.players[0].protectedUntil).toBe(0);
-    advance(game, 30);
-    expect(grenade.y).toBeGreaterThan(start.y + 5);
-    advance(game, 15);
+    advance(game, 6);
+    expect(grenade.y).toBeGreaterThan(start.y);
+    expect(grenade.y).toBeLessThan(start.y + 0.3);
+    const events = advance(game, 9);
     expect(grenade.vy).toBeLessThan(0);
-    const events = advance(game, grenadeFuseTicks - 46);
+    events.push(...advance(game, 30));
+    events.push(...advance(game, grenadeFuseTicks - 46));
     expect(game.grenades).toHaveLength(1);
     expect(events.some((e) => e.type === "grenadeBounce")).toBe(true);
     expect(events.some((e) => e.type === "grenadeExplosion")).toBe(false);
@@ -213,7 +216,7 @@ describe("grenades", () => {
     Object.assign(game.players[0], { x: -19, y: 0.85, z: -1 });
     const enemy = soldier(game, 23);
     enemy.z = -1;
-    game.step({ ...idle(), yaw: Math.PI / 2, grenade: true });
+    game.step({ ...idle(), yaw: Math.PI / 2, pitch: 0.6, grenade: true });
     const events = advance(game, grenadeFuseTicks);
     const explosion = events.find((e) => e.type === "grenadeExplosion");
     expect(enemy.hp, JSON.stringify(explosion)).toBeLessThan(100);
@@ -299,7 +302,7 @@ it("detonates a real thrown grenade inside either enemy trench and records damag
       nextThink: 1e9,
     };
     g.players.push(q);
-    g.step({ ...idle(), yaw: (-side * Math.PI) / 2, grenade: true });
+    g.step({ ...idle(), yaw: (-side * Math.PI) / 2, pitch: 0.7, grenade: true });
     const thrown = { ...g.grenades[0] };
     expect(thrown).toBeDefined();
     p.hp = 0;
@@ -314,6 +317,7 @@ it("detonates a real thrown grenade inside either enemy trench and records damag
     expect(
       burst?.type === "grenadeExplosion" &&
         burst.hits.some((h) => h.target === q.id),
+      JSON.stringify(burst),
     ).toBe(true);
     expect(q.hp).toBeLessThan(100);
     expect(g.grenades).toHaveLength(0);

@@ -2,13 +2,13 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local single-player third-person shooter. Industrial is 5v5 territory control; Trench front and Village front are 50v50 domination maps with four flags. Matches last up to eight minutes.
+Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front and Village front are 50v50 domination maps with four flags. Matches last up to eight minutes.
 
 ## Public trial
 
 Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. Each visitor plays an independent match against bots.
 
-This is a frozen production-build snapshot of game commit `d1d6fd4`, published November 8, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
+This is a frozen production-build snapshot, updated November 8, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
 
 ## Run
 
@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ```
 
-Open the printed localhost URL, then click **Begin operation** to capture the mouse. WASD moves, mouse aims, Shift sprints, right mouse aims down range, each left click fires one round, R reloads, Tab holds the scoreboard, and Escape pauses. Press Escape again to resume, or click Resume. After Escape releases the mouse, the next movement/action key or a click on the game recaptures it automatically; that capture click does not fire a shot. Losing focus pauses the local simulation.
+Open the printed localhost URL, then click **Begin operation** to capture the mouse. WASD moves, mouse aims, Shift sprints, T switches first/third person, holding right mouse aims through the iron sights, each left click fires one round, R reloads, Tab holds the scoreboard, and Escape pauses. Press Escape again to resume, or click Resume. After Escape releases the mouse, the next movement/action key or a click on the game recaptures it automatically; that capture click does not fire a shot. Losing focus pauses the local simulation.
 
 ```sh
 npm run check
@@ -30,6 +30,8 @@ npm run preview
 GitHub Actions runs `npm ci`, `npm run check -- --maxWorkers=1` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
 
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
+
+Press **T** to toggle the normal view. Third person remains the default; `?view=first` starts in first person. Hold **right mouse** for first-person iron sights from either view, with a narrower field of view and slower mouse sensitivity. Releasing returns to the chosen view. The camera sits at the standing/crouched eye; the local head/body are hidden and separate articulated arms retain the reload/bolt/throw motions. Sights align with the camera ray, and traveling rounds converge from the barrel onto the first surface or soldier under the sight. Nearby cover can still block the barrel. Recoil moves the view and shot aim together; cosmetic blast rotation does not displace first-person sights. Grenade throws keep the selected perspective.
 
 Walk over a trench edge to drop in naturally; no Space press is needed. Gravity carries you onto the firing step or floor, with a small landing pose. Press **Space** to hop on open ground or mantle upward to climb out. Hopping over an edge continues the arc down to the ground below.
 
@@ -47,7 +49,7 @@ Press **V** for melee. Trench service rifles use a **bayonet thrust**: 65 damage
 
 Melee checks the victim's position at contact, so stepping away can make it miss. Earth and solid cover stop it, and friendly/protected soldiers block the thrust without taking damage. An attack interrupts firing, loading, throwing and climbing until recovery ends. You cannot begin while reloading, throwing, airborne or stunned. A landed blow briefly staggers a surviving soldier and can interrupt their wind-up. Bots use melee only against a nearby recognized enemy, after a close-range reaction delay; artillery evasion and suppression cover still take priority. No spoken callouts are added.
 
-Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Grenades arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. Aim up/down to change the arc. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. A connected column of thrown-up dirt rises above the trench lip so a burst inside it remains visible. Flash and damage still respect solid earth. Explosive blast smoke is cosmetic. Press **F** for a separate concealing smoke grenade; bots use these during squad advances, while explosive grenade throws remain player-controlled.
+Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Human throws follow the look direction with only a 0.1-radian upward bias, then arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. A level look produces a shallow, visible throw; look upward to lob farther or clear a parapet, or down to drop one nearby. Bot smoke throws retain their existing loft. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. A connected column of thrown-up dirt rises above the trench lip so a burst inside it remains visible. Flash and damage still respect solid earth. Explosive blast smoke is cosmetic. Press **F** for a separate concealing smoke grenade; bots use these during squad advances, while explosive grenade throws remain player-controlled.
 
 ## Trench domination
 

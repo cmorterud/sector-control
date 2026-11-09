@@ -4,7 +4,7 @@ import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
 import { createPhysicsWorld, TerrainPhysics } from "./physics";
 import { Game, idle } from "./simulation";
 
-it("initializes real Ammo wall raycasts and stops a traveling round without stepping physics", () => {
+it("initializes real Ammo wall raycasts and stops a sight-aligned traveling round without stepping physics", () => {
   const world = createPhysicsWorld();
   const wall = new Entity("thin wall");
   const shape = world.createShape({
@@ -36,7 +36,9 @@ it("initializes real Ammo wall raycasts and stops a traveling round without step
       },
       false,
     );
-    Object.assign(game.players[0], { x: 0, z: 5 });
+    Object.assign(game.players[0], {
+      x: 0, z: 5, command: { ...idle(), firstPerson: true, aim: true },
+    });
     game.fire(game.players[0]);
     expect(game.projectiles).toHaveLength(1);
     let wallImpact = false;
@@ -45,13 +47,15 @@ it("initializes real Ammo wall raycasts and stops a traveling round without step
       for (const event of game.events)
         if (event.type === "impact" && event.target === null) {
           expect(event.at.z).toBeCloseTo(0.05, 3);
+          expect(event.at.x).toBeCloseTo(0, 3);
+          expect(event.at.y).toBeCloseTo(1.65, 3);
           wallImpact = true;
         }
     }
     expect(wallImpact).toBe(true);
     expect(game.projectiles).toHaveLength(0);
     // Grenade shell sweeps must also catch this 10 cm Ammo wall.
-    game.step({ ...idle(), grenade: true, pitch: -1 });
+    game.step({ ...idle(), grenade: true, pitch: 0 });
     const grenade = game.grenades[0];
     for (let i = 0; i < 10; i++) game.step(idle());
     expect(grenade.z).toBeGreaterThan(0.17);
@@ -138,7 +142,7 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
       protectedUntil: 0,
     };
     game.players.push(target);
-    game.step({ ...idle(), yaw: Math.PI / 2, grenade: true });
+    game.step({ ...idle(), yaw: Math.PI / 2, pitch: 0.7, grenade: true });
     for (let i = 0; i < 89; i++) {
       game.step(idle());
       const grenade = game.grenades[0];

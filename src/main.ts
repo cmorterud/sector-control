@@ -1,4 +1,5 @@
 import { EscapePause } from "./escape-pause";
+import { sighted } from "./player-view";
 import { villageMap } from "./village-map";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
@@ -77,8 +78,9 @@ const map =
 const requestedTeamSize = params.has("teamSize")
   ? Number(params.get("teamSize"))
   : undefined;
+let preferredFirstPerson = params.get("view") === "first";
 document.querySelector(".controls")!.textContent +=
-  "　 G GRENADE　 F SMOKE　 C TOGGLE CROUCH　 SPACE HOP / MANTLE　 Q TACTICAL MAP";
+  "　 G GRENADE　 F SMOKE　 C TOGGLE CROUCH　 SPACE HOP / MANTLE　 T CHANGE VIEW　 Q TACTICAL MAP";
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function sound(freq: number, length = 0.08, volume = 0.04) {
   audio?.tone(freq, length, volume);
@@ -279,6 +281,7 @@ function table() {
 }
 function hud(now: number) {
   const p = game.players[0];
+  el("reticle").classList.toggle("hidden", sighted(p, game.tick));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
   const t = Math.ceil((game.duration - game.tick) / 30);
@@ -378,6 +381,7 @@ function command(): Command {
   c.artillery = pendingArtillery;
   pendingArtillery = undefined;
   c.aim = aim && !tacticalMap.open;
+  c.firstPerson = preferredFirstPerson;
   c.reload = reload;
   c.mantle = mantle;
   c.grenade = grenade;
@@ -427,6 +431,7 @@ window.addEventListener("keydown", (e) => {
       "KeyF",
       "KeyV",
       "KeyQ",
+      "KeyT",
     ].includes(e.code)
   )
     captureMouse();
@@ -437,6 +442,7 @@ window.addEventListener("keydown", (e) => {
     tacticalMap.toggle();
   }
   if (tacticalMap.open && e.code !== "KeyR") return;
+  if (e.code === "KeyT" && !e.repeat) preferredFirstPerson = !preferredFirstPerson;
   if (e.code === "KeyR") reload = true;
   if (e.code === "Space" && !e.repeat) mantle = true;
   if (e.code === "KeyG" && !e.repeat) grenade = true;
@@ -453,8 +459,9 @@ window.addEventListener("mousemove", (e) => {
     tacticalMap.move(e, document.pointerLockElement === renderer.canvas);
     return;
   }
-  yaw += e.movementX * 0.002;
-  pitch = Math.max(-1.1, Math.min(1.1, pitch - e.movementY * 0.002));
+  const sensitivity = aim ? 0.0013 : 0.002;
+  yaw += e.movementX * sensitivity;
+  pitch = Math.max(-1.1, Math.min(1.1, pitch - e.movementY * sensitivity));
 });
 window.addEventListener("mousedown", (e) => {
   if (paused) return;
@@ -525,6 +532,7 @@ function frame(now: number) {
           autoplay && game.players[0].hp > 0
             ? botCommand(game, game.players[0])
             : command();
+        input.firstPerson = preferredFirstPerson;
         game.step(input);
         if (!autoplay && game.players[0].melee) yaw = game.players[0].yaw;
         for (const e of game.events) handle(e);
@@ -574,7 +582,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a><a href="/?map=village" ${map.id === "village" ? 'aria-current="page"' : ""}>Village front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Aim with right mouse. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G to throw a grenade: three per spawn, three-second fuse. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Aim higher for a higher arc.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot from cover." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a><a href="/?map=village" ${map.id === "village" ? 'aria-current="page"' : ""}>Village front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G to throw a grenade: three per spawn, three-second fuse. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot from cover." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

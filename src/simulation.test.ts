@@ -284,14 +284,13 @@ describe("combat and lifecycle", () => {
     g.botSettings.awareness = false;
     g.tick = 1;
     const c = botCommand(g, p);
-    expect(c.yaw).toBeGreaterThan(-0.01);
-    expect(c.yaw).toBeLessThan(0.03);
+    expect(c.yaw).toBeCloseTo(Math.asin(4.5 / 128));
     p.weapon = "machineGun";
     const slower = botCommand(g, p);
     expect(slower.yaw).toBeGreaterThan(c.yaw + 0.08);
     expect(slower.yaw).toBeLessThan(0.3);
   });
-  it("aligns the autoplay driver with the elevated shoulder camera", () => {
+  it("aligns the autoplay driver with the first-person sight camera", () => {
     const { g, p, enemy } = scene();
     enemy.z = -20;
     p.target = enemy.id;

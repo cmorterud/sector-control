@@ -32,6 +32,7 @@ import {
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse } from "./recoil";
+import { firstPersonView, sighted, sightHeight, viewWeaponPosition } from "./player-view";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
 import { dominationRules, flagContains } from "./domination";
@@ -111,6 +112,9 @@ type FallingTree = {
   age: number;
   landed: boolean;
 };
+type FirstPersonRig = Pick<SoldierRig,
+  "arms" | "rifle" | "supportHand" | "bolt" | "magazine" | "reloadMagazine"
+> & { root: pc.Entity };
 
 export class Renderer implements CollisionWorld {
   app: pc.Application;
@@ -121,6 +125,7 @@ export class Renderer implements CollisionWorld {
   private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
+  private firstPersonRig?: FirstPersonRig;
   rings: pc.Entity[] = [];
   private objectiveTerrainRevision = -1;
   effects: { e: pc.Entity; life: number; velocity?: V3; size?: number }[] = [];
@@ -1783,30 +1788,6 @@ export class Renderer implements CollisionWorld {
         );
         band.setLocalEulerAngles(90, 0, 0);
       }
-      this.cube(
-        "front sight",
-        0,
-        0.08,
-        service ? -0.65 : -0.72,
-        0.025,
-        0.065,
-        0.025,
-        "#262e2c",
-        false,
-        rifle,
-      );
-      this.cube(
-        "rear sight",
-        0,
-        0.075,
-        0.08,
-        0.04,
-        0.045,
-        0.06,
-        "#323a36",
-        false,
-        rifle,
-      );
       const trigger = part(
         "trigger guard",
         0,
@@ -1849,6 +1830,15 @@ export class Renderer implements CollisionWorld {
         rifle,
       );
     }
+    // A real open notch and front post share a horizontal sight line.
+    this.cube("front sight", 0, sightHeight - 0.02,
+      service ? -0.65 : gunner ? -0.72 : -0.54,
+      0.008, 0.04, 0.018, "#202724", false, rifle);
+    for (const side of [-1, 1])
+      this.cube("rear sight ear", side * 0.018, sightHeight - 0.0125,
+        0.08, 0.008, 0.025, 0.025, "#202724", false, rifle);
+    this.cube("rear sight bridge", 0, sightHeight - 0.0315,
+      0.08, 0.044, 0.014, 0.025, "#202724", false, rifle);
     if (service) {
       const blade = part(
         "bayonet blade",
@@ -2073,7 +2063,7 @@ export class Renderer implements CollisionWorld {
     });
   }
   private poseArm(
-    rig: SoldierRig,
+    rig: Pick<SoldierRig, "arms">,
     index: number,
     target: pc.Vec3,
     upperLength: number,
@@ -2122,6 +2112,71 @@ export class Renderer implements CollisionWorld {
       .getLocalTransform()
       .transformPoint(rig.supportHand.getLocalPosition());
     this.poseArm(rig, 0, hand, supportUpperLength, supportForearmLength);
+  }
+  private createFirstPersonRig() {
+    this.firstPersonRig?.root.destroy();
+    const source = this.soldiers[0];
+    const root = this.joint("first-person weapon and arms", this.camera);
+    const rifle = source.rifle.clone();
+    root.addChild(rifle);
+    const arms = source.arms.map((arm) => {
+      const shoulder = arm.shoulder.clone();
+      root.addChild(shoulder);
+      return { shoulder, elbow: shoulder.findByName("elbow") as pc.Entity };
+    });
+    // These moving meshes are independent of the world actor batches.
+    for (const component of root.findComponents("render") as pc.RenderComponent[]) {
+      component.batchGroupId = -1;
+      component.enabled = true;
+      component.castShadows = false;
+      for (const mesh of component.meshInstances) mesh.visible = true;
+    }
+    this.firstPersonRig = {
+      root, rifle, arms,
+      supportHand: rifle.findByName("left hand grip") as pc.Entity,
+      bolt: rifle.findByName("bolt") as pc.Entity,
+      magazine: rifle.findByName("weapon magazine") as pc.Entity,
+      reloadMagazine: arms[1].shoulder.findByName(source.reloadMagazine.name) as pc.Entity,
+    };
+    root.enabled = false;
+  }
+  private drawFirstPerson(p: Soldier, tick: number) {
+    const rig = this.firstPersonRig;
+    if (!rig) return;
+    rig.root.enabled = firstPersonView(p) && !p.mantle;
+    if (!rig.root.enabled) return;
+    const source = this.soldiers[0];
+    const ads = sighted(p, tick);
+    const position = viewWeaponPosition(ads);
+    const loading = reloadMotion(p, tick);
+    const lower = loading?.lower ?? 0;
+    const throwing = p.throwUntil > tick;
+    const t = clamp01(1 - (p.throwUntil - tick) / 15);
+    const melee = p.melee ? meleePose(p.melee, tick) : null;
+    const sway = ads ? 0 : Math.sin(source.phase) * source.motion * 0.008;
+    rig.rifle.setLocalPosition(position.x + sway + lower * 0.06,
+      position.y - lower * 0.12 - (throwing ? 0.15 : 0),
+      position.z + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18);
+    rig.rifle.setLocalEulerAngles(-24 * lower - (throwing ? 18 : 0),
+      10 * lower, -28 * lower);
+    rig.bolt.setLocalPosition(source.bolt.getLocalPosition());
+    rig.bolt.setLocalRotation(source.bolt.getLocalRotation());
+    rig.magazine.setLocalScale(source.magazine.getLocalScale());
+    rig.reloadMagazine.setLocalScale(source.reloadMagazine.getLocalScale());
+    rig.arms[0].shoulder.setLocalPosition(-0.22, -0.3, -0.12);
+    rig.arms[1].shoulder.setLocalPosition(0.24, -0.3, -0.1);
+    const left = rig.rifle.getLocalTransform().transformPoint(rig.supportHand.getLocalPosition());
+    this.poseArm(rig, 0, left, armLengths.upper, armLengths.forearm);
+    let right = rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(0, -0.03, 0.14));
+    if (loading || boltMotion(p, tick)) {
+      // Reuse the actual clip/bolt hand path in the new weapon's coordinate space.
+      const hand = source.arms[1].elbow.getWorldTransform()
+        .transformPoint(new pc.Vec3(0, -armLengths.forearm, 0));
+      const local = source.rifle.getWorldTransform().clone().invert().transformPoint(hand);
+      right = rig.rifle.getLocalTransform().transformPoint(local);
+    }
+    if (throwing) right = new pc.Vec3(0.16, -0.14 - smooth(t) * 0.28, -0.5 + smooth(t) * 0.2);
+    this.poseArm(rig, 1, right, armLengths.upper, armLengths.forearm);
   }
   private animateSoldier(
     p: Soldier,
@@ -2693,6 +2748,7 @@ export class Renderer implements CollisionWorld {
     for (const p of g.players) this.createSoldier(p);
     this.batchGroup = -1;
     this.app.batcher!.generate([this.actorBatch]);
+    this.createFirstPersonRig();
     for (const rig of this.soldiers) rig.reloadMagazine.setLocalScale(0, 0, 0);
     for (const s of g.scoring !== "eliminations" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
@@ -2836,10 +2892,11 @@ export class Renderer implements CollisionWorld {
     }
     this.objectiveTerrainRevision = objectiveRevision;
     const p = g.players[0],
+      firstPerson = firstPersonView(p) && !overview,
       baseView = weaponAim(p),
       view = {
-        yaw: baseView.yaw + (overview ? 0 : this.cameraReaction.yaw),
-        pitch: baseView.pitch + (overview ? 0 : this.cameraReaction.pitch),
+        yaw: baseView.yaw + (overview || firstPerson ? 0 : this.cameraReaction.yaw),
+        pitch: baseView.pitch + (overview || firstPerson ? 0 : this.cameraReaction.pitch),
       },
       d = p.command.aim ? 2.5 : 4,
       dir = {
@@ -2848,14 +2905,14 @@ export class Renderer implements CollisionWorld {
         z: -Math.cos(view.yaw) * Math.cos(view.pitch),
       };
     const visual = this.people[0].getPosition();
-    const cameraDrop = crouchRules.drop * this.soldiers[0].crouch;
+    const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[0].crouch);
     const pivot = { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
       desired = {
         x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
         y: visual.y + 2.5 - cameraDrop - dir.y * d,
         z: visual.z - dir.z * d + Math.sin(view.yaw) * 0.65,
       },
-      f = this.ray(pivot, desired) * 0.95;
+      f = firstPerson ? 0 : this.ray(pivot, desired) * 0.95;
     const pos = new pc.Vec3(
       pivot.x + (desired.x - pivot.x) * f,
       pivot.y + (desired.y - pivot.y) * f,
@@ -2867,7 +2924,12 @@ export class Renderer implements CollisionWorld {
       pos.y + dir.y * 20,
       pos.z + dir.z * 20,
     );
-    if (!overview) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
+    // Recoil is authoritative in weaponAim. Cosmetic blast angles cannot move
+    // the first-person sight away from the direction used by the simulation.
+    if (!overview && !firstPerson) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
+    this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
+    this.camera.camera!.fov += ((sighted(p, g.tick) ? 50 : 70) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
       this.camera.camera!.projection = pc.PROJECTION_ORTHOGRAPHIC;
@@ -2876,6 +2938,9 @@ export class Renderer implements CollisionWorld {
       this.camera.setEulerAngles(-90, 0, 0);
       this.app.scene.fog.type = "none";
     }
+    this.drawFirstPerson(p, g.tick - 1 + alpha);
+    if (this.firstPersonRig && overview) this.firstPersonRig.root.enabled = false;
+    if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
     this.overcastSky?.setPosition(this.camera.getPosition());
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);

@@ -17,6 +17,9 @@ import {
   type Soldier,
 } from "./simulation";
 import { trenchMap } from "./trench-map";
+import { eyeHeightOf } from "./crouch";
+import { weaponAim } from "./recoil";
+import { viewDirection } from "./player-view";
 
 // Exercise the real rig and animation transforms without a WebGL context.
 // Mesh creation is replaced by bare transform nodes; joint/IK code is unchanged.
@@ -36,12 +39,16 @@ type Rig = {
 };
 type Harness = {
   app: { root: Entity };
+  camera: Entity;
   map: typeof trenchMap;
   people: Entity[];
   soldiers: Rig[];
   blastFlinches: Map<number, { tick: number; strength: number }>;
   cube: Renderer["cube"];
   createSoldier(p: Soldier): void;
+  createFirstPersonRig(): void;
+  drawFirstPerson(p: Soldier, tick: number): void;
+  firstPersonRig: Rig & { root: Entity };
   collapseSoldier(p: Soldier, age: number): void;
   animateSoldier(
     p: Soldier,
@@ -55,6 +62,8 @@ function rigFor(p: Soldier) {
   const renderer = Object.create(Renderer.prototype) as Harness;
   renderer.app = { root: new Entity("test world") };
   Object.assign(renderer.app.root, { _enabledInHierarchy: true });
+  renderer.camera = new Entity("test camera");
+  renderer.app.root.addChild(renderer.camera);
   renderer.map = trenchMap;
   renderer.people = [];
   renderer.soldiers = [];
@@ -79,8 +88,89 @@ function rigFor(p: Soldier) {
     return e;
   };
   renderer.createSoldier(p);
+  // Entity.clone needs an application registry even when meshes are omitted.
+  Object.assign(renderer.app, { _entityIndex: {} });
+  for (const e of renderer.app.root.find(() => true))
+    Object.assign(e, { _app: renderer.app });
   return renderer;
 }
+
+it("aligns the actual cloned front post and rear notch with the camera through aim, recoil and crouch", () => {
+  for (const weapon of ["rifle", "serviceRifle", "machineGun"] as const) {
+    const g = new Game(new TestCollision(trenchMap), false), p = g.players[0];
+    p.weapon = weapon;
+    p.command = { ...idle(), firstPerson: true, aim: true };
+    const r = rigFor(p);
+    r.createFirstPersonRig();
+    for (const pitch of [-0.8, 0, 0.7]) for (const crouched of [false, true]) {
+      Object.assign(p, { pitch, yaw: 1.3, crouched, recoilPitch: 0.025, recoilYaw: -0.01 });
+      const view = weaponAim(p), direction = viewDirection(view.yaw, view.pitch);
+      r.camera.setPosition(p.x, p.y + eyeHeightOf(p), p.z);
+      r.camera.lookAt(p.x + direction.x, p.y + eyeHeightOf(p) + direction.y, p.z + direction.z);
+      r.animateSoldier(p, p.x, p.z, 1 / 60, 100);
+      r.drawFirstPerson(p, 100);
+      const rig = r.firstPersonRig;
+      const front = rig.rifle.findByName("front sight") as Entity;
+      const tip = front.getWorldTransform().transformPoint(new Vec3(0, 0.5, 0));
+      const inCamera = r.camera.getWorldTransform().clone().invert().transformPoint(tip);
+      expect(Math.abs(inCamera.x)).toBeLessThan(0.00001);
+      expect(Math.abs(inCamera.y)).toBeLessThan(0.00001);
+      expect(inCamera.z).toBeLessThan(-0.8);
+      const ears = rig.rifle.findByName("rear sight ear") as Entity;
+      const notchTop = ears.getWorldTransform().transformPoint(new Vec3(-ears.getLocalPosition().x / ears.getLocalScale().x, 0.5, 0));
+      const notch = r.camera.getWorldTransform().clone().invert().transformPoint(notchTop);
+      expect(Math.abs(notch.x)).toBeLessThan(0.00001);
+      expect(Math.abs(notch.y)).toBeLessThan(0.00001);
+      for (const aim of [true, false]) {
+        p.command.aim = aim;
+        r.drawFirstPerson(p, 100);
+        const wrist = rig.arms[0].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+        expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.001);
+        const right = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+        const trigger = rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.03, 0.14));
+        expect(right.distance(trigger)).toBeLessThan(0.001);
+      }
+      p.command.aim = true;
+    }
+    p.throwUntil = 115;
+    r.drawFirstPerson(p, 100);
+    expect(r.firstPersonRig.root.enabled).toBe(true);
+    const hand = r.firstPersonRig.arms[1].elbow.getWorldTransform()
+      .transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    const localHand = r.camera.getWorldTransform().clone().invert().transformPoint(hand);
+    expect(localHand.z).toBeCloseTo(-0.5);
+    expect(localHand.y).toBeCloseTo(-0.14);
+    p.command.firstPerson = p.command.aim = false;
+    r.drawFirstPerson(p, 100);
+    expect(r.firstPersonRig.root.enabled).toBe(false);
+    const old = r.firstPersonRig.root;
+    r.createFirstPersonRig();
+    expect(old.parent).toBeNull();
+  }
+});
+
+it("keeps the first-person support hand attached through reloads and animates the copied clip and bolt independently", () => {
+  for (const weapon of ["rifle", "serviceRifle", "machineGun"] as const) {
+    const g = new Game(new TestCollision(trenchMap), false), p = g.players[0];
+    p.weapon = weapon;
+    p.command = { ...idle(), firstPerson: true, aim: true };
+    p.reloadAt = 100 + weaponProfiles[weapon].reloadTicks;
+    const r = rigFor(p);
+    r.createFirstPersonRig();
+    for (let tick = 100; tick < p.reloadAt; tick += 2) {
+      r.animateSoldier(p, p.x, p.z, 1 / 60, tick);
+      const sourcePosition = r.soldiers[0].rifle.getLocalPosition().clone();
+      r.drawFirstPerson(p, tick);
+      const rig = r.firstPersonRig;
+      const left = rig.arms[0].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+      expect(left.distance(rig.supportHand.getPosition())).toBeLessThan(0.001);
+      expect(rig.reloadMagazine.getLocalScale().equals(r.soldiers[0].reloadMagazine.getLocalScale())).toBe(true);
+      expect(rig.bolt.getLocalPosition().equals(r.soldiers[0].bolt.getLocalPosition())).toBe(true);
+      expect(r.soldiers[0].rifle.getLocalPosition().equals(sourcePosition)).toBe(true);
+      expect(rig.rifle).not.toBe(r.soldiers[0].rifle);
+    }
+  }
+});
 
 it("thrusts and butt-strikes with both wrists on the weapon, then restores the pose without changing simulation state", () => {
   for (const kind of ["bayonet", "charge", "butt"] as const) {

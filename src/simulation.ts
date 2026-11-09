@@ -34,6 +34,7 @@ import {
 } from "./crouch";
 import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
+import { firstPersonView, viewMuzzle } from "./player-view";
 import {
   suppressNearMiss,
   suppressionCommand,
@@ -101,6 +102,7 @@ export interface Command {
   smoke?: boolean;
   melee?: boolean;
   crouch?: boolean;
+  firstPerson?: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -1362,7 +1364,7 @@ export class Game {
     };
     const f = this.collision.ray(pivot, desired) * 0.95;
     const camera =
-      p.id === 0
+      p.id === 0 && !firstPersonView(p)
         ? {
             x: pivot.x + (desired.x - pivot.x) * f,
             y: pivot.y + (desired.y - pivot.y) * f,
@@ -1393,7 +1395,7 @@ export class Game {
       z: camera.z + (aim.z - camera.z) * first,
     };
     const muzzle = weaponProfiles[p.weapon].muzzle;
-    const from = {
+    const from = firstPersonView(p) ? viewMuzzle(p, this.tick) : {
       x: p.x + Math.cos(yaw) * weaponMount.x + dir.x * muzzle,
       y: p.y + rifleHeight(this.map, p),
       z: p.z + Math.sin(yaw) * weaponMount.x + dir.z * muzzle,
@@ -1627,10 +1629,17 @@ export class Game {
   }
   private throwGrenade(p: Soldier, smoke = false) {
     const speed = smoke ? 13 : grenadeSpeed;
-    const elevation = clamp(p.pitch + 0.65, 0.15, 1.25);
+    const human = this.humanPlayerIds.includes(p.id);
+    const elevation = human
+      ? clamp(p.pitch + 0.1, -1.1, 1.25)
+      : clamp(p.pitch + 0.65, 0.15, 1.25);
     // Timber can extend slightly beyond the height-field bank. Find clearance
     // within the soldier's footprint before releasing; never start inside it.
-    const origin = { x: p.x, y: p.y + 1.8 - stanceDrop(p), z: p.z };
+    const origin = {
+      x: p.x + (human ? Math.cos(p.yaw) * 0.16 : 0),
+      y: p.y + (human ? 1.53 : 1.8) - stanceDrop(p),
+      z: p.z + (human ? Math.sin(p.yaw) * 0.16 : 0),
+    };
     const from = [
       origin,
       {
@@ -1663,7 +1672,7 @@ export class Game {
     if (!from) return;
     const desired = {
       x: from.x + Math.sin(p.yaw) * 0.55,
-      y: from.y + 0.15,
+      y: from.y + (human ? 0.05 : 0.15),
       z: from.z - Math.cos(p.yaw) * 0.55,
     };
     const f = Math.max(0, this.grenadeSweep(from, desired) - 0.03);
@@ -2352,33 +2361,9 @@ export function botCommand(g: Game, p: Soldier): Command {
       aimZ = rz + velocity.z * estimate;
     const aimDistance = Math.hypot(aimX, aimZ);
     const aimYaw = Math.atan2(aimX, -aimZ);
-    let eyeHeight = p.y + eyeHeightOf(p),
-      shoulderOffset = 0;
-    if (p.id === 0) {
-      // The optional player driver aims through the same shoulder camera as a human.
-      const pitch = Math.atan2(seen.y - (p.y + cameraHeightOf(p)), aimDistance);
-      const f =
-        g.collision.ray(
-          { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
-          {
-            x:
-              p.x -
-              Math.sin(aimYaw) * Math.cos(pitch) * 2.5 +
-              Math.cos(aimYaw) * 0.65,
-            y: p.y + cameraHeightOf(p) - Math.sin(pitch) * 2.5,
-            z:
-              p.z +
-              Math.cos(aimYaw) * Math.cos(pitch) * 2.5 +
-              Math.sin(aimYaw) * 0.65,
-          },
-        ) * 0.95;
-      eyeHeight += 0.85 * f;
-      shoulderOffset = 0.65 * f;
-    }
-    c.yaw =
-      aimYaw -
-      Math.asin(clamp(shoulderOffset / Math.max(0.001, aimDistance), 0, 0.99)) +
-      error.yaw;
+    // Engagement commands use ADS, including the optional driver in slot zero.
+    const eyeHeight = p.y + eyeHeightOf(p);
+    c.yaw = aimYaw + error.yaw;
     c.pitch = Math.atan2(seen.y - eyeHeight, aimDistance) + error.pitch;
     if (g.botSettings.awareness) {
       c.yaw = turnToward(p.yaw, c.yaw, 0.075);
