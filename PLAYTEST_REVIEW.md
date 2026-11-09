@@ -1,4 +1,21 @@
-# Chrome playtest review — November 1, 2026
+# Chrome playtest review
+
+## November 9, 2026 — public environment build
+
+Native Chrome app control recovered; the browser-specific host remains unavailable. Public version7 (game `bfc015f`) rendered successfully. Two native recordings and their exported JSON/event logs are retained under ignored `playtest-artifacts/`:
+
+| UTC timestamp suffix | Run | Wall clip / ticks | Average FPS / p95 | Runtime errors |
+| --- | --- | --- | --- | --- |
+| `12-36-28-140Z` | 100-soldier first-person bot autoplay | 60s / 1,757 | 55.68 / 17.2ms | 0 |
+| `12-39-34-198Z` | One-player manual grenade/aim/crouch fixture, AI off | 35s / 1,047 | 59.77 / 17.5ms | 0 |
+
+The battle records1,582shots (293machine-gun),40deaths,four captures,35artillery impacts (three ambient),35craters,11bank cuts,eight structural collapses and two fallen trees. Bot reactions include1,031target acquisitions,415attention breaks,12smoke clouds,five assaults and five arrivals at enemy trenches. Ten falls each have a landing. Last sampled scores are21–22. The manual log confirmsG at tick699/detonation789 (three-second fuse),170excavated samples,134aim ticks and sticky crouch. Actual extracted frames show iron sights, terrain detail and the grenade plume. Both1280×720VP8/stereo48kOpus recordings fully decode without warnings; last packet timestamps are59.903s/34.944s. Frame rates include capture overhead; these are not controlled benchmarks.
+
+Native observation after the manual clip also exercised view switching, a rifle shot and completed reload (4/60→5/59), plus climbing/movement attempts. Those actions are outside the clip and must not be described as recorded acceptance. Dedicated close-up ragdoll settling and precise sight-hit acceptance remain open;40combat deaths without runtime errors are insufficient visual proof. Absolute native dragging did not establish reliable pointer-locked look control.
+
+The main visual follow-up is conspicuous light-colored bands/faceted shading and material transitions on some trench slopes. Do not mark that polish complete. `environment-native-audit.json`, `environment-battle-review.png`, `environment-battle-frame.png`, `environment-ads-frame.png` and `environment-grenade-frame.png` retain supporting ignored artifacts. Normal public50v50 menu restored; no gameplay source changes in this check.
+
+## Original November 1 verification
 
 Direct Chrome gameplay control and native video export are now verified. Work stayed local. Recordings, JSON, extracted frames, and machine-readable measurements are in ignored `playtest-artifacts/`.
 
