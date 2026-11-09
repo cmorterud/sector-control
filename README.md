@@ -6,7 +6,7 @@ Local single-player shooter with toggleable first- and third-person views. Indus
 
 ## Public trial
 
-Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. Each visitor plays an independent match against bots.
+Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. [Start trenches in first person](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches&view=first), or press T during play. Each visitor plays an independent match against bots.
 
 This is a frozen production-build snapshot, updated November 8, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
 
