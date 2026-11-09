@@ -1,5 +1,13 @@
 # Chrome playtest review
 
+## November 9, 2026 — trench lighting correction
+
+The bank-band issue found below is corrected in three incremental code commits, each pushed after testing: `ed9c54d` (continuous world-space terrain normals and repaired zero normals), `809bfc9` (consistent sRGB terrain color decoding), `f1aec02` (subdued terrain highlights). Actual triangle positions/indices and gameplay rules stay unchanged. Three new regressions cover seams, excavation, hard-edge preservation, finite normals and industrial opt-out; material checks also cover color-space/data-map configuration and bounded highlight strength. StrictTypeScript/all349tests/55files pass locally87.55s; build4.77s, all three code-commit CI runs green.
+
+Native normal-only recording `13-15-18-607Z` (60s) softened the faceting but retained the pale highlight. Gamma-only `13-18-51-515Z` (35s) confirmed the residual glare. Final `13-22-47-885Z` (35s) has100soldiers/1,002ticks,54.43FPS average/17.3ms p95/26slow frames/zero errors,908shots/21deaths/four captures/17artillery impacts/five bank cuts. Final VP8/stereoOpus video fully decodes without warnings. All recorded commands and events are identical to the original environment baseline through every shared tick (1,002final/1,749normal-only). No controlled performance gain is claimed.
+
+Final native view and `playtest-artifacts/shading-before-after.png` compare the same bank at simulation tick600 (before left/after right): the conspicuous pale strip is replaced by continuous soil-colored shading. Supporting recordings, per-pass contact sheets and `terrain-lighting-audit.json` remain ignored locally. Public version8 serves the verified final bundle; normal Chrome menu restored and the owned5176preview stopped.
+
 ## November 9, 2026 — public environment build
 
 Native Chrome app control recovered; the browser-specific host remains unavailable. Public version7 (game `bfc015f`) rendered successfully. Two native recordings and their exported JSON/event logs are retained under ignored `playtest-artifacts/`:
@@ -13,7 +21,7 @@ The battle records1,582shots (293machine-gun),40deaths,four captures,35artillery
 
 Native observation after the manual clip also exercised view switching, a rifle shot and completed reload (4/60→5/59), plus climbing/movement attempts. Those actions are outside the clip and must not be described as recorded acceptance. Dedicated close-up ragdoll settling and precise sight-hit acceptance remain open;40combat deaths without runtime errors are insufficient visual proof. Absolute native dragging did not establish reliable pointer-locked look control.
 
-The main visual follow-up is conspicuous light-colored bands/faceted shading and material transitions on some trench slopes. Do not mark that polish complete. `environment-native-audit.json`, `environment-battle-review.png`, `environment-battle-frame.png`, `environment-ads-frame.png` and `environment-grenade-frame.png` retain supporting ignored artifacts. Normal public50v50 menu restored; no gameplay source changes in this check.
+The visual follow-up at this earlier checkpoint was conspicuous light-colored bands/faceted shading and material transitions on some trench slopes. The terrain lighting correction above supersedes that follow-up. `environment-native-audit.json`, `environment-battle-review.png`, `environment-battle-frame.png`, `environment-ads-frame.png` and `environment-grenade-frame.png` retain supporting ignored artifacts. Normal public50v50 menu restored; no gameplay source changes in this check.
 
 ## Original November 1 verification
 
