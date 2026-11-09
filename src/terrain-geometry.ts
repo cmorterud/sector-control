@@ -1,3 +1,4 @@
+import { exposedEarth } from "./environment-surface";
 import { soilColor } from "./battlefield-look";
 import {
   groundHeight,
@@ -50,7 +51,7 @@ export function terrainGeometry(
       uvs.push((dark ? (acrossX ? x : z) : x) / 3, (dark ? y : z) / 3);
       positions.push(x, y, z);
       if (map.terrain)
-        colors.push(...soilColor(x, y, z, dark, terrainCut(x, z, map)), 1);
+        colors.push(...soilColor(x, y, z, dark, terrainCut(x, z, map)), exposedEarth(terrainCut(x, z, map), dark));
       else
         colors.push(
           ...[0.46, 0.49, 0.43].map(

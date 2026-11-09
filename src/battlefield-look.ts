@@ -32,13 +32,10 @@ export function surfacePixels(kind: SurfaceKind, size = 256) {
           lookNoise(u * 8, v * 8, 8) * 4 +
           Math.sin(v * Math.PI * 4) * 0.6,
       );
-      const seam = Math.min(fract(u * 5), 1 - fract(u * 5));
-      const wood =
-        0.68 +
-        large * 0.24 +
-        ridge * 0.065 +
-        grain * 0.08 -
-        (seam < 0.025 ? 0.23 : 0);
+      const knot = Math.sin(v * Math.PI * 2) * Math.sin(u * Math.PI * 2 * 3);
+      const split = Math.max(0, 1 - Math.abs(Math.sin(u * Math.PI * 2 * 13 + large * 2 + knot * 0.5)) / 0.045);
+      const pore = Math.max(0, grain - 0.65) * 0.4;
+      const wood = 0.57 + large * 0.24 + ridge * 0.09 + grain * 0.08 - split * 0.29 - pore;
       const mud =
         0.63 +
         large * 0.3 +
@@ -57,7 +54,7 @@ export function surfacePixels(kind: SurfaceKind, size = 256) {
       );
       heights[y * size + x] =
         kind === "wood"
-          ? ridge * 0.2 + grain * 0.1 - (seam < 0.025 ? 0.25 : 0)
+          ? ridge * 0.12 + grain * 0.08 - split * 0.35
           : large * 0.5 + grain * 0.25;
       const shine = kind === "wood" ? 20 : 22 + Math.max(0, 0.5 - large) * 210;
       gloss.set([shine, shine, shine, 255], i);
@@ -131,7 +128,7 @@ export function soilColor(
   dark: boolean,
   cut: number,
 ): number[] {
-  const damp = y < 1 ? 0.9 : 1;
+  const damp = (y < 1 ? 0.9 : 1) * (0.9 + lookNoise(x * 0.19 + 71, z * 0.19 - 37) * 0.16);
   // Map-sized materials provide old weathered variation. Runtime excavation adds
   // warm exposed clay and a darker deep center, rather than recoloring old scars.
   const fresh = Math.min(1, cut * 1.3);

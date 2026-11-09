@@ -10,6 +10,8 @@ Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site
 
 This is a frozen production-build snapshot, updated November 8, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
 
+Trench and village terrain now use close-up clumped earth, grit and broken soil fissures alongside broad wet/dry/grass variation. Explosions replace excavated grass, paving and wet surface finishes with fresh earth; the detail follows steep banks and crater walls without stretching. Individual worn duckboard planks, split timber grain, small exposed roots and rounded rubble add trench detail. These are cosmetic changes; movement and cover collision keep their existing shapes.
+
 ## Run
 
 Requires Node.js 22.12+ (developed with Node 26).

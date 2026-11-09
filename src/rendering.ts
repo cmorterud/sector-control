@@ -1,3 +1,4 @@
+import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
 import { RagdollPhysics, type Ragdoll, type RagdollPart } from "./ragdoll";
@@ -47,7 +48,7 @@ import {
 import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
 import { scarRubble } from "./terrain-relief";
 import { treeHasCrown } from "./vegetation";
-import { battlefieldProps } from "./battlefield-dressing";
+import { battlefieldProps, trenchRoots } from "./battlefield-dressing";
 import {
   industrialMap,
   groundHeight,
@@ -456,6 +457,7 @@ export class Renderer implements CollisionWorld {
           clod.d,
           "#70624c",
         );
+        part.render!.type = "sphere";
         part.setLocalEulerAngles(0, clod.yaw, 0);
       }
     }
@@ -547,17 +549,26 @@ export class Renderer implements CollisionWorld {
         }
       }
     }
+    for (const root of trenchRoots(this.map)) {
+      const group = this.joint("exposed bank roots", this.mapRoot);
+      this.groundDecor.push({ root: group, x: root.x, z: root.z, radius: 0.6, batched: true });
+      for (let i = 1; i < root.points.length; i++) {
+        const a = root.points[i - 1], b = root.points[i];
+        const direction = new pc.Vec3(b.x - a.x, b.y - a.y, b.z - a.z);
+        const part = this.cube("exposed root", (a.x+b.x)/2, (a.y+b.y)/2, (a.z+b.z)/2,
+          0.018 - i * 0.002, direction.length(), 0.018 - i * 0.002, "#4b4031", false, group);
+        part.setLocalRotation(new pc.Quat().setFromDirections(pc.Vec3.UP, direction));
+        part.render!.castShadows = false;
+      }
+    }
     for (const b of duckboards(this.map)) {
-      const root = this.cube(
-        "duckboard",
-        b.x,
-        0.025,
-        b.z,
-        1.3,
-        0.045,
-        1.8,
-        "#756044",
-      );
+      const root = this.joint("duckboard walkway", this.mapRoot, b.x, 0, b.z);
+      for (let i = 0; i < 9; i++) {
+        const wear = Math.sin(b.x * 19 + b.z * 31 + i * 13);
+        const plank = this.cube("duckboard", wear * 0.025, 0.025, (i - 4) * 0.2,
+          1.22 + wear * 0.06, 0.045, 0.17, i % 3 ? "#74644e" : "#625542", false, root);
+        plank.setLocalEulerAngles(0, wear * 1.5, 0);
+      }
       root.enabled = intactBoard(b, this.map);
       this.boardVisuals.push({ root, ...b });
     }
@@ -1297,11 +1308,11 @@ export class Renderer implements CollisionWorld {
     const key = `surface-${kind}-${tint}`;
     if (!this.materials.has(key)) {
       const ground = kind === "mud";
-      const size = ground ? 1024 : 256;
+      const size = ground ? 1024 : 512;
       if (!this.textures.has(`${kind}-diffuse`)) {
         const data = ground
           ? groundSurfacePixels(this.map, size)
-          : surfacePixels(kind);
+          : surfacePixels(kind, size);
         for (const channel of ["diffuse", "normal", "gloss"] as const)
           this.texture(
             `${kind}-${channel}`,
@@ -1325,16 +1336,12 @@ export class Renderer implements CollisionWorld {
           m[`${channel}MapTiling`].set(3 / this.map.width, 3 / this.map.depth);
           m[`${channel}MapOffset`].set(0.5, 0.5);
         }
-        const detail = surfacePixels("mud");
-        m.normalDetailMap = this.texture(
-          "ground-fine-normal",
-          256,
-          256,
-          () => detail.normal,
-        );
-        m.normalDetailMapTiling.set(0.81, 0.81);
-        m.normalDetailMapRotation = 37;
-        m.normalDetailMapBumpiness = 0.16;
+        const earth = earthPixels();
+        m.setParameter("earthDiffuse", this.texture("earth-diffuse", 512, 512, () => earth.diffuse));
+        m.setParameter("earthNormal", this.texture("earth-normal", 512, 512, () => earth.normal));
+        m.getShaderChunks().set("diffusePS", earthDiffusePS);
+        m.getShaderChunks().set("glossPS", earthGlossPS);
+        m.getShaderChunks().set("normalMapPS", earthNormalPS);
       }
       m.update();
       this.materials.set(key, m);
@@ -1356,6 +1363,7 @@ export class Renderer implements CollisionWorld {
         b.d,
         i % 3 ? "#6f6551" : "#8a7b61",
       );
+      part.render!.type = "sphere";
       part.setLocalEulerAngles(0, b.yaw, 0);
       part.render!.castShadows = false;
       this.groundDecor.push({
