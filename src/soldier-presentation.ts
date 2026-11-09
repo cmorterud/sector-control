@@ -6,7 +6,6 @@ const ease = (v: number) => {
   return v * v * (3 - 2 * v);
 };
 export const casualtyRules = {
-  fallSeconds: 0.85,
   lifetime: 20,
   max: 24,
   range: 70,
@@ -40,17 +39,5 @@ export function reloadMotion(
         ? progress >= 0.28 && progress < 0.68
         : progress >= 0.25 && progress < 0.64,
     removed: p.weapon !== "serviceRifle" && progress >= 0.2 && progress < 0.69,
-  };
-}
-export function collapseMotion(age: number, id: number) {
-  const buckle = ease(age / 0.32),
-    fall = ease((age - 0.13) / 0.72);
-  return {
-    drop: 0.56 * buckle,
-    roll: soldierStyle(id).side * 78 * fall,
-    lean: -12 * fall,
-    buckle,
-    fall,
-    settled: age >= casualtyRules.fallSeconds,
   };
 }

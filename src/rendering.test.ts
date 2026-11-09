@@ -6,7 +6,6 @@ import { Renderer } from "./rendering";
 import {
   soldierStyle,
   reloadMotion,
-  casualtyRules,
 } from "./soldier-presentation";
 import { weaponProfiles } from "./weapons";
 import {
@@ -50,7 +49,7 @@ type Harness = {
   createFirstPersonRig(): void;
   drawFirstPerson(p: Soldier, tick: number): void;
   firstPersonRig: Rig & { root: Entity };
-  collapseSoldier(p: Soldier, age: number): void;
+  ragdollPose(p: Soldier): { parts: import("./ragdoll").RagdollPart[] };
   animateSoldier(
     p: Soldier,
     x: number,
@@ -557,25 +556,19 @@ it("opens, retracts and closes the service bolt with the right wrist on its knob
   expect(rig.bolt.getLocalEulerAngles().z).toBeCloseTo(0);
   expect(p).toEqual(before);
 });
-it("buckles and topples progressively while retaining equipment and the support grip", () => {
-  const g = new Game(new TestCollision(trenchMap), false),
-    p = g.players[0],
-    r = rigFor(p),
-    rig = r.soldiers[0];
-  const snapshot = structuredClone(p);
-  r.collapseSoldier(p, 0);
-  const upright = rig.body.getLocalRotation().clone();
-  r.collapseSoldier(p, 0.2);
-  expect(Math.abs(rig.legs[0].knee.getLocalEulerAngles().x)).toBeGreaterThan(
-    50,
-  );
-  expect(Math.abs(rig.body.getLocalEulerAngles().z)).toBeLessThan(10);
-  r.collapseSoldier(p, casualtyRules.fallSeconds);
-  expect(Math.abs(rig.body.getLocalEulerAngles().z)).toBeGreaterThan(60);
-  expect(rig.body.getLocalRotation().equals(upright)).toBe(false);
-  const wrist = rig.arms[0].elbow
-    .getWorldTransform()
-    .transformPoint(new Vec3(0, -armLengths.forearm, 0));
-  expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
-  expect(p).toEqual(snapshot);
+it("captures standing and crouching live rig anatomy for ragdolls without changing soldier state", () => {
+  const g = new Game(new TestCollision(trenchMap), false), p = g.players[0], r = rigFor(p);
+  const standingHead = r.ragdollPose(p).parts.find(b => b.name === "head")!.position.y;
+  p.crouched = true; p.command = { ...idle(), crouch: true, aim: true };
+  for (let i = 0; i < 90; i++) r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + i);
+  const before = structuredClone(p), pose = r.ragdollPose(p);
+  expect(pose.parts).toHaveLength(14);
+  expect(pose.parts.filter(b => b.parent)).toHaveLength(13);
+  expect(pose.parts.find(b => b.name === "head")!.position.y).toBeLessThan(standingHead - 0.45);
+  const arm = r.soldiers[0].arms[0];
+  const wrist = arm.elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+  const center = arm.elbow.getPosition().clone().lerp(arm.elbow.getPosition(), wrist, 0.5);
+  expect(pose.parts.find(b => b.name === "left forearm")!.position.distance(center)).toBeLessThan(0.00001);
+  expect(pose.parts.every(b => Number.isFinite(b.position.x + b.position.y + b.position.z))).toBe(true);
+  expect(p).toEqual(before);
 });

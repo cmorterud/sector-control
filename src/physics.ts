@@ -76,7 +76,7 @@ export class TerrainPhysics {
     b: { x: number; y: number; z: number },
   ) {
     return (
-      this.world.raycastFirst(new Vec3(a.x, a.y, a.z), new Vec3(b.x, b.y, b.z))
+      this.world.raycastFirst(new Vec3(a.x, a.y, a.z), new Vec3(b.x, b.y, b.z), { filterCollisionMask: BODYGROUP_STATIC })
         ?.hitFraction ?? 1
     );
   }

@@ -181,6 +181,7 @@ it("renders a twice-size heavy flash/dust footprint without extending the effect
       app: { root: new Entity("test") },
       camera: new Entity("camera"),
       blasts: [],
+      casualties: [],
       blastSequence: 0,
       people: new Map(),
       dustMaterial: () => new StandardMaterial(),

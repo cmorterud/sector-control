@@ -1,5 +1,6 @@
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
+import { RagdollPhysics, type Ragdoll, type RagdollPart } from "./ragdoll";
 import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfacePixels, type RifleShape } from "./rifle-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
@@ -10,7 +11,6 @@ import {
 import {
   soldierStyle,
   reloadMotion,
-  collapseMotion,
   casualtyRules,
 } from "./soldier-presentation";
 import {
@@ -127,6 +127,9 @@ export class Renderer implements CollisionWorld {
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
   private firstPersonRig?: FirstPersonRig;
+  private ragdollPhysics?: RagdollPhysics;
+  private activeGame?: Game;
+  private deathHits = new Map<number, pc.Vec3>();
   rings: pc.Entity[] = [];
   private objectiveTerrainRevision = -1;
   effects: { e: pc.Entity; life: number; velocity?: V3; size?: number }[] = [];
@@ -141,6 +144,9 @@ export class Renderer implements CollisionWorld {
   private casualties: {
     entity: pc.Entity;
     mesh: pc.Mesh;
+    skin: pc.SkinInstance;
+    ragdoll: Ragdoll;
+    bones: pc.Entity[];
     x: number;
     z: number;
     age: number;
@@ -2594,40 +2600,43 @@ export class Renderer implements CollisionWorld {
     );
     this.attachSupportArm(rig);
   }
-  private collapseSoldier(p: Soldier, age: number) {
-    const rig = this.soldiers[p.id];
-    rig.arms[0].shoulder.setLocalPosition(-0.27, 0.41, -0.12);
-    rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, 0);
-    const pose = collapseMotion(age, p.id);
-    rig.body.setLocalPosition(0, 0.94 - pose.drop, 0.12 * pose.fall);
-    rig.body.setLocalEulerAngles(pose.lean, 0, pose.roll);
-    rig.upper.setLocalPosition(0, 0.08, 0);
-    rig.upper.setLocalEulerAngles(10 * pose.buckle, 0, 0);
-    rig.hips.setLocalEulerAngles(0, 0, 0);
+  private ragdollPose(p: Soldier) {
+    const rig = this.soldiers[p.id], root = this.people[p.id];
+    const parts: RagdollPart[] = [];
+    const bindings = new Map<pc.Entity, string>([[rig.body, "pelvis"], [rig.hips, "pelvis"], [rig.upper, "torso"], [rig.rifle, "weapon"], [rig.supportHand, "left forearm"]]);
+    const right = rig.upper.getWorldTransform().transformVector(pc.Vec3.RIGHT).normalize();
+    const up = rig.upper.getWorldTransform().transformVector(pc.Vec3.UP).normalize();
+    const hipCenter = rig.hips.getPosition().clone();
+    parts.push({ name: "pelvis", position: hipCenter, rotation: rig.hips.getRotation().clone(), mass: 11, shape: "box", size: new pc.Vec3(0.20, 0.12, 0.14) });
+    parts.push({ name: "torso", position: rig.upper.getWorldTransform().transformPoint(new pc.Vec3(0, 0.22, 0.045)), rotation: rig.upper.getRotation().clone(), mass: 24, shape: "box", size: new pc.Vec3(0.24, 0.25, 0.245), parent: "pelvis", anchor: hipCenter.clone().add(up.clone().mulScalar(0.13)), axis: up, swing: 25, twist: 20 });
+    const head = root.findByName("head") as pc.Entity;
+    parts.push({ name: "head", position: head.getPosition().clone().add(up.clone().mulScalar(0.06)), rotation: head.getRotation().clone(), mass: 5, shape: "capsule", size: new pc.Vec3(0.18, 0.42, 0), parent: "torso", anchor: head.getPosition().clone().sub(up.clone().mulScalar(0.17)), axis: up, swing: 45, twist: 50 });
+    const segment = (name: string, a: pc.Vec3, b: pc.Vec3, radius: number, mass: number, parent: string, hinge?: [number, number]) => {
+      const direction = b.clone().sub(a), length = direction.length();
+      direction.normalize();
+      parts.push({ name, position: a.clone().lerp(a, b, 0.5), rotation: new pc.Quat().setFromDirections(pc.Vec3.UP, direction), mass, shape: "capsule", size: new pc.Vec3(radius, length, 0), parent, anchor: a.clone(), axis: hinge ? right : direction, hinge, swing: parent === "torso" ? 80 : 50, twist: 30 });
+    };
     for (let i = 0; i < 2; i++) {
-      rig.legs[i].hip.setLocalEulerAngles((i ? 70 : 75) * pose.buckle, 0, 0);
-      rig.legs[i].knee.setLocalEulerAngles(
-        (i ? -130 : -135) * pose.buckle,
-        0,
-        0,
-      );
-      rig.legs[i].ankle.setLocalEulerAngles(45 * pose.buckle, 0, 0);
+      const side = i ? "right" : "left", arm = rig.arms[i], leg = rig.legs[i];
+      const shoulder = arm.shoulder.getPosition().clone(), elbow = arm.elbow.getPosition().clone();
+      const wrist = arm.elbow.getWorldTransform().transformPoint(new pc.Vec3(0, -armLengths.forearm, 0));
+      segment(`${side} upper arm`, shoulder, elbow, 0.075, 2.5, "torso");
+      segment(`${side} forearm`, elbow, wrist, 0.065, 1.5, `${side} upper arm`, [-5, 125]);
+      bindings.set(arm.shoulder, `${side} upper arm`); bindings.set(arm.elbow, `${side} forearm`);
+      const hip = leg.hip.getPosition().clone(), knee = leg.knee.getPosition().clone(), ankle = leg.ankle.getPosition().clone();
+      segment(`${side} thigh`, hip, knee, 0.10, 8, "pelvis");
+      segment(`${side} calf`, knee, ankle, 0.08, 5, `${side} thigh`, [-125, 5]);
+      parts.push({ name: `${side} foot`, position: leg.ankle.getWorldTransform().transformPoint(new pc.Vec3(0, -0.04, -0.065)), rotation: leg.ankle.getRotation().clone(), mass: 1, shape: "box", size: new pc.Vec3(0.09, 0.065, 0.13), parent: `${side} calf`, anchor: ankle, axis: right, swing: 25, twist: 15 });
+      bindings.set(leg.hip, `${side} thigh`); bindings.set(leg.knee, `${side} calf`); bindings.set(leg.ankle, `${side} foot`);
     }
-    rig.magazine.setLocalScale(rig.magazineScale);
-    rig.reloadMagazine.setLocalScale(0, 0, 0);
-    rig.rifle.setLocalPosition(
-      weaponMount.x,
-      weaponMount.y + rifleHeight(this.map) - 1.45,
-      weaponMount.z,
-    );
-    rig.rifle.setLocalEulerAngles(-8 * pose.fall, 0, -10 * pose.fall);
-    const hand = rig.rifle
-      .getLocalTransform()
-      .transformPoint(new pc.Vec3(0, -0.03, 0.14));
-    this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm);
-    this.attachSupportArm(rig);
+    const wrist = rig.arms[1].elbow.getWorldTransform().transformPoint(new pc.Vec3(0, -armLengths.forearm, 0));
+    parts.push({ name: "weapon", position: rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, -0.03, -0.2)), rotation: rig.rifle.getRotation().clone(), mass: 4, shape: "box", size: new pc.Vec3(0.045, 0.07, 0.7), parent: "right forearm", anchor: wrist, axis: rig.rifle.getWorldTransform().transformVector(pc.Vec3.FORWARD).normalize(), swing: 65, twist: 55 });
+    return { parts, bindings, head: head.getPosition().clone(), up };
   }
-  private retainCasualty(p: Soldier) {
+  private releaseCasualty(c: (typeof this.casualties)[number]) {
+    c.ragdoll.destroy(); c.skin.destroy(); c.entity.destroy(); c.mesh.destroy();
+  }
+  private retainCasualty(p: Soldier, impulse = new pc.Vec3(0.5, 0, 1.5)) {
     if (
       Math.hypot(
         p.x - this.camera.getPosition().x,
@@ -2637,15 +2646,17 @@ export class Renderer implements CollisionWorld {
       return;
     if (this.casualties.length >= casualtyRules.max) {
       const old = this.casualties.shift()!;
-      old.entity.destroy();
-      old.mesh.destroy();
+      this.releaseCasualty(old);
       this.soldierStats.evicted++;
     }
     const positions: number[] = [],
       normals: number[] = [],
       indices: number[] = [],
-      colors: number[] = [];
-    const floor = groundHeight(p.x, p.z, this.map);
+      colors: number[] = [], weights: number[] = [], blendIndices: number[] = [];
+    const pose = this.ragdollPose(p);
+    this.ragdollPhysics ??= new RagdollPhysics(this.terrainPhysics.world, this.map);
+    const ragdoll = this.ragdollPhysics.create(pose.parts, new pc.Vec3(p.vx, 0, p.vz));
+    ragdoll.hit(impulse, pose.parts[1].position.clone().add(new pc.Vec3(0.08, 0.08, 0)));
     for (const component of this.people[p.id].findComponents(
       "render",
     ) as pc.RenderComponent[]) {
@@ -2654,8 +2665,17 @@ export class Renderer implements CollisionWorld {
         component.entity === this.soldiers[p.id].reloadMagazine
       )
         continue;
+      let carried: pc.GraphNode | null = component.entity;
+      while (carried && carried !== this.soldiers[p.id].reloadMagazine) carried = carried.parent;
+      if (carried) continue;
       const world = component.entity.getWorldTransform(),
         normalMatrix = world.clone().invert().transpose();
+      let ancestor: pc.GraphNode | null = component.entity, bone = "torso";
+      while (ancestor) {
+        const mapped = pose.bindings.get(ancestor as pc.Entity);
+        if (mapped) { bone = mapped; break; }
+        ancestor = ancestor.parent;
+      }
       for (const instance of component.meshInstances) {
         if (!instance.mesh) continue;
         const points: number[] = [],
@@ -2667,14 +2687,19 @@ export class Renderer implements CollisionWorld {
         instance.mesh.getNormals(ns);
         instance.mesh.getIndices(is);
         const base = positions.length / 3;
-        const tint =
+        let tint =
           (instance.material as pc.StandardMaterial).diffuse ??
           new pc.Color(0.4, 0.4, 0.35);
+        if (instance.material === this.materials.get("rifle-material-walnut")) tint = color("#715037");
+        if (instance.material === this.materials.get("rifle-material-steel")) tint = color("#353c3a");
         for (let i = 0; i < points.length; i += 3) {
           const v = world.transformPoint(
             new pc.Vec3(points[i], points[i + 1], points[i + 2]),
           );
-          positions.push(v.x - p.x, v.y - floor, v.z - p.z);
+          positions.push(v.x, v.y, v.z);
+          const vertexBone = component.entity === this.soldiers[p.id].upper && v.clone().sub(pose.head).dot(pose.up) > -0.17 ? "head" : bone;
+          blendIndices.push(pose.parts.findIndex(part => part.name === vertexBone), 0, 0, 0);
+          weights.push(1, 0, 0, 0);
           const n = normalMatrix
             .transformVector(new pc.Vec3(ns[i], ns[i + 1], ns[i + 2]))
             .normalize();
@@ -2690,17 +2715,15 @@ export class Renderer implements CollisionWorld {
         indices.push(...is.map((i) => i + base));
       }
     }
-    if (!indices.length) return;
-    let low = Infinity;
-    for (let i = 1; i < positions.length; i += 3)
-      low = Math.min(low, positions[i]);
-    const lift = Math.max(0, 0.035 - low);
-    for (let i = 1; i < positions.length; i += 3) positions[i] += lift;
+    if (!indices.length) { ragdoll.destroy(); return; }
     const mesh = new pc.Mesh(this.app.graphicsDevice);
     mesh.setPositions(positions);
     mesh.setNormals(normals);
     mesh.setColors(colors);
     mesh.setIndices(indices);
+    mesh.setVertexStream(pc.SEMANTIC_BLENDINDICES, blendIndices, 4, undefined, pc.TYPE_UINT8);
+    mesh.setVertexStream(pc.SEMANTIC_BLENDWEIGHT, weights, 4);
+    mesh.skin = new pc.Skin(this.app.graphicsDevice, ragdoll.bind.map(m => m.clone().invert()), pose.parts.map(p => p.name));
     mesh.update(pc.PRIMITIVE_TRIANGLES);
     const entity = this.joint("fallen soldier", this.app.root);
     let material = this.materials.get("casualty");
@@ -2714,10 +2737,16 @@ export class Renderer implements CollisionWorld {
       this.materials.set("casualty", material);
     }
     const instance = new pc.MeshInstance(mesh, material, entity);
+    const bones = pose.parts.map(part => {
+      const bone = this.joint(part.name, entity);
+      bone.setPosition(part.position); bone.setRotation(part.rotation);
+      return bone;
+    });
+    const skin = new pc.SkinInstance(mesh.skin);
+    skin.bones = bones; skin.rootBone = entity; instance.skinInstance = skin;
     instance.castShadow = false;
     entity.addComponent("render", { meshInstances: [instance] });
-    entity.setPosition(p.x, floor, p.z);
-    this.casualties.push({ entity, mesh, x: p.x, z: p.z, age: 0 });
+    this.casualties.push({ entity, mesh, skin, bones, ragdoll, x: p.x, z: p.z, age: 0 });
     this.soldierStats.remnants++;
     this.soldierStats.peakRemnants = Math.max(
       this.soldierStats.peakRemnants,
@@ -2725,15 +2754,18 @@ export class Renderer implements CollisionWorld {
     );
   }
   private drawCasualties(dt: number) {
+    this.ragdollPhysics?.step(dt);
     this.casualties = this.casualties.filter((c) => {
       c.age += dt;
       if (c.age >= casualtyRules.lifetime) {
-        c.entity.destroy();
-        c.mesh.destroy();
+        this.releaseCasualty(c);
         this.soldierStats.expired++;
         return false;
       }
-      c.entity.setPosition(c.x, groundHeight(c.x, c.z, this.map), c.z);
+      c.ragdoll.read();
+      for (let i = 0; i < c.bones.length; i++) {
+        c.bones[i].setPosition(c.ragdoll.positions[i]); c.bones[i].setRotation(c.ragdoll.rotations[i]);
+      }
       c.entity.render!.meshInstances[0].setParameter(
         "material_opacity",
         Math.min(1, (casualtyRules.lifetime - c.age) / 2),
@@ -2744,10 +2776,11 @@ export class Renderer implements CollisionWorld {
   reset(g: Game) {
     this.clearEnvironmentEffects();
     for (const c of this.casualties) {
-      c.entity.destroy();
-      c.mesh.destroy();
+      this.releaseCasualty(c);
     }
     this.casualties = [];
+    this.ragdollPhysics?.destroy(); this.ragdollPhysics = undefined;
+    this.activeGame = g; this.deathHits.clear();
     for (const key of Object.keys(
       this.soldierStats,
     ) as (keyof typeof this.soldierStats)[])
@@ -2885,12 +2918,9 @@ export class Renderer implements CollisionWorld {
         }
         rig.alive = false;
         if (!rig.remnantCreated) {
-          const age = Math.max(0, (tick - rig.deathAt) / 30);
-          this.collapseSoldier(p, age);
-          if (age >= casualtyRules.fallSeconds) {
-            this.retainCasualty(p);
-            rig.remnantCreated = true;
-          }
+          e.setLocalScale(pc.Vec3.ONE);
+          this.retainCasualty(p, this.deathHits.get(p.id));
+          rig.remnantCreated = true;
         }
         // Preserve the original actor bind poses and batch membership at death.
         e.setLocalScale(rig.remnantCreated ? pc.Vec3.ZERO : pc.Vec3.ONE);
@@ -3381,7 +3411,29 @@ export class Renderer implements CollisionWorld {
     }
   }
   effect(e: Event) {
+    if (e.type === "respawn") this.deathHits.delete(e.actor);
+    if (e.type === "damage" && this.activeGame) {
+      const target = this.people[e.actor]?.getPosition(), source = this.people[e.source]?.getPosition();
+      if (target && source) this.deathHits.set(e.actor, target.clone().sub(source).normalize().mulScalar(7));
+    }
+    if (e.type === "death" && this.activeGame) {
+      const p = this.activeGame.players[e.actor], rig = this.soldiers[e.actor], actor = this.people[e.actor];
+      if (p && rig && actor && !rig.remnantCreated) {
+        actor.setLocalScale(pc.Vec3.ONE);
+        this.retainCasualty(p, this.deathHits.get(e.actor));
+        rig.deathAt = e.tick; rig.remnantCreated = true; rig.alive = false;
+        this.soldierStats.collapses++;
+        actor.setLocalScale(pc.Vec3.ZERO);
+      }
+    }
     if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") {
+      const at = new pc.Vec3(e.at.x, e.at.y, e.at.z);
+      for (const c of this.casualties) {
+        c.ragdoll.read();
+        const p = c.ragdoll.positions[0];
+        const cover = this.ray(e.at, p) < 0.98 ? 0.25 : 1;
+        c.ragdoll.blast(at, e.radius * 1.25, (e.type === "artilleryImpact" ? 140 : 90) * cover);
+      }
       this.people.forEach((person, id) => {
         const p = person.getPosition();
         const distance = Math.hypot(
