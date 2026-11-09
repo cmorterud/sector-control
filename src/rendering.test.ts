@@ -20,6 +20,7 @@ import { trenchMap } from "./trench-map";
 import { eyeHeightOf } from "./crouch";
 import { weaponAim } from "./recoil";
 import { viewDirection } from "./player-view";
+import { boltGrip } from "./rifle-geometry";
 
 // Exercise the real rig and animation transforms without a WebGL context.
 // Mesh creation is replaced by bare transform nodes; joint/IK code is unchanged.
@@ -541,7 +542,7 @@ it("opens, retracts and closes the service bolt with the right wrist on its knob
     );
     const knob = rig.bolt
       .getWorldTransform()
-      .transformPoint(new Vec3(0.105, 0, 0));
+      .transformPoint(new Vec3(boltGrip.x, boltGrip.y, boltGrip.z));
     const right = rig.arms[1].elbow
       .getWorldTransform()
       .transformPoint(new Vec3(0, -armLengths.forearm, 0));

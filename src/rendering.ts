@@ -1,5 +1,6 @@
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
+import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfacePixels, type RifleShape } from "./rifle-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
   groundSurfacePixels,
@@ -1527,6 +1528,47 @@ export class Renderer implements CollisionWorld {
     }
     return entity;
   }
+  private riflePart(
+    name: string, x: number, y: number, z: number,
+    w: number, h: number, d: number, tint: string,
+    parent: pc.Entity, shape: RifleShape,
+  ) {
+    const base = tint === "walnut" ? "#715037" : tint === "edge" ? "#858d85" : "#353c3a";
+    const entity = this.cube(name, x, y, z, w, h, d, base, false, parent);
+    if (!this.app.graphicsDevice || !entity.render) return entity;
+    const key = `rifle-${shape}`;
+    if (!this.kitMeshes.has(key)) {
+      const data = rifleGeometry(shape), mesh = new pc.Mesh(this.app.graphicsDevice);
+      mesh.setPositions(data.positions); mesh.setNormals(data.normals);
+      mesh.setUvs(0, data.uvs); mesh.setIndices(data.indices);
+      mesh.update(pc.PRIMITIVE_TRIANGLES); mesh.incRefCount();
+      this.kitMeshes.set(key, mesh);
+    }
+    const materialKey = `rifle-material-${tint}`;
+    let material = this.materials.get(materialKey);
+    if (!material) {
+      material = new pc.StandardMaterial();
+      material.diffuse = color(base);
+      material.gloss = tint === "walnut" ? 0.38 : 0.6;
+      material.specular = color(tint === "walnut" ? "#514439" : "#8c9897");
+      if (tint !== "edge") {
+        const kind = tint === "walnut" ? "walnut" : "steel";
+        const texture = new pc.Texture(this.app.graphicsDevice, {
+          name: `rifle ${kind}`, width: 128, height: 128,
+          format: pc.PIXELFORMAT_RGBA8, mipmaps: true,
+          minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR,
+          addressU: pc.ADDRESS_REPEAT, addressV: pc.ADDRESS_REPEAT,
+        });
+        (texture.lock() as Uint8Array).set(rifleSurfacePixels(kind)); texture.unlock();
+        this.textures.set(materialKey, texture);
+        material.diffuseMap = texture;
+        material.diffuse = new pc.Color(1, 1, 1);
+      }
+      material.update(); this.materials.set(materialKey, material);
+    }
+    entity.render.meshInstances = [new pc.MeshInstance(this.kitMeshes.get(key)!, material, entity)];
+    return entity;
+  }
   private createSoldier(p: Soldier) {
     const root = this.joint(`soldier-${p.id}`, this.app.root);
     root.setPosition(p.x, p.y, p.z);
@@ -1733,7 +1775,15 @@ export class Renderer implements CollisionWorld {
     );
     const service = p.weapon === "serviceRifle",
       gunner = p.weapon === "machineGun";
-    if (service || gunner) {
+    if (service) {
+      for (const spec of detailedRifleParts) {
+        const piece = this.riflePart(spec.name, ...spec.at, ...spec.size, spec.tint, rifle, spec.shape);
+        if (spec.rotation) piece.setLocalEulerAngles(...spec.rotation);
+      }
+      this.cube("ejection port", 0.01, 0.063, 0.04, 0.04, 0.005, 0.12, "#151b1c", false, rifle);
+      const trigger = this.cube("curved trigger", 0, -0.085, 0.165, 0.008, 0.043, 0.012, "#626961", false, rifle);
+      trigger.setLocalEulerAngles(-18, 0, 0);
+    } else if (gunner) {
       const stock = part(
         "wooden stock",
         0,
@@ -1834,11 +1884,14 @@ export class Renderer implements CollisionWorld {
     this.cube("front sight", 0, sightHeight - 0.02,
       service ? -0.65 : gunner ? -0.72 : -0.54,
       0.008, 0.04, 0.018, "#202724", false, rifle);
-    for (const side of [-1, 1])
-      this.cube("rear sight ear", side * 0.018, sightHeight - 0.0125,
+    for (const side of [-1, 1]) {
+      const ear = this.cube("rear sight ear", side * 0.018, sightHeight - 0.0125,
         0.08, 0.008, 0.025, 0.025, "#202724", false, rifle);
-    this.cube("rear sight bridge", 0, sightHeight - 0.0315,
+      if (service && ear.render) ear.removeComponent("render");
+    }
+    const bridge = this.cube("rear sight bridge", 0, sightHeight - 0.0315,
       0.08, 0.044, 0.014, 0.025, "#202724", false, rifle);
+    if (service && bridge.render) bridge.removeComponent("render");
     if (service) {
       const blade = part(
         "bayonet blade",
@@ -1868,20 +1921,12 @@ export class Renderer implements CollisionWorld {
     }
     const bolt = this.joint("bolt", rifle, 0.05, 0.045, 0.13);
     if (service) {
-      const stem = part(
-        "bolt handle",
-        0.05,
-        0,
-        0,
-        0.025,
-        0.1,
-        0.025,
-        "#8b8d7f",
-        bolt,
-        "disc",
-      );
-      stem.setLocalEulerAngles(0, 0, -90);
-      part("bolt knob", 0.105, 0, 0, 0.045, 0.045, 0.045, "#535c53", bolt);
+      for (const spec of detailedBoltParts) {
+        const piece = this.riflePart(spec.name, ...spec.at, ...spec.size, spec.tint, bolt, spec.shape);
+        if (spec.rotation) piece.setLocalEulerAngles(...spec.rotation);
+      }
+      this.cube("safety lever", -0.05, 0.048, 0.06, 0.045, 0.012, 0.012, "#70776d", false, bolt);
+      this.cube("bayonet lug", 0, -0.012, -0.65, 0.028, 0.08, 0.04, "#353c3a", false, rifle);
     }
     const magazine = gunner
       ? part(
@@ -2147,7 +2192,7 @@ export class Renderer implements CollisionWorld {
     if (!rig.root.enabled) return;
     const source = this.soldiers[0];
     const ads = sighted(p, tick);
-    const position = viewWeaponPosition(ads);
+    const position = viewWeaponPosition(ads, p.weapon);
     const loading = reloadMotion(p, tick);
     const lower = loading?.lower ?? 0;
     const throwing = p.throwUntil > tick;
@@ -2472,7 +2517,7 @@ export class Renderer implements CollisionWorld {
       const hand = rig.rifle
         .getLocalTransform()
         .transformPoint(
-          rig.bolt.getLocalTransform().transformPoint(new pc.Vec3(0.105, 0, 0)),
+          rig.bolt.getLocalTransform().transformPoint(new pc.Vec3(boltGrip.x, boltGrip.y, boltGrip.z)),
         );
       this.poseArm(
         rig,

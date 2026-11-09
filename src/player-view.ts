@@ -18,9 +18,9 @@ export function viewDirection(yaw: number, pitch: number): V3 {
   };
 }
 
-export function viewWeaponPosition(ads: boolean): V3 {
+export function viewWeaponPosition(ads: boolean, weapon?: WeaponKind): V3 {
   return ads
-    ? { x: 0, y: -sightHeight, z: -0.32 }
+    ? { x: 0, y: -sightHeight, z: weapon === "serviceRifle" ? -0.4 : -0.32 }
     : { x: 0.18, y: -0.25, z: -0.45 };
 }
 
@@ -44,7 +44,7 @@ export function viewToWorld(p: Soldier, local: V3): V3 {
 }
 
 export function viewMuzzle(p: Soldier, tick: number): V3 {
-  const position = viewWeaponPosition(sighted(p, tick));
+  const position = viewWeaponPosition(sighted(p, tick), p.weapon);
   return viewToWorld(p, {
     x: position.x,
     y: position.y + 0.025,
