@@ -73,6 +73,12 @@ it("uploads and shares the actual earth material maps and all three engine shade
   expect(m.diffuseMap!.srgb).toBe(true);
   expect(m.normalMap!.srgb).toBe(false);
   expect(m.glossMap!.srgb).toBe(false);
+  // Bound the engine's normalized Blinn highlight for even the wettest texel.
+  // A bank facing the half-vector should retain its soil color, not turn white.
+  const specular = m.specular.clone().linear();
+  const peak = Math.max(specular.r, specular.g, specular.b) *
+    (2 ** (m.gloss * 11) + 2) / 8;
+  expect(peak).toBeLessThan(0.1);
   expect(r.textures.get("earth-diffuse")!.srgb).toBe(true);
   expect(r.textures.get("earth-normal")!.srgb).toBe(false);
   expect(m.getShaderChunks().get("diffusePS")).toBe(earthDiffusePS);

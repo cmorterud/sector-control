@@ -1333,8 +1333,10 @@ export class Renderer implements CollisionWorld {
       m.bumpiness = ground ? 0.4 : 0.7;
       m.glossMap = this.textures.get(`${kind}-gloss`)!;
       m.glossMapChannel = "r";
-      m.gloss = 0.6;
-      m.specular = color(ground ? "#67716d" : "#252728");
+      // Broad soil highlights must not bleach an entire bank as its normal
+      // turns toward the sun. Separate puddles retain their glossy water finish.
+      m.gloss = ground ? 0.35 : 0.6;
+      m.specular = color(ground ? "#343b30" : "#252728");
       if (ground) {
         for (const channel of ["diffuse", "normal", "gloss"] as const) {
           m[`${channel}MapTiling`].set(3 / this.map.width, 3 / this.map.depth);
