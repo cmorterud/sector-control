@@ -659,3 +659,12 @@ Focused63tests/fivefiles pass13.02s and strict TypeScript passes. All reload pro
 Chrome native control still reports `Sky Computer Use native pipe startup failed`; this pass has automated rig/simulation/Ammo evidence, not a fresh manual playtest or video. Production preview5175 serves the rebuilt bundle on refresh. Full-suite/build results follow before commit; original test timeouts remain unchanged.
 
 Final validation: strictTypeScript/whitespace and all327tests/50files pass locally in93.01s with original limits. Production build passes12.21s. Updated actual-rig animation/Ammo/simulation evidence is automated; native pipe failure still blocks a fresh desktop recording.
+
+
+## Bayonet charge presentation — November 9
+
+Game commit `6b82717` raises/centers the active-charge rifle and adds stride-driven lateral/fore-aft motion in both views. Actual rig regressions keep both wrists attached, verify a long-held charge remains raised and clear the extra pose on contact/cancel without mutating simulation state. No rules, collision or HUD status text changed.
+
+Native Chrome authored production Game/Renderer rehearsal `sector-control-2026-11-09T15-01-00-586Z` records18s/540ticks,59.94FPS,16.8ms p95,zero slow frames/zero errors. Charge starts60 and cancels306 against tree cover, spanning first-person and third-person views. Extracted sequence0.5/3/3.3/9/9.5/12seconds shows stance/stride and clearing. Full silentVP8 video decodes, with seven duplicate-DTS muxer diagnostics near the tail. Ignored video/JSON/events, `charge-pose-review.html`, `charge-pose-sequence.jpg` and `charge-pose-audit.json` retain evidence. This is authored rehearsal, not manual input acceptance; native manual control serializes W/V overlap and the earlier clip recorded a normal bayonet instead of charge.
+
+Strict TypeScript/build4.13s/whitespace pass. Broad351-test run passed350; new sway sampling fixture omitted a negative vertical phase. Corrected phase coverage then passes all32 rendering/melee/view checks, with original budgets unchanged. GitHub CI42640608887 subsequently passes strictTypeScript/all351tests across55files in168.17s and production build11.75s. Public version9 is deployed at the existing anonymous trial; public asset bytes match the build.
