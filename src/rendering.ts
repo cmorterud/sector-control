@@ -1,3 +1,4 @@
+import { terrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
@@ -602,7 +603,7 @@ export class Renderer implements CollisionWorld {
     const entity = this.joint(`terrain ${key}`, this.mapRoot);
     const mesh = new pc.Mesh(this.app.graphicsDevice);
     mesh.setPositions(data.positions);
-    const normals = pc.calculateNormals(data.positions, data.indices);
+    const normals = terrainNormals(this.map, data, pc.calculateNormals(data.positions, data.indices));
     mesh.setNormals(normals);
     mesh.setUvs(0, data.uvs);
     if (this.map.terrain)
