@@ -298,6 +298,7 @@ export interface Soldier extends Vec {
   assaultId: number | null;
   forwardPost: Vec | null;
   throwUntil: number;
+  throwAction: { startTick: number; releaseTick: number; smoke: boolean; released: boolean } | null;
   nextGrenade: number;
   yaw: number;
   pitch: number;
@@ -840,6 +841,7 @@ export class Game {
         assaultId: null,
         forwardPost: null,
         throwUntil: 0,
+        throwAction: null,
         nextGrenade: 0,
         yaw: 0,
         pitch: 0,
@@ -952,6 +954,7 @@ export class Game {
     p.assaultId = null;
     p.forwardPost = null;
     p.throwUntil = 0;
+    p.throwAction = null;
     p.nextGrenade = this.tick;
     p.reloadAt = 0;
     p.mantle = null;
@@ -1002,6 +1005,7 @@ export class Game {
           }
         } else {
           p.triggerHeld = p.id === 0 && human.fire;
+          p.throwAction = null;
           p.triggerPressed = false;
           p.meleeHeld = p.id === 0 && !!human.melee;
           continue;
@@ -1032,6 +1036,17 @@ export class Game {
         p.aimBloom = Math.max(0, p.aimBloom - 1 / 18);
       p.yaw = c.yaw;
       p.pitch = clamp(c.pitch, -1.1, 1.1);
+      if (p.throwAction && this.tick >= p.throwUntil) p.throwAction = null;
+      if (p.throwAction && !p.throwAction.released && this.tick >= p.throwAction.releaseTick) {
+        const action = p.throwAction;
+        action.released = true;
+        if (!p.mantle && !p.melee && !p.reloadAt && this.tick >= p.staggerUntil)
+          this.throwGrenade(p, action.smoke);
+        else {
+          p.throwAction = null;
+          p.throwUntil = this.tick;
+        }
+      }
       if (
         (c.grenade || c.smoke) &&
         !p.mantle &&
@@ -1040,10 +1055,17 @@ export class Game {
         !p.reloadAt &&
         (c.smoke ? p.smokes > 0 : p.grenades > 0) &&
         this.tick >= p.nextGrenade
-      )
-        this.throwGrenade(p, !!c.smoke);
+      ) {
+        if (this.humanPlayerIds.includes(p.id)) {
+          p.throwAction = { startTick: this.tick, releaseTick: this.tick + 6, smoke: !!c.smoke, released: false };
+          p.throwUntil = this.tick + 21;
+          p.nextGrenade = this.tick + 30;
+          p.protectedUntil = 0;
+        } else this.throwGrenade(p, !!c.smoke);
+      }
       if (
         c.mantle &&
+        this.tick >= p.throwUntil &&
         !p.melee &&
         this.tick >= p.staggerUntil &&
         !p.crouched &&
@@ -1107,6 +1129,7 @@ export class Game {
       }
       if (
         c.reload &&
+        this.tick >= p.throwUntil &&
         !p.melee &&
         this.tick >= p.staggerUntil &&
         !p.mantle &&
@@ -1196,6 +1219,8 @@ export class Game {
       for (const p of this.players) {
         cancelMelee(this, p);
         p.meleeThreat = null;
+        p.throwAction = null;
+        p.throwUntil = 0;
       }
       this.projectiles = [];
       this.grenades = [];
@@ -1570,6 +1595,7 @@ export class Game {
       victim.mode = "Respawn";
       victim.reloadAt = 0;
       victim.throwUntil = 0;
+      victim.throwAction = null;
       victim.mantle = null;
       victim.crouched = false;
       victim.hop = null;
@@ -1637,7 +1663,7 @@ export class Game {
     // within the soldier's footprint before releasing; never start inside it.
     const origin = {
       x: p.x + (human ? Math.cos(p.yaw) * 0.16 : 0),
-      y: p.y + (human ? 1.53 : 1.8) - stanceDrop(p),
+      y: p.y + (human ? 1.73 : 1.8) - stanceDrop(p),
       z: p.z + (human ? Math.sin(p.yaw) * 0.16 : 0),
     };
     const from = [
@@ -1654,6 +1680,7 @@ export class Game {
       },
       { ...origin, y: origin.y + 0.4 },
     ].find((candidate) =>
+      (!human || this.grenadeSweep({ x: p.x, y: origin.y, z: p.z }, candidate) >= 1) &&
       (["x", "y", "z"] as const).every((axis) =>
         [-1, 1].every((sign) => {
           const edge = {
@@ -1671,9 +1698,9 @@ export class Game {
     );
     if (!from) return;
     const desired = {
-      x: from.x + Math.sin(p.yaw) * 0.55,
-      y: from.y + (human ? 0.05 : 0.15),
-      z: from.z - Math.cos(p.yaw) * 0.55,
+      x: from.x + Math.sin(p.yaw) * (human ? Math.cos(p.pitch) * 0.32 : 0.55),
+      y: from.y + (human ? Math.sin(p.pitch) * 0.32 : 0.15),
+      z: from.z - Math.cos(p.yaw) * (human ? Math.cos(p.pitch) * 0.32 : 0.55),
     };
     const f = Math.max(0, this.grenadeSweep(from, desired) - 0.03);
     const grenade: Grenade = {

@@ -273,8 +273,9 @@ describe("crouching combat profile", () => {
     const g = scene(),
       p = g.players[0];
     g.step({ ...idle(), crouch: true, smoke: true, yaw: Math.PI / 2 });
+    for (let i = 0; i < 6; i++) g.step({ ...idle(), crouch: true, yaw: Math.PI / 2 });
     const e = g.events.find((e) => e.type === "smokeThrow");
-    expect(e?.type === "smokeThrow" && e.from.y).toBeCloseTo(1.03);
+    expect(e?.type === "smokeThrow" && e.from.y).toBeCloseTo(1.18);
     expect(p.smokes).toBe(1);
     expect(p.grenades).toBe(3);
     expect(p.crouched).toBe(true);

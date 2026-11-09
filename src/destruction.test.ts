@@ -41,6 +41,7 @@ const blast = (
 it("creates a persistent crater from an actual thrown grenade, serializes it, and restores pristine terrain in a new match", () => {
   const game = gameFor();
   game.step({ ...idle(), grenade: true, yaw: Math.PI / 2 });
+    for (let windup = 0; windup < 6; windup++) game.step({ ...idle(), yaw: game.players[0].yaw, pitch: game.players[0].pitch });
   const log = new PlaytestLog();
   for (let i = 0; i < 90; i++) {
     game.step(idle());

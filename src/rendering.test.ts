@@ -48,8 +48,9 @@ type Harness = {
   createSoldier(p: Soldier): void;
   riflePart(name: string, x: number, y: number, z: number, w: number, h: number, d: number, tint: string, parent: Entity, shape: RifleShape): Entity;
   createFirstPersonRig(): void;
-  drawFirstPerson(p: Soldier, tick: number): void;
-  firstPersonRig: Rig & { root: Entity };
+  drawFirstPerson(p: Soldier, tick: number, dt?: number): void;
+  firstPersonRig: Rig & { root: Entity; grenade: Entity; pullback: number };
+  ray(a: import("./simulation").V3, b: import("./simulation").V3): number;
   ragdollPose(p: Soldier): { parts: import("./ragdoll").RagdollPart[] };
   animateSoldier(
     p: Soldier,
@@ -66,6 +67,7 @@ function rigFor(p: Soldier) {
   renderer.camera = new Entity("test camera");
   renderer.app.root.addChild(renderer.camera);
   renderer.map = trenchMap;
+  renderer.ray = () => 1;
   renderer.people = [];
   renderer.soldiers = [];
   renderer.cube = (
@@ -655,4 +657,86 @@ it("adds stride motion to the raised third-person charge without detaching the h
   }
   expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.015);
   expect(p).toEqual(before);
+});
+
+it("pulls the actual barrel and bayonet in front of close cover, retaining grips and settling back after clearance", () => {
+  const g = new Game(new TestCollision(trenchMap), false), p = g.players[0];
+  p.weapon = "serviceRifle";
+  const r = rigFor(p);
+  Object.assign(p, { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+  p.command = { ...idle(), firstPerson: true };
+  r.camera.setPosition(0, eyeHeightOf(p), 0); r.camera.lookAt(0, eyeHeightOf(p), -1);
+  r.createFirstPersonRig(); r.animateSoldier(p, 0, 0, 1 / 60, 100);
+  const wall = new TestCollision({ ...trenchMap, terrain: undefined, boxes: [
+    { x: 0, z: -0.55, w: 3, d: 0.1, h: 4, kind: "barrier" },
+  ] });
+  r.ray = (a, b) => wall.ray(a, b);
+  const before = structuredClone(p);
+  r.drawFirstPerson(p, 100);
+  const rig = r.firstPersonRig;
+  expect(rig.pullback).toBeGreaterThan(0.8);
+  const tip = rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.05, -0.98));
+  expect(tip.z).toBeGreaterThan(-0.5);
+  for (const [i, target] of [rig.supportHand.getPosition(), rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.03, 0.14))].entries()) {
+    const wrist = rig.arms[i].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    expect(wrist.distance(target)).toBeLessThan(0.001);
+  }
+  r.ray = () => 1;
+  const pulled = rig.pullback;
+  r.drawFirstPerson(p, 100, 0); expect(rig.pullback).toBe(pulled);
+  r.drawFirstPerson(p, 101); expect(rig.pullback).toBeGreaterThan(0); expect(rig.pullback).toBeLessThan(pulled);
+  for (let i = 0; i < 60; i++) r.drawFirstPerson(p, 102 + i);
+  expect(rig.pullback).toBeLessThan(0.00001);
+  expect(p).toEqual(before);
+});
+
+it("lowers the first-person weapon during actual sprint travel and smoothly shoulders it on aiming", () => {
+  for (const fps of [30, 60, 120]) {
+    const g = new Game(new TestCollision(trenchMap), false), p = g.players[0], r = rigFor(p);
+    p.command = { ...idle(), firstPerson: true, sprint: true };
+    r.createFirstPersonRig(); r.animateSoldier(p, p.x, p.z, 1 / fps, 100); r.drawFirstPerson(p, 100, 1 / fps);
+    const y = r.firstPersonRig.rifle.getLocalPosition().y;
+    for (let i = 1; i <= fps; i++) {
+      r.animateSoldier(p, p.x, p.z - i * 6.8 / fps, 1 / fps, 100 + i * 30 / fps);
+      r.drawFirstPerson(p, 100 + i * 30 / fps, 1 / fps);
+    }
+    expect(r.firstPersonRig.rifle.getLocalPosition().y).toBeLessThan(y - 0.06);
+    p.command.aim = true;
+    r.animateSoldier(p, p.x, p.z - 6.8, 1 / fps, 131); r.drawFirstPerson(p, 131, 1 / fps);
+    expect(r.firstPersonRig.rifle.getLocalPosition().y).toBeLessThan(-0.15);
+    for (let i = 0; i < fps; i++) {
+      r.animateSoldier(p, p.x, p.z - 6.8, 1 / fps, 131 + i * 30 / fps);
+      r.drawFirstPerson(p, 131 + i * 30 / fps, 1 / fps);
+    }
+    const post = r.firstPersonRig.rifle.findByName("front sight") as Entity;
+    const tip = post.getWorldTransform().transformPoint(new Vec3(0, 0.5, 0));
+    expect(Math.abs(tip.x)).toBeLessThan(0.001);
+    expect(Math.abs(tip.y)).toBeLessThan(0.001);
+  }
+});
+
+it("shows a grenade attached to the winding-up hand, hides it on physical release and restores the grip", () => {
+  const g = new Game(new TestCollision(trenchMap), false), p = g.players[0], r = rigFor(p);
+  g.step({ ...idle(), firstPerson: true, grenade: true });
+  r.createFirstPersonRig(); r.animateSoldier(p, p.x, p.z, 1 / 60, g.tick);
+  const before = structuredClone(p), heights: number[] = [];
+  for (const age of [0, 2, 4, 5.5]) {
+    r.drawFirstPerson(p, 1 + age);
+    const rig = r.firstPersonRig;
+    expect(rig.grenade.enabled).toBe(true);
+    const wrist = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+    expect(wrist.distance(rig.grenade.getPosition())).toBeLessThan(0.07);
+    heights.push(wrist.y);
+  }
+  expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.2);
+  expect(p).toEqual(before);
+  for (let i = 0; i < 6; i++) g.step({ ...idle(), firstPerson: true });
+  expect(g.grenades).toHaveLength(1);
+  r.drawFirstPerson(p, g.tick);
+  expect(r.firstPersonRig.grenade.enabled).toBe(false);
+  for (let i = 0; i < 15; i++) g.step({ ...idle(), firstPerson: true });
+  r.drawFirstPerson(p, g.tick);
+  const rig = r.firstPersonRig;
+  const wrist = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
+  expect(wrist.distance(rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.03, 0.14)))).toBeLessThan(0.001);
 });

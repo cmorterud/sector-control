@@ -56,6 +56,7 @@ it("initializes real Ammo wall raycasts and stops a sight-aligned traveling roun
     expect(game.projectiles).toHaveLength(0);
     // Grenade shell sweeps must also catch this 10 cm Ammo wall.
     game.step({ ...idle(), grenade: true, pitch: 0 });
+    for (let windup = 0; windup < 6; windup++) game.step({ ...idle(), yaw: game.players[0].yaw, pitch: game.players[0].pitch });
     const grenade = game.grenades[0];
     for (let i = 0; i < 10; i++) game.step(idle());
     expect(grenade.z).toBeGreaterThan(0.17);
@@ -143,6 +144,7 @@ it("uses real Ammo earth banks for trench protection, firing steps, ramps, and m
     };
     game.players.push(target);
     game.step({ ...idle(), yaw: Math.PI / 2, pitch: 0.7, grenade: true });
+    for (let windup = 0; windup < 6; windup++) game.step({ ...idle(), yaw: game.players[0].yaw, pitch: game.players[0].pitch });
     for (let i = 0; i < 89; i++) {
       game.step(idle());
       const grenade = game.grenades[0];
@@ -205,4 +207,39 @@ it("releases replaced terrain mesh data immediately and preserves collision acro
     release.mockRestore();
     root.destroy();
   }
+});
+
+it("clears either front parapet from the firing step at a level look, while crouching and floor throws still hit earth", async () => {
+  const { trenchMap } = await import("./trench-map");
+  const { groundHeight } = await import("./map");
+  const physics = new TerrainPhysics(), root = new Entity("grenade step clearance");
+  try {
+    for (const key of terrainPatchKeys(trenchMap)) physics.setPatch(key, terrainGeometry(trenchMap, key), root);
+    for (const side of [-1, 1]) for (const stance of ["step", "crouch", "floor"]) {
+      const g = new Game({ ray: (a, b) => physics.ray(a, b), move: p => p }, false, 600, 12345,
+        { engagementRange: 0 }, { map: trenchMap, ambientArtillery: false, assaults: false });
+      const p = g.players[0], yaw = -side * Math.PI / 2;
+      Object.assign(p, { x: side * (stance === "floor" ? 21 : 19), z: -1 });
+      p.y = groundHeight(p.x, p.z, g.map);
+      const c = { ...idle(), yaw, crouch: stance === "crouch" };
+      g.step({ ...c, grenade: true });
+      for (let i = 0; i < 6; i++) g.step({ ...c });
+      expect(g.grenades).toHaveLength(1);
+      const grenade = g.grenades[0]; let bounced = false, lipBounce = false;
+      for (let i = 0; i < 12; i++) {
+        g.step({ ...c });
+        const contact = g.events.some(e => e.type === "grenadeBounce");
+        bounced ||= contact;
+        if (i < 5) lipBounce ||= contact;
+        expect(grenade.y).toBeGreaterThanOrEqual(groundHeight(grenade.x, grenade.z, g.map) + 0.11);
+      }
+      if (stance === "step") {
+        expect(lipBounce, `${side}/${stance}`).toBe(false);
+        expect(Math.abs(grenade.x)).toBeLessThan(14);
+      } else {
+        expect(bounced, `${side}/${stance}`).toBe(true);
+        expect(Math.abs(grenade.x)).toBeGreaterThan(17);
+      }
+    }
+  } finally { physics.destroy(); root.destroy(); }
 });

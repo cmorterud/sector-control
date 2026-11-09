@@ -55,3 +55,23 @@ export function reloadMotion(
     removed: p.weapon !== "serviceRifle" && progress >= 0.2 && progress < 0.69,
   };
 }
+
+// A human throw has a six-tick wind-up; the world grenade appears at release.
+export function throwPresentation(p: Soldier, tick: number) {
+  if (p.hp <= 0 || tick >= p.throwUntil) return null;
+  const action = p.throwAction;
+  if (action && !action.released) {
+    const t = clamp((tick - action.startTick) / (action.releaseTick - action.startTick));
+    const reach = ease((t - 0.3) / 0.7);
+    return {
+      held: true, weight: ease(t / 0.25), lower: ease(t / 0.3),
+      hand: { x: 0.3 - reach * 0.14, y: -0.14 + reach * 0.22, z: -0.18 - reach * 0.14 },
+    };
+  }
+  const t = clamp(1 - (p.throwUntil - tick) / 15);
+  const recovery = ease((t - 0.35) / 0.65);
+  return {
+    held: false, weight: 1 - recovery, lower: 1 - recovery,
+    hand: { x: 0.16, y: -0.14 + (action ? Math.sin((1 - t) * Math.PI / 2) * 0.26 : -ease(t) * 0.28), z: -0.5 + ease(t) * 0.2 },
+  };
+}

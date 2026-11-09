@@ -7,6 +7,7 @@ import {
   grenadeBlastRadius,
   type Event,
   type Grenade,
+  type Command,
 } from "./simulation";
 import { industrialMap, type MapDefinition } from "./map";
 import { trenchMap } from "./trench-map";
@@ -39,6 +40,10 @@ function advance(game: Game, ticks: number) {
     events.push(...game.events);
   }
   return events;
+}
+function throwAndRelease(game: Game, command: Command) {
+  game.step(command);
+  for (let i = 0; i < 6; i++) game.step({ ...idle(), yaw: command.yaw, pitch: command.pitch, crouch: command.crouch });
 }
 function soldier(game: Game, x: number, team: "blue" | "red" = "red") {
   const p = {
@@ -90,7 +95,7 @@ describe("grenades", () => {
 
   it("throws along the aimed yaw in a perceptible arc, bounces, and explodes exactly three seconds after release", () => {
     const game = scene();
-    game.step({ ...idle(), grenade: true, yaw: Math.PI / 2, fire: true });
+    throwAndRelease(game, { ...idle(), grenade: true, yaw: Math.PI / 2, fire: true });
     const grenade = game.grenades[0];
     const start = { ...grenade };
     expect(game.players[0].grenades).toBe(2);
@@ -121,12 +126,12 @@ describe("grenades", () => {
 
   it("limits throws to inventory/cooldown and ignores throws while dead or mantling", () => {
     const game = scene();
-    game.step({ ...idle(), grenade: true });
-    game.step({ ...idle(), grenade: true });
+    throwAndRelease(game, { ...idle(), grenade: true });
+    throwAndRelease(game, { ...idle(), grenade: true });
     expect(game.players[0].grenades).toBe(2);
     for (let i = 0; i < 3; i++) {
       advance(game, 24);
-      game.step({ ...idle(), grenade: true });
+      throwAndRelease(game, { ...idle(), grenade: true });
     }
     expect(game.players[0].grenades).toBe(0);
     expect(game.grenadeSequence).toBe(3);
@@ -134,7 +139,7 @@ describe("grenades", () => {
     p.grenades = 3;
     p.hp = 0;
     p.respawnAt = 1000;
-    game.step({ ...idle(), grenade: true });
+    throwAndRelease(game, { ...idle(), grenade: true });
     expect(p.grenades).toBe(3);
     p.hp = 100;
     p.mantle = {
@@ -145,7 +150,7 @@ describe("grenades", () => {
       startTick: game.tick,
       endTick: game.tick + 36,
     };
-    game.step({ ...idle(), grenade: true });
+    throwAndRelease(game, { ...idle(), grenade: true });
     expect(p.grenades).toBe(3);
   });
 
@@ -155,7 +160,7 @@ describe("grenades", () => {
       boxes: [{ x: 2, z: 0, w: 0.05, d: 10, h: 12, kind: "barrier" }],
     };
     const game = scene(selected);
-    game.step({ ...idle(), grenade: true, yaw: Math.PI / 2 });
+    throwAndRelease(game, { ...idle(), grenade: true, yaw: Math.PI / 2 });
     const grenade = game.grenades[0];
     const events = advance(game, 10);
     expect(grenade.x).toBeLessThan(1.86);
@@ -169,8 +174,8 @@ describe("grenades", () => {
       boxes: [{ x: 0, z: 0, w: 0.16, d: 10, h: 4, kind: "barrier" }],
     };
     const game = scene(selected);
-    game.players[0].x = -0.08;
-    game.step({ ...idle(), grenade: true, yaw: Math.PI / 2 });
+    game.players[0].x = -0.25;
+    throwAndRelease(game, { ...idle(), grenade: true, yaw: Math.PI / 2 });
     const grenade = game.grenades[0];
     expect(grenade.x).toBeLessThan(-0.2);
     advance(game, 10);
@@ -216,7 +221,7 @@ describe("grenades", () => {
     Object.assign(game.players[0], { x: -19, y: 0.85, z: -1 });
     const enemy = soldier(game, 23);
     enemy.z = -1;
-    game.step({ ...idle(), yaw: Math.PI / 2, pitch: 0.6, grenade: true });
+    throwAndRelease(game, { ...idle(), yaw: Math.PI / 2, pitch: 0.6, grenade: true });
     const events = advance(game, grenadeFuseTicks);
     const explosion = events.find((e) => e.type === "grenadeExplosion");
     expect(enemy.hp, JSON.stringify(explosion)).toBeLessThan(100);
@@ -248,7 +253,7 @@ describe("grenades", () => {
 
   it("keeps a released grenade alive after its thrower dies, logs it, and clears active ordnance at match end", () => {
     const game = scene();
-    game.step({ ...idle(), grenade: true });
+    throwAndRelease(game, { ...idle(), grenade: true });
     const log = new PlaytestLog();
     log.recordTick(game, { ...idle(), grenade: true }, 0);
     const snapshot = game.snapshot();
@@ -302,7 +307,7 @@ it("detonates a real thrown grenade inside either enemy trench and records damag
       nextThink: 1e9,
     };
     g.players.push(q);
-    g.step({ ...idle(), yaw: (-side * Math.PI) / 2, pitch: 0.7, grenade: true });
+    throwAndRelease(g, { ...idle(), yaw: (-side * Math.PI) / 2, pitch: 0.7, grenade: true });
     const thrown = { ...g.grenades[0] };
     expect(thrown).toBeDefined();
     p.hp = 0;
@@ -322,4 +327,43 @@ it("detonates a real thrown grenade inside either enemy trench and records damag
     expect(q.hp).toBeLessThan(100);
     expect(g.grenades).toHaveLength(0);
   }
+});
+
+it("prepares a human throw before releasing, consumes once at release, and starts the fuse there", () => {
+  const g = scene(), p = g.players[0];
+  p.ammo = 15;
+  g.step({ ...idle(), grenade: true, fire: true, reload: true, mantle: true });
+  expect(p.throwAction).toMatchObject({ startTick: 1, releaseTick: 7, released: false });
+  expect(g.grenades).toHaveLength(0);
+  expect(p.grenades).toBe(3);
+  expect(p.ammo).toBe(15);
+  expect(p.reloadAt).toBe(0);
+  expect(p.hop).toBeNull();
+  advance(g, 5);
+  expect(g.grenades).toHaveLength(0);
+  g.step({ ...idle(), yaw: Math.PI / 2 });
+  expect(p.throwAction?.released).toBe(true);
+  expect(p.grenades).toBe(2);
+  expect(g.grenades[0]).toMatchObject({ bornAt: 7, explodeAt: 97 });
+  expect(g.grenades[0].vx).toBeGreaterThan(19);
+  advance(g, 14);
+  expect(p.grenades).toBe(2);
+  g.step(idle());
+  expect(p.throwAction).toBeNull();
+});
+
+it("cancels an unreleased grenade on death or match end without leaving live ordnance", () => {
+  const g = scene(), p = g.players[0];
+  g.step({ ...idle(), grenade: true });
+  p.hp = 0; p.respawnAt = 100;
+  advance(g, 10);
+  expect(p.throwAction).toBeNull();
+  expect(p.grenades).toBe(3);
+  expect(g.grenades).toHaveLength(0);
+  g.respawn(p);
+  expect(p.throwAction).toBeNull();
+  const ended = scene(); ended.duration = 4;
+  ended.step({ ...idle(), grenade: true }); advance(ended, 3);
+  expect(ended.players[0].throwAction).toBeNull();
+  expect(ended.grenades).toHaveLength(0);
 });

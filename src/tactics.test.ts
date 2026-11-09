@@ -98,6 +98,7 @@ describe("concealing smoke", () => {
       log = new PlaytestLog();
     const c = { ...idle(), smoke: true, yaw: Math.PI / 2 };
     g.step(c);
+    for (let i = 0; i < 6; i++) g.step({ ...idle(), yaw: c.yaw });
     log.recordTick(g, c, 0);
     expect(p.smokes).toBe(1);
     expect(p.grenades).toBe(3);

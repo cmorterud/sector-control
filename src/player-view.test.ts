@@ -78,9 +78,10 @@ describe("first-person sight and projectile alignment", () => {
     g.step({ ...idle(), firstPerson: true, grenade: true });
     expect(firstPersonView(p)).toBe(true);
     expect(sighted(p, g.tick)).toBe(false);
+    for (let i = 0; i < 6; i++) g.step({ ...idle(), firstPerson: true });
     const bomb = g.grenades[0];
     expect(Math.atan2(bomb.vy, Math.hypot(bomb.vx, bomb.vz))).toBeCloseTo(0.1);
-    expect(bomb.y).toBeLessThan(p.y + eyeHeightOf(p));
+    expect(bomb.y).toBeGreaterThan(p.y + eyeHeightOf(p));
     p.hp = 0;
     expect(firstPersonView(p)).toBe(false);
   });

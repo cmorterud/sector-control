@@ -51,3 +51,21 @@ export function viewMuzzle(p: Soldier, tick: number): V3 {
     z: position.z + barrelEnd(p.weapon),
   });
 }
+
+// Probe the visible barrel, including its thickness. Pullback is cosmetic;
+// authoritative rounds still sweep from the unchanged muzzle and hit cover.
+export function weaponPullback(eye: V3, muzzle: V3, forward: V3,
+  ray: (from: V3, to: V3) => number) {
+  let fraction = 1;
+  for (const offset of [{ x: 0, y: 0, z: 0 },
+    { x: 0.045, y: 0, z: 0 }, { x: -0.045, y: 0, z: 0 },
+    { x: 0, y: 0.045, z: 0 }, { x: 0, y: -0.045, z: 0 }]) {
+    fraction = Math.min(fraction, ray(
+      { x: eye.x + offset.x, y: eye.y + offset.y, z: eye.z + offset.z },
+      { x: muzzle.x + offset.x, y: muzzle.y + offset.y, z: muzzle.z + offset.z },
+    ));
+  }
+  if (fraction >= 1) return 0;
+  const depth = (muzzle.x - eye.x) * forward.x + (muzzle.y - eye.y) * forward.y + (muzzle.z - eye.z) * forward.z;
+  return Math.max(0, depth * (1 - Math.max(0, fraction)) + 0.06);
+}
