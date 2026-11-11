@@ -1,3 +1,4 @@
+import { equipLoadout, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
   villageSpawn,
@@ -103,6 +104,9 @@ export interface Command {
   melee?: boolean;
   crouch?: boolean;
   firstPerson?: boolean;
+  equip?: WeaponSlot;
+  loadout?: Loadout;
+  interact?: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -274,6 +278,13 @@ export interface Soldier extends Vec {
   staggerAt: number;
   staggerUntil: number;
   weapon: WeaponKind;
+  weaponId?: string;
+  faction?: FactionId;
+  loadout?: Loadout;
+  pendingLoadout?: Loadout;
+  equippedSlot?: WeaponSlot;
+  inventory?: Record<WeaponSlot, WeaponState>;
+  aimSince?: number;
   crouched: boolean;
   y: number;
   teamIndex: number;
@@ -910,7 +921,21 @@ export class Game {
   emit(e: EventInput) {
     this.events.push({ ...e, id: ++this.sequence, tick: this.tick } as Event);
   }
+  selectLoadout(p: Soldier, loadout: Loadout) {
+    if (!["rifleman", "marksman", "support"].includes(loadout)) return;
+    p.pendingLoadout = loadout;
+    if (this.tick === 0) equipLoadout(p, loadout, this.map.id === "industrial");
+  }
   respawn(p: Soldier) {
+    const retainedPrimary = p.pendingLoadout === p.loadout ? p.inventory?.primary : undefined;
+    const legacyWeapon = p.inventory && p.inventory[p.equippedSlot ?? "primary"].kind !== p.weapon ? p.weapon : undefined;
+    p.faction = factionFor(this.map, p.team);
+    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon)), this.map.id === "industrial");
+    const retainedKind = legacyWeapon ?? (retainedPrimary?.kind !== "flamethrower" ? retainedPrimary?.kind : undefined);
+    if (retainedKind && p.inventory) {
+      p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;
+      p.weaponId = retainedPrimary?.id ?? p.weaponId; p.inventory.primary.id = p.weaponId!;
+    }
     const s = this.map.spawn[p.team];
     if (this.teamSize <= 5 && !this.map.terrain) {
       p.x = s.x + (p.teamIndex - 2) * 1.8;
@@ -1017,7 +1042,10 @@ export class Game {
       );
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
-      p.triggerPressed = c.fire && !p.triggerHeld;
+      if (c.loadout) this.selectLoadout(p, c.loadout);
+      const switched = c.equip ? switchWeapon(p, c.equip, this.tick) : false;
+      if (c.aim) { if ((p.aimSince ?? -1) < 0) p.aimSince = this.tick; } else p.aimSince = -1;
+      p.triggerPressed = !switched && c.fire && (!p.triggerHeld || (p.weapon === "machineGun" && p.id === 0) || p.weapon === "flamethrower");
       p.triggerHeld = c.fire;
       recoverRecoil(p);
       if (p.melee) c.crouch = p.crouched;
@@ -1369,7 +1397,11 @@ export class Game {
     return true;
   }
   fire(p: Soldier) {
-    const { yaw, pitch } = weaponAim(p);
+    let { yaw, pitch } = weaponAim(p);
+    if (p.weapon === "machineGun" && p.id === 0 && p.loadout === "support") {
+      const spread = Math.hypot(p.vx,p.vz) > 1 ? .045 : p.command.aim ? .005 : .018;
+      yaw += (this.random() - .5) * spread; pitch += (this.random() - .5) * spread;
+    }
     p.ammo--;
     p.nextShot = this.tick + weaponProfiles[p.weapon].shotTicks;
     // Bloom feeds bot aim drift; the shared recoil below applies to every rifle.
@@ -1439,7 +1471,7 @@ export class Game {
       vx: ((aim.x - from.x) / length) * speed,
       vy: ((aim.y - from.y) / length) * speed,
       vz: ((aim.z - from.z) / length) * speed,
-      remaining: projectileRange,
+      remaining: p.weapon === "pistol" ? 25 : projectileRange,
       bornAt: this.tick,
     };
     this.emit({

@@ -1,3 +1,4 @@
+import { scoped } from "./loadouts";
 import { eyeHeightOf } from "./crouch";
 import { weaponAim } from "./recoil";
 import type { Soldier, V3 } from "./simulation";
@@ -8,7 +9,7 @@ export const firstPersonView = (p: Soldier) =>
   p.id === 0 && p.hp > 0 && !!(p.command.firstPerson || p.command.aim);
 export const sighted = (p: Soldier, tick: number) =>
   firstPersonView(p) && p.command.aim && !p.reloadAt &&
-  !p.mantle && !p.melee && p.throwUntil <= tick;
+  !p.mantle && !p.melee && p.throwUntil <= tick && (!scoped(p) || tick - (p.aimSince ?? tick) >= 15);
 
 export function viewDirection(yaw: number, pitch: number): V3 {
   return {
@@ -25,7 +26,7 @@ export function viewWeaponPosition(ads: boolean, weapon?: WeaponKind): V3 {
 }
 
 export const barrelEnd = (weapon: WeaponKind) =>
-  weapon === "serviceRifle" ? -0.7 : weapon === "machineGun" ? -0.77 : -0.575;
+  weapon === "serviceRifle" ? -0.7 : weapon === "machineGun" ? -0.77 : weapon === "pistol" ? -0.38 : -0.575;
 
 // Camera-local offsets use the same basis as PlayCanvas's lookAt camera.
 export function viewToWorld(p: Soldier, local: V3): V3 {

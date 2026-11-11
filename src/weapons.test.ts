@@ -159,16 +159,16 @@ it("uses the gunner's actual magazine, reload time, rate, events and respawn inv
   expect(p.ammo).toBe(59);
   expect(p.nextShot - g.tick).toBe(3);
   for (let i = 0; i < 10; i++) g.step(c);
-  expect(p.ammo).toBe(59); // No held-trigger repeat on the player's rifle input path.
+  expect(p.ammo).toBe(56); // Player support weapons repeat while held.
   const reload = idle();
   reload.reload = true;
   g.step(reload);
   expect(p.reloadAt - g.tick).toBe(45);
   for (let i = 0; i < 44; i++) g.step(idle());
-  expect(p.ammo).toBe(59);
+  expect(p.ammo).toBe(56);
   g.step(idle());
   expect(p.ammo).toBe(60);
-  expect(p.reserve).toBe(239);
+  expect(p.reserve).toBe(236);
   g.respawn(p);
   expect(p.ammo).toBe(60);
   expect(p.reserve).toBe(240);

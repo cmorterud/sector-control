@@ -55,7 +55,6 @@ export class ControlsPanel {
     this.panel.append(title);
     const list = document.createElement("div"); list.className = "binding-list";
     for (const action of Object.keys(defaultBindings) as ControlAction[]) {
-      if (["primary", "sidearm", "interact"].includes(action)) continue;
       const label = document.createElement("label"); label.textContent = controlLabels[action];
       const button = document.createElement("button"); button.textContent = keyLabel(this.settings.bindings[action]);
       button.setAttribute("aria-label", `Rebind ${controlLabels[action]}`);

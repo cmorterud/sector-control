@@ -1,3 +1,4 @@
+import { factions, factionFor, scoped, type Loadout, type WeaponSlot } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -62,7 +63,7 @@ const held = (action: ControlAction) => [...keys].some(code => isKey(action, cod
 function updateControlHints() {
   const hint = (action: ControlAction) => keyLabel(settings.bindings[action]);
   document.querySelector(".controls")!.textContent =
-    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("tactical")} TACTICAL MAP`;
+    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("primary")} / ${hint("sidearm")} WEAPONS　 ${hint("tactical")} TACTICAL MAP`;
   document.querySelector(".hint")!.innerHTML = `${hint("scoreboard")} · SCOREBOARD<br>ESC · PAUSE`;
 }
 
@@ -74,6 +75,8 @@ let fire = false,
   grenade = false,
   smoke = false,
   melee = false;
+let pendingEquip: WeaponSlot | undefined;
+let chosenLoadout: Loadout = "rifleman";
 let pendingArtillery: Command["artillery"];
 const tacticalMap = new ArtilleryMap(
   () => game,
@@ -143,6 +146,7 @@ function clear() {
   smoke = false;
   melee = false;
   pendingArtillery = undefined;
+  pendingEquip = undefined;
   if (renderer) renderer.artilleryPreview = null;
 }
 function menu(
@@ -155,6 +159,12 @@ function menu(
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
     `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+  const faction = factions[factionFor(map,"blue")];
+  const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  el("controls-settings").before(loadouts);
+  const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
+  select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
   updateBriefControls();
   el("primary").onclick = action;
   el("controls-settings").onclick = () => controlsPanel.show(el("controls-settings"));
@@ -216,6 +226,7 @@ function start() {
     undefined,
     { map, teamSize, humanPlayerIds: autoplay ? [] : [0] },
   );
+  game.selectLoadout(game.players[0], chosenLoadout);
   renderer.reset(game);
   battlefield.reset(game);
   audio ??= new BattleAudio();
@@ -364,8 +375,9 @@ function hud(now: number) {
           .join("");
   el("health").innerHTML =
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
+  root.classList.toggle("scoped", scoped(p) && sighted(p,game.tick));
   el("ammo").innerHTML =
-    `<small>${weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
+    `<small>${p.weaponId ?? weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : p.weapon === "machineGun" ? "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
@@ -438,7 +450,8 @@ function command(): Command {
   c.pitch = pitch;
   c.crouch = crouchInput.active;
   c.sprint = settings.toggleSprint ? sprintInput.active : held("sprint");
-  c.fire = fire && !tacticalMap.open;
+  c.fire = (fire || (triggerDown && (game.players[0].weapon === "machineGun" || game.players[0].weapon === "flamethrower"))) && !tacticalMap.open;
+  c.equip = pendingEquip; pendingEquip = undefined;
   fire = false;
   c.artillery = pendingArtillery;
   pendingArtillery = undefined;
@@ -491,6 +504,8 @@ window.addEventListener("keydown", (e) => {
     settings.firstPerson = preferredFirstPerson;
     try { saveControls(settings, localStorage); } catch { /* Session preference remains. */ }
   }
+  if (isKey("primary", e.code) && !e.repeat) pendingEquip = "primary";
+  if (isKey("sidearm", e.code) && !e.repeat) pendingEquip = "sidearm";
   if (isKey("reload", e.code)) reload = true;
   if (isKey("mantle", e.code) && !e.repeat) mantle = true;
   if (isKey("grenade", e.code) && !e.repeat) grenade = true;
@@ -507,7 +522,7 @@ window.addEventListener("mousemove", (e) => {
     tacticalMap.move(e, document.pointerLockElement === renderer.canvas);
     return;
   }
-  const sensitivity = aim ? 0.0013 : 0.002;
+  const sensitivity = aim ? scoped(game.players[0]) ? 0.0005 : 0.0013 : 0.002;
   yaw += e.movementX * sensitivity;
   pitch = Math.max(-1.1, Math.min(1.1, pitch - e.movementY * sensitivity));
 });

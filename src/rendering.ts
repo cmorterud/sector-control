@@ -1,3 +1,4 @@
+import { factions, scoped } from "./loadouts";
 import { terrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
@@ -1600,8 +1601,8 @@ export class Renderer implements CollisionWorld {
     const body = this.joint("body", root, 0, 0.94);
     const hips = this.joint("hips", body);
     const upper = this.joint("upper body", body, 0, 0.08);
-    const shirt = p.team === "blue" ? "#597f91" : "#9f685a";
-    const trousers = p.team === "blue" ? "#4d5853" : "#62594b";
+    const faction = factions[p.faction ?? (p.team === "blue" ? "trainingBlue" : "trainingRed")];
+    const shirt = faction.shirt, trousers = faction.trousers;
     const equipment = "#68634d",
       skin = "#bba185",
       leather = "#403b30";
@@ -1650,15 +1651,15 @@ export class Renderer implements CollisionWorld {
         upper,
       );
     }
-    const helmetTint = p.team === "blue" ? "#586c68" : "#796d57";
+    const helmetTint = faction.helmet;
     part("helmet", 0, 0.83, 0, 0.375, 0.2, 0.395, helmetTint, upper, "helmet");
     part(
       "helmet brim",
       0,
       0.752,
       -0.012,
-      0.465,
-      0.035,
+      p.faction === "german" ? 0.39 : p.faction === "french" ? 0.41 : 0.465,
+      p.faction === "german" ? 0.12 : 0.035,
       0.475,
       helmetTint,
       upper,
@@ -1676,6 +1677,8 @@ export class Renderer implements CollisionWorld {
       upper,
       "disc",
     );
+    if (p.faction === "french") part("Adrian helmet crest", 0, .91, 0, .04, .08, .33, helmetTint, upper);
+    part("team recognition band", .278, .25, 0, .018, .09, .29, p.team === "blue" ? "#5c9bb5" : "#b47c6c", upper);
     part("web belt", 0, 0.025, 0, 0.56, 0.075, 0.38, equipment, upper, "disc");
     for (const side of [-1, 1]) {
       part(
@@ -1799,7 +1802,12 @@ export class Renderer implements CollisionWorld {
     );
     const service = p.weapon === "serviceRifle",
       gunner = p.weapon === "machineGun";
-    if (service) {
+    if (p.weapon === "pistol") {
+      part("pistol grip", 0, -.08, .07, .075, .19, .09, "#544333", rifle);
+      part("pistol receiver", 0, .025, -.06, .075, .07, .26, "#434b49", rifle);
+      part("pistol barrel", 0, .025, -.25, .04, .28, .04, "#555f5b", rifle, "limb").setLocalEulerAngles(90,0,0);
+      part("pistol front sight", 0, .1, -.35, .012, .035, .02, "#9da59a", rifle);
+    } else if (service) {
       for (const spec of detailedRifleParts) {
         const piece = this.riflePart(spec.name, ...spec.at, ...spec.size, spec.tint, rifle, spec.shape);
         if (spec.rotation) piece.setLocalEulerAngles(...spec.rotation);
@@ -1906,7 +1914,7 @@ export class Renderer implements CollisionWorld {
     }
     // A real open notch and front post share a horizontal sight line.
     this.cube("front sight", 0, sightHeight - 0.02,
-      service ? -0.65 : gunner ? -0.72 : -0.54,
+      service ? -0.65 : gunner ? -0.72 : p.weapon === "pistol" ? -0.35 : -0.54,
       0.008, 0.04, 0.018, "#202724", false, rifle);
     for (const side of [-1, 1]) {
       const ear = this.cube("rear sight ear", side * 0.018, sightHeight - 0.0125,
@@ -1943,6 +1951,12 @@ export class Renderer implements CollisionWorld {
         rifle,
       );
     }
+    if (service && p.faction === "british") part("SMLE box magazine", 0, -.11, .03, .09, .12, .16, "#414945", rifle);
+    if (service && p.faction === "french") part("Berthier extended magazine", 0, -.12, .04, .075, .15, .13, "#424a46", rifle);
+    if (scoped(p)) {
+      part("four power scope tube", -.035, .18, -.03, .065, .4, .065, "#343e3d", rifle, "limb").setLocalEulerAngles(90,0,0);
+      part("scope lens", -.035, .18, .18, .06, .02, .06, "#45646a", rifle, "disc").setLocalEulerAngles(90,0,0);
+    }
     const bolt = this.joint("bolt", rifle, 0.05, 0.045, 0.13);
     if (service) {
       for (const spec of detailedBoltParts) {
@@ -1977,6 +1991,11 @@ export class Renderer implements CollisionWorld {
           false,
           rifle,
         );
+    if (gunner && p.faction !== "british" && p.faction !== undefined) {
+      magazine.setLocalScale(p.faction === "french" ? .16 : .45, 1.7, .7);
+      magazine.setLocalPosition(0,-.14,.05);
+      if (p.faction === "german") part("MG water jacket", 0,.02,-.47,.13,.48,.13,"#3d4a44",rifle,"limb").setLocalEulerAngles(90,0,0);
+    }
     const reloadMagazine = service
       ? this.joint(
           "stripper clip",
@@ -2063,7 +2082,7 @@ export class Renderer implements CollisionWorld {
   }
   private mergeSoldierKit(upper: pc.Entity, p: Soldier) {
     this.kitMeshes ??= new Map();
-    const key = `${p.team}-${p.weapon}`;
+    const key = `${p.team}-${p.faction}-${p.weapon}-${p.weaponId}`;
     const parts = upper.children.filter(
       (e) => (e as pc.Entity).render,
     ) as pc.Entity[];
@@ -2873,6 +2892,7 @@ export class Renderer implements CollisionWorld {
     }
     this.smokeVolumes.clear();
     this.people = [];
+    this.actorKits.clear();
     this.rings = [];
     this.objectiveTerrainRevision = -1;
     this.effects = [];
@@ -2948,8 +2968,22 @@ export class Renderer implements CollisionWorld {
       g.grenades.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
     );
   }
+  private actorKits = new Map<number,string>();
   draw(g: Game, alpha: number, dt: number, overview = false) {
     for (const p of g.players) {
+      const kit = `${p.faction}-${p.weapon}-${p.weaponId}`;
+      const previousKit = this.actorKits.get(p.id);
+      if (previousKit !== undefined && previousKit !== kit && p.hp > 0) {
+        const old = this.people[p.id];
+        this.batchGroup = this.actorBatch;
+        this.createSoldier(p);
+        this.people[p.id] = this.people.pop()!;
+        this.soldiers[p.id] = this.soldiers.pop()!;
+        old.destroy(); this.batchGroup = -1;
+        this.app.batcher!.generate([this.actorBatch]);
+        if (p.id === 0) this.createFirstPersonRig();
+      }
+      this.actorKits.set(p.id, kit);
       const e = this.people[p.id],
         previous = this.previous[p.id] ?? p,
         teleported = Math.hypot(previous.x - p.x, previous.z - p.z) > 2;
@@ -3059,7 +3093,7 @@ export class Renderer implements CollisionWorld {
     // the first-person sight away from the direction used by the simulation.
     if (!overview && !firstPerson) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((sighted(p, g.tick) ? 50 : 70) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((sighted(p, g.tick) ? scoped(p) ? 17.5 : 50 : 70) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
@@ -3070,6 +3104,7 @@ export class Renderer implements CollisionWorld {
       this.app.scene.fog.type = "none";
     }
     this.drawFirstPerson(p, g.tick - 1 + alpha, dt);
+    if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
     if (this.firstPersonRig && overview) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
     this.overcastSky?.setPosition(this.camera.getPosition());

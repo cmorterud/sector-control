@@ -583,3 +583,8 @@ button span {
 .tactical-grid button { position:relative; border-color:#fff2; background:transparent; text-shadow:0 1px 3px #000; }
 .tactical-grid button[aria-disabled="true"] { background:#111a1c40; }
 @media(max-width:650px) { .map-choice {grid-template-columns:1fr;} .map-choice img {max-height:120px;} }
+.loadout-choice {text-align:left; padding:12px; margin:14px 0; background:#ffffff08; font-size:13px;}
+.loadout-choice label, .loadout-choice small {display:block; margin:6px 0;}
+.loadout-choice select {background:#263a38; color:#e3e6d9; padding:8px; width:100%; border:1px solid #8e9b86;}
+#ui.scoped::after {content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle closest-side,transparent 78%,#131b18 79%); z-index:2;}
+#ui.scoped #reticle {z-index:3; font-size:24px; opacity:.8;}

@@ -1,5 +1,7 @@
-export type WeaponKind = "rifle" | "serviceRifle" | "machineGun";
+export type WeaponKind = "rifle" | "serviceRifle" | "machineGun" | "pistol" | "flamethrower";
 export const weaponProfiles = {
+  pistol: { magazine: 8, reserve: 40, shotTicks: 6, reloadTicks: 36, damage: 25, projectileSpeed: 128, muzzle: 0.7, label: "PISTOL" },
+  flamethrower: { magazine: 240, reserve: 0, shotTicks: 1, reloadTicks: 30, damage: 1, projectileSpeed: 20, muzzle: 1, label: "FLAMETHROWER" },
   rifle: {
     magazine: 30,
     reserve: 120,
