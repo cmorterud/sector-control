@@ -553,3 +553,23 @@ button span {
   padding: 8px 12px;
   font-size: 11px;
 }
+
+.controls-panel {
+  position: fixed;
+  z-index: 120;
+  inset: 5vh auto auto 50%;
+  transform: translateX(-50%);
+  width: min(500px, 90vw);
+  max-height: 90vh;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid #c8ba8a;
+  background: #1b2d2d;
+  pointer-events: auto;
+}
+.binding-list { display: grid; gap: 6px; margin-bottom: 16px; }
+.binding-list label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.binding-list button { width: 110px; padding: 8px; text-align: center; }
+.controls-panel > label { display: block; margin: 12px 0; }
+.controls-panel > p { min-height: 2em; color: #eee0b0; }

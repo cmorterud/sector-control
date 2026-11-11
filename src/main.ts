@@ -1,3 +1,5 @@
+import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
+import { ControlsPanel } from "./controls-panel";
 import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
 import { villageMap } from "./village-map";
@@ -41,6 +43,28 @@ let renderer: Renderer,
   uiTime = 0;
 const keys = new Set<string>();
 const crouchInput = new CrouchToggle();
+const sprintInput = new SprintInput();
+let settings = loadControls();
+try { settings = loadControls(localStorage); } catch { /* Storage can be blocked. */ }
+function persistSettings() {
+  preferredFirstPerson = settings.firstPerson;
+  sprintInput.reset();
+  try { saveControls(settings, localStorage); } catch { /* Keep session settings. */ }
+  updateControlHints();
+  updateBriefControls();
+  tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
+}
+const controlsPanel = new ControlsPanel(settings, persistSettings);
+const isKey = (action: ControlAction, code: string) => settings.bindings[action] === code ||
+  (settings.bindings[action] === "ShiftLeft" && code === "ShiftRight");
+const held = (action: ControlAction) => [...keys].some(code => isKey(action, code));
+function updateControlHints() {
+  const hint = (action: ControlAction) => keyLabel(settings.bindings[action]);
+  document.querySelector(".controls")!.textContent =
+    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("tactical")} TACTICAL MAP`;
+  document.querySelector(".hint")!.innerHTML = `${hint("scoreboard")} · SCOREBOARD<br>ESC · PAUSE`;
+}
+
 let triggerDown = false;
 let fire = false,
   aim = false,
@@ -78,9 +102,9 @@ const map =
 const requestedTeamSize = params.has("teamSize")
   ? Number(params.get("teamSize"))
   : undefined;
-let preferredFirstPerson = params.get("view") === "first";
-document.querySelector(".controls")!.textContent +=
-  "　 G GRENADE　 F SMOKE　 C TOGGLE CROUCH　 SPACE HOP / MANTLE　 T CHANGE VIEW　 Q TACTICAL MAP";
+let preferredFirstPerson = params.has("view") ? params.get("view") === "first" : settings.firstPerson;
+updateControlHints();
+tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
   const choices = [industrialMap, trenchMap, villageMap].map((battlefield) => {
@@ -91,16 +115,26 @@ function battlefieldChoices() {
       return `<span aria-current="page">${label}</span>`;
     const query = new URLSearchParams();
     if (battlefield.id !== "industrial") query.set("map", battlefield.id);
-    if (preferredFirstPerson) query.set("view", "first");
+    query.set("view", preferredFirstPerson ? "first" : "third");
     return `<a href="?${query}">${label}</a>`;
   });
   return `<nav class="map-choice" aria-label="Battlefield">${choices.join("")}</nav>`;
+}
+function updateBriefControls() {
+  const menuKeys: Record<string, ControlAction> = { WASD: "forward", Shift: "sprint", T: "view", R: "reload", V: "melee", G: "grenade", C: "crouch", F: "smoke", Space: "mantle", Q: "tactical" };
+  for (const paragraph of Array.from(el("menu").querySelectorAll(".brief p")).slice(1)) {
+    const original = (paragraph as HTMLElement).dataset.original ?? paragraph.textContent!;
+    (paragraph as HTMLElement).dataset.original = original;
+    paragraph.textContent = original.replace(/\b(WASD|Shift|T|R|V|G|C|F|Space|Q)\b/g, (token: string) =>
+      token === "WASD" ? ["forward", "left", "backward", "right"].map(a => keyLabel(settings.bindings[a as ControlAction])).join("") : keyLabel(settings.bindings[menuKeys[token]]));
+  }
 }
 function sound(freq: number, length = 0.08, volume = 0.04) {
   audio?.tone(freq, length, volume);
 }
 function clear() {
   keys.clear();
+  sprintInput.reset();
   tacticalMap.close();
   fire = false;
   triggerDown = false;
@@ -122,8 +156,10 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+  updateBriefControls();
   el("primary").onclick = action;
+  el("controls-settings").onclick = () => controlsPanel.show(el("controls-settings"));
   el("volume").oninput = (e) => {
     audioVolume = Number((e.target as HTMLInputElement).value) / 100;
     audio?.volume(audioVolume);
@@ -132,6 +168,7 @@ function menu(
     (cameraReactions = (e.target as HTMLInputElement).checked);
 }
 function unpause() {
+  controlsPanel.close();
   paused = false;
   last = performance.now();
   accumulator = 0;
@@ -236,8 +273,10 @@ function pause() {
 function handle(e: Event) {
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
-  if ((e.type === "death" || e.type === "respawn") && e.actor === 0)
+  if ((e.type === "death" || e.type === "respawn") && e.actor === 0) {
     crouchInput.reset();
+    sprintInput.reset();
+  }
   renderer.effect(e);
   battlefield.event(game, e);
   if (e.type === "smokeThrow" && e.actor === 0) sound(300, 0.12, 0.035);
@@ -328,13 +367,13 @@ function hud(now: number) {
   el("health").innerHTML =
     `<small>VITALS / BLUE TEAM</small><strong>${p.hp}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   el("ammo").innerHTML =
-    `<small>${weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : "SEMI · CLICK TO FIRE"}</small><small>G · GRENADES ${p.grenades}　 F · SMOKE ${p.smokes}</small>`;
+    `<small>${weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
   );
   el("ammo").innerHTML +=
-    `<small>Q · ARTILLERY ${readyIn ? readyIn + "s" : "READY"}</small>`;
+    `<small>${keyLabel(settings.bindings.tactical)} · ARTILLERY ${readyIn ? readyIn + "s" : "READY"}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : "";
@@ -361,7 +400,7 @@ function hud(now: number) {
       : p.mantle
         ? "<small>CLIMBING TRENCH EDGE</small>"
         : ledge && !(game.scoring === "domination" && sector)
-          ? "<small>SPACE · MANTLE TRENCH EDGE</small>"
+          ? `<small>${keyLabel(settings.bindings.mantle)} · MANTLE TRENCH EDGE</small>`
           : sector
             ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
@@ -369,7 +408,7 @@ function hud(now: number) {
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
-  if (keys.has("Tab")) {
+  if (held("scoreboard")) {
     el("scoreboard").classList.remove("hidden");
     el("scoreboard").innerHTML =
       `<section class="panel"><div class="eyebrow">LIVE OPERATION</div><h2>Scoreboard</h2>${table()}</section>`;
@@ -393,14 +432,14 @@ function hud(now: number) {
 }
 function command(): Command {
   const c = idle();
-  const x = Number(keys.has("KeyD")) - Number(keys.has("KeyA")),
-    z = Number(keys.has("KeyW")) - Number(keys.has("KeyS"));
+  const x = Number(held("right")) - Number(held("left")),
+    z = Number(held("forward")) - Number(held("backward"));
   c.x = x * Math.cos(yaw) + z * Math.sin(yaw);
   c.z = x * Math.sin(yaw) - z * Math.cos(yaw);
   c.yaw = yaw;
   c.pitch = pitch;
   c.crouch = crouchInput.active;
-  c.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
+  c.sprint = settings.toggleSprint ? sprintInput.active : held("sprint");
   c.fire = fire && !tacticalMap.open;
   fire = false;
   c.artillery = pendingArtillery;
@@ -420,6 +459,7 @@ function command(): Command {
   return c;
 }
 window.addEventListener("keydown", (e) => {
+  if (controlsPanel.key(e)) return;
   if (e.code === "Escape") {
     const action = escapePause.press(e, {
       started,
@@ -436,43 +476,28 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (paused) return;
-  if (["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
+  if (Object.values(settings.bindings).includes(e.code))
     e.preventDefault();
-  if (
-    mouseCaptureNeeded &&
-    !e.repeat &&
-    !e.ctrlKey &&
-    !e.metaKey &&
-    !e.altKey &&
-    [
-      "KeyW",
-      "KeyA",
-      "KeyS",
-      "KeyD",
-      "Space",
-      "KeyR",
-      "KeyC",
-      "KeyG",
-      "KeyF",
-      "KeyV",
-      "KeyQ",
-      "KeyT",
-    ].includes(e.code)
-  )
-    captureMouse();
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (mouseCaptureNeeded && !e.repeat && Object.values(settings.bindings).includes(e.code)) captureMouse();
   keys.add(e.code);
-  if (e.code === "KeyC" && game.players[0].hp > 0) crouchInput.press(e.repeat);
-  if (e.code === "KeyQ" && !e.repeat) {
+  if (isKey("sprint", e.code)) sprintInput.press(e.repeat, settings.toggleSprint);
+  if (isKey("crouch", e.code) && game.players[0].hp > 0) crouchInput.press(e.repeat);
+  if (isKey("tactical", e.code) && !e.repeat) {
     fire = aim = grenade = smoke = mantle = melee = false;
     tacticalMap.toggle();
   }
-  if (tacticalMap.open && e.code !== "KeyR") return;
-  if (e.code === "KeyT" && !e.repeat) preferredFirstPerson = !preferredFirstPerson;
-  if (e.code === "KeyR") reload = true;
-  if (e.code === "Space" && !e.repeat) mantle = true;
-  if (e.code === "KeyG" && !e.repeat) grenade = true;
-  if (e.code === "KeyF" && !e.repeat) smoke = true;
-  if (e.code === "KeyV" && !e.repeat) melee = true;
+  if (tacticalMap.open && !isKey("reload", e.code)) return;
+  if (isKey("view", e.code) && !e.repeat) {
+    preferredFirstPerson = !preferredFirstPerson;
+    settings.firstPerson = preferredFirstPerson;
+    try { saveControls(settings, localStorage); } catch { /* Session preference remains. */ }
+  }
+  if (isKey("reload", e.code)) reload = true;
+  if (isKey("mantle", e.code) && !e.repeat) mantle = true;
+  if (isKey("grenade", e.code) && !e.repeat) grenade = true;
+  if (isKey("smoke", e.code) && !e.repeat) smoke = true;
+  if (isKey("melee", e.code) && !e.repeat) melee = true;
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.code);

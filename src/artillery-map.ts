@@ -32,6 +32,9 @@ export class ArtilleryMap {
     this.panel.append(close);
     document.getElementById("ui")!.append(this.panel);
   }
+  setShortcut(key: string) {
+    this.panel.querySelector(":scope > button")!.textContent = `${key} / RIGHT CLICK · CANCEL`;
+  }
   close() {
     this.open = false;
     if (this.panel.contains(document.activeElement))
