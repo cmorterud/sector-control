@@ -1,3 +1,4 @@
+import { verdunMap } from "./verdun-map";
 import { factions, factionFor, scoped, type Loadout, type WeaponSlot } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
@@ -98,7 +99,9 @@ const params = new URLSearchParams(location.search),
   demo = params.has("demo") || autoplay;
 const duration = Number(params.get("duration") ?? 480);
 const map =
-  params.get("map") === "village"
+  params.get("map") === "verdun"
+    ? verdunMap
+    : params.get("map") === "village"
     ? villageMap
     : params.get("map") === "trenches"
       ? trenchMap
@@ -111,7 +114,7 @@ updateControlHints();
 tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
-  const choices = [industrialMap, trenchMap, villageMap].map((battlefield) => {
+  const choices = [industrialMap, trenchMap, villageMap, verdunMap].map((battlefield) => {
     if (battlefield.id === map.id)
       return battlefieldCard(battlefield);
     const query = new URLSearchParams();
@@ -638,7 +641,9 @@ try {
   });
   menu(
     map.id !== "industrial" ? map.name : "Sector Control",
-    map.id === "village"
+    map.id === "verdun"
+      ? `France faces Imperial Germany across shattered woods, shell craters and a broken fortification. ${teamSize} soldiers per team · four-flag domination. Verdun-inspired, 1917.`
+      : map.id === "village"
       ? `Fight through the orchard, ruined schoolhouse and market courtyards. Cross the exposed road under smoke; artillery opens walls and leaves rubble. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "trenches"
         ? `Capture flags A–D in the front trenches and hold them to score. Use smoke and advancing squads to take enemy flags. Step down when pinned. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`

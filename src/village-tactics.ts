@@ -83,7 +83,7 @@ function posts(g: Game, p: Soldier) {
 // Spread computer-controlled lives behind all three entrances. Human spawn
 // remains unchanged. These are individual routes, not synchronized squads.
 export function villageSpawn(g: Game, p: Soldier): Vec | null {
-  if (g.map.id !== "village" || g.humanPlayerIds.includes(p.id)) return null;
+  if ((g.map.id !== "village" && g.map.id !== "verdun") || g.humanPlayerIds.includes(p.id)) return null;
   const routes =
     g.map.terrain?.communicationRoutes?.filter((r) => r.team === p.team) ?? [];
   if (!routes.length) return null;

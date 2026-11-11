@@ -951,7 +951,7 @@ export class Game {
       p.x = deployment.x;
       p.z = deployment.z;
     }
-    if (this.map.id === "village") p.villagePlan = null;
+    if ((this.map.id === "village" || this.map.id === "verdun")) p.villagePlan = null;
     p.y = groundHeight(p.x, p.z, this.map);
     p.yaw =
       this.map.id !== "industrial"
@@ -2231,7 +2231,7 @@ export function botCommand(g: Game, p: Soldier): Command {
       ranks.sort((a, b) => a.weight - b.weight);
       const current = ranks.find((rank) => rank.i === p.objective)!;
       if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
-      if (g.map.id === "village")
+      if ((g.map.id === "village" || g.map.id === "verdun"))
         planVillageMove(g, p, (a, b) => pathfind(a, b, g.map));
       else p.path = pathfind(p, g.sectors[p.objective], g.map);
     }
@@ -2342,7 +2342,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   if (
     dest &&
     (dist(p, objective) > (p.villagePlan ? 0.8 : station ? 0.15 : 4) ||
-      (g.map.id === "village" && !flagOccupant(g, p, g.sectors[p.objective])))
+      ((g.map.id === "village" || g.map.id === "verdun") && !flagOccupant(g, p, g.sectors[p.objective])))
   ) {
     const d = dist(p, dest);
     c.x = (dest.x - p.x) / Math.max(0.1, d);
@@ -2498,7 +2498,7 @@ export function botCommand(g: Game, p: Soldier): Command {
   // A few village riflemen screen an exposed road crossing individually. This
   // spends their normal smoke supply; it does not introduce a squad controller.
   if (
-    g.map.id === "village" &&
+    (g.map.id === "village" || g.map.id === "verdun") &&
     p.weapon === "serviceRifle" &&
     p.id % 8 === 0 &&
     p.smokes > 0 &&
@@ -2515,7 +2515,7 @@ export function botCommand(g: Game, p: Soldier): Command {
     c.yaw = Math.atan2(objective.x - p.x, p.z - objective.z);
     c.pitch = 0.38;
   }
-  if (g.map.id === "village")
+  if ((g.map.id === "village" || g.map.id === "verdun"))
     villageSteering(g, p, c, target ? dist(p, target) : Infinity);
   return assaultCommand(g, p, c);
 }
