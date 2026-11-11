@@ -1,3 +1,4 @@
+import { weaponDesign } from "./weapon-design";
 import { factions, scoped } from "./loadouts";
 import { terrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
@@ -1800,9 +1801,15 @@ export class Renderer implements CollisionWorld {
       weaponMount.y,
       weaponMount.z,
     );
+    const design = weaponDesign(p);
     const service = p.weapon === "serviceRifle",
       gunner = p.weapon === "machineGun";
-    if (p.weapon === "flamethrower") {
+    if (design) {
+      for (const spec of design.parts) {
+        const piece=this.riflePart(spec.name,...spec.at,...spec.size,spec.tint,rifle,spec.shape);
+        if(spec.rotation)piece.setLocalEulerAngles(...spec.rotation);
+      }
+    } else if (p.weapon === "flamethrower") {
       part("flame lance",0,.025,-.22,.045,.66,.045,"#5d665d",rifle,"limb").setLocalEulerAngles(90,0,0);
       part("flame nozzle",0,.025,-.55,.085,.12,.085,"#454a41",rifle,"limb").setLocalEulerAngles(90,0,0);
       part("flame grip",0,-.08,.05,.07,.19,.08,"#4e4030",rifle);
@@ -1919,18 +1926,23 @@ export class Renderer implements CollisionWorld {
         rifle,
       );
     }
+    if(design)this.riflePart("front sight base",0,.055,design.front,.03,.06,.045,"steel",rifle,"buttplate");
     // A real open notch and front post share a horizontal sight line.
     this.cube("front sight", 0, sightHeight - 0.02,
-      service ? -0.65 : gunner ? -0.72 : p.weapon === "pistol" ? -0.35 : -0.54,
+      design?.front ?? (service ? -0.65 : gunner ? -0.72 : p.weapon === "pistol" ? -0.35 : -0.54),
       0.008, 0.04, 0.018, "#202724", false, rifle);
     for (const side of [-1, 1]) {
       const ear = this.cube("rear sight ear", side * 0.018, sightHeight - 0.0125,
-        service ? -0.13 : 0.08, 0.008, 0.025, 0.025, "#202724", false, rifle);
+        design?.rear ?? (service ? -0.13 : 0.08), 0.008, 0.025, 0.025, "#202724", false, rifle);
       if (service && ear.render) ear.removeComponent("render");
     }
     const bridge = this.cube("rear sight bridge", 0, sightHeight - 0.0315,
-      service ? -0.13 : 0.08, 0.044, 0.014, 0.025, "#202724", false, rifle);
+      design?.rear ?? (service ? -0.13 : 0.08), 0.044, 0.014, 0.025, "#202724", false, rifle);
     if (service && bridge.render) bridge.removeComponent("render");
+    if(design && service) {
+      this.riflePart("V-notch rear sight",0,.1005,design.rear,.075,.035,.04,"steel",rifle,"notch");
+      this.riflePart("rear sight base",0,.064,design.rear,.055,.045,.085,"steel",rifle,"buttplate");
+    }
     if (service) {
       const blade = part(
         "bayonet blade",
@@ -1958,14 +1970,20 @@ export class Renderer implements CollisionWorld {
         rifle,
       );
     }
-    if (service && p.faction === "british") part("SMLE box magazine", 0, -.11, .03, .09, .12, .16, "#414945", rifle);
-    if (service && p.faction === "french") part("Berthier extended magazine", 0, -.12, .04, .075, .15, .13, "#424a46", rifle);
+    if (!design && service && p.faction === "british") part("SMLE box magazine", 0, -.11, .03, .09, .12, .16, "#414945", rifle);
+    if (!design && service && p.faction === "french") part("Berthier extended magazine", 0, -.12, .04, .075, .15, .13, "#424a46", rifle);
     if (scoped(p)) {
+      for(const z of [-.14,.09])this.riflePart("scope mounting ring",-.035,.16,z,.085,.035,.085,"steel",rifle,"band").setLocalEulerAngles(90,0,0);
       part("four power scope tube", -.035, .18, -.03, .065, .4, .065, "#343e3d", rifle, "limb").setLocalEulerAngles(90,0,0);
       part("scope lens", -.035, .18, .18, .06, .02, .06, "#45646a", rifle, "disc").setLocalEulerAngles(90,0,0);
     }
-    const bolt = this.joint("bolt", rifle, 0.05, 0.045, 0.13);
-    if (service) {
+    const bolt = this.joint("bolt", rifle, ...(design?.actionOrigin ?? [.05,.045,.13] as [number,number,number]));
+    if(design) {
+      for(const spec of design.actionParts){
+        const piece=this.riflePart(spec.name,...spec.at,...spec.size,spec.tint,bolt,spec.shape);
+        if(spec.rotation)piece.setLocalEulerAngles(...spec.rotation);
+      }
+    } else if (service) {
       for (const spec of detailedBoltParts) {
         const piece = this.riflePart(spec.name, ...spec.at, ...spec.size, spec.tint, bolt, spec.shape);
         if (spec.rotation) piece.setLocalEulerAngles(...spec.rotation);
@@ -1973,7 +1991,9 @@ export class Renderer implements CollisionWorld {
       this.cube("safety lever", -0.05, 0.048, 0.06, 0.045, 0.012, 0.012, "#70776d", false, bolt);
       this.cube("bayonet lug", 0, -0.012, -0.65, 0.028, 0.08, 0.04, "#353c3a", false, rifle);
     }
-    const magazine = gunner
+    const magazine = design
+      ? this.riflePart("weapon magazine",...design.magazine.at,...design.magazine.size,design.magazine.tint,rifle,design.magazine.shape)
+      : gunner
       ? part(
           "weapon magazine",
           0,
@@ -1998,12 +2018,15 @@ export class Renderer implements CollisionWorld {
           false,
           rifle,
         );
-    if (gunner && p.faction !== "british" && p.faction !== undefined) {
+    if(design?.magazine.rotation)magazine.setLocalEulerAngles(...design.magazine.rotation);
+    if (!design && gunner && p.faction !== "british" && p.faction !== undefined) {
       magazine.setLocalScale(p.faction === "french" ? .16 : .45, 1.7, .7);
       magazine.setLocalPosition(0,-.14,.05);
       if (p.faction === "german") part("MG water jacket", 0,.02,-.47,.13,.48,.13,"#3d4a44",rifle,"limb").setLocalEulerAngles(90,0,0);
     }
-    const reloadMagazine = service
+    const reloadMagazine = design && !["clip","tube","revolver"].includes(design.reload)
+      ? this.riflePart("carried magazine",0,-armLengths.forearm-.025,0,...design.magazine.size,design.magazine.tint,arms[1].elbow,design.magazine.shape)
+      : service
       ? this.joint(
           "stripper clip",
           arms[1].elbow,
@@ -2023,7 +2046,7 @@ export class Renderer implements CollisionWorld {
           arms[1].elbow,
           gunner ? "disc" : "soft",
         );
-    if (service) {
+    if (service && design?.reload !== "tube") {
       this.cube(
         "clip bridge",
         0,
@@ -2050,12 +2073,25 @@ export class Renderer implements CollisionWorld {
           "limb",
         );
     }
+    if(design?.reload === "tube" || design?.reload === "revolver") {
+      for(const render of reloadMagazine.findComponents("render") as pc.RenderComponent[])render.enabled=false;
+      for(let i=0;i<3;i++)this.riflePart("loose cartridge",(i-1)*.017,.015,0,.013,.065,.013,"edge",reloadMagazine,"pin");
+    }
+    if(design?.family === "webley") {
+      magazine.reparent(bolt);magazine.setLocalPosition(...design.magazine.at.map((v,i)=>v-design.actionOrigin[i]) as [number,number,number]);
+      for(let i=0;i<6;i++)this.riflePart("cylinder flute",Math.sin(i*Math.PI/3)*.46,0,Math.cos(i*Math.PI/3)*.46,.12,.8,.12,"dark",magazine,"pin");
+    }
+    if(design?.family === "lewis")for(let i=0;i<20;i++){
+      const rib=this.cube("pan radial rib",Math.cos(i*Math.PI/10)*.1,.175,-.055+Math.sin(i*Math.PI/10)*.1,.12,.005,.006,"#686f65",false,magazine);
+      rib.setLocalPosition(Math.cos(i*Math.PI/10)*.28,.52,Math.sin(i*Math.PI/10)*.28);rib.setLocalEulerAngles(0,-i*18,0);rib.setLocalScale(.3,.06,.02);
+    }
+    if(design?.family === "mg08")for(let i=0;i<8;i++)this.riflePart("belt cartridge",(i-3.5)*.1,0,0,.025,.7,.025,"edge",magazine,"pin").setLocalEulerAngles(90,0,0);
     const supportHand = this.joint(
       "left hand grip",
       rifle,
       -0.035,
-      service ? -0.06 : -0.1,
-      service ? -0.16 : -0.1,
+      design?.grip[1] ?? (service ? -0.06 : -0.1),
+      design?.grip[2] ?? (service ? -0.16 : -0.1),
     );
     part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
     if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p);
@@ -2277,7 +2313,7 @@ export class Renderer implements CollisionWorld {
       -28 * lower - sprint * 18 - charge.ready * 5 + charge.side * 1.2,
     );
     const eye = this.camera.getPosition();
-    const muzzle = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(p.weapon)));
+    const muzzle = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(p.weapon,p.weaponId)));
     let needed = weaponPullback(eye, muzzle, this.camera.forward, (a, b) => this.ray(a, b));
     if (p.weapon === "serviceRifle") {
       const tip = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, -0.05, -0.98));
@@ -2295,7 +2331,7 @@ export class Renderer implements CollisionWorld {
     rig.arms[1].shoulder.setLocalPosition(0.24, -0.3, -0.1 + (throwing ? 0 : rig.pullback));
     const left = rig.rifle.getLocalTransform().transformPoint(rig.supportHand.getLocalPosition());
     this.poseArm(rig, 0, left, armLengths.upper, armLengths.forearm);
-    let right = rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(0, -0.03, 0.14));
+    let right = rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
     if (loading || boltMotion(p, tick)) {
       // Reuse the actual clip/bolt hand path in the new weapon's coordinate space.
       const hand = source.arms[1].elbow.getWorldTransform()
@@ -2317,7 +2353,7 @@ export class Renderer implements CollisionWorld {
     dt: number,
     tick: number,
   ) {
-    const rig = this.soldiers[p.id];
+    const rig = this.soldiers[p.id], design=weaponDesign(p);
     rig.arms[0].shoulder.setLocalPosition(-0.27, 0.41, -0.12);
     rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, 0);
     let magazineVisible = true,
@@ -2528,7 +2564,7 @@ export class Renderer implements CollisionWorld {
     if (this.map.terrain && !p.mantle) {
       const trigger = rig.rifle
         .getLocalTransform()
-        .transformPoint(new pc.Vec3(0, -0.03, 0.14));
+        .transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
       this.poseArm(rig, 1, trigger, armLengths.upper, armLengths.forearm);
     }
     const loading = reloadMotion(p, tick);
@@ -2542,7 +2578,7 @@ export class Renderer implements CollisionWorld {
       rig.rifle.setLocalEulerAngles(-24 * lower, 10 * lower, -28 * lower);
       const trigger = rig.rifle
         .getLocalTransform()
-        .transformPoint(new pc.Vec3(0, -0.03, 0.14));
+        .transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
       const service = p.weapon === "serviceRifle";
       const well = rig.rifle
         .getLocalTransform()
@@ -2597,14 +2633,15 @@ export class Renderer implements CollisionWorld {
         ? ease((loading.progress - 0.1) / 0.12) *
           (1 - ease((loading.progress - 0.73) / 0.15))
         : (cycling?.pull ?? 0);
-    rig.bolt.setLocalPosition(0.05, 0.045, 0.13 + boltPull * 0.13);
-    rig.bolt.setLocalEulerAngles(0, 0, 65 * boltLift);
+    const origin=design?.actionOrigin ?? [.05,.045,.13];
+    rig.bolt.setLocalPosition(origin[0],origin[1],origin[2]+boltPull*(design?.travel ?? .13));
+    rig.bolt.setLocalEulerAngles(0,0,(design?.lift ?? 65)*boltLift);
     if (cycling && !p.mantle && p.throwUntil <= tick) {
       rig.rifle.rotateLocal(-5 * cycling.reach, 0, -6 * cycling.reach);
       const hand = rig.rifle
         .getLocalTransform()
         .transformPoint(
-          rig.bolt.getLocalTransform().transformPoint(new pc.Vec3(boltGrip.x, boltGrip.y, boltGrip.z)),
+          rig.bolt.getLocalTransform().transformPoint(new pc.Vec3(...(design?.boltGrip ?? [boltGrip.x,boltGrip.y,boltGrip.z]) as [number,number,number])),
         );
       this.poseArm(
         rig,
@@ -2648,7 +2685,7 @@ export class Renderer implements CollisionWorld {
       );
       const hand = rig.rifle
         .getLocalTransform()
-        .transformPoint(new pc.Vec3(0, -0.03, 0.14));
+        .transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
       this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm);
       carryingMagazine = false;
     }

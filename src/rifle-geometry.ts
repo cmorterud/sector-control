@@ -4,7 +4,7 @@ import { BoxGeometry } from "playcanvas";
 type MeshData = ReturnType<typeof characterGeometry> & { uvs: number[] };
 type Ring = [number, number, number, number?];
 export type RifleShape = "stock" | "handguard" | "steel" | "barrel" |
-  "band" | "guard" | "hood" | "sling" | "buttplate" | "screw" | "knob" | "shroud" | "notch" | "pin" | "slot";
+  "band" | "guard" | "hood" | "sling" | "buttplate" | "screw" | "knob" | "shroud" | "notch" | "pin" | "slot" | "crescent";
 
 export const rifleTextureSize = 256;
 const limitedSlope = (a: number, b: number) => a * b <= 0 ? 0 : Math.sign(a) * Math.min(Math.abs(a), Math.abs(b));
@@ -91,6 +91,32 @@ function loop(segments: number, tubeSides: number, thickness: number): MeshData 
 }
 
 export function rifleGeometry(shape: RifleShape): MeshData {
+  if (shape === "crescent") {
+    const result: MeshData = {positions:[], normals:[], indices:[], uvs:[]};
+    const steps=48;
+    const face=(points:number[][],normal:number[])=>{
+      const base=result.positions.length/3;
+      for(const [x,y,z] of points){result.positions.push(x,y,z);result.normals.push(...normal);result.uvs.push(z+.5,y+.5);}
+      const u=points[1].map((v,i)=>v-points[0][i]),v=points[2].map((v,i)=>v-points[0][i]);
+      const dot=(u[1]*v[2]-u[2]*v[1])*normal[0]+(u[2]*v[0]-u[0]*v[2])*normal[1]+(u[0]*v[1]-u[1]*v[0])*normal[2];
+      result.indices.push(...(dot<0?[base,base+2,base+1,base,base+3,base+2]:[base,base+1,base+2,base,base+2,base+3]));
+    };
+    for(let i=0;i<steps;i++){
+      const a=i/steps*Math.PI,b=(i+1)/steps*Math.PI;
+      const yz=(t:number,r:number)=>[-Math.sin(t)*r+.25,Math.cos(t)*r];
+      const [ay,az]=yz(a,.5),[by,bz]=yz(b,.5),[cy,cz]=yz(b,.3),[dy,dz]=yz(a,.3);
+      for(const side of [-1,1])face([[side*.5,ay,az],[side*.5,by,bz],[side*.5,cy,cz],[side*.5,dy,dz]], [side,0,0]);
+      for(const [radius,sign] of [[.5,1],[.3,-1]]){
+        const [y,z]=yz(a,radius),[v,w]=yz(b,radius),t=(a+b)/2;
+        face([[-.5,y,z],[.5,y,z],[.5,v,w],[-.5,v,w]], [0,-Math.sin(t)*sign,Math.cos(t)*sign]);
+      }
+    }
+    for(const a of [0,Math.PI]){
+      const y=.25,z=Math.cos(a);
+      face([[-.5,y,z*.3],[.5,y,z*.3],[.5,y,z*.5],[-.5,y,z*.5]], [0,1,0]);
+    }
+    return result;
+  }
   if (shape === "slot") {
     const box = new BoxGeometry();
     return { positions: box.positions, normals: box.normals, indices: box.indices, uvs: box.uvs };

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { detailedRifleParts, detailedBoltParts, rifleGeometry, rifleSurfacePixels, type RifleShape } from "./rifle-geometry";
 
-const shapes: RifleShape[] = ["stock", "handguard", "steel", "barrel", "band", "guard", "hood", "sling", "buttplate", "screw", "knob", "shroud", "notch", "pin", "slot"];
+const shapes: RifleShape[] = ["stock", "handguard", "steel", "barrel", "band", "guard", "hood", "sling", "buttplate", "screw", "knob", "shroud", "notch", "pin", "slot", "crescent"];
 
 it("builds finite UV-mapped rifle meshes with outward faces and unit normals", () => {
   for (const shape of shapes) {
@@ -32,7 +32,7 @@ it("provides roughly four times the previous service-rifle triangles while shari
     + detailedBoltParts.reduce((sum, p) => sum + rifleGeometry(p.shape).indices.length / 3, 0);
   expect(triangles).toBeGreaterThanOrEqual(4444 * 3.8);
   expect(triangles).toBeLessThanOrEqual(4444 * 4.4);
-  expect(shapes.length).toBeLessThan(16);
+  expect(shapes.length).toBeLessThanOrEqual(16); // One shared curved magazine mesh added.
 });
 
 it("carves the side finger grooves into the stock geometry", () => {

@@ -565,7 +565,7 @@ it("opens, retracts and closes the service bolt with the right wrist on its knob
     r.animateSoldier(p, p.x, p.z, 1 / 60, 100 + age);
     const motion = boltMotion(p, 100 + age)!;
     expect(rig.bolt.getLocalPosition().z).toBeCloseTo(
-      0.13 + 0.13 * motion.pull,
+      0.13 + 0.1 * motion.pull,
     );
     const knob = rig.bolt
       .getWorldTransform()

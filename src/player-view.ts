@@ -1,3 +1,4 @@
+import { weaponDesign } from "./weapon-design";
 import { scoped } from "./loadouts";
 import { eyeHeightOf } from "./crouch";
 import { weaponAim } from "./recoil";
@@ -26,8 +27,8 @@ export function viewWeaponPosition(ads: boolean, weapon?: WeaponKind): V3 {
     : { x: 0.18, y: -0.25, z: -0.45 };
 }
 
-export const barrelEnd = (weapon: WeaponKind) =>
-  weapon === "serviceRifle" ? -0.7 : weapon === "machineGun" ? -0.77 : weapon === "pistol" ? -0.38 : -0.575;
+export const barrelEnd = (weapon: WeaponKind, weaponId?: string) =>
+  weaponDesign({weapon,weaponId})?.muzzle ?? (weapon === "serviceRifle" ? -0.7 : weapon === "machineGun" ? -0.77 : weapon === "pistol" ? -0.38 : -0.575);
 
 // Camera-local offsets use the same basis as PlayCanvas's lookAt camera.
 export function viewToWorld(p: Soldier, local: V3): V3 {
@@ -50,7 +51,7 @@ export function viewMuzzle(p: Soldier, tick: number): V3 {
   return viewToWorld(p, {
     x: position.x,
     y: position.y + 0.025,
-    z: position.z + barrelEnd(p.weapon),
+    z: position.z + barrelEnd(p.weapon,p.weaponId),
   });
 }
 
