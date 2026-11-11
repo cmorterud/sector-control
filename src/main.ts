@@ -1,3 +1,4 @@
+import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
 import { EscapePause } from "./escape-pause";
@@ -108,15 +109,12 @@ tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
   const choices = [industrialMap, trenchMap, villageMap].map((battlefield) => {
-    const name = battlefield.id === "industrial" ? "Industrial" : battlefield.name;
-    const size = resolveTeamSize(battlefield);
-    const label = `${name} <small>${size} vs ${size}</small>`;
     if (battlefield.id === map.id)
-      return `<span aria-current="page">${label}</span>`;
+      return battlefieldCard(battlefield);
     const query = new URLSearchParams();
     if (battlefield.id !== "industrial") query.set("map", battlefield.id);
     query.set("view", preferredFirstPerson ? "first" : "third");
-    return `<a href="?${query}">${label}</a>`;
+    return battlefieldCard(battlefield, `?${query}`);
   });
   return `<nav class="map-choice" aria-label="Battlefield">${choices.join("")}</nav>`;
 }

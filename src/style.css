@@ -573,3 +573,13 @@ button span {
 .binding-list button { width: 110px; padding: 8px; text-align: center; }
 .controls-panel > label { display: block; margin: 12px 0; }
 .controls-panel > p { min-height: 2em; color: #eee0b0; }
+
+.map-choice { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.map-choice > * { padding: 0 0 10px; overflow: hidden; background: #172626; }
+.map-choice img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: linear-gradient(145deg,#7b8575,#293e3c); color:#ddd; }
+.map-choice strong, .map-choice small, .map-choice p { display: block; margin: 8px 10px 0; }
+.map-choice p { font-size: 10px; line-height: 1.5; color: #b4c2bc; }
+.tactical-terrain { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.tactical-grid button { position:relative; border-color:#fff2; background:transparent; text-shadow:0 1px 3px #000; }
+.tactical-grid button[aria-disabled="true"] { background:#111a1c40; }
+@media(max-width:650px) { .map-choice {grid-template-columns:1fr;} .map-choice img {max-height:120px;} }

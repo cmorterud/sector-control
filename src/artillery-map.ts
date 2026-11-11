@@ -2,6 +2,7 @@ import { artillerySector, artillerySectors } from "./artillery-sectors";
 import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import type { Game } from "./simulation";
 import type { Vec } from "./map";
+import { drawTacticalTerrain } from "./tactical-terrain";
 
 export class ArtilleryMap {
   open = false;
@@ -11,6 +12,8 @@ export class ArtilleryMap {
   private status = document.createElement("p");
   private marker = document.createElement("i");
   private you = document.createElement("i");
+  private terrain = document.createElement("canvas");
+  private terrainRevision = -1;
   private buttons: HTMLButtonElement[] = [];
   private flagMarkers: { id: string; dot: Element }[] = [];
   constructor(
@@ -54,6 +57,9 @@ export class ArtilleryMap {
     this.grid.replaceChildren();
     this.grid.style.gridTemplateColumns = `repeat(${Math.ceil(g.map.width / 16)}, 1fr)`;
     this.grid.style.aspectRatio = `${g.map.width} / ${g.map.depth}`;
+    this.terrain.className = "tactical-terrain";
+    this.terrainRevision = -1;
+    this.grid.append(this.terrain);
     this.buttons = sectors.map((s) => {
       const b = document.createElement("button");
       b.textContent = s.name;
@@ -77,15 +83,7 @@ export class ArtilleryMap {
         road.setAttribute("stroke-width", "5");
         svg.append(road);
       }
-      for (const b of g.map.boxes.filter((b) => b.kind === "masonry")) {
-        const ruin = document.createElementNS(svg.namespaceURI, "rect");
-        ruin.setAttribute("x", String(b.x - b.w / 2 + g.map.width / 2));
-        ruin.setAttribute("y", String(b.z - b.d / 2 + g.map.depth / 2));
-        ruin.setAttribute("width", String(b.w));
-        ruin.setAttribute("height", String(b.d));
-        ruin.setAttribute("fill", "#514c42");
-        svg.append(ruin);
-      }
+
     }
     for (const line of g.map.terrain?.trenchLines ?? [])
       for (const s of line.sections) {
@@ -214,6 +212,11 @@ export class ArtilleryMap {
     if (p.hp <= 0 || g.phase !== "playing") {
       this.close();
       return;
+    }
+    const revision = g.map.destruction?.revision ?? 0;
+    if (revision !== this.terrainRevision) {
+      drawTacticalTerrain(this.terrain, g.map);
+      this.terrainRevision = revision;
     }
     const sectors = artillerySectors(g.map),
       selected = this.selected();
