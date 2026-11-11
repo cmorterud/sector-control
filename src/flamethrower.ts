@@ -1,3 +1,4 @@
+import { beginWeaponChange } from "./weapon-handling";
 import { groundHeight, dist, type Vec } from "./map";
 import type { Game, Soldier, V3, Team } from "./simulation";
 import { eyeHeightOf } from "./crouch";
@@ -21,6 +22,7 @@ export function nearestFlame(g:Game,p:Soldier) {
 export function pickupFlame(g:Game,p:Soldier) {
  const kit=nearestFlame(g,p);
  if(!kit || !p.inventory || p.flameKit!==undefined || p.hp<=0 || p.melee || p.mantle || p.reloadAt || g.tick<p.throwUntil)return false;
+ beginWeaponChange(p,g.tick);
  p.inventory[p.equippedSlot??"primary"]={kind:p.weapon,id:p.weaponId??p.weapon,ammo:p.ammo,reserve:p.reserve,nextShot:p.nextShot,lastShotAt:p.lastShotAt};
  p.inventory.primary={kind:"flamethrower",id:"Wex-inspired flame kit",ammo:kit.fuel,reserve:0,nextShot:g.tick+12,lastShotAt:-1000};
  p.weapon="flamethrower"; p.weaponId=p.inventory.primary.id; p.equippedSlot="primary";

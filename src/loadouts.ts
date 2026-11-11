@@ -1,3 +1,4 @@
+import { beginWeaponChange, switchRules } from "./weapon-handling";
 import type { Soldier } from "./simulation";
 import { weaponProfiles, type WeaponKind } from "./weapons";
 export type FactionId = "british" | "german" | "french" | "trainingBlue" | "trainingRed";
@@ -29,16 +30,17 @@ export function equipLoadout(p: Soldier, loadout: Loadout, industrial = false) {
   const primary = p.inventory.primary;
   p.ammo = primary.ammo; p.reserve = primary.reserve; p.nextShot = primary.nextShot; p.lastShotAt = primary.lastShotAt;
   p.weapon = primary.kind; p.weaponId = primary.id;
-  p.reloadAt = 0; p.aimSince = -1;
+  p.reloadAt = 0; p.aimSince = -1; p.weaponChange=undefined; p.aimMotion=undefined;
 }
 export function switchWeapon(p:Soldier, slot:WeaponSlot, tick:number) {
   if (!p.inventory || p.equippedSlot === slot || p.hp <= 0 || p.mantle || p.melee || tick < p.throwUntil) return false;
+  beginWeaponChange(p,tick);
   const old = p.inventory[p.equippedSlot ?? "primary"];
   Object.assign(old, {ammo:p.ammo,reserve:p.reserve,nextShot:p.nextShot,lastShotAt:p.lastShotAt});
   const next = p.inventory[slot];
   p.equippedSlot = slot; p.weapon = next.kind; p.weaponId = next.id;
   p.ammo = next.ammo; p.reserve = next.reserve; p.lastShotAt = next.lastShotAt;
-  p.nextShot = Math.max(next.nextShot, tick + 9); p.reloadAt = 0;
+  p.nextShot = Math.max(next.nextShot, tick + switchRules.readyTicks); p.reloadAt = 0;
   p.triggerHeld = true; p.triggerPressed = false; p.aimSince = -1;
   p.recoilPitch = p.recoilYaw = p.recoilShots = 0;
   return true;

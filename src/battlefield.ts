@@ -10,6 +10,9 @@ import { eyeHeightOf } from "./crouch";
 import type { Event, Game, V3 } from "./simulation";
 
 export type SoundKind =
+  | "pistol"
+  | "equip"
+  | "magazine"
   | "flame"
   | "meleeSwing"
   | "meleeHit"
@@ -37,6 +40,8 @@ export type SoundCue = {
   distance: number;
   seed: number;
   line?: VoiceLine;
+  weaponId?: string;
+  action?: string;
 };
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
@@ -138,6 +143,7 @@ export class BattlefieldFeedback {
     occlusion = true,
     seed = g.tick,
     line?: VoiceLine,
+    weapon?: {weaponId?:string;action?:string},
   ) {
     const p = g.players[0];
     const ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
@@ -154,6 +160,7 @@ export class BattlefieldFeedback {
     });
     if (this.recent.length > 160) this.recent.shift();
     this.play({
+      ...weapon,
       kind,
       at: { ...at },
       volume,
@@ -195,7 +202,7 @@ export class BattlefieldFeedback {
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
         g,
-        e.weapon === "machineGun"
+        e.weapon === "pistol" ? "pistol" : e.weapon === "machineGun"
           ? "machineGun"
           : e.weapon === "serviceRifle"
             ? "serviceRifle"
@@ -204,7 +211,7 @@ export class BattlefieldFeedback {
         e.actor === 0 ? (e.weapon === "serviceRifle" ? 0.5 : 0.4) : 0.3,
         e.actor === 0,
         true,
-        e.id,
+        e.id,undefined,{weaponId:e.weaponId},
       );
       this.stats.rifles++;
       if (Math.hypot(p.x - e.from.x, p.z - e.from.z) > 35)
@@ -241,12 +248,12 @@ export class BattlefieldFeedback {
       ) {
         this.cue(
           g,
-          e.action === "clip" ? "clip" : "bolt",
+          ["holster","draw"].includes(e.action) ? "equip" : ["magazineOut","magazineIn"].includes(e.action) ? "magazine" : ["clip","cartridges"].includes(e.action) ? "clip" : "bolt",
           { x: actor.x, y: actor.y + 1.3, z: actor.z },
           actor.id === 0 ? 0.17 : 0.08,
           actor.id === 0,
           true,
-          e.id,
+          e.id,undefined,{weaponId:e.weaponId??actor.weaponId,action:e.action},
         );
         this.nextMechanism = g.tick + 4;
       }

@@ -1,3 +1,4 @@
+import { shotVoice, mechanicalVoice } from "./weapon-sound";
 import { voiceLines, type VoiceLine } from "./soldier-chatter";
 import type { SoundCue } from "./battlefield";
 import { treeFallTime } from "./environment-effects";
@@ -171,13 +172,15 @@ export class BattleAudio {
     const rifle =
       cue.kind === "rifle" ||
       cue.kind === "serviceRifle" ||
-      cue.kind === "machineGun";
+      cue.kind === "machineGun" || cue.kind === "pistol";
     const melee = cue.kind === "meleeSwing" || cue.kind === "meleeHit";
-    const mechanism = cue.kind === "bolt" || cue.kind === "clip";
+    const mechanism = ["bolt","clip","equip","magazine"].includes(cue.kind);
+    const mechanical=mechanism?mechanicalVoice(cue.kind,cue.action,cue.weaponId):undefined;
+    const shotPitch=shotVoice(cue.weaponId);
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
-    const length = cue.kind === "flame" ? .14 : melee
+    const length = mechanical ? mechanical.length : cue.kind === "flame" ? .14 : melee
       ? cue.kind === "meleeSwing"
         ? 0.17
         : 0.11
@@ -213,7 +216,7 @@ export class BattleAudio {
     const filter = c.createBiquadFilter();
     filter.type = crack || whistle || mechanism ? "bandpass" : "lowpass";
     filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
-    filter.frequency.value = cue.kind === "flame" ? 1500 : melee
+    filter.frequency.value = mechanical ? mechanical.frequency : cue.kind === "flame" ? 1500 : melee
       ? cue.kind === "meleeSwing"
         ? 2400
         : 650
@@ -252,7 +255,7 @@ export class BattleAudio {
     if (whistle) filter.frequency.exponentialRampToValueAtTime(420, end);
     const envelope = c.createGain();
     envelope.gain.setValueAtTime(0.0001, start);
-    const volume = cue.volume * (cue.occluded ? 0.48 : 1);
+    const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1);
     envelope.gain.exponentialRampToValueAtTime(
       Math.max(0.0002, volume),
       start + (whistle ? 0.1 : explosion ? 0.001 : 0.004),
@@ -354,9 +357,7 @@ export class BattleAudio {
     }
     const noise = c.createBufferSource();
     noise.buffer = this.noise;
-    noise.playbackRate.value =
-      (cue.kind === "serviceRifle" ? 0.78 : 0.92) +
-      Math.abs(Math.sin(cue.seed * 2.4)) * 0.16;
+    noise.playbackRate.value = mechanical?.rate ?? ((cue.kind === "serviceRifle" ? .78 : .92)+Math.abs(Math.sin(cue.seed*2.4))*.16)*shotPitch;
     noise.loop = true;
     noise.connect(filter);
     noise.start(start, Math.abs(Math.sin(cue.seed)) * 0.15);

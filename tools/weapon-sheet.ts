@@ -16,7 +16,13 @@ for(const [index,id] of ids.entries()){
  label(id,(index%2)*700+22,Math.floor(index/2)*220+16);
  const parts=[...d.parts,d.magazine,...d.actionParts.map(p=>({...p,at:p.at.map((v,i)=>v+d.actionOrigin[i]) as [number,number,number]}))];
  parts.push({name:"front base",shape:"buttplate",at:[0,.055,d.front],size:[.03,.06,.045],tint:"steel"});
- if(id.startsWith("Scoped"))parts.push({name:"scope",shape:"shroud",at:[-.035,.18,-.03],size:[.065,.4,.065],tint:"steel",rotation:[90,0,0]});
+ if(id.startsWith("Scoped")) {
+  parts.push({name:"scope",shape:"shroud",at:[-.035,.18,-.03],size:[.065,.4,.065],tint:"steel",rotation:[90,0,0]});
+  for(const z of [-.14,.09]) {
+   parts.push({name:"scope mounting foot",shape:"buttplate",at:[-.035,.103,z],size:[.035,.075,.04],tint:"steel"});
+   parts.push({name:"scope mounting ring",shape:"band",at:[-.035,.16,z],size:[.085,.035,.085],tint:"steel",rotation:[90,0,0]});
+  }
+ }
  parts.push({name:"front sight",shape:"slot",at:[0,.0925,d.front],size:[.008,.04,.018],tint:"dark"});
  for(const p of parts){
   const mesh=rifleGeometry(p.shape),base=p.tint==="walnut"?[110,65,33]:p.tint==="dark"?[21,27,29]:p.tint==="edge"?[133,145,139]:[65,75,73];

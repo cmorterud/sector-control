@@ -20,6 +20,9 @@ import { eyeHeightOf } from "./crouch";
 import { weaponAim } from "./recoil";
 import { viewDirection } from "./player-view";
 import { boltGrip, rifleGeometry, rifleTextureSize, type RifleShape } from "./rifle-geometry";
+import { weaponDesign } from "./weapon-design";
+import { viewMuzzle } from "./player-view";
+import { updateAimMotion } from "./weapon-handling";
 
 // Exercise the real rig and animation transforms without a WebGL context.
 // Mesh creation is replaced by bare transform nodes; joint/IK code is unchanged.
@@ -98,6 +101,72 @@ function rigFor(p: Soldier) {
   return renderer;
 }
 
+const historicalKits = [
+  ["serviceRifle", "SMLE Mk III"], ["serviceRifle", "Gewehr 98"],
+  ["serviceRifle", "Berthier Mle 1916"], ["serviceRifle", "Scoped Lebel"],
+  ["machineGun", "Lewis Mk I"], ["machineGun", "MG 08/15"], ["machineGun", "Chauchat"],
+  ["pistol", "Webley Mk VI"], ["pistol", "P08"], ["pistol", "Ruby"],
+] as const;
+
+it("keeps every faction's cloned sights on the camera ray and its visible muzzle on the firing origin throughout shouldering", () => {
+  for (const [weapon, weaponId] of historicalKits) {
+    const g = new Game(new TestCollision(trenchMap), false), p = g.players[0];
+    Object.assign(p, {weapon, weaponId, landedAt: -1000, pitch: .3, yaw: .7});
+    p.command = {...idle(), firstPerson: true, aim: true};
+    updateAimMotion(p, 100);
+    const r = rigFor(p); r.createFirstPersonRig();
+    const dir = viewDirection(p.yaw, p.pitch);
+    r.camera.setPosition(p.x, p.y + eyeHeightOf(p), p.z);
+    r.camera.lookAt(p.x + dir.x, p.y + eyeHeightOf(p) + dir.y, p.z + dir.z);
+    for (const tick of [100, 102, 104, 106, 115]) {
+      r.animateSoldier(p, p.x, p.z, 1/60, tick); r.drawFirstPerson(p, tick, 1/60);
+      const rig = r.firstPersonRig, design = weaponDesign(p)!;
+      const muzzle = rig.rifle.getWorldTransform().transformPoint(new Vec3(0, .025, design.muzzle));
+      const origin = viewMuzzle(p, tick);
+      expect(muzzle.distance(new Vec3(origin.x, origin.y, origin.z)), weaponId).toBeLessThan(.00001);
+      if (tick === 115) {
+        const tip = (rig.rifle.findByName("front sight") as Entity).getWorldTransform().transformPoint(new Vec3(0,.5,0));
+        const cameraTip = r.camera.getWorldTransform().clone().invert().transformPoint(tip);
+        expect(Math.hypot(cameraTip.x,cameraTip.y), weaponId).toBeLessThan(.00001);
+        expect(cameraTip.z).toBeLessThan(-.5);
+      }
+      const right = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0,-armLengths.forearm,0));
+      const trigger = rig.rifle.getWorldTransform().transformPoint(new Vec3(...(design.trigger??[0,-.03,.14]) as [number,number,number]));
+      expect(right.distance(trigger), weaponId).toBeLessThan(.001);
+    }
+    r.app.root.destroy();
+  }
+});
+
+it("keeps cloned reload hands attached and moves the Webley frame, Luger toggle and Ruby slide with their mechanisms", () => {
+  for (const [weapon, weaponId] of historicalKits) {
+    const g = new Game(new TestCollision(trenchMap), false), p = g.players[0];
+    Object.assign(p, {weapon, weaponId, landedAt: -1000, reloadAt:100+weaponProfiles[weapon].reloadTicks});
+    p.command = {...idle(), firstPerson:true};
+    const r = rigFor(p); r.createFirstPersonRig();
+    for (const progress of [.25,.4,.6,.83]) {
+      const tick=100+progress*weaponProfiles[weapon].reloadTicks;
+      r.animateSoldier(p,p.x,p.z,1/60,tick); r.drawFirstPerson(p,tick,1/60);
+      const source=r.soldiers[0], rig=r.firstPersonRig;
+      const left=rig.arms[0].elbow.getWorldTransform().transformPoint(new Vec3(0,-armLengths.forearm,0));
+      expect(left.distance(rig.supportHand.getPosition()),weaponId).toBeLessThan(.001);
+      const worldHand=source.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0,-armLengths.forearm,0));
+      const localHand=source.rifle.getWorldTransform().clone().invert().transformPoint(worldHand);
+      const target=rig.rifle.getWorldTransform().transformPoint(localHand);
+      const right=rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0,-armLengths.forearm,0));
+      expect(right.distance(target),weaponId).toBeLessThan(.001);
+      if (weaponId==="Webley Mk VI") {
+        expect(Math.abs(rig.bolt.getLocalEulerAngles().x)).toBeGreaterThan(10);
+        expect((rig.rifle.findByName("front sight") as Entity).parent).toBe(rig.bolt);
+        expect(rig.magazine.getLocalScale().length()).toBeGreaterThan(0);
+      }
+      if(progress===.83 && weaponId==="P08")expect(Math.abs((rig.bolt.findByName("Luger toggle front link") as Entity).getLocalEulerAngles().x)).toBeGreaterThan(20);
+      if(progress===.83 && weaponId==="Ruby")expect(rig.bolt.getLocalPosition().z).toBeGreaterThan(.05);
+    }
+    r.app.root.destroy();
+  }
+});
+
 it("uploads real wood pixels and shares detailed rifle buffers/materials between instances", () => {
   const g = new Game(new TestCollision(trenchMap), false), r = rigFor(g.players[0]);
   const device = new NullGraphicsDevice();
@@ -136,7 +205,7 @@ it("aligns the actual cloned front post and rear notch with the camera through a
       r.camera.setPosition(p.x, p.y + eyeHeightOf(p), p.z);
       r.camera.lookAt(p.x + direction.x, p.y + eyeHeightOf(p) + direction.y, p.z + direction.z);
       r.animateSoldier(p, p.x, p.z, 1 / 60, 100);
-      r.drawFirstPerson(p, 100);
+      r.drawFirstPerson(p,100,1/60);
       const rig = r.firstPersonRig;
       const front = rig.rifle.findByName("front sight") as Entity;
       const tip = front.getWorldTransform().transformPoint(new Vec3(0, 0.5, 0));

@@ -1,3 +1,4 @@
+import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
 import { factions, scoped } from "./loadouts";
 import { terrainNormals } from "./terrain-shading";
@@ -121,7 +122,7 @@ type FallingTree = {
 };
 type FirstPersonRig = Pick<SoldierRig,
   "arms" | "rifle" | "supportHand" | "bolt" | "magazine" | "reloadMagazine"
-> & { root: pc.Entity; grenade: pc.Entity; explosive: pc.Entity; smoke: pc.Entity; pullback: number };
+> & { root: pc.Entity; grenade: pc.Entity; explosive: pc.Entity; smoke: pc.Entity; pullback: number; ads?: number };
 
 export class Renderer implements CollisionWorld {
   app: pc.Application;
@@ -1973,7 +1974,10 @@ export class Renderer implements CollisionWorld {
     if (!design && service && p.faction === "british") part("SMLE box magazine", 0, -.11, .03, .09, .12, .16, "#414945", rifle);
     if (!design && service && p.faction === "french") part("Berthier extended magazine", 0, -.12, .04, .075, .15, .13, "#424a46", rifle);
     if (scoped(p)) {
-      for(const z of [-.14,.09])this.riflePart("scope mounting ring",-.035,.16,z,.085,.035,.085,"steel",rifle,"band").setLocalEulerAngles(90,0,0);
+      for(const z of [-.14,.09]) {
+        this.riflePart("scope mounting foot",-.035,.103,z,.035,.075,.04,"steel",rifle,"buttplate");
+        this.riflePart("scope mounting ring",-.035,.16,z,.085,.035,.085,"steel",rifle,"band").setLocalEulerAngles(90,0,0);
+      }
       part("four power scope tube", -.035, .18, -.03, .065, .4, .065, "#343e3d", rifle, "limb").setLocalEulerAngles(90,0,0);
       part("scope lens", -.035, .18, .18, .06, .02, .06, "#45646a", rifle, "disc").setLocalEulerAngles(90,0,0);
     }
@@ -1990,6 +1994,11 @@ export class Renderer implements CollisionWorld {
       }
       this.cube("safety lever", -0.05, 0.048, 0.06, 0.045, 0.012, 0.012, "#70776d", false, bolt);
       this.cube("bayonet lug", 0, -0.012, -0.65, 0.028, 0.08, 0.04, "#353c3a", false, rifle);
+    }
+    if(design?.family === "webley")for(const name of ["front sight","front sight base"]){
+      const sight=rifle.findByName(name) as pc.Entity;
+      const position=sight.getLocalPosition().clone();sight.reparent(bolt);
+      sight.setLocalPosition(position.x-design.actionOrigin[0],position.y-design.actionOrigin[1],position.z-design.actionOrigin[2]);
     }
     const magazine = design
       ? this.riflePart("weapon magazine",...design.magazine.at,...design.magazine.size,design.magazine.tint,rifle,design.magazine.shape)
@@ -2074,7 +2083,7 @@ export class Renderer implements CollisionWorld {
         );
     }
     if(design?.reload === "tube" || design?.reload === "revolver") {
-      for(const render of reloadMagazine.findComponents("render") as pc.RenderComponent[])render.enabled=false;
+      for(const render of reloadMagazine.findComponents("render") as pc.RenderComponent[])render.entity.removeComponent("render");
       for(let i=0;i<3;i++)this.riflePart("loose cartridge",(i-1)*.017,.015,0,.013,.065,.013,"edge",reloadMagazine,"pin");
     }
     if(design?.family === "webley") {
@@ -2089,7 +2098,7 @@ export class Renderer implements CollisionWorld {
     const supportHand = this.joint(
       "left hand grip",
       rifle,
-      -0.035,
+      design?.grip[0] ?? -0.035,
       design?.grip[1] ?? (service ? -0.06 : -0.1),
       design?.grip[2] ?? (service ? -0.16 : -0.1),
     );
@@ -2286,11 +2295,14 @@ export class Renderer implements CollisionWorld {
     if (!rig.root.enabled) { rig.pullback = 0; rig.grenade.enabled = false; return; }
     const source = this.soldiers[0];
     const ads = sighted(p, tick);
+    rig.ads=aimBlend(p,tick);
+    const change=switchPose(p,tick);
     const charge = chargePresentation(p, tick, source.phase, source.motion);
     const throwing = throwPresentation(p, tick);
     const loading = reloadMotion(p, tick);
     const sprint = source.sprint * (1 - charge.ready) * (throwing || loading ? 0 : 1);
-    const hip = viewWeaponPosition(false, p.weapon), target = viewWeaponPosition(ads, p.weapon);
+    const hip = viewWeaponPosition(false, p.weapon), aimed=viewWeaponPosition(true,p.weapon);
+    const target={x:hip.x+(aimed.x-hip.x)*rig.ads,y:hip.y+(aimed.y-hip.y)*rig.ads,z:hip.z+(aimed.z-hip.z)*rig.ads};
     // The existing travel-driven sprint blend also shoulders the rifle smoothly
     // when aim interrupts a run; settled ADS keeps exact camera-ray alignment.
     const position = {
@@ -2301,16 +2313,16 @@ export class Renderer implements CollisionWorld {
     const lower = loading?.lower ?? 0;
     const melee = p.melee ? meleePose(p.melee, tick) : null;
     const throwLower = throwing?.lower ?? 0;
-    const sway = ads ? 0 : Math.sin(source.phase) * source.motion * 0.008;
+    const sway = (1-rig.ads)*Math.sin(source.phase)*source.motion*.008;
     rig.rifle.setLocalPosition(
       position.x + sway + lower * 0.06 + sprint * (0.07 + Math.sin(source.phase) * 0.012) - charge.ready * 0.045 + charge.side * 0.016,
-      position.y - lower * 0.12 - throwLower * 0.15 - sprint * 0.09 + charge.ready * 0.11 + charge.bob * 0.006,
-      position.z + sprint * 0.05 + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18 - charge.ready * 0.04 + charge.bob * 0.008,
+      position.y - change.lower*.55 - lower * 0.12 - throwLower * 0.15 - sprint * 0.09 + charge.ready * 0.11 + charge.bob * 0.006,
+      position.z + change.lower*.22 + sprint * 0.05 + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18 - charge.ready * 0.04 + charge.bob * 0.008,
     );
     rig.rifle.setLocalEulerAngles(
-      -24 * lower - throwLower * 18 - sprint * 22 + charge.ready * 4 + charge.bob * 0.8,
+      -30*change.lower -24 * lower - throwLower * 18 - sprint * 22 + charge.ready * 4 + charge.bob * 0.8,
       10 * lower + charge.side,
-      -28 * lower - sprint * 18 - charge.ready * 5 + charge.side * 1.2,
+      20*change.lower -28 * lower - sprint * 18 - charge.ready * 5 + charge.side * 1.2,
     );
     const eye = this.camera.getPosition();
     const muzzle = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(p.weapon,p.weaponId)));
@@ -2326,6 +2338,9 @@ export class Renderer implements CollisionWorld {
     rig.bolt.setLocalPosition(source.bolt.getLocalPosition());
     rig.bolt.setLocalRotation(source.bolt.getLocalRotation());
     rig.magazine.setLocalScale(source.magazine.getLocalScale());
+    rig.magazine.setLocalRotation(source.magazine.getLocalRotation());
+    const toggle=rig.bolt.findByName("Luger toggle front link") as pc.Entity;
+    if(toggle)toggle.setLocalRotation((source.bolt.findByName("Luger toggle front link") as pc.Entity).getLocalRotation());
     rig.reloadMagazine.setLocalScale(source.reloadMagazine.getLocalScale());
     rig.arms[0].shoulder.setLocalPosition(-0.22, -0.3, -0.12 + rig.pullback);
     rig.arms[1].shoulder.setLocalPosition(0.24, -0.3, -0.1 + (throwing ? 0 : rig.pullback));
@@ -2580,12 +2595,14 @@ export class Renderer implements CollisionWorld {
         .getLocalTransform()
         .transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
       const service = p.weapon === "serviceRifle";
+      const feed=design?.feed ? new pc.Vec3(...design.feed) : null;
+      if(feed && design?.reload === "revolver"){const pivot=new pc.Vec3(...design.actionOrigin);feed.sub(pivot);new pc.Quat().setFromEulerAngles(55*loading.lower,0,0).transformVector(feed,feed);feed.add(pivot);}
       const well = rig.rifle
         .getLocalTransform()
         .transformPoint(
-          service
+          feed ?? (service
             ? new pc.Vec3(0.025, 0.16, 0.06)
-            : new pc.Vec3(0.025, -0.23, 0.14),
+            : new pc.Vec3(0.025, -0.23, 0.14)),
         );
       const belt = new pc.Vec3(0.23, 0.02, -0.27);
       const bolt = rig.rifle
@@ -2617,6 +2634,10 @@ export class Renderer implements CollisionWorld {
         b.p,
         smooth((t - a.t) / (b.t - a.t)),
       );
+      if((design?.reload === "tube" || design?.reload === "revolver") && t>.2 && t<.78){
+        const stroke=(t-.2)/.58*(design.reload === "tube"?5:6)%1;
+        hand.lerp(belt,well,smooth(Math.min(1,stroke*2))*(1-smooth(Math.max(0,(stroke-.8)*5))));
+      }
       this.poseArm(rig, 1, hand, armLengths.upper, armLengths.forearm);
       magazineVisible = !loading.removed;
       carryingMagazine = loading.carrying;
@@ -2636,6 +2657,21 @@ export class Renderer implements CollisionWorld {
     const origin=design?.actionOrigin ?? [.05,.045,.13];
     rig.bolt.setLocalPosition(origin[0],origin[1],origin[2]+boltPull*(design?.travel ?? .13));
     rig.bolt.setLocalEulerAngles(0,0,(design?.lift ?? 65)*boltLift);
+    if(design?.kind === "pistol") {
+      const kick=recoilPulse(p,tick),rack=loading?Math.sin(Math.PI*clamp01((loading.progress-.73)/.2)):0;
+      if(design.family === "webley") {
+        rig.bolt.setLocalEulerAngles(55*(loading?.lower??0),0,0);
+        rig.magazine.setLocalEulerAngles(90,0,0);rig.magazine.rotateLocal(0,(8-p.ammo)*60,0);
+      } else {
+        rig.bolt.setLocalPosition(origin[0],origin[1],origin[2]+design.travel*Math.max(kick,rack));
+        rig.bolt.setLocalEulerAngles(design.family === "luger"?40*Math.max(kick,rack):0,0,0);
+        if(design.family === "luger")(rig.bolt.findByName("Luger toggle front link") as pc.Entity).setLocalEulerAngles(-80*Math.max(kick,rack),0,0);
+      }
+    } else if(design?.kind === "machineGun" && loading) {
+      const rack=Math.sin(Math.PI*clamp01((loading.progress-.74)/.2));
+      rig.bolt.setLocalPosition(origin[0],origin[1],origin[2]+rack*design.travel);
+      if(design.reload === "belt")rig.bolt.setLocalEulerAngles(-60*loading.lower,0,0);
+    }
     if (cycling && !p.mantle && p.throwUntil <= tick) {
       rig.rifle.rotateLocal(-5 * cycling.reach, 0, -6 * cycling.reach);
       const hand = rig.rifle
@@ -2717,6 +2753,14 @@ export class Renderer implements CollisionWorld {
     rig.reloadMagazine.setLocalScale(
       carryingMagazine ? rig.reloadMagazineScale : pc.Vec3.ZERO,
     );
+    const change=switchPose(p,tick);
+    if(change.active && !p.mantle){
+      const position=rig.rifle.getLocalPosition();
+      rig.rifle.setLocalPosition(position.x,position.y-change.lower*.25,position.z+change.lower*.1);
+      rig.rifle.rotateLocal(-25*change.lower,0,15*change.lower);
+      const hand=rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(...(design?.trigger??[0,-.03,.14]) as [number,number,number]));
+      this.poseArm(rig,1,hand,armLengths.upper,armLengths.forearm);
+    }
     this.attachSupportArm(rig);
   }
   private ragdollPose(p: Soldier) {
@@ -3030,12 +3074,13 @@ export class Renderer implements CollisionWorld {
       if(kit.at)marker.setPosition(kit.at.x,groundHeight(kit.at.x,kit.at.z,g.map),kit.at.z);
     }
     for (const p of g.players) {
-      const kit = `${p.faction}-${p.weapon}-${p.weaponId}`;
+      const visible=visualWeapon(p,g.tick-1+alpha);
+      const kit = `${p.faction}-${visible.weapon}-${visible.weaponId}`;
       const previousKit = this.actorKits.get(p.id);
       if (previousKit !== undefined && previousKit !== kit && p.hp > 0) {
         const old = this.people[p.id];
         this.batchGroup = this.actorBatch;
-        this.createSoldier(p);
+        this.createSoldier(visible);
         this.people[p.id] = this.people.pop()!;
         this.soldiers[p.id] = this.soldiers.pop()!;
         old.destroy(); this.batchGroup = -1;
@@ -3059,7 +3104,7 @@ export class Renderer implements CollisionWorld {
         e.setLocalScale(1, 1, 1);
         rig.deathAt = null;
         rig.remnantCreated = false;
-        this.animateSoldier(p, position.x, position.z, dt, tick);
+        this.animateSoldier(visible, position.x, position.z, dt, tick);
       } else {
         if (rig.deathAt === null) {
           rig.deathAt = tick;
@@ -3152,7 +3197,7 @@ export class Renderer implements CollisionWorld {
     // the first-person sight away from the direction used by the simulation.
     if (!overview && !firstPerson) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((sighted(p, g.tick) ? scoped(p) ? scopeFov : 50 : 70) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((70+((scoped(p)?scopeFov:50)-70)*aimBlend(p,g.tick-1+alpha)) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
@@ -3162,7 +3207,7 @@ export class Renderer implements CollisionWorld {
       this.camera.setEulerAngles(-90, 0, 0);
       this.app.scene.fog.type = "none";
     }
-    this.drawFirstPerson(p, g.tick - 1 + alpha, dt);
+    this.drawFirstPerson(visualWeapon(p,g.tick-1+alpha), g.tick - 1 + alpha, dt);
     if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
     if (this.firstPersonRig && overview) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);

@@ -1,3 +1,5 @@
+import { weaponDesign } from "./weapon-design";
+import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
 import { equipLoadout, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
@@ -281,12 +283,14 @@ export interface Soldier extends Vec {
   staggerUntil: number;
   weapon: WeaponKind;
   weaponId?: string;
+  weaponChange?: {tick:number;from:WeaponKind;fromId?:string;fromSlot?:WeaponSlot;startLower?:number};
   faction?: FactionId;
   loadout?: Loadout;
   pendingLoadout?: Loadout;
   equippedSlot?: WeaponSlot;
   inventory?: Record<WeaponSlot, WeaponState>;
   commandInteractHeld?: boolean;
+  aimMotion?: {tick:number;from:number;to:number;duration:number};
   aimSince?: number;
   flameKit?: number;
   burnUntil?: number;
@@ -496,6 +500,7 @@ export type Event = { id: number; tick: number } & (
   | {
       type: "fire";
       weapon?: WeaponKind;
+      weaponId?: string;
       actor: number;
       projectile: number;
       from: V3;
@@ -523,7 +528,8 @@ export type Event = { id: number; tick: number } & (
   | {
       type: "weaponAction";
       actor: number;
-      action: "boltOpen" | "boltClose" | "clip";
+      weaponId?: string;
+      action: "boltOpen" | "boltClose" | "clip" | "holster" | "draw" | "magazineOut" | "magazineIn" | "rack" | "cylinderOpen" | "cylinderClose" | "cartridges";
     }
   | { type:"flamePickup"|"flameDrop";actor:number;kit:number;fuel:number }
   | { type:"flame";actor:number;from:V3;to:V3;fuel:number }
@@ -1065,7 +1071,10 @@ export class Game {
       p.commandInteractHeld = !!c.interact;
       if (c.loadout) this.selectLoadout(p, c.loadout);
       const switched = c.equip ? switchWeapon(p, c.equip, this.tick) : false;
-      if (c.aim) { if ((p.aimSince ?? -1) < 0) p.aimSince = this.tick; } else p.aimSince = -1;
+      if(switched)this.emit({type:"weaponAction",actor:p.id,action:"holster",weaponId:p.weaponChange?.fromId});
+      if(p.weaponChange && this.tick===p.weaponChange.tick+switchRules.lowerTicks)
+        this.emit({type:"weaponAction",actor:p.id,action:"draw",weaponId:p.weaponId});
+      updateAimMotion(p,this.tick);
       p.triggerPressed = !switched && c.fire && (!p.triggerHeld || (p.weapon === "machineGun" && p.id === 0) || p.weapon === "flamethrower");
       p.triggerHeld = c.fire;
       recoverRecoil(p);
@@ -1186,14 +1195,15 @@ export class Game {
         p.ammo < weaponProfiles[p.weapon].magazine &&
         p.reserve > 0
       ) {
-        p.reloadAt = this.tick + weaponProfiles[p.weapon].reloadTicks;
+        p.reloadAt = this.tick + weaponProfiles[p.weapon].reloadTicks + (switchPose(p,this.tick).active ? Math.max(0,p.weaponChange!.tick+switchRules.readyTicks-this.tick) : 0);
         this.emit({ type: "reload", actor: p.id });
       }
       if (p.weapon === "serviceRifle" && !p.melee) {
         const action = serviceRifleAction(p, this.tick);
-        if (action) this.emit({ type: "weaponAction", actor: p.id, action });
+        if (action) this.emit({ type: "weaponAction", actor: p.id, action:action === "clip" && weaponDesign(p)?.reload === "tube" ? "cartridges" : action, weaponId:p.weaponId });
       }
     }
+    for(const p of this.players){const action=reloadCue(p,this.tick);if(action)this.emit({type:"weaponAction",actor:p.id,action,weaponId:p.weaponId});}
     advanceMelee(this, (target, amount, source, team) =>
       this.damage(target, amount, source, team),
     );
@@ -1500,6 +1510,7 @@ export class Game {
     this.emit({
       type: "fire",
       weapon: p.weapon,
+      weaponId:p.weaponId,
       actor: p.id,
       projectile: shot.id,
       recoil: { pitch: p.recoilPitch, yaw: p.recoilYaw },

@@ -1,3 +1,4 @@
+import { switchPose, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
 import { scoped } from "./loadouts";
 import { eyeHeightOf } from "./crouch";
@@ -10,8 +11,8 @@ export const sightHeight = 0.1125;
 export const firstPersonView = (p: Soldier) =>
   p.id === 0 && p.hp > 0 && !!(p.command.firstPerson || p.command.aim);
 export const sighted = (p: Soldier, tick: number) =>
-  firstPersonView(p) && p.command.aim && !p.reloadAt &&
-  !p.mantle && !p.melee && p.throwUntil <= tick && (!scoped(p) || tick - (p.aimSince ?? tick) >= 15);
+  firstPersonView(p) && p.command.aim && !switchPose(p,tick).active && !p.reloadAt &&
+  !p.mantle && !p.melee && p.throwUntil <= tick && aimBlend(p,tick)>=.99999 && (!scoped(p) || tick - (p.aimSince ?? tick) >= 15);
 
 export function viewDirection(yaw: number, pitch: number): V3 {
   return {
@@ -25,6 +26,11 @@ export function viewWeaponPosition(ads: boolean, weapon?: WeaponKind): V3 {
   return ads
     ? { x: 0, y: -sightHeight, z: weapon === "serviceRifle" ? -0.4 : -0.32 }
     : { x: 0.18, y: -0.25, z: -0.45 };
+}
+
+export function raisedWeaponPosition(p:Soldier,tick:number):V3 {
+  const hip=viewWeaponPosition(false,p.weapon),aim=viewWeaponPosition(true,p.weapon),blend=aimBlend(p,tick);
+  return {x:hip.x+(aim.x-hip.x)*blend,y:hip.y+(aim.y-hip.y)*blend,z:hip.z+(aim.z-hip.z)*blend};
 }
 
 export const barrelEnd = (weapon: WeaponKind, weaponId?: string) =>
@@ -47,7 +53,7 @@ export function viewToWorld(p: Soldier, local: V3): V3 {
 }
 
 export function viewMuzzle(p: Soldier, tick: number): V3 {
-  const position = viewWeaponPosition(sighted(p, tick), p.weapon);
+  const position = raisedWeaponPosition(p,tick);
   return viewToWorld(p, {
     x: position.x,
     y: position.y + 0.025,

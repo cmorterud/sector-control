@@ -1,3 +1,4 @@
+import { weaponDesign } from "./weapon-design";
 import { weaponProfiles } from "./weapons";
 import type { Soldier } from "./simulation";
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -37,7 +38,7 @@ export function soldierStyle(id: number) {
   };
 }
 export function reloadMotion(
-  p: Pick<Soldier, "reloadAt" | "weapon">,
+  p: Pick<Soldier, "reloadAt" | "weapon" | "weaponId">,
   tick: number,
 ) {
   if (!p.reloadAt || tick >= p.reloadAt) return null;
@@ -45,14 +46,15 @@ export function reloadMotion(
     1 - (p.reloadAt - tick) / weaponProfiles[p.weapon].reloadTicks,
   );
   const lower = ease(progress / 0.16) * (1 - ease((progress - 0.78) / 0.22));
+  const style=weaponDesign(p)?.reload;
   return {
     progress,
     lower,
-    carrying:
+    carrying: style === "tube" || style === "revolver" ? progress>=.23 && progress<.76 && ((progress-.23)*8%1)>.25 :
       p.weapon === "serviceRifle"
         ? progress >= 0.28 && progress < 0.68
         : progress >= 0.25 && progress < 0.64,
-    removed: p.weapon !== "serviceRifle" && progress >= 0.2 && progress < 0.69,
+    removed: style !== "revolver" && p.weapon !== "serviceRifle" && progress >= 0.2 && progress < 0.69,
   };
 }
 
