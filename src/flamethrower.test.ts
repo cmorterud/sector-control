@@ -33,3 +33,14 @@ test("flame burn is brief and does not add damage while the jet is hitting",()=>
  g.step({...idle(),fire:true});expect(q.hp).toBeCloseTo(99,6);
  for(let i=0;i<40;i++)g.step(idle());expect(q.hp).toBeCloseTo(93.2,6);
 });
+test("sustained flame burns wooden cover without deforming earth or damaging concrete",async()=>{
+ const {TestCollision}=await import("./simulation");
+ const map={...industrialMap,boxes:[{id:"wood-test",x:0,z:-4,w:2,d:.3,h:2,kind:"wood" as const},{id:"concrete-test",x:0,z:-5,w:2,d:.3,h:2,kind:"concrete" as const}]};
+ const g=new Game(new TestCollision(map),false,1000,5,undefined,{map,ambientArtillery:false});
+ const p=g.players[0];Object.assign(p,{x:0,y:0,z:0,protectedUntil:0});
+ g.flames={kits:[{id:0,home:{x:0,z:0},at:{x:0,z:0},fuel:240,carrier:null,readyAt:0,droppedAt:null}]};pickupFlame(g,p);
+ for(let i=0;i<270;i++)g.step({...idle(),fire:true});
+ expect(g.map.destruction!.objects["wood-test"].stage).toBeGreaterThan(0);
+ expect(g.map.destruction!.objects["concrete-test"].stage).toBe(0);
+ expect(g.map.destruction!.craters).toHaveLength(0);expect(p.ammo).toBe(0);
+});

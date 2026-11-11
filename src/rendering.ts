@@ -3471,8 +3471,8 @@ export class Renderer implements CollisionWorld {
       gradient.addColorStop(0,"rgba(255,242,163,.85)");gradient.addColorStop(.3,"rgba(255,176,54,.65)");gradient.addColorStop(.65,"rgba(232,76,22,.3)");gradient.addColorStop(1,"rgba(170,35,8,0)");
       ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
       const texture=new pc.Texture(this.app.graphicsDevice);texture.setSource(canvas);
-      const material=new pc.StandardMaterial();material.useLighting=false;material.emissive=new pc.Color(1,1,1);material.emissiveMap=texture;
-      material.opacityMap=texture;material.opacityMapChannel="a";material.blendType=pc.BLEND_ADDITIVE;material.depthWrite=false;material.cull=pc.CULLFACE_NONE;material.update();this.materials.set(key,material);
+      const material=new pc.StandardMaterial();material.useLighting=false;material.diffuse=new pc.Color(0,0,0);material.emissive=new pc.Color(1,1,1);material.emissiveMap=texture;
+      material.opacityMap=texture;material.opacityMapChannel="a";material.opacity=.75;material.blendType=pc.BLEND_NORMAL;material.depthWrite=false;material.cull=pc.CULLFACE_NONE;material.update();this.materials.set(key,material);
     }
     return this.materials.get(key)!;
   }

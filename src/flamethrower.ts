@@ -67,7 +67,8 @@ export function fireFlame(g:Game,p:Soldier,damage:(p:Soldier,n:number,source:num
   q.lastFlameHitAt=g.tick; q.burnUntil=g.tick+flameRules.burnTicks;q.burnSource=p.id;q.burnTeam=p.team;
  }
  if(g.tick%10===0 && fraction<1) {
-  const c=deformExplosion(g.map,to,{kind:"flame",radius:0,damage:0,structuralRadius:1.3,structuralDamage:8,craterRadius:0,craterDepth:0,terrainReach:0},(a,b)=>g.collision.ray(a,b));if(c)change(c);
+  const surface={x:to.x-dir.x*.04,y:to.y-dir.y*.04,z:to.z-dir.z*.04};
+  const c=deformExplosion(g.map,surface,{kind:"flame",radius:0,damage:0,structuralRadius:1.3,structuralDamage:8,craterRadius:0,craterDepth:0,terrainReach:0},(a,b)=>g.collision.ray(a,b));if(c)change(c);
  }
  if(g.tick%3===0) {
   const nozzle=viewMuzzle(p,g.tick),clear=g.collision.ray(from,nozzle);
