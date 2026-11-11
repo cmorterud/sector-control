@@ -10,6 +10,7 @@ import { eyeHeightOf } from "./crouch";
 import type { Event, Game, V3 } from "./simulation";
 
 export type SoundKind =
+  | "flame"
   | "meleeSwing"
   | "meleeHit"
   | "serviceRifle"
@@ -229,6 +230,7 @@ export class BattlefieldFeedback {
           e.id,
         );
     }
+    if (e.type === "flame") this.cue(g,"flame",e.from,.17,e.actor===0,false,e.id);
     if (e.type === "weaponAction") {
       const actor = g.players.find((q) => q.id === e.actor);
       if (

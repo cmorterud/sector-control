@@ -177,7 +177,7 @@ export class BattleAudio {
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
-    const length = melee
+    const length = cue.kind === "flame" ? .14 : melee
       ? cue.kind === "meleeSwing"
         ? 0.17
         : 0.11
@@ -213,7 +213,7 @@ export class BattleAudio {
     const filter = c.createBiquadFilter();
     filter.type = crack || whistle || mechanism ? "bandpass" : "lowpass";
     filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
-    filter.frequency.value = melee
+    filter.frequency.value = cue.kind === "flame" ? 1500 : melee
       ? cue.kind === "meleeSwing"
         ? 2400
         : 650

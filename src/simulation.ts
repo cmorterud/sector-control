@@ -1,3 +1,5 @@
+import { freshArtilleryAudit } from "./artillery-audit";
+import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
 import { equipLoadout, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
@@ -284,7 +286,15 @@ export interface Soldier extends Vec {
   pendingLoadout?: Loadout;
   equippedSlot?: WeaponSlot;
   inventory?: Record<WeaponSlot, WeaponState>;
+  commandInteractHeld?: boolean;
   aimSince?: number;
+  flameKit?: number;
+  burnUntil?: number;
+  burnSource?: number;
+  burnTeam?: Team | null;
+  lastFlameHitAt?: number;
+  flameThreatUntil?: number;
+  flameThreatFrom?: V3;
   crouched: boolean;
   y: number;
   teamIndex: number;
@@ -515,6 +525,8 @@ export type Event = { id: number; tick: number } & (
       actor: number;
       action: "boltOpen" | "boltClose" | "clip";
     }
+  | { type:"flamePickup"|"flameDrop";actor:number;kit:number;fuel:number }
+  | { type:"flame";actor:number;from:V3;to:V3;fuel:number }
   | { type: "damage"; actor: number; source: number }
   | { type: "death" | "respawn" | "reload"; actor: number }
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
@@ -743,6 +755,8 @@ export function capture(
   return null;
 }
 export class Game {
+  artilleryAudit = freshArtilleryAudit();
+  flames: FlameState = {kits:[]};
   tick = 0;
   duration: number;
   phase: "playing" | "ended" = "playing";
@@ -784,6 +798,7 @@ export class Game {
   ) {
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
     this.map = runtimeMap(options.map ?? industrialMap);
+    this.flames = createFlames(this.map);
     this.artillery = createArtilleryState(
       seed,
       options.ambientArtillery ?? this.map.id !== "industrial",
@@ -909,6 +924,8 @@ export class Game {
       grenades: this.grenades,
       grenadeSequence: this.grenadeSequence,
       artillery: this.artillery,
+      flames: this.flames,
+      artilleryAudit: this.artilleryAudit,
       assaults: this.assaults,
       smokeClouds: this.smokeClouds,
       smokeSequence: this.smokeSequence,
@@ -927,6 +944,7 @@ export class Game {
     if (this.tick === 0) equipLoadout(p, loadout, this.map.id === "industrial");
   }
   respawn(p: Soldier) {
+    dropFlame(this,p); p.burnUntil=0; p.flameThreatUntil=0;
     const retainedPrimary = p.pendingLoadout === p.loadout ? p.inventory?.primary : undefined;
     const legacyWeapon = p.inventory && p.inventory[p.equippedSlot ?? "primary"].kind !== p.weapon ? p.weapon : undefined;
     p.faction = factionFor(this.map, p.team);
@@ -1042,6 +1060,9 @@ export class Game {
       );
       p.command = p.id === 0 ? human : botCommand(this, p);
       const c = p.command;
+      if (p.id !== 0) evadeFlame(this,p);
+      if (c.interact && !p.commandInteractHeld) pickupFlame(this,p);
+      p.commandInteractHeld = !!c.interact;
       if (c.loadout) this.selectLoadout(p, c.loadout);
       const switched = c.equip ? switchWeapon(p, c.equip, this.tick) : false;
       if (c.aim) { if ((p.aimSince ?? -1) < 0) p.aimSince = this.tick; } else p.aimSince = -1;
@@ -1189,6 +1210,7 @@ export class Game {
         this.tick >= p.nextShot
       )
         this.fire(p);
+    advanceFlames(this,(p,n,source,team)=>this.damage(p,n,source,team));
     this.advanceProjectiles();
     this.advanceGrenades();
     advanceArtillery(this);
@@ -1397,6 +1419,7 @@ export class Game {
     return true;
   }
   fire(p: Soldier) {
+    if (p.weapon === "flamethrower") { fireFlame(this,p,(q,n,source,team)=>this.damage(q,n,source,team),c=>this.applyDestruction(p.id,c)); return; }
     let { yaw, pitch } = weaponAim(p);
     if (p.weapon === "machineGun" && p.id === 0 && p.loadout === "support") {
       const spread = Math.hypot(p.vx,p.vz) > 1 ? .045 : p.command.aim ? .005 : .018;
@@ -1612,6 +1635,7 @@ export class Game {
     victim.hp = Math.max(0, victim.hp - amount);
     this.emit({ type: "damage", actor: victim.id, source });
     if (!victim.hp) {
+      dropFlame(this,victim);
       cancelMelee(this, victim);
       victim.meleeThreat = null;
       victim.deaths++;
@@ -1878,14 +1902,25 @@ export class Game {
         (height) =>
           this.collision.ray(at, { x: p.x, y: p.y + height, z: p.z }) >= 0.999,
       ).length;
-      if (!exposed) continue;
+      const rawDamage = Math.ceil(profile.damage * (1-distance/profile.radius));
+      const artillery = profile.kind.startsWith("artillery");
+      if (artillery) {
+        this.artilleryAudit.exposedSoldiers++;
+        if(exposed < probes.length) this.artilleryAudit.coveredSoldiers++;
+      }
+      if (!exposed) { if(artillery)this.artilleryAudit.damagePrevented+=rawDamage; continue; }
       const damage = Math.ceil(
         profile.damage *
           (1 - distance / profile.radius) *
           (profile.partialCover ? exposed / probes.length : 1),
       );
+      const capturing = this.scoring === "domination" && this.sectors.some(s=>s.owner!==p.team && flagOccupant(this,p,s));
       hits.push({ target: p.id, damage });
       this.damage(p, damage, actor, team);
+      if(artillery) {
+        this.artilleryAudit.damagePrevented+=rawDamage-damage;
+        if(p.hp<=0) { this.artilleryAudit.deaths++; if(capturing)this.artilleryAudit.captureInterruptions++; }
+      }
     }
     const change = deformExplosion(this.map, at, profile, (a, b) =>
       this.collision.ray(a, b),

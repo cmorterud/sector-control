@@ -53,12 +53,15 @@ export class PlaytestLog {
     const average =
       this.frames.reduce((a, b) => a + b, 0) / Math.max(1, this.frames.length);
     return {
+      artilleryAudit: this.samples.at(-1)?.state.artilleryAudit,
       ticks: this.commands.length,
       frames: this.frames.length,
       averageFps: average ? 1000 / average : 0,
       p95FrameMs: sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0,
       slowFramesOver33ms: this.frames.filter((ms) => ms > 1000 / 30).length,
       errors: [...this.errors],
+      flamePulses: this.events.filter(e=>e.type === "flame").length,
+      flamePickups: this.events.filter(e=>e.type === "flamePickup").length,
       shots: this.events.filter((e) => e.type === "fire").length,
       meleeAttacks: this.events.filter(
         (e) => e.type === "melee" && e.phase === "start",

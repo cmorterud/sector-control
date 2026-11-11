@@ -196,6 +196,7 @@ export function deformExplosion(
   // Evaluate all cover against the world as it stood before this explosion.
   for (const object of Object.values(state.objects)) {
     if (object.stage === 2) continue;
+    if (profile.kind === "flame" && !["wood", "tree", "brush", "log"].includes(object.original.kind)) continue;
     const box = object.original,
       base = box.baseY ?? 0;
     const nearest = {

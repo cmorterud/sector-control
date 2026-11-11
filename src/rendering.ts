@@ -38,7 +38,7 @@ import {
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse } from "./recoil";
-import { firstPersonView, sighted, sightHeight, viewWeaponPosition, weaponPullback, barrelEnd } from "./player-view";
+import { firstPersonView, sighted, sightHeight, scopeFov, viewWeaponPosition, weaponPullback, barrelEnd } from "./player-view";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
 import { dominationRules, flagContains } from "./domination";
@@ -137,7 +137,7 @@ export class Renderer implements CollisionWorld {
   private deathHits = new Map<number, pc.Vec3>();
   rings: pc.Entity[] = [];
   private objectiveTerrainRevision = -1;
-  effects: { e: pc.Entity; life: number; velocity?: V3; size?: number }[] = [];
+  effects: { e: pc.Entity; life: number; velocity?: V3; size?: number; billboard?: boolean }[] = [];
   private fallingTrees: FallingTree[] = [];
   private fragments: { entity: pc.Entity; state: Debris }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
@@ -1802,10 +1802,17 @@ export class Renderer implements CollisionWorld {
     );
     const service = p.weapon === "serviceRifle",
       gunner = p.weapon === "machineGun";
-    if (p.weapon === "pistol") {
+    if (p.weapon === "flamethrower") {
+      part("flame lance",0,.025,-.22,.045,.66,.045,"#5d665d",rifle,"limb").setLocalEulerAngles(90,0,0);
+      part("flame nozzle",0,.025,-.55,.085,.12,.085,"#454a41",rifle,"limb").setLocalEulerAngles(90,0,0);
+      part("flame grip",0,-.08,.05,.07,.19,.08,"#4e4030",rifle);
+      for(const side of [-1,1]) part("fuel cylinder",side*.12,.25,.29,.18,.52,.18,"#535d42",upper,"limb");
+      part("fuel hose",.21,.05,.14,.035,.3,.035,"#3b3930",upper,"limb");
+    } else if (p.weapon === "pistol") {
       part("pistol grip", 0, -.08, .07, .075, .19, .09, "#544333", rifle);
       part("pistol receiver", 0, .025, -.06, .075, .07, .26, "#434b49", rifle);
       part("pistol barrel", 0, .025, -.25, .04, .28, .04, "#555f5b", rifle, "limb").setLocalEulerAngles(90,0,0);
+      if (p.faction === "british") part("revolver cylinder",0,.02,.005,.09,.09,.13,"#515b55",rifle,"limb").setLocalEulerAngles(90,0,0);
       part("pistol front sight", 0, .1, -.35, .012, .035, .02, "#9da59a", rifle);
     } else if (service) {
       for (const spec of detailedRifleParts) {
@@ -2891,6 +2898,8 @@ export class Renderer implements CollisionWorld {
       smoke.material.destroy();
     }
     this.smokeVolumes.clear();
+    for(const scorch of this.flameScorches.values())scorch.entity.destroy();this.flameScorches.clear();
+    for(const marker of this.flamePickups.values())marker.destroy();this.flamePickups.clear();
     this.people = [];
     this.actorKits.clear();
     this.rings = [];
@@ -2968,8 +2977,21 @@ export class Renderer implements CollisionWorld {
       g.grenades.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
     );
   }
+  private flameScorches = new Map<string,{entity:pc.Entity;life:number}>();
+  private flamePickups = new Map<number,pc.Entity>();
   private actorKits = new Map<number,string>();
   draw(g: Game, alpha: number, dt: number, overview = false) {
+    for (const kit of g.flames?.kits ?? []) {
+      let marker=this.flamePickups.get(kit.id);
+      if(!marker) {
+        marker=this.joint("flame supply kit",this.app.root);
+        this.cube("supply crate",0,.25,0,.7,.5,.6,"#535d42",false,marker);
+        this.cube("fuel label",0,.52,0,.4,.02,.3,"#c4a86a",false,marker);
+        this.flamePickups.set(kit.id,marker);
+      }
+      marker.enabled=!!kit.at;
+      if(kit.at)marker.setPosition(kit.at.x,groundHeight(kit.at.x,kit.at.z,g.map),kit.at.z);
+    }
     for (const p of g.players) {
       const kit = `${p.faction}-${p.weapon}-${p.weaponId}`;
       const previousKit = this.actorKits.get(p.id);
@@ -3093,7 +3115,7 @@ export class Renderer implements CollisionWorld {
     // the first-person sight away from the direction used by the simulation.
     if (!overview && !firstPerson) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((sighted(p, g.tick) ? scoped(p) ? 17.5 : 50 : 70) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((sighted(p, g.tick) ? scoped(p) ? scopeFov : 50 : 70) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
@@ -3114,10 +3136,12 @@ export class Renderer implements CollisionWorld {
     this.drawSmoke(g, alpha);
     this.drawBlasts(dt);
     this.drawEnvironmentEffects(dt);
+    for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {
       fx.life -= dt;
       const size = fx.life * (fx.size ?? 0.7);
       fx.e.setLocalScale(size, size, size);
+      if(fx.billboard){fx.e.setRotation(this.camera.getRotation());fx.e.rotateLocal(90,0,0);}
       if (fx.velocity) {
         const position = fx.e.getPosition();
         fx.velocity.y -= 10 * dt;
@@ -3439,6 +3463,19 @@ export class Renderer implements CollisionWorld {
       return true;
     });
   }
+  private flameSprite() {
+    const key="flame-sprite";
+    if(!this.materials.has(key)) {
+      const canvas=document.createElement("canvas");canvas.width=canvas.height=64;
+      const ctx=canvas.getContext("2d")!,gradient=ctx.createRadialGradient(32,32,0,32,32,32);
+      gradient.addColorStop(0,"rgba(255,242,163,.85)");gradient.addColorStop(.3,"rgba(255,176,54,.65)");gradient.addColorStop(.65,"rgba(232,76,22,.3)");gradient.addColorStop(1,"rgba(170,35,8,0)");
+      ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
+      const texture=new pc.Texture(this.app.graphicsDevice);texture.setSource(canvas);
+      const material=new pc.StandardMaterial();material.useLighting=false;material.emissive=new pc.Color(1,1,1);material.emissiveMap=texture;
+      material.opacityMap=texture;material.opacityMapChannel="a";material.blendType=pc.BLEND_ADDITIVE;material.depthWrite=false;material.cull=pc.CULLFACE_NONE;material.update();this.materials.set(key,material);
+    }
+    return this.materials.get(key)!;
+  }
   private tracerMaterial(team: Team) {
     const key = `projectile-${team}`;
     if (!this.materials.has(key)) {
@@ -3502,6 +3539,24 @@ export class Renderer implements CollisionWorld {
     }
   }
   effect(e: Event) {
+    if(e.type === "flame") {
+      const key=`${Math.round(e.to.x)},${Math.round(e.to.z)}`;
+      if(this.flameScorches.size<24 && !this.flameScorches.has(key) && Math.abs(e.to.y-groundHeight(e.to.x,e.to.z,this.map))<.5){
+        const mark=this.joint("charred soil",this.app.root);
+        mark.addComponent("render",{type:"sphere",material:this.material("#38372e"),castShadows:false});
+        mark.setPosition(e.to.x,groundHeight(e.to.x,e.to.z,this.map)+.025,e.to.z);mark.setLocalScale(.6,.025,.6);
+        this.flameScorches.set(key,{entity:mark,life:12});
+      }
+      for(let i=0;i<=10 && this.effects.length<160;i++) {
+        const t=i/10, wobble=Math.sin(e.tick*2.3+i*3.1)*t*.12;
+        const at={x:e.from.x+(e.to.x-e.from.x)*t+wobble,y:e.from.y+(e.to.y-e.from.y)*t,z:e.from.z+(e.to.z-e.from.z)*t};
+        const particle=this.joint("flame plume",this.app.root);
+        particle.addComponent("render",{type:"plane",material:this.flameSprite(),castShadows:false});
+        const life=.18+t*.14;
+        this.effects.push({e:particle,life,size:(.28+t*1.05)/life,billboard:true,velocity:{x:wobble,y:.35+t*.7,z:0}});
+        particle.setPosition(at.x,at.y,at.z);
+      }
+    }
     if (e.type === "respawn") this.deathHits.delete(e.actor);
     if (e.type === "damage" && this.activeGame) {
       const target = this.people[e.actor]?.getPosition(), source = this.people[e.source]?.getPosition();

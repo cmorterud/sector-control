@@ -30,3 +30,9 @@ test("human machine gun repeats held fire; pistol requires a new press",()=>{
  switchWeapon(p,"sidearm",g.tick); for(let i=0;i<10;i++)g.step(idle());
  for(let i=0;i<30;i++)g.step({...idle(),fire:true}); expect(p.ammo).toBe(7);
 });
+test("marksman sights take half a second to settle and sidearm clears the scoped state",async()=>{
+ const {sighted}=await import("./player-view");const g=make(),p=g.players[0];equipLoadout(p,"marksman");
+ for(let i=0;i<15;i++)g.step({...idle(),aim:true,firstPerson:true});expect(sighted(p,g.tick)).toBe(false);
+ g.step({...idle(),aim:true,firstPerson:true});expect(sighted(p,g.tick)).toBe(true);
+ switchWeapon(p,"sidearm",g.tick);expect(scoped(p)).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
 import { factions, factionFor, scoped, type Loadout, type WeaponSlot } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
@@ -64,7 +65,7 @@ const held = (action: ControlAction) => [...keys].some(code => isKey(action, cod
 function updateControlHints() {
   const hint = (action: ControlAction) => keyLabel(settings.bindings[action]);
   document.querySelector(".controls")!.textContent =
-    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("primary")} / ${hint("sidearm")} WEAPONS　 ${hint("tactical")} TACTICAL MAP`;
+    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("primary")} / ${hint("sidearm")} WEAPONS　 ${hint("interact")} PICKUP　 ${hint("tactical")} TACTICAL MAP`;
   document.querySelector(".hint")!.innerHTML = `${hint("scoreboard")} · SCOREBOARD<br>ESC · PAUSE`;
 }
 
@@ -345,19 +346,19 @@ function table() {
   const style = capture ? "" : ' style="grid-template-columns:1fr 35px 35px"';
   const header = `<div class="row"${style}><span>SOLDIER</span><span>K</span><span>D</span>${capture ? "<span>CAP</span>" : ""}</div>`;
   const row = (p: Soldier) =>
-    `<div class="row ${p.team}"${style}><span>${p.id === 0 ? "YOU" : `${p.team.toUpperCase()} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span>${capture ? `<span>${p.captures}</span>` : ""}</div>`;
+    `<div class="row ${p.team}"${style}><span>${p.id === 0 ? "YOU" : `${factions[p.faction ?? factionFor(map,p.team)].name} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span>${capture ? `<span>${p.captures}</span>` : ""}</div>`;
   if (game.teamSize > 8)
     return `<div class="rosters">${(["blue", "red"] as const)
       .map((team) => {
         const players = game.players.filter((p) => p.team === team);
-        return `<div class="table"><b class="${team}">${team.toUpperCase()} · ${players.length}</b>${header}${players.map(row).join("")}</div>`;
+        return `<div class="table"><b class="${team}">${factions[factionFor(map,team)].name.toUpperCase()} · ${players.length}</b>${header}${players.map(row).join("")}</div>`;
       })
       .join("")}</div>`;
   return `<div class="table">${header}${game.players.map(row).join("")}</div>`;
 }
 function hud(now: number) {
   const p = game.players[0];
-  el("reticle").classList.toggle("hidden", sighted(p, game.tick));
+  el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
   const t = Math.ceil((game.duration - game.tick) / 30);
@@ -417,6 +418,9 @@ function hud(now: number) {
           : sector
             ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
+  const pickup = p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
+  if (pickup) el("capture").innerHTML = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
+  if (p.weapon === "flamethrower") el("ammo").innerHTML = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
@@ -454,6 +458,7 @@ function command(): Command {
   c.crouch = crouchInput.active;
   c.sprint = settings.toggleSprint ? sprintInput.active : held("sprint");
   c.fire = (fire || (triggerDown && (game.players[0].weapon === "machineGun" || game.players[0].weapon === "flamethrower"))) && !tacticalMap.open;
+  c.interact = held("interact");
   c.equip = pendingEquip; pendingEquip = undefined;
   fire = false;
   c.artillery = pendingArtillery;

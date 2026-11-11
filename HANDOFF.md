@@ -1,6 +1,23 @@
 # Sector Control — continuation handoff
 
-Updated November 10, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
+Updated November 11, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
+
+## Expansion implementation — newest checkpoint
+
+The approved five-release feedback plan has been implemented. Release commits pushed immediately after committing: controls `927efc0`, map cards / tactical relief `2f43852`, faction equipment / loadouts `3d2bb32`, Verdun `d6d21b3`. All four passed GitHub CI. The rare flame kit and artillery audit finish the fifth release; public snapshot update and final production recording are being completed below.
+
+- Fresh profiles start first person, hold Shift to sprint. Controls dialog saves remaps, sprint preference and view; URL view overrides the saved choice. Native Chrome verified remapping, persistence and reset.
+- Actual 640×360 JPEG captures for all four maps live in `public/previews` (about 130 KB total). Start, pause and results share cards. Tactical canvas samples excavated terrain and surviving cover only on destruction revision changes. Native Chrome verified overlay and switching weapons.
+- Rifleman / Marksman / Support selection applies at deployment or next respawn. 1/2 switches primary and pistol, preserving ammo and bolt cooldown while canceling reload. Human MG held fire, movement bloom, 4× scope and 0.5 s scope settling. Two marksmen, four support and 44 riflemen per 50-soldier bot team. Faction colors/helmets and equipment variants carry into FPS sleeves and ragdolls; mesh keys include faction and weapon ID. Models share base archetypes and are stylized, not exact historic reproductions.
+- Verdun sector (`?map=verdun`), France vs Imperial Germany, 160×128 m / 50v50 / four flags. Wooded north, crater field, southern turned trenches; six shelter bays, walkable ramps and cover around flags. Fine waypoints connect ruin entrances. Tests verify spawn/terrain, roster and access to every flag. Existing reactive village cover AI is reused. No squads added.
+- Flame kits use two circulation slots on historical maps. E exchanges primary, keeps pistol; eight seconds of fuel / 8m / 30 DPS / brief nonstack burn. Cover rays block damage, only wood/vegetation takes structural flame damage. Death drops remaining fuel; stations restock after120s with no kit duplication. Visible danger triggers bot evasion. Bounded soft additive plume sprites originate at the visible nozzle; soil scorch marks clear on restart.
+- Native authored production Game/Renderer fixture `playtest-artifacts/flame-review.html` verified E pickup, 1/2 switching, fuel drain and bot evasion. Recording `sector-control-2026-11-11T10-03-32-161Z` completed18s at59FPS average / zero reported errors, silent. It stages a trench encounter; this is not a full human match or balance benchmark. Earlier first capture fired the rifle before E was held long enough; that attempt was discarded. Polling-based fixture input needs ≥100ms key holds; normal game action keys use keydown.
+- CUA browser host was unavailable; native app input initially returned “user changed” repeatedly. Calling the exposed window **Raise** action after getApp restored input. Preserve user GitHub/billing tabs. Browser UI must stay within CUA; no CDP/Playwright/shell browser automation.
+- Final broad local suite:371tests/61files,82.04s, original budgets; two subsequent focused regressions for burn duration and scope settling also pass (373 total expected on CI). TypeScript and production build pass. Final production replay / publication identity to follow.
+
+### Artillery evidence (unchanged balance)
+
+Three seeded eight-minute 100-soldier TestCollision matches completed with finite state throughout. Seeds12345 trenches /6842 Verdun /91821 Verdun: scores262–220 /236–282 /256–248, captures6/7/4, deaths610/1243/1254, artillery impacts290/287/287. Artillery deaths427/406/327; repeated flag calls within90s3/19/17; killed while capturing0/11/7. Cover partially or fully protected1672/783/556 blast exposures and prevented100782/42957/30114 potential damage (includes damage beyond current health, not equivalent to saved HP). Results show continued objective progress and substantial cover protection; three bot seeds do not establish human camping balance. No cooldown/flag relocation/kill-radius changes made. Full output retained in ignored artifacts; reproduce by bundling `tools/battle-audit.ts` with esbuild for Node and running its output. This audit uses TestCollision, not GPU/Ammo equivalence or human acceptance.
 
 ## Current checkpoint — start here
 

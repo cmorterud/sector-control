@@ -4,6 +4,7 @@ import { weaponAim } from "./recoil";
 import type { Soldier, V3 } from "./simulation";
 import type { WeaponKind } from "./weapons";
 
+export const scopeFov = 2 * Math.atan(Math.tan(70 * Math.PI / 360) / 4) * 180 / Math.PI;
 export const sightHeight = 0.1125;
 export const firstPersonView = (p: Soldier) =>
   p.id === 0 && p.hp > 0 && !!(p.command.firstPerson || p.command.aim);

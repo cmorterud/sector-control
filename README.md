@@ -2,7 +2,7 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front and Village front are 50v50 domination maps with four flags. Matches last up to eight minutes.
+Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front, Village front and Verdun sector are 50v50 domination maps with four flags. Matches last up to eight minutes.
 
 ## Public trial
 
@@ -11,6 +11,20 @@ Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site
 This is a frozen production-build snapshot, updated November 10, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
 
 Trench and village terrain now use close-up clumped earth, grit and broken soil fissures alongside broad wet/dry/grass variation. Explosions replace excavated grass, paving and wet surface finishes with fresh earth; the detail follows steep banks and crater walls without stretching. Individual worn duckboard planks, split timber grain, small exposed roots and rounded rubble add trench detail. Terrain lighting now shares smooth normals across patch seams, decodes surface colors consistently and uses softer soil highlights to prevent bright bands on trench banks. These are cosmetic changes; movement and cover collision keep their existing shapes.
+
+## Player options and equipment
+
+**Controls** in the briefing and pause menu remaps actions, switches hold/toggle sprint (hold Shift by default), and saves camera and keyboard preferences locally. Escape always pauses/resumes. Reset restores defaults. Browser modifier shortcuts and duplicate bindings are rejected; browser-owned shortcuts can still close a tab.
+
+Choose **Rifleman**, **Marksman** or **Support** before deployment. Changes during a match apply on respawn. Press **1** for the primary and **2** for the pistol, or use your remapped keys. Ammo and bolt cooldown belong to each weapon; switching cancels a reload without adding ammo. Support weapons fire automatically while held and become less accurate while moving. Marksmen have a fixed 4× scope, half-second sight settling and reduced peripheral vision. Pistols deal 25 damage and have a 25 m effective range.
+
+Western Front maps use British and Imperial German uniforms and equipment; **Verdun sector** uses France and Imperial Germany. The procedural models are stylized faction variants with shared role statistics: SMLE / Gewehr 98 / Berthier rifles, Lewis / MG 08/15 / Chauchat support weapons, and Webley / P08 / Ruby sidearms. French marksmen carry a scoped Lebel-inspired rifle. These are gameplay archetypes, not exact museum replicas.
+
+Two rare **flame kits** are placed in forward trenches on each historical map. Press **E** nearby to exchange the primary, retaining the pistol. A kit has eight seconds of fuel, an 8 m jet, 30 damage per second and a brief nonstacking burn. Earth and cover stop the jet; wood can burn through the existing destruction system. Bots react to visible flame danger and seek cover. Death drops remaining fuel; supply replenishes after two minutes with at most two kits in circulation. Bots do not pick up kits in this prototype.
+
+All four maps have actual game screenshots in their selection cards. The tactical map draws terrain and current cover, updating after destruction. Verdun is a 160 × 128 m, four-flag battlefield inspired by the 1917 fighting, with woodland, crater and communication-trench routes. It is an authored layout rather than a geographical reconstruction.
+
+Artillery cooldowns, fixed objectives and blast rules remain unchanged. Snapshots and playtest summaries now include repeat calls near flags, blast deaths, capture interruptions and potential damage prevented by cover. `tools/battle-audit.ts` runs three seeded full matches to gather evidence before proposing balance changes. See HANDOFF.md for results and validation limits.
 
 ## Run
 
@@ -35,7 +49,7 @@ GitHub Actions runs `npm ci`, `npm run check -- --maxWorkers=1` (TypeScript and 
 
 Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
 
-Press **T** to toggle the normal view. Third person remains the default; `?view=first` starts in first person. Hold **right mouse** for first-person iron sights from either view, with a narrower field of view and slower mouse sensitivity. Releasing returns to the chosen view. The camera sits at the standing/crouched eye; the local head/body are hidden and separate articulated arms retain the reload/bolt/throw motions. Sights align with the camera ray, and traveling rounds converge from the barrel onto the first surface or soldier under the sight. Nearby cover can still block the barrel. Recoil moves the view and shot aim together; cosmetic blast rotation does not displace first-person sights. Grenade throws keep the selected perspective. In first person, the rifle pulls inward near solid cover (including its bayonet), lowers during actual sprint movement, and smoothly shoulders again when stopping or aiming. Retraction does not let shots bypass cover. Settled sights retain their alignment with the camera ray.
+Press **T** to toggle the normal view. First person is the default for a fresh profile; the camera choice is saved locally. `?view=first` or `?view=third` overrides it for that visit. Hold **right mouse** for first-person iron sights from either view, with a narrower field of view and slower mouse sensitivity. Releasing returns to the chosen view. The camera sits at the standing/crouched eye; the local head/body are hidden and separate articulated arms retain the reload/bolt/throw motions. Sights align with the camera ray, and traveling rounds converge from the barrel onto the first surface or soldier under the sight. Nearby cover can still block the barrel. Recoil moves the view and shot aim together; cosmetic blast rotation does not displace first-person sights. Grenade throws keep the selected perspective. In first person, the rifle pulls inward near solid cover (including its bayonet), lowers during actual sprint movement, and smoothly shoulders again when stopping or aiming. Retraction does not let shots bypass cover. Settled sights retain their alignment with the camera ray.
 
 Walk over a trench edge to drop in naturally; no Space press is needed. Gravity carries you onto the firing step or floor, with a small landing pose. Press **Space** to hop on open ground or mantle upward to climb out. Hopping over an edge continues the arc down to the ground below.
 
@@ -45,7 +59,7 @@ Service-rifle and semi-auto rifle rounds travel at **128 m/s**, twice their prev
 
 Reloads now take half their previous time: **1 second** for the semi-auto rifle, **1.6 seconds** for the service rifle and **1.5 seconds** for the machine gun. Hand, clip/magazine and bolt animations follow the shorter timings, with mechanical sound cues aligned to them.
 
-**Machine gunners:** four bots per team in 50v50 (two in 25v25) carry a longer wooden-stock weapon with a pan magazine and folded bipod. They fire four-to-six-round bursts at 600 rounds/minute, then pause for 1.5–3 seconds. They retain recognition delay, imperfect aim, recoil, suppression and sight-loss interruption, with more aim wander than riflemen. Their magazines hold 60 rounds with 240 reserve and a 1.5-second reload. They stay with the covering force rather than joining assault squads. Human players keep their map’s rifle; small 5v5 rosters stay rifle-only.
+**Machine gunners:** four bots per team in 50v50 (two in 25v25) carry a longer wooden-stock weapon with a pan magazine and folded bipod. They fire four-to-six-round bursts at 600 rounds/minute, then pause for 1.5–3 seconds. They retain recognition delay, imperfect aim, recoil, suppression and sight-loss interruption, with more aim wander than riflemen. Their magazines hold 60 rounds with 240 reserve and a 1.5-second reload. They stay with the covering force rather than joining assault squads. Players can choose Rifleman, Marksman or Support before deployment or for their next respawn. Small 5v5 bot rosters stay rifle-only.
 
 Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or space your shots and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.
 

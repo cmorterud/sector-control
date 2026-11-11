@@ -1,3 +1,4 @@
+import { auditArtilleryCall } from "./artillery-audit";
 import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
 import { blocked, dist, groundHeight, walkSegment, type Vec } from "./map";
@@ -336,6 +337,7 @@ export function requestArtillery(
       ),
     });
   }
+  auditArtilleryCall(g,p.team,target);
   g.artillery.readyAt[p.team] = g.tick + artilleryRules.cooldown;
   g.artillery.missions.push(mission);
   p.protectedUntil = 0;
