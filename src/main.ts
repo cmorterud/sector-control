@@ -82,6 +82,20 @@ let preferredFirstPerson = params.get("view") === "first";
 document.querySelector(".controls")!.textContent +=
   "　 G GRENADE　 F SMOKE　 C TOGGLE CROUCH　 SPACE HOP / MANTLE　 T CHANGE VIEW　 Q TACTICAL MAP";
 const teamSize = resolveTeamSize(map, requestedTeamSize);
+function battlefieldChoices() {
+  const choices = [industrialMap, trenchMap, villageMap].map((battlefield) => {
+    const name = battlefield.id === "industrial" ? "Industrial" : battlefield.name;
+    const size = resolveTeamSize(battlefield);
+    const label = `${name} <small>${size} vs ${size}</small>`;
+    if (battlefield.id === map.id)
+      return `<span aria-current="page">${label}</span>`;
+    const query = new URLSearchParams();
+    if (battlefield.id !== "industrial") query.set("map", battlefield.id);
+    if (preferredFirstPerson) query.set("view", "first");
+    return `<a href="?${query}">${label}</a>`;
+  });
+  return `<nav class="map-choice" aria-label="Battlefield">${choices.join("")}</nav>`;
+}
 function sound(freq: number, length = 0.08, volume = 0.04) {
   audio?.tone(freq, length, volume);
 }
@@ -197,16 +211,27 @@ function pause() {
   audio?.pause();
   clear();
   accumulator = 0;
-  if (started && game.phase === "playing")
-    menu(
-      "Operation paused",
-      "Press Escape or click Resume to continue.",
-      "Resume operation",
-      () => resume(),
-      '<button class="secondary" id="restart">Restart match</button>',
-    );
-  const restart = el("restart");
-  if (restart) restart.onclick = start;
+  if (!started || game.phase !== "playing") return;
+  menu(
+    "Operation paused",
+    "Press Escape or click Resume to continue.",
+    "Resume operation",
+    () => resume(),
+    `<div class="pause-actions">
+      <button class="secondary" id="restart">Restart match</button>
+      <button class="secondary" id="select-map" aria-expanded="false" aria-controls="pause-map-picker">Select map</button>
+    </div>
+    <div id="pause-map-picker" class="pause-map-picker hidden">
+      <p>Choosing a different battlefield ends this match.</p>
+      ${battlefieldChoices()}
+    </div>`,
+  );
+  el("restart").onclick = start;
+  const selectMap = el("select-map");
+  selectMap.onclick = () => {
+    const expanded = !el("pause-map-picker").classList.toggle("hidden");
+    selectMap.setAttribute("aria-expanded", String(expanded));
+  };
 }
 function handle(e: Event) {
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
@@ -260,7 +285,7 @@ function handle(e: Event) {
       `Operation complete · ${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}Blue ${game.scores.blue} / Red ${game.scores.red}`,
       "Deploy again",
       start,
-      table(),
+      battlefieldChoices() + table(),
     );
   }
 }
@@ -395,8 +420,6 @@ function command(): Command {
   return c;
 }
 window.addEventListener("keydown", (e) => {
-  if (["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
-    e.preventDefault();
   if (e.code === "Escape") {
     const action = escapePause.press(e, {
       started,
@@ -413,6 +436,8 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (paused) return;
+  if (["Tab", "Space", "ArrowUp", "ArrowDown"].includes(e.code))
+    e.preventDefault();
   if (
     mouseCaptureNeeded &&
     !e.repeat &&
@@ -582,7 +607,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `<nav class="map-choice" aria-label="Battlefield"><a href="/" ${map.id === "industrial" ? 'aria-current="page"' : ""}>Industrial <small>5 vs 5</small></a><a href="/?map=trenches" ${map.id === "trenches" ? 'aria-current="page"' : ""}>Trench front <small>50 vs 50</small></a><a href="/?map=village" ${map.id === "village" ? 'aria-current="page"' : ""}>Village front <small>50 vs 50</small></a></nav><div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
+    `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? "Capture flags A–D. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points." : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

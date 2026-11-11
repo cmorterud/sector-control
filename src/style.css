@@ -393,8 +393,9 @@ button span {
 .map-choice {
   gap: 10px;
   margin-top: 20px;
+  flex-wrap: wrap;
 }
-.map-choice a {
+.map-choice > * {
   flex: 1;
   padding: 12px;
   border: 1px solid #b5b39a55;
@@ -402,8 +403,9 @@ button span {
   text-decoration: none;
   font-size: 12px;
 }
-.map-choice a[aria-current],
-.map-choice a:hover {
+.map-choice [aria-current],
+.map-choice a:hover,
+.map-choice a:focus-visible {
   border-color: #c8ba8a;
   color: #eee0b0;
   background: #c8ba8a12;
@@ -411,6 +413,22 @@ button span {
 .map-choice small {
   margin-top: 4px;
   font-size: 9px;
+}
+.pause-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.pause-actions .secondary:hover {
+  color: #1c302e;
+}
+.pause-map-picker > p {
+  margin: 0;
+  font-size: 12px;
+  color: #b4c2bc;
+}
+.pause-map-picker .map-choice {
+  margin-top: 8px;
 }
 
 #artillery-status {

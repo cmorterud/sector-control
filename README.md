@@ -8,7 +8,7 @@ Local single-player shooter with toggleable first- and third-person views. Indus
 
 Try [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. [Start trenches in first person](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches&view=first), or press T during play. Each visitor plays an independent match against bots.
 
-This is a frozen production-build snapshot, updated November 9, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
+This is a frozen production-build snapshot, updated November 10, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
 
 Trench and village terrain now use close-up clumped earth, grit and broken soil fissures alongside broad wet/dry/grass variation. Explosions replace excavated grass, paving and wet surface finishes with fresh earth; the detail follows steep banks and crater walls without stretching. Individual worn duckboard planks, split timber grain, small exposed roots and rounded rubble add trench detail. Terrain lighting now shares smooth normals across patch seams, decodes surface colors consistently and uses softer soil highlights to prevent bright bands on trench banks. These are cosmetic changes; movement and cover collision keep their existing shapes.
 
@@ -28,6 +28,8 @@ npm run check
 npm run build
 npm run preview
 ```
+
+Use **Select map** in the pause menu to leave the current match and open another battlefield’s start screen. The results screen also offers map choices. Your selected camera view carries over.
 
 GitHub Actions runs `npm ci`, `npm run check -- --maxWorkers=1` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
 
