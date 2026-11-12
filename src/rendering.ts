@@ -2,7 +2,7 @@ import { battlePerformance } from "./battle-performance";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
 import { factions, scoped } from "./loadouts";
-import { terrainNormals } from "./terrain-shading";
+import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
@@ -1248,6 +1248,7 @@ export class Renderer implements CollisionWorld {
       if (object.original.kind === "tree" && changed.stage === 2)
         this.startTreeFall(object);
     }
+    invalidateTerrainNormals(this.map,change);
     for (const key of change.patches) this.rebuildTerrainPatch(key);
     let coverChanged = false;
     for (const changed of change.objects)
@@ -1271,7 +1272,7 @@ export class Renderer implements CollisionWorld {
         stump: hide(`stump-${fall.source.id}`),
       };
     }
-    if (coverChanged) this.app.batcher!.generate([this.coverBatch]);
+    if (coverChanged) this.queueWorldBatch(this.coverBatch);
     if (change.crater) {
       let changed = false;
       for (const board of this.boardVisuals) {
@@ -1281,7 +1282,7 @@ export class Renderer implements CollisionWorld {
           changed = true;
         }
       }
-      if (changed) this.app.batcher!.generate([this.boardBatch]);
+      if (changed) this.queueWorldBatch(this.boardBatch);
     }
     let decorChanged = false;
     if (change.crater)
@@ -1294,7 +1295,17 @@ export class Renderer implements CollisionWorld {
           decor.root.enabled = false;
           decorChanged ||= !!decor.batched;
         }
-    if (decorChanged) this.app.batcher!.generate([this.boardBatch]);
+    if (decorChanged) this.queueWorldBatch(this.boardBatch);
+  }
+  private dirtyWorldBatches?: Set<number>;
+  private queueWorldBatch(id:number) { (this.dirtyWorldBatches ??= new Set()).add(id); }
+  private flushWorldBatches() {
+    if (!this.dirtyWorldBatches?.size) return;
+    const start = battlePerformance.begin();
+    this.app.batcher!.generate([...this.dirtyWorldBatches]);
+    battlePerformance.count("sceneryBatches",this.dirtyWorldBatches.size);
+    battlePerformance.end("sceneryBatch",start);
+    this.dirtyWorldBatches.clear();
   }
   private texture(
     name: string,
@@ -2953,6 +2964,7 @@ export class Renderer implements CollisionWorld {
     });
   }
   reset(g: Game) {
+    this.dirtyWorldBatches?.clear();
     this.clearEnvironmentEffects();
     for (const c of this.casualties) {
       this.releaseCasualty(c);
@@ -3078,6 +3090,9 @@ export class Renderer implements CollisionWorld {
   private flamePickups = new Map<number,pc.Entity>();
   private actorKits = new Map<number,string>();
   draw(g: Game, alpha: number, dt: number, overview = false) {
+    // All synchronous collision/mesh changes are complete. Rebatch each scenery
+    // group once before render, even if several shells hit during catch-up ticks.
+    this.flushWorldBatches();
     for (const kit of g.flames?.kits ?? []) {
       let marker=this.flamePickups.get(kit.id);
       if(!marker) {

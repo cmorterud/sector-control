@@ -60,6 +60,8 @@ export class PlaytestLog {
       frames: this.frames.length,
       averageFps: average ? 1000 / average : 0,
       p95FrameMs: sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0,
+      p99FrameMs: sorted[Math.max(0, Math.ceil(sorted.length * 0.99) - 1)] ?? 0,
+      maxFrameMs: sorted.at(-1) ?? 0,
       slowFramesOver33ms: this.frames.filter((ms) => ms > 1000 / 30).length,
       errors: [...this.errors],
       flamePulses: this.events.filter(e=>e.type === "flame").length,
@@ -332,6 +334,7 @@ export class PlaytestRecorder {
       );
       this.chunks = [];
     }
+    if (this.log.performance) link(new Blob([JSON.stringify({startedAt:this.log.startedAt,performance:this.log.performance,summary},null,2)],{type:"application/json"}),"perf.json");
     link(
       new Blob([JSON.stringify({ ...this.log, summary }, null, 2)], {
         type: "application/json",

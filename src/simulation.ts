@@ -1,3 +1,4 @@
+import { NavigationEdges } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
@@ -1942,6 +1943,11 @@ export class Game {
   }
   private applyDestruction(actor: number, change: DestructionChange) {
     if (change.geometry === false) {
+      // Cosmetic tree damage advances the global destruction revision, but does
+      // not change walkability. Preserve a graph pending a local rebuild instead
+      // of discarding all its directed checks on the next path request.
+      const memo = navigationSegments.get(this.map);
+      if (memo && memo.revision === change.revision - 1) memo.revision = change.revision;
       this.collision.updateWorld?.(change);
       this.emit({ type: "destruction", actor, change });
       return;
@@ -1979,16 +1985,7 @@ const navigation = new WeakMap<
 >();
 // Reuse unchanged graph-edge walk checks across local explosions. Directed keys
 // preserve the original sample order and exact route tie-breaking.
-const navigationSegments = new WeakMap<
-  MapDefinition,
-  {
-    revision: number;
-    checks: Map<
-      string,
-      { pass: boolean; minX: number; maxX: number; minZ: number; maxZ: number }
-    >;
-  }
->();
+const navigationSegments = new WeakMap<MapDefinition, {revision:number;edges:NavigationEdges}>();
 function invalidateNavigationSegments(
   map: MapDefinition,
   change: DestructionChange,
@@ -2018,16 +2015,7 @@ function invalidateNavigationSegments(
     const b = map.destruction?.objects[object.id]?.original;
     if (b) include(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
   }
-  if (!Number.isFinite(minX)) memo.checks.clear();
-  else
-    for (const [key, check] of memo.checks)
-      if (
-        check.minX <= maxX &&
-        check.maxX >= minX &&
-        check.minZ <= maxZ &&
-        check.maxZ >= minZ
-      )
-        memo.checks.delete(key);
+  memo.edges.invalidate(Number.isFinite(minX)?{minX,maxX,minZ,maxZ}:undefined);
   memo.revision = map.destruction?.revision ?? 0;
 }
 function graph(map: MapDefinition) {
@@ -2092,54 +2080,25 @@ function graph(map: MapDefinition) {
       [0, 1],
     ])
       add(crater.x + dx * crater.radius, crater.z + dz * crater.radius);
-  const buckets = new Map<string, number[]>();
-  nodes.forEach((p, i) => {
-    const key = `${Math.floor(p.x / step)},${Math.floor(p.z / step)}`;
-    const list = buckets.get(key);
-    if (list) list.push(i);
-    else buckets.set(key, [i]);
-  });
+  battlePerformance.end("navigationNodes",profileStart);
+  const edgeStart = battlePerformance.begin();
   const revision = map.destruction?.revision ?? 0;
   let memo = navigationSegments.get(map);
   if (!memo || memo.revision !== revision) {
-    memo = { revision, checks: new Map() };
+    memo = { revision, edges:new NavigationEdges() };
     navigationSegments.set(map, memo);
   }
-  const edgePasses = (a: Vec, b: Vec, i: number, j: number) => {
-    const key = `${nodeKeys[i]}:${nodeKeys[j]}`;
-    let check = memo.checks.get(key);
-    if (!check) {
-      check = {
-        pass: walkSegment(a, b, map),
-        minX: Math.min(a.x, b.x) - 0.61,
-        maxX: Math.max(a.x, b.x) + 0.61,
-        minZ: Math.min(a.z, b.z) - 0.61,
-        maxZ: Math.max(a.z, b.z) + 0.61,
-      };
-      memo.checks.set(key, check);
-    }
-    return check.pass;
-  };
-  const edges = nodes.map((a, i) => {
-    const result: number[] = [];
-    const cx = Math.floor(a.x / step),
-      cz = Math.floor(a.z / step);
-    for (let x = cx - 1; x <= cx + 1; x++)
-      for (let z = cz - 1; z <= cz + 1; z++)
-        for (const j of buckets.get(`${x},${z}`) ?? [])
-          if (
-            j !== i &&
-            dist(a, nodes[j]) <= step * 1.45 &&
-            edgePasses(a, nodes[j], i, j)
-          )
-            result.push(j);
-    return result;
+  const edges = memo.edges.build(nodes,nodeKeys,step,(a,b)=>{
+    battlePerformance.count("navigationChecks");
+    return walkSegment(a,b,map);
   });
+  battlePerformance.end("navigationEdges",edgeStart);
   const result = { nodes, edges };
   navigation.set(map, result);
   battlePerformance.end("navigationBuild",profileStart);
   return result;
 }
+export function prepareNavigation(map:MapDefinition) { graph(map); }
 export function pathfind(
   a: Vec,
   b: Vec,

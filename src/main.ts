@@ -1,3 +1,4 @@
+import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
@@ -233,6 +234,7 @@ function start() {
     { map, teamSize, humanPlayerIds: autoplay ? [] : [0] },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
+  if (bots) prepareNavigation(game.map);
   renderer.reset(game);
   battlefield.reset(game);
   audio ??= new BattleAudio();
@@ -619,6 +621,7 @@ function frame(now: number) {
         const feedbackStart = battlePerformance.begin();
         battlefield.step(game);
         battlePerformance.end("feedback",feedbackStart);
+        const diagnosticsStart = battlePerformance.begin();
         if (recording)
           recording.log.presentation = {
             feedback: { ...battlefield.stats },
@@ -627,6 +630,7 @@ function frame(now: number) {
             soldiers: { ...renderer.soldierStats },
           };
         recording?.tick(game, input);
+        battlePerformance.end("diagnostics",diagnosticsStart);
         accumulator -= 1 / 30;
         if (paused) break;
       }

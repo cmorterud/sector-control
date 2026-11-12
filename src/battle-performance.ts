@@ -26,11 +26,12 @@ export class BattlePerformance {
   private frames = new Timing();
   private pending: Record<string, number> = {};
   private counts: Record<string, number> = {};
+  private totals: Record<string, number> = {};
   private last?: number;
   private lastTick = 0;
   private slow: { tick: number; frameMs: number; phases: Record<string,number>; counts: Record<string,number> }[] = [];
   constructor(private clock: () => number = () => performance.now()) {}
-  reset() { this.stages.clear(); this.frames = new Timing(); this.pending = {}; this.counts = {}; this.slow = []; this.last = undefined; }
+  reset() { this.stages.clear(); this.frames = new Timing(); this.pending = {}; this.counts = {}; this.totals = {}; this.slow = []; this.last = undefined; }
   begin() { return this.enabled ? this.clock() : undefined; }
   end(name: string, start: number | undefined) {
     if (start === undefined || !this.enabled) return;
@@ -39,7 +40,7 @@ export class BattlePerformance {
     if (!stats) { stats = new Timing(); this.stages.set(name,stats); }
     stats.add(ms); this.pending[name] = (this.pending[name] ?? 0) + ms;
   }
-  count(name: string, n = 1) { if (this.enabled) this.counts[name] = (this.counts[name] ?? 0) + n; }
+  count(name: string, n = 1) { if (this.enabled) {this.counts[name] = (this.counts[name] ?? 0) + n;this.totals[name] = (this.totals[name] ?? 0) + n;} }
   // The elapsed frame belongs to work since the PREVIOUS callback, including
   // PlayCanvas's separate render callback. Pause/resume discards that interval.
   frame(now: number, tick: number, paused: boolean) {
@@ -58,7 +59,7 @@ export class BattlePerformance {
     this.pending = {}; this.counts = {}; this.last = paused ? undefined : now; this.lastTick = tick;
   }
   summary() {
-    return { version:1, note:"CPU phases are nested/inclusive; renderSubmit is CPU submission, not GPU timing. Percentiles use 1ms buckets. Slow frames refer to the preceding callback interval.", frames:this.frames.summary(), stages:Object.fromEntries([...this.stages].map(([name,stats])=>[name,stats.summary()])), slowFrames:structuredClone(this.slow) };
+    return { version:1, note:"CPU phases are nested/inclusive; renderSubmit is CPU submission, not GPU timing. Percentiles use 1ms buckets. Slow frames refer to the preceding callback interval.", frames:this.frames.summary(), counters:{...this.totals}, stages:Object.fromEntries([...this.stages].map(([name,stats])=>[name,stats.summary()])), slowFrames:structuredClone(this.slow) };
   }
 }
 export const battlePerformance = new BattlePerformance();

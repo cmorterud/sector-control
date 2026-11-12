@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { calculateNormals } from "playcanvas";
 import { terrainGeometry } from "./terrain-geometry";
-import { terrainNormals } from "./terrain-shading";
+import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { trenchMap } from "./trench-map";
 import { industrialMap, groundHeight, type MapDefinition } from "./map";
 import { Game, TestCollision } from "./simulation";
@@ -53,4 +53,20 @@ it("retains the industrial flat-shaded material and normals", () => {
   const data = terrainGeometry(industrialMap, "0,0");
   const flat = calculateNormals(data.positions, data.indices);
   expect(terrainNormals(industrialMap, data, flat)).toBe(flat);
+});
+
+it("retains exact cold-cache lighting after overlapping local cuts and across neighboring patch seams", () => {
+  const g = new Game(new TestCollision(trenchMap), false, 600, 12345, undefined, {map:trenchMap});
+  const keys=["-5,-7","-4,-7","-5,-6","-4,-6"];
+  for (const key of keys) { const data=terrainGeometry(g.map,key);terrainNormals(g.map,data,calculateNormals(data.positions,data.indices)); }
+  for (const [x,z] of [[-32,-48],[-31.5,-47.5],[-33,-49]] as const) {
+    g.events=[];
+    g.explode({x,z,y:groundHeight(x,z,g.map)+.02},-1,null,{...artilleryExplosionProfile,damage:0});
+    for(const event of g.events)if(event.type==="destruction")invalidateTerrainNormals(g.map,event.change);
+    for(const key of keys) {
+      const data=terrainGeometry(g.map,key),flat=calculateNormals(data.positions,data.indices);
+      const actual=terrainNormals(g.map,data,flat);
+      expect(actual).toEqual(terrainNormals(structuredClone(g.map),data,flat));
+    }
+  }
 });
