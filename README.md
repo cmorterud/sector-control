@@ -211,6 +211,14 @@ Chrome direct input, native video export, a full rendered autoplay match, and re
 
 For simulation checks without video, open `http://localhost:5173/?playtest=1&video=0&autoplay=1&duration=40`. Begin the operation, then use **Save events.txt** or **Save json** when it finishes. This skips canvas capture and MediaRecorder entirely. Omit `autoplay=1` to collect direct input instead. Events include simulation ticks/times, projectile IDs, fire/impact, damage, death/respawn, reload, capture, score, and results. JSON snapshots include all active projectile positions and velocities. The normal bounded clip limit still applies to log-only runs.
 
+## Performance diagnostics
+
+Battle navigation retains unaffected adjacency rows and walk checks after local destruction, including cosmetic tree hits. The initial graph is prepared during deployment. Scenery groups regenerate once before rendering when several impacts share a frame; collision updates stay synchronous. Terrain-lighting normals reuse unchanged world points with local invalidation around fresh cuts. These changes preserve game rules, roster size and visual detail.
+
+For a stutter report, open `?map=trenches&playtest=1&video=0&clip=60` on the local server or public trial, begin play, and use **Save perf.json** when the minute finishes. Omit autoplay for direct play; add `autoplay=1` for a repeatable bot-driven player. The small report contains frame p95/p99/max, CPU phase timings, event counts and the worst60 frames with preceding-work attribution. Recording is opt-in and stays local; it adds overhead. Nested phase totals overlap; render submission measures CPU work rather than GPU execution. Deployment/loading stalls are retained and can appear at tick0.
+
+`tools/performance-battle.ts` runs seeded CPU-only Trench/Verdun simulations with event/final-state hashes; `tools/performance-terrain.ts` checks exact terrain/lighting output and real Ammo replacement cost. Bundle these scripts with esbuild for Node. Neither is a substitute for browser/GPU measurements. See HANDOFF.md for the before/after native recordings and remaining blast-related spikes.
+
 ## Rules and architecture
 
 All simulation uses 30 Hz ticks, plain serializable state, shared human/bot commands, typed events, and an injected collision boundary. `simulation.ts` runs in Node without PlayCanvas or a DOM. `map.ts` is the shared geometry and objective definition. `rendering.ts` adapts PlayCanvas/Ammo and procedural models. `main.ts` owns browser input, menus, audio, and the frame accumulator.
