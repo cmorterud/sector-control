@@ -2,7 +2,15 @@
 
 Updated November 12, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Verdun forest trenches — newest checkpoint
+## Verdun central groves — newest checkpoint
+
+Added 24 destructible trees in four small central groves, for 148 trees total. Mixed pine/sparse/bare/snapped trunks give real advancing cover between the flags. Existing placement guards keep whole footprints off ramps, trench lanes, tracks, flag centers and spawn areas. Three broad breaks remain at z=-20,1,22; all three have clear standing cross-field rays and walkable central spans. A measured 18/23 original clear cross-field rays remain open. The material's existing woodland-density mask now includes the groves, adding local leaf litter around them.
+
+The new central placement uses its own authoring stream after all original dressing is generated. Offline comparison against the pre-change builder preserves every flank tree, brush patch, log and stump exactly: hash `24310ecb92fb3338c21ca9c852620643b913a4c663c3edc7c5d350338c67d666`. The original 124 flank trees, 42 brush patches, 14 logs and 12 stumps are unchanged. Central trunks use the existing crown-stripping/felling/collision rules; the staged physical-remnant regression now runs for both a flank pine and a central pine.
+
+Focused strict TypeScript and19checks/3files pass, including 100-soldier90s battle, all flag routes from both teams, sap floors/exits, clear breaks, and physical tree destruction. First full run400/401passed; unchanged real-Ammo trench terrain check stalled58.7s and hit its5s budget. Isolated physics+Verdun rerun13/13passes in8.10s with original budgets, including the stronger70% sightline check; fresh full-suite retry is pending. Production build3.93s passes. Chrome native getApp returned cgWindowNotFound, CUA part summarized; no new native gameplay/visual acceptance claim and no local preview server started. Ignored layout audit JSON and a schematic PPM/PNG were inspected; these are authored-data diagnostics, not game screenshots. Existing preview JPEG predates only these central additions. CI last failed to start due account billing/spending limit; do not raise budgets or change billing settings to compensate. Final validation/publication recorded when complete.
+
+## Previous Verdun forest trenches checkpoint
 
 **Live version 17:** [Play Verdun forest trenches](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Game source `a65e4df10eb3e50d9e08bf106ff81a033c49e601`, committed and immediately pushed. Local strict TypeScript, all 400 tests / 67 files (78.12s), production build (4.28s), whitespace checks pass. [Workflow 43212564563](https://github.com/cmorterud/sector-control/actions/runs/43212564563) never started: GitHub's annotation says recent account payments failed or the spending limit needs increasing. It has zero executed steps; this is not a test failure. No billing settings changed or repeated workflow runs requested. Resolve the account issue before relying on hosted CI again.
 

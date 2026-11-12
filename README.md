@@ -97,7 +97,7 @@ This is a layout/balance prototype. The latest full-presentation production reco
 
 ## Verdun forest trenches
 
-Verdun now has irregular woodland belts along both flanks: tall pines and torn broadleaf crowns mixed with bare trunks and snapped trees. The center stays a blasted, exposed crossing between the four objectives. There are 124 destructible trees, 42 low brush patches, 14 fallen logs and 12 stumps. Trunks provide real cover; foliage affects bot visibility, and the low undergrowth leaves soldier-height sightlines open.
+Verdun now has irregular woodland belts along both flanks: tall pines and torn broadleaf crowns mixed with bare trunks and snapped trees. Four small central groves add 24 trees between the objectives, with broad gaps for movement and shooting. There are 148 destructible trees, 42 low brush patches, 14 fallen logs and 12 stumps. Trunks provide real cover; foliage affects bot visibility, and the low undergrowth leaves soldier-height sightlines open. Central trees can be stripped and felled by explosions, opening the field as the match progresses.
 
 Three forward sap trenches turn through the woods, joining the existing rear/front network. The southern approaches take different doglegs on each side. Walk-out slopes, objective approaches and worn woodland tracks stay clear of new props. Brown leaf litter, needles and damp soil blend into the same terrain material; fresh artillery and grenade cuts reveal earth. Crowns disappear when trees are badly damaged, and destroyed trunks fall into physical low timber cover using the existing bounded animation/debris system.
 
