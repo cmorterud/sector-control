@@ -287,9 +287,18 @@ describe("artillery damage and bots", () => {
       red = g.players[25];
     const station = firingPosition(g, p)!;
     Object.assign(p, { ...station, y: 0.85, protectedUntil: 0 });
-    const redStation = firingPosition(g, red)!;
-    Object.assign(red, { ...redStation, y: 0.85, protectedUntil: 0 });
+    // New farm walls can screen the old roster-assigned station. Pick an
+    // authored firing step that really can spot this target, without granting
+    // bots the human tactical map's ability to call through cover.
     g.tick = 925;
+    const redStation = g.map.terrain!.firingPositions!.find((s) => {
+      if (s.team !== red.team) return false;
+      Object.assign(red, { ...s, y: groundHeight(s.x, s.z, g.map), protectedUntil: 0 });
+      return !artilleryTargetReason(g, red, p);
+    });
+    expect(redStation).toBeDefined();
+    Object.assign(red, { ...redStation, y: 0.85, protectedUntil: 0 });
+    expect(artilleryTargetReason(g, red, p)).toBeNull();
     expect(botCommand(g, p).artillery).toBeUndefined();
     expect(botCommand(g, red).artillery).toBeDefined();
     const original = { x: p.x, z: p.z };

@@ -417,6 +417,54 @@ function sampleTerrainCuts(
   }
   return interpolate(a, b, c, d);
 }
+const coverLookup = new WeakMap<
+  MapDefinition,
+  { boxes: Box[]; length: number; revision: number; cells: Map<string, Box[]> }
+>();
+const noCover: Box[] = [];
+export function invalidateCoverLookup(map: MapDefinition): void {
+  coverLookup.delete(map);
+}
+// Broad phase only. Expand cell membership by the largest ordinary movement
+// radius so a point query needs no temporary set or neighboring-cell scans.
+// Every candidate still goes through the original exact collision predicates.
+function nearbyCover(
+  x: number,
+  z: number,
+  radius: number,
+  map: MapDefinition,
+): Box[] {
+  if (radius > 0.75 || map.boxes.length < 32) return map.boxes;
+  const revision = map.destruction?.revision ?? 0;
+  let lookup = coverLookup.get(map);
+  if (
+    !lookup ||
+    lookup.boxes !== map.boxes ||
+    lookup.length !== map.boxes.length ||
+    lookup.revision !== revision
+  ) {
+    const cells = new Map<string, Box[]>();
+    for (const b of map.boxes)
+      for (
+        let ix = Math.floor((b.x - b.w / 2 - 0.75) / 8);
+        ix <= Math.floor((b.x + b.w / 2 + 0.75) / 8);
+        ix++
+      )
+        for (
+          let iz = Math.floor((b.z - b.d / 2 - 0.75) / 8);
+          iz <= Math.floor((b.z + b.d / 2 + 0.75) / 8);
+          iz++
+        ) {
+          const key = `${ix},${iz}`,
+            bucket = cells.get(key);
+          if (bucket) bucket.push(b);
+          else cells.set(key, [b]);
+        }
+    lookup = { boxes: map.boxes, length: map.boxes.length, revision, cells };
+    coverLookup.set(map, lookup);
+  }
+  return lookup.cells.get(`${Math.floor(x / 8)},${Math.floor(z / 8)}`) ?? noCover;
+}
 export function blocked(
   x: number,
   z: number,
@@ -426,7 +474,7 @@ export function blocked(
   return (
     Math.abs(x) > map.width / 2 - 1 - r ||
     Math.abs(z) > map.depth / 2 - 1 - r ||
-    map.boxes.some(
+    nearbyCover(x, z, r, map).some(
       (b) =>
         Math.abs(x - b.x) < b.w / 2 + r &&
         Math.abs(z - b.z) < b.d / 2 + r &&
@@ -468,7 +516,7 @@ export function moveOnMap(
       Math.abs(nz) > map.depth / 2 - 1.45
     )
       return false;
-    return !map.boxes.some((b) => {
+    return !nearbyCover(nx, nz, 0.45, map).some((b) => {
       if (
         Math.abs(nx - b.x) >= b.w / 2 + 0.45 ||
         Math.abs(nz - b.z) >= b.d / 2 + 0.45

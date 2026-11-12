@@ -58,6 +58,7 @@ import {
 } from "./artillery";
 import {
   blocked,
+  invalidateCoverLookup,
   dist,
   industrialMap,
   groundHeight,
@@ -566,9 +567,13 @@ export class TestCollision implements CollisionWorld {
   setMap(map: MapDefinition) {
     this.map = map;
     this.boxBuckets = undefined;
+    invalidateCoverLookup(map);
   }
   updateWorld(change: DestructionChange) {
-    if (change.geometry !== false) this.boxBuckets = undefined;
+    if (change.geometry !== false) {
+      this.boxBuckets = undefined;
+      invalidateCoverLookup(this.map);
+    }
   }
   // Broad phase only: retain the exact existing slab and terrain intersections.
   // Most projectile/grenade sweeps touch one eight-meter cell, not every lining.

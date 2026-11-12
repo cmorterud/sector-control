@@ -2,7 +2,62 @@ import { expect, it } from "vitest";
 import { Game, TestCollision } from "./simulation";
 import { trenchMap } from "./trench-map";
 import { artilleryExplosionProfile } from "./destruction";
-import { groundHeight, type MapDefinition } from "./map";
+import { blocked, groundHeight, type MapDefinition } from "./map";
+
+function fullBlocked(map: MapDefinition, x: number, z: number, radius: number) {
+  return Math.abs(x) > map.width / 2 - 1 - radius ||
+    Math.abs(z) > map.depth / 2 - 1 - radius ||
+    map.boxes.some((b) => Math.abs(x - b.x) < b.w / 2 + radius &&
+      Math.abs(z - b.z) < b.d / 2 + radius &&
+      (!b.supports || (b.baseY ?? 0) <= groundHeight(x, z, map) + 1.8));
+}
+
+it("matches full-scan movement clearance at cover and cell edges, including blast-created gaps and debris", () => {
+  const game = new Game(new TestCollision(trenchMap), false, 1000, 12345, undefined, { map: trenchMap });
+  let seed = 6789;
+  const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const check = () => {
+    const points = game.map.boxes.flatMap((b) => [
+      { x: b.x - b.w / 2 - 0.45, z: b.z },
+      { x: b.x + b.w / 2 + 0.4499, z: b.z },
+      { x: b.x, z: b.z - b.d / 2 - 0.6001 },
+    ]);
+    for (let i = 0; i < 1500; i++) points.push({
+      x: i % 5 ? (random() - 0.5) * 164 : ((i % 21) - 10) * 8,
+      z: i % 7 ? (random() - 0.5) * 132 : ((i % 17) - 8) * 8,
+    });
+    for (const p of points)
+      for (const radius of [0, 0.45, 0.6, 0.7, 0.75, 2])
+        expect(blocked(p.x, p.z, radius, game.map)).toBe(fullBlocked(game.map, p.x, p.z, radius));
+  };
+  check();
+  game.explode({ x: -19, z: -1, y: 2.45 }, -1, null, artilleryExplosionProfile);
+  check();
+});
+
+it("refreshes movement clearance after direct world edits, array replacement, insertion and removal", () => {
+  const map: MapDefinition = {
+    ...trenchMap, terrain: undefined, destruction: undefined,
+    boxes: Array.from({ length: 32 }, (_, i) => ({ x: 40 + i / 10, z: 40, w: 0.1, d: 2, h: 2, kind: "wood" })),
+  };
+  const world = new TestCollision(map);
+  expect(blocked(0, 0, 0.5, map)).toBe(false);
+  const b = { x: 0, z: 0, w: 0.1, d: 2, h: 2, kind: "wood" as const };
+  map.boxes.push(b);
+  expect(blocked(0, 0, 0.5, map)).toBe(true);
+  b.x = 20;
+  world.updateWorld({ geometry: true, revision: 1, kind: "artillery", at: { x: 0, y: 0, z: 0 }, crater: null, terrain: [], objects: [], patches: [] });
+  expect(blocked(0, 0, 0.5, map)).toBe(false);
+  expect(blocked(20, 0, 0.5, map)).toBe(true);
+  map.boxes.pop();
+  expect(blocked(20, 0, 0.5, map)).toBe(false);
+  map.boxes = [...map.boxes.slice(1), { ...b, x: 0 }];
+  expect(blocked(0, 0, 0.5, map)).toBe(true);
+  map.boxes[31] = { ...b, x: -20 };
+  world.setMap(map);
+  expect(blocked(0, 0, 0.5, map)).toBe(false);
+  expect(blocked(-20, 0, 0.5, map)).toBe(true);
+});
 
 // Reference keeps the prior full-box scan, including the exact terrain/slab math.
 function fullScan(map: MapDefinition) {

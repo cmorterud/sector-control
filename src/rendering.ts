@@ -59,6 +59,7 @@ import { treeHasCrown } from "./vegetation";
 import { battlefieldProps, trenchRoots } from "./battlefield-dressing";
 import {
   industrialMap,
+  invalidateCoverLookup,
   groundHeight,
   moveOnMap,
   type MapDefinition,
@@ -1245,6 +1246,7 @@ export class Renderer implements CollisionWorld {
     return true;
   }
   updateWorld(change: DestructionChange) {
+    if (change.geometry !== false) invalidateCoverLookup(this.map);
     const start = battlePerformance.begin();
     try { this.applyWorldChange(change); } finally { battlePerformance.end("worldRebuild",start); }
   }
