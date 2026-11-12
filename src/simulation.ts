@@ -1,3 +1,4 @@
+import { battlePerformance } from "./battle-performance";
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
@@ -2032,6 +2033,7 @@ function invalidateNavigationSegments(
 function graph(map: MapDefinition) {
   const cached = navigation.get(map);
   if (cached) return cached;
+  const profileStart = battlePerformance.begin();
   const step = map.navSpacing,
     nodes: Vec[] = [],
     nodeKeys: string[] = [];
@@ -2135,6 +2137,7 @@ function graph(map: MapDefinition) {
   });
   const result = { nodes, edges };
   navigation.set(map, result);
+  battlePerformance.end("navigationBuild",profileStart);
   return result;
 }
 export function pathfind(
@@ -2247,6 +2250,11 @@ function changeBotTarget(g: Game, p: Soldier, target: number) {
   if (target >= 0) beginBotFocus(g, p);
 }
 export function botCommand(g: Game, p: Soldier): Command {
+  if (!battlePerformance.enabled) return chooseBotCommand(g,p);
+  const start = battlePerformance.begin();
+  try { return chooseBotCommand(g,p); } finally { battlePerformance.end("bots",start); }
+}
+function chooseBotCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
   if (evasion) return evasion;
   const duck = suppressionCommand(g, p);

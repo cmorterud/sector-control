@@ -1,3 +1,4 @@
+import { battlePerformance } from "./battle-performance";
 import { AmmoPhysicsWorld, Vec2, Vec3, Quat, Mat4, BODYGROUP_STATIC, BODYGROUP_USER_1, BODYGROUP_USER_2 } from "playcanvas";
 import { groundHeight, type MapDefinition, type Box } from "./map";
 
@@ -163,7 +164,9 @@ export class RagdollPhysics {
       this.syncCover(); this.coverAge = 0;
       this.revision = revision;
     }
+    const start = battlePerformance.begin();
     if (this.ragdolls.size) this.world.step(Math.min(dt, 0.1), 6, 1 / 60);
+    battlePerformance.end("ragdollPhysics",start);
   }
   destroy() {
     for (const doll of [...this.ragdolls]) doll.destroy();

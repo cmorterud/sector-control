@@ -1,3 +1,4 @@
+import { battlePerformance } from "./battle-performance";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
 import { factions, scoped } from "./loadouts";
@@ -602,7 +603,10 @@ export class Renderer implements CollisionWorld {
     this.buildMap();
   }
   private rebuildTerrainPatch(key: string) {
+    const geometryStart = battlePerformance.begin();
     const data = terrainGeometry(this.map, key);
+    battlePerformance.end("terrainGeometry",geometryStart);
+    const meshStart = battlePerformance.begin();
     if (!data.indices.length) return;
     const old = this.terrainPatches.get(key);
     const entity = this.joint(`terrain ${key}`, this.mapRoot);
@@ -628,7 +632,11 @@ export class Renderer implements CollisionWorld {
     const instance = new pc.MeshInstance(mesh, material, entity);
     instance.castShadow = true;
     entity.addComponent("render", { meshInstances: [instance] });
+    battlePerformance.end("terrainMesh",meshStart);
+    const physicsStart = battlePerformance.begin();
     this.terrainPhysics.setPatch(key, data, entity);
+    battlePerformance.end("terrainCollision",physicsStart);
+    battlePerformance.count("terrainPatches");
     if (old) {
       old.entity.destroy();
       old.mesh.destroy();
@@ -1228,6 +1236,10 @@ export class Renderer implements CollisionWorld {
     return true;
   }
   updateWorld(change: DestructionChange) {
+    const start = battlePerformance.begin();
+    try { this.applyWorldChange(change); } finally { battlePerformance.end("worldRebuild",start); }
+  }
+  private applyWorldChange(change: DestructionChange) {
     for (const fall of [...this.fallingTrees])
       if (change.objects.some((o) => fall.pieces.includes(o.id)))
         this.finishTreeFall(fall);
@@ -2800,6 +2812,10 @@ export class Renderer implements CollisionWorld {
     c.ragdoll.destroy(); c.skin.destroy(); c.entity.destroy(); c.mesh.destroy();
   }
   private retainCasualty(p: Soldier, impulse = new pc.Vec3(0.5, 0, 1.5)) {
+    const start = battlePerformance.begin();
+    try { this.buildCasualty(p,impulse); } finally { battlePerformance.end("ragdollCreate",start); }
+  }
+  private buildCasualty(p: Soldier, impulse: pc.Vec3) {
     if (
       Math.hypot(
         p.x - this.camera.getPosition().x,

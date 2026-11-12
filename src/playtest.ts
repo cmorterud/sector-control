@@ -1,3 +1,4 @@
+import { battlePerformance } from "./battle-performance";
 import type { Command, Event, Game } from "./simulation";
 
 // Keep a fixed deadline so render timing jitter does not lower the capture rate.
@@ -15,6 +16,7 @@ export class CaptureCadence {
 
 export class PlaytestLog {
   readonly version = 3;
+  performance?: ReturnType<typeof battlePerformance.summary>;
   presentation?: {
     soldiers?: Record<string, number>;
     feedback: Record<string, number>;
@@ -309,6 +311,7 @@ export class PlaytestRecorder {
     this.published = true;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.panel.replaceChildren();
+    if (battlePerformance.enabled) this.log.performance = battlePerformance.summary();
     const summary = this.log.summary();
     const title = document.createElement("div");
     title.textContent = `PLAYTEST COMPLETE · ${summary.averageFps.toFixed(0)} FPS avg · ${summary.errors.length} errors`;

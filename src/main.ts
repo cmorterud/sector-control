@@ -1,3 +1,4 @@
+import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
 import { factions, factionFor, scoped, type Loadout, type WeaponSlot } from "./loadouts";
@@ -98,6 +99,7 @@ const params = new URLSearchParams(location.search),
   bots = params.get("bots") !== "0",
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
+battlePerformance.enabled = params.has("perf") || params.has("playtest");
 const duration = Number(params.get("duration") ?? 480);
 const map =
   params.get("map") === "verdun"
@@ -245,6 +247,7 @@ function start() {
     );
   yaw = game.players[0].yaw;
   pitch = 0;
+  battlePerformance.reset();
   started = true;
   hitUntil = damageUntil = 0;
   artilleryNotice = "";
@@ -284,6 +287,7 @@ function pause() {
   };
 }
 function handle(e: Event) {
+  if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
   if ((e.type === "death" || e.type === "respawn") && e.actor === 0) {
@@ -582,6 +586,7 @@ window.addEventListener("blur", () => {
   }
 });
 function frame(now: number) {
+  battlePerformance.frame(now, game?.tick ?? 0, !started || paused);
   rawFrameMs = now - last;
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -604,10 +609,16 @@ function frame(now: number) {
             ? botCommand(game, game.players[0])
             : command();
         input.firstPerson = preferredFirstPerson;
+        const simStart = battlePerformance.begin();
         game.step(input);
+        battlePerformance.end("simulation",simStart);
         if (!autoplay && game.players[0].melee) yaw = game.players[0].yaw;
+        const eventStart = battlePerformance.begin();
         for (const e of game.events) handle(e);
+        battlePerformance.end("events",eventStart);
+        const feedbackStart = battlePerformance.begin();
         battlefield.step(game);
+        battlePerformance.end("feedback",feedbackStart);
         if (recording)
           recording.log.presentation = {
             feedback: { ...battlefield.stats },
@@ -625,14 +636,18 @@ function frame(now: number) {
       game.tick - 1 + accumulator * 30,
       cameraReactions && !paused,
     );
+    const drawStart = battlePerformance.begin();
     renderer.draw(
       game,
       accumulator * 30,
       paused ? 0 : dt,
       params.has("overview"),
     );
+    battlePerformance.end("presentation",drawStart);
     if (now - uiTime > 50) {
+      const hudStart = battlePerformance.begin();
       hud(now);
+      battlePerformance.end("hud",hudStart);
       uiTime = now;
     }
   }
@@ -640,8 +655,11 @@ function frame(now: number) {
 }
 try {
   renderer = new Renderer(document.querySelector("#game")!, map);
+  let renderStart: number | undefined;
+  renderer.app.on("prerender", () => { renderStart = started && !paused ? battlePerformance.begin() : undefined; });
   // Copy the WebGL surface while its drawing buffer is still available.
   renderer.app.on("postrender", () => {
+    battlePerformance.end("renderSubmit",renderStart);
     if (started) recording?.frame(game, rawFrameMs, paused);
   });
   menu(
