@@ -92,7 +92,7 @@ describe("combat and lifecycle", () => {
     expect(enemy.deaths).toBe(1);
     expect(p.ammo).toBe(26);
     enemy.command = idle();
-    advance(g, 149);
+    advance(g, enemy.respawnAt - g.tick - 1);
     expect(enemy.hp).toBe(0);
     advance(g, 1);
     expect(enemy.hp).toBe(100);
@@ -251,16 +251,20 @@ describe("combat and lifecycle", () => {
     expect(enemy.hp).toBe(100);
   });
   it("checks spawn protection at impact and preserves rounds after the shooter dies", () => {
-    const { g, p, enemy } = scene();
-    enemy.protectedUntil = 3;
-    enemy.hp = 25;
-    g.fire(p);
-    p.hp = 0;
-    p.respawnAt = 150;
-    advance(g, 15);
-    expect(enemy.hp).toBe(0);
-    expect(p.kills).toBe(1);
-    expect(p.hp).toBe(0);
+    for (const protectedUntil of [2,3]) {
+      const { g, p, enemy } = scene();
+      enemy.protectedUntil = protectedUntil;
+      enemy.hp = 25;
+      g.fire(p);
+      p.hp = 0;
+      p.respawnAt = 150;
+      advance(g, 15);
+      // At 192m/s this round arrives on tick2, after protection ending at2
+      // but before protection ending at3. Shooter death never cancels flight.
+      expect(enemy.hp).toBe(protectedUntil === 2 ? 0 : 25);
+      expect(p.kills).toBe(protectedUntil === 2 ? 1 : 0);
+      expect(p.hp).toBe(0);
+    }
   });
   it("expires rounds at sixty meters and clears them at match end", () => {
     const g = new Game(empty, false);
