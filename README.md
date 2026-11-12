@@ -95,11 +95,19 @@ Playtest logs include `botPosition` events with the chosen position and reason (
 
 This is a layout/balance prototype. The latest full-presentation production recording runs 100 soldiers for 60 seconds with four captures, artillery, collapses and zero reported errors, averaging 44.11 FPS on the development machine. It records cover changes under fire and after destruction, with much less opening congestion. The earlier 9.24 FPS development recording and 55.21 FPS isolated fixture used different workloads/build conditions; these results do not isolate the cause of that performance difference. Longer performance and manual-play acceptance remain follow-ups. See PLAYTEST_REVIEW.md.
 
+## Verdun forest trenches
+
+Verdun now has irregular woodland belts along both flanks: tall pines and torn broadleaf crowns mixed with bare trunks and snapped trees. The center stays a blasted, exposed crossing between the four objectives. There are 124 destructible trees, 42 low brush patches, 14 fallen logs and 12 stumps. Trunks provide real cover; foliage affects bot visibility, and the low undergrowth leaves soldier-height sightlines open.
+
+Three forward sap trenches turn through the woods, joining the existing rear/front network. The southern approaches take different doglegs on each side. Walk-out slopes, objective approaches and worn woodland tracks stay clear of new props. Brown leaf litter, needles and damp soil blend into the same terrain material; fresh artillery and grenade cuts reveal earth. Crowns disappear when trees are badly damaged, and destroyed trunks fall into physical low timber cover using the existing bounded animation/debris system.
+
+France versus Imperial Germany, 50 soldiers per team, four-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
+
 ## Farmland trench front
 
 Trench Front now has two rutted supply roads, broken farmyard boundaries, a lower ruined farmhouse with a recognizable chimney, bare orchard trees, supply carts/crates, shelter-bay stores and three shallow flooded pockets. A winding shallow drainage hollow adds ground-level variation in the northern crossing. There are87new destructible cover parts, clustered around supply districts and farm boundaries; existing trench routes, firing stations and four flags remain accessible.
 
-Most added cover sits below standing sightlines. Explosions open timber fences and remove carts/crates; masonry leaves low rubble and felled trees leave trunks/stumps. Undermined farm props lose both their visual and collider. New scenery uses existing shared materials and batched primitives. Verdun remains the suggested forest/trench follow-up; this pass changes Trench Front.
+Most added cover sits below standing sightlines. Explosions open timber fences and remove carts/crates; masonry leaves low rubble and felled trees leave trunks/stumps. Undermined farm props lose both their visual and collider. New scenery uses existing shared materials and batched primitives. Trench Front keeps its farmland identity alongside Verdun's woodland setting.
 
 ## Soldiers
 

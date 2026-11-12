@@ -1,8 +1,20 @@
 # Sector Control — continuation handoff
 
-Updated November 11, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
+Updated November 12, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Farmland frontage and faster bullets — newest checkpoint
+## Verdun forest trenches — newest checkpoint
+
+Approved forest/trench adaptation is implemented in Verdun, preserving its four flags, France/Germany factions and 50v50 roster. `verdun-forest.ts` authors asymmetric woodland belts, 124 trees (pine/sparse/bare/snapped), 42 low brush patches, 14 fallen logs and 12 stumps with an isolated deterministic authoring stream. Full prop footprints stay off trench lanes, ramps, flag centers, spawn assembly areas and woodland paths. The central crossing retains standing sightlines. Existing tree damage strips crowns, then replaces standing trunks/collision with low logs/stumps; falling animation and debris retain their existing caps. No artillery accuracy, damage or timing changes were included in this map pass.
+
+Three forward sap trenches add turning woodland routes. The southern approaches have independent doglegs. Tests caught an existing Red ramp interrupting a new low corridor, and the old C-rubble pile obstructing its exit; both were corrected. All four flags are pathfind-reachable from both spawn approaches, new floors/exits are walkable, and original rear-ramp protection checks remain. `woodland` metadata supplies tracks/leaf-litter masks to the deformable atlas. Pine crowns use batched cones, torn broadleaf crowns smaller clusters, and woodland trunks/branches shared wood materials. No new per-frame foliage simulation. Other battlefields retain their scenery.
+
+Native production Chrome: log-only overview `sector-control-2026-11-12T11-40-02-326Z`, 60 wall seconds / 1,781 ticks / 100 soldiers / four captures / 35 artillery impacts / zero errors. 56.37 FPS average, 16.9ms p95, 50ms p99, 433.4ms maximum including startup, 56 frames over33ms. Capture-only frame instrumentation is included; this is a diagnostic, not a comparative GPU benchmark. Blast hitches remain. Saved raw log/perf are ignored `verdun-forest-native.json` / `.perf.json`. No trees were felled during that first minute; tree/crown removal and physical remnants are covered by the staged regression.
+
+Native ground-level autoplay `sector-control-2026-11-12T11-43-14-750Z`, 30 wall seconds / 890 ticks / 100 soldiers / two captures / 17 artillery impacts / zero errors. 56.99 FPS average, 17.3ms p95 / 33.4ms p99, max366ms. Exported WebM plus JSON saved as ignored `verdun-forest-ground.*`; H.264/AAC shareable `playtest-artifacts/verdun-forest.mp4` is1280x720 /29.93s. Both battle recordings predate only the last cosmetic branch-size/crown-apex polish. The final native production-renderer scenic fixture verified that polish and exported the new640x360 `public/previews/verdun.jpg`. Fixture is isolated scenery, not a human gameplay test; no new manual keyboard/mouse acceptance claim. Direct browser host was unavailable, native Chrome worked; one transient cgWindowNotFound recovered via getApp. User's original public-trial tab was preserved.
+
+Validation: strict TypeScript, all400tests/67files locally in78.12s, production build, whitespace checks pass. Six new regressions cover repeatable bounded woodland, both-team flag access, connected sap floors/exits, central sightlines, crown stripping/felling with collider changes/low remnants, forest materials and a90s100-soldier battle (the existing two map tests were extended). Original existing timeouts unchanged. Final CI/publication and server teardown are recorded when complete below. Temporary scenic fixture lives only in ignored artifacts/build output and must not be published; final Vite build removes it.
+
+## Previous farmland frontage and faster bullets checkpoint
 
 **Live version16:** [Trench Front farmland](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Tested game source `4a281918ab3f892dcc9577ecd75c4d9e85af758f`; [CI43143844283](https://github.com/cmorterud/sector-control/actions/runs/43143844283) succeeds: strictTypeScript, all394tests/67files in119.95s and production build9.59s. Local full suite also passes394tests/67files in70.55s; production build4.40s. Original budgets unchanged. All commits immediately pushed.
 

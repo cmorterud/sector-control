@@ -195,7 +195,7 @@ export function foliageBlocks(map: MapDefinition, from: V3, to: V3): boolean {
       b.h < 0.6
     )
       continue;
-    const sparse = b.treeStyle === "sparse";
+    const sparse = b.treeStyle === "sparse" || b.treeStyle === "pine";
     const radius = b.kind === "tree" ? b.h * (sparse ? 0.23 : 0.3) : b.w * 0.55;
     if (
       Math.max(from.x, to.x) < b.x - radius ||

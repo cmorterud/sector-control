@@ -833,7 +833,7 @@ export class Renderer implements CollisionWorld {
     if (["tree", "brush", "log", "stump"].includes(b.kind)) {
       const primitive = (
         name: string,
-        type: "sphere" | "cylinder" | "plane",
+        type: "sphere" | "cylinder" | "plane" | "cone",
         x: number,
         y: number,
         z: number,
@@ -845,7 +845,8 @@ export class Renderer implements CollisionWorld {
         const e = new pc.Entity(name);
         e.addComponent("render", {
           type,
-          material: this.material(tint),
+          material: this.map.woodland && type === "cylinder"
+            ? this.surfaceMaterial("wood", tint) : this.material(tint),
           castShadows: true,
           receiveShadows: true,
           batchGroupId: this.coverBatch,
@@ -899,17 +900,19 @@ export class Renderer implements CollisionWorld {
       }
       if (b.kind === "tree") {
         const bare = !treeHasCrown(b);
-        for (let i = 0; i < (b.treeStyle === "bare" ? 5 : 2); i++) {
+        const woodland = !!this.map.woodland;
+        for (let i = 0; i < (b.treeStyle === "bare" ? 5 : woodland ? 4 : 2); i++) {
           const side = i % 2 ? 1 : -1;
+          const angle = ((seed + i * 137) * Math.PI) / 180;
           const branch = primitive(
             "tree branch",
             "cylinder",
-            b.x + side * h * 0.09,
+            b.x + (woodland ? Math.sin(angle) : side) * h * (woodland ? .07 : .09),
             base + h * (0.43 + (i % 3) * 0.14),
-            b.z,
-            b.w * 0.35,
-            h * (bare ? 0.26 : 0.42),
-            b.w * 0.35,
+            b.z + (woodland ? Math.cos(angle) * h * .07 : 0),
+            b.w * (woodland ? .22 : .35),
+            h * (woodland ? bare ? .24 : .20 : bare ? .26 : .42),
+            b.w * (woodland ? .22 : .35),
             bare ? "#51473a" : "#5a4833",
           );
           branch.setLocalEulerAngles(
@@ -954,7 +957,30 @@ export class Renderer implements CollisionWorld {
             );
           }
         }
-        if (object.stage === 0 && treeHasCrown(b))
+        if (object.stage === 0 && b.treeStyle === "pine") {
+          for (let i = 0; i < 4; i++) {
+            const crown = primitive(
+              "broken pine crown", "cone",
+              b.x + Math.sin(seed + i * 2.4) * b.h * .025,
+              base + b.h * (i === 3 ? .94 : .58 + i * .105),
+              b.z + Math.cos(seed + i * 2.4) * b.h * .025,
+              b.h * (.43 - i * .078), b.h * (i === 3 ? .24 : .3 - i * .045),
+              b.h * (.38 - i * .065),
+              i % 2 ? "#49523e" : "#555d45",
+            );
+            crown.setLocalEulerAngles(0, seed + i * 53, i % 2 ? 4 : -3);
+          }
+        } else if (object.stage === 0 && this.map.woodland && b.treeStyle === "sparse") {
+          for (let i = 0; i < 5; i++)
+            primitive(
+              "torn woodland crown", "sphere",
+              b.x + Math.sin(seed + i * 2.4) * b.h * .10,
+              base + b.h * [ .63, .73, .84, .69, .92 ][i],
+              b.z + Math.cos(seed + i * 2.4) * b.h * .10,
+              b.h * .22, b.h * (.21 + (i % 2) * .05), b.h * .22,
+              i % 2 ? "#62674b" : "#4f5b42",
+            );
+        } else if (object.stage === 0 && treeHasCrown(b))
           for (let i = 0; i < (b.treeStyle === "sparse" ? 2 : 3); i++) {
             const sparse = b.treeStyle === "sparse";
             primitive(

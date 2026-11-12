@@ -1,6 +1,6 @@
 import type { MapDefinition } from "./map";
 export const battlefieldInfo = {
-  verdun: {setting:"Verdun-inspired · 1917", factions:"France · Imperial Germany", description:"Shattered woodland, shell fields and a broken fortification."},
+  verdun: {setting:"Verdun-inspired · 1917", factions:"France · Imperial Germany", description:"Forest trenches, shattered tree belts and exposed shell clearings."},
   industrial: { setting: "Training ground", factions: "Training teams", description: "Close lanes and industrial cover. Three control points." },
   trenches: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Flooded farmland, broken farmyards and exposed trench crossings. Four flags." },
   village: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Ruined streets, orchard flanks and sunken approaches." },

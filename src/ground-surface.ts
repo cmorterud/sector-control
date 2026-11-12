@@ -1,5 +1,6 @@
 import { groundHeight, type MapDefinition, type Vec } from "./map";
 import { lookNoise, surfacePixels } from "./battlefield-look";
+import { woodlandDensity } from "./verdun-forest";
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const smooth = (a: number, b: number, n: number) => {
@@ -41,6 +42,9 @@ function context(map: MapDefinition) {
     }
     const farmPaths:Segment[]=[];
     for(const track of map.farmland?.tracks??[])for(let i=1;i<track.points.length;i++)farmPaths.push({a:track.points[i-1],b:track.points[i],width:track.width});
+    for (const track of map.woodland?.tracks ?? [])
+      for (let i = 1; i < track.points.length; i++)
+        paths.push({ a: track.points[i - 1], b: track.points[i] });
     c = { paths, farmPaths, base: { ...map, destruction: undefined } };
     contexts.set(map.terrain!, c);
   }
@@ -71,12 +75,15 @@ export function groundField(map: MapDefinition, x: number, z: number) {
   let near = 1e9;
   for (const path of c.paths) near = Math.min(near, distance({ x, z }, path));
   const wear = Math.max((1-smooth(.3,2.3,near))*(.35+lookNoise(x*.29,z*.29)*.65),road*(.7+lookNoise(x*.7,z*.7)*.3));
+  const litter = map.woodland
+    ? woodlandDensity(map.woodland, wx, wz) * (1 - wear * .9) * (.65 + lookNoise(x * .21, z * .21) * .35)
+    : 0;
   const grass =
     smooth(0.51, 0.76, lookNoise(wx * 0.047 + 3, wz * 0.047 - 20)) *
     (1 - wet * 0.65) *
     (1 - wear) *
-    (0.35 + smooth(8, 42, Math.abs(x)) * 0.65);
-  return { wet, dry, grass, wear };
+    (0.35 + smooth(8, 42, Math.abs(x)) * 0.65) * (1 - litter * .85);
+  return { wet, dry, grass, wear, litter };
 }
 
 // One map-sized atlas: two rotated/incommensurate mud samples and a warped,
@@ -91,7 +98,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
   const spacing = 0.5,
     columns = Math.ceil(map.width / spacing) + 1,
     rows = Math.ceil(map.depth / spacing) + 1;
-  const fields = new Float32Array(columns * rows * 4);
+  const fields = new Float32Array(columns * rows * 5);
   for (let row = 0; row < rows; row++)
     for (let col = 0; col < columns; col++) {
       const f = groundField(
@@ -99,7 +106,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         -map.width / 2 + col * spacing,
         -map.depth / 2 + row * spacing,
       );
-      fields.set([f.wet, f.dry, f.grass, f.wear], (row * columns + col) * 4);
+      fields.set([f.wet, f.dry, f.grass, f.wear, f.litter], (row * columns + col) * 5);
     }
   const sample = (x: number, y: number) => {
     x = (((x % 1) + 1) % 1) * sourceSize;
@@ -130,7 +137,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         fz = gz - iz;
       const channel = (k: number) => {
         const at = (dx: number, dz: number) =>
-          fields[((iz + dz) * columns + ix + dx) * 4 + k];
+          fields[((iz + dz) * columns + ix + dx) * 5 + k];
         return (
           (at(0, 0) * (1 - fx) + at(1, 0) * fx) * (1 - fz) +
           (at(0, 1) * (1 - fx) + at(1, 1) * fx) * fz
@@ -139,7 +146,8 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
       const wet = channel(0),
         dry = channel(1),
         grass = channel(2),
-        wear = channel(3);
+        wear = channel(3),
+        litter = channel(4);
       const warp = (wet - dry) * 0.8;
       const a = sample(
         (x * 0.857 - z * 0.515) / 4.7 + warp,
@@ -163,6 +171,15 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         ],
         i,
       );
+      if (litter > .01) {
+        // Broken leaves and needles are baked into the same deformable atlas;
+        // fresh blast cuts expose the ordinary soil through the existing mask.
+        const fleck = lookNoise(x * 3.1 + 71, z * 3.1 - 29);
+        const mix = litter * .7;
+        const leaf = [.48 + fleck * .13, .40 + fleck * .10, .28 + fleck * .07];
+        for (let c = 0; c < 3; c++)
+          diffuse[i + c] = diffuse[i + c] * (1 - mix) + leaf[c] * 255 * mix;
+      }
       const road = villageRoad(map, x, z);
       if (road > 0) {
         const pavingRow = Math.floor(z / 0.43),
@@ -174,7 +191,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         for (let c = 0; c < 3; c++)
           diffuse[i + c] = diffuse[i + c] * (1 - mix) + stone * 255 * mix;
       }
-      const shine = 18 + wet * 112 + wear * wet * 65;
+      const shine = (18 + wet * 112 + wear * wet * 65) * (1 - litter * .45);
       gloss.set([shine, shine, shine, 255], i);
       heights[row * size + col] =
         detail * (0.7 - wet * 0.35) + wear * (a - b) * 0.18;
