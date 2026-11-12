@@ -224,11 +224,12 @@ it("requires awareness and stops gunner bursts immediately when sight is lost", 
   }
 });
 
-it("doubles both rifle velocities, retains machine-gun speed, and keeps in-flight speed after a weapon change", () => {
+it("scales all bullet velocities by 1.5, and keeps in-flight speed after a weapon change", () => {
   for (const [weapon, speed] of [
-    ["rifle", 128],
-    ["serviceRifle", 128],
-    ["machineGun", 32],
+    ["rifle", 192],
+    ["serviceRifle", 192],
+    ["machineGun", 48],
+    ["pistol", 192],
   ] as const) {
     const g = new Game(
         new TestCollision({ ...industrialMap, boxes: [] }),

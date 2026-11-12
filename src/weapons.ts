@@ -1,6 +1,6 @@
 export type WeaponKind = "rifle" | "serviceRifle" | "machineGun" | "pistol" | "flamethrower";
 export const weaponProfiles = {
-  pistol: { magazine: 8, reserve: 40, shotTicks: 6, reloadTicks: 36, damage: 25, projectileSpeed: 128, muzzle: 0.7, label: "PISTOL" },
+  pistol: { magazine: 8, reserve: 40, shotTicks: 6, reloadTicks: 36, damage: 25, projectileSpeed: 192, muzzle: 0.7, label: "PISTOL" },
   flamethrower: { magazine: 240, reserve: 0, shotTicks: 1, reloadTicks: 30, damage: 1, projectileSpeed: 20, muzzle: 1, label: "FLAMETHROWER" },
   rifle: {
     magazine: 30,
@@ -8,7 +8,7 @@ export const weaponProfiles = {
     shotTicks: 6,
     reloadTicks: 30,
     damage: 25,
-    projectileSpeed: 128,
+    projectileSpeed: 192,
     muzzle: 1.08,
     label: "AR-01 / SEMI-AUTO RIFLE",
   },
@@ -18,7 +18,7 @@ export const weaponProfiles = {
     shotTicks: 18,
     reloadTicks: 48,
     damage: 50,
-    projectileSpeed: 128,
+    projectileSpeed: 192,
     muzzle: 1.2,
     label: "SERVICE RIFLE / BOLT ACTION",
   },
@@ -28,7 +28,7 @@ export const weaponProfiles = {
     shotTicks: 3,
     reloadTicks: 45,
     damage: 25,
-    projectileSpeed: 32,
+    projectileSpeed: 48,
     muzzle: 1.27,
     label: "LIGHT MACHINE GUN",
   },

@@ -284,10 +284,10 @@ describe("combat and lifecycle", () => {
     g.botSettings.awareness = false;
     g.tick = 1;
     const c = botCommand(g, p);
-    expect(c.yaw).toBeCloseTo(Math.asin(4.5 / 128));
+    expect(c.yaw).toBeCloseTo(Math.asin(4.5 / 192));
     p.weapon = "machineGun";
     const slower = botCommand(g, p);
-    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.08);
+    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.05);
     expect(slower.yaw).toBeLessThan(0.3);
   });
   it("aligns the autoplay driver with the first-person sight camera", () => {

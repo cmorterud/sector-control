@@ -52,7 +52,7 @@ describe("first-person sight and projectile alignment", () => {
         const travel = (dot(plane) - dot(shot)) / dot({ x: shot.vx, y: shot.vy, z: shot.vz });
         expect(Math.hypot(shot.x + shot.vx * travel - plane.x,
           shot.y + shot.vy * travel - plane.y, shot.z + shot.vz * travel - plane.z)).toBeLessThan(0.00001);
-        expect(Math.hypot(shot.vx, shot.vy, shot.vz)).toBeCloseTo(weapon === "machineGun" ? 32 : 128);
+        expect(Math.hypot(shot.vx, shot.vy, shot.vz)).toBeCloseTo(weapon === "machineGun" ? 48 : 192);
       }
   });
 
