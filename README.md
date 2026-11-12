@@ -57,7 +57,7 @@ Trench riflemen, including the player, carry a **bolt-action service rifle** wit
 
 Weapon changes lower the old gun, draw the selected one and raise it over the existing **0.3-second** firing lock. Ordinary sights shoulder over **0.2 seconds**; marksmen retain their **0.5-second** settling. The visible first-person muzzle and firing origin share that shoulder curve. Reload hands follow the actual feed location for pans, belts, curved magazines, pistol magazines and opening revolver frames. Slides/toggles and bolt travel follow the weapon; magazine/bolt/equip sounds follow their animation phases. Reloading during a draw queues a full loading cycle. Shared role capacities, damage, fire rates and reload durations remain unchanged, including the common eight-round sidearm capacity despite the Webley's stylized six-chamber model.
 
-Service-rifle and semi-auto rifle rounds travel at **128 m/s**, twice their previous speed. Machine-gun rounds remain at 32 m/s. All retain a 60 m range, visible tracers, swept collision and damage on impact; bot lead follows each weapon’s speed.
+Service-rifle, semi-auto rifle and pistol rounds travel at **192 m/s**; machine-gun rounds travel at **48 m/s**. All bullet speeds are 1.5× the previous values. All retain a 60 m range, visible tracers, swept collision and damage on impact; bot lead follows each weapon’s speed.
 
 Reloads now take half their previous time: **1 second** for the semi-auto rifle, **1.6 seconds** for the service rifle and **1.5 seconds** for the machine gun. Hand, clip/magazine and bolt animations follow the shorter timings, with mechanical sound cues aligned to them.
 
@@ -94,6 +94,12 @@ Masonry sections and partial roofs use the existing destruction system: blasts o
 Playtest logs include `botPosition` events with the chosen position and reason (`deploy`, `objective`, `stuck`, `underFire`, `coverLost` or `reposition`), plus cover-choice/stuck-replan counters. Plans are included in snapshots and clear on respawn.
 
 This is a layout/balance prototype. The latest full-presentation production recording runs 100 soldiers for 60 seconds with four captures, artillery, collapses and zero reported errors, averaging 44.11 FPS on the development machine. It records cover changes under fire and after destruction, with much less opening congestion. The earlier 9.24 FPS development recording and 55.21 FPS isolated fixture used different workloads/build conditions; these results do not isolate the cause of that performance difference. Longer performance and manual-play acceptance remain follow-ups. See PLAYTEST_REVIEW.md.
+
+## Farmland trench front
+
+Trench Front now has two rutted supply roads, broken farmyard boundaries, a lower ruined farmhouse with a recognizable chimney, bare orchard trees, supply carts/crates, shelter-bay stores and three shallow flooded pockets. A winding shallow drainage hollow adds ground-level variation in the northern crossing. There are87new destructible cover parts, clustered around supply districts and farm boundaries; existing trench routes, firing stations and four flags remain accessible.
+
+Most added cover sits below standing sightlines. Explosions open timber fences and remove carts/crates; masonry leaves low rubble and felled trees leave trunks/stumps. Undermined farm props lose both their visual and collider. New scenery uses existing shared materials and batched primitives. Verdun remains the suggested forest/trench follow-up; this pass changes Trench Front.
 
 ## Soldiers
 

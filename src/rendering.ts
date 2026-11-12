@@ -1,3 +1,4 @@
+import {farmPropParts} from "./farm-props";
 import { battlePerformance } from "./battle-performance";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
@@ -1042,7 +1043,15 @@ export class Renderer implements CollisionWorld {
         true,
         root,
       );
-      if (b.kind === "gun") {
+      if (b.farmProp === "crate" || b.farmProp === "cart") {
+        solid.render!.enabled = false;
+        for (const part of farmPropParts(b,h)) {
+          const piece=this.cube(part.name,b.x+part.at[0],base+part.at[1],b.z+part.at[2],...part.size,part.tint,false,root);
+          piece.render!.type=part.shape;
+          if(part.rotation)piece.setLocalEulerAngles(...part.rotation);
+          if(part.wood)piece.render!.material=this.surfaceMaterial("wood",part.tint);
+        }
+      } else if (b.kind === "gun") {
         solid.render!.enabled = false;
         const primitive = (
           name: string,

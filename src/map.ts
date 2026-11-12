@@ -1,3 +1,4 @@
+import type { FarmFront } from "./farm-front";
 import type { Landmark } from "./landmarks";
 import type { DestructionState } from "./destruction";
 export const terrainResolution = 0.25;
@@ -27,6 +28,8 @@ export type Box = Vec & {
   landmark?: string;
   supports?: string[];
   baseY?: number;
+  farmProp?: "crate" | "cart" | "fence";
+  footingY?: number;
   treeStyle?: "bare" | "snapped" | "sparse";
 };
 export const sectors = [
@@ -112,6 +115,7 @@ export interface MapDefinition {
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
+  farmland?: FarmFront;
   sectors: (Vec & { id: string; name?: string; home?: "blue" | "red" })[];
   boxes: Box[];
   vegetation?: Box[];

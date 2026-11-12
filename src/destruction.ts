@@ -623,6 +623,13 @@ function applyCoverChanges(
       b.z - b.d / 2 - 0.5 > bounds[3]
     )
       continue;
+    // A blast can excavate beneath cover that was shielded from its pressure.
+    // Store the ground footing separately from raised fence rails so unsupported
+    // farm props disappear with their colliders rather than hanging over holes.
+    if (b.farmProp && groundHeight(b.x,b.z,map) < (b.footingY ?? b.baseY ?? 0) - .3) {
+      const change = {id:object.id,hp:0,stage:2 as const};
+      changes.push(change);apply(change);continue;
+    }
     if (isStructure(b) || b.kind === "rubble") {
       const ground = groundHeight(b.x, b.z, map);
       if (isStructure(b) && !b.supports && ground < (b.baseY ?? 0) - 0.45) {

@@ -66,7 +66,7 @@ it("bakes a reproducible map-wide surface without a repeated three-meter color/n
 it("places shallow level puddles inside authored hollows and low rubble near worn approaches", () => {
   const puddles = groundPuddles(trenchMap);
   expect(puddles.length).toBeGreaterThanOrEqual(6);
-  expect(puddles.length).toBeLessThanOrEqual(9);
+  expect(puddles.length).toBeLessThanOrEqual(13);
   for (const p of puddles) {
     expect(p.indices.length).toBeGreaterThan(0);
     expect(p.positions.every(Number.isFinite)).toBe(true);

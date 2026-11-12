@@ -1,3 +1,4 @@
+import {buildFarmFront,farmDrainage} from "./farm-front";
 import { buildLandmarks } from "./landmarks";
 import { buildTrenchBanks } from "./trench-banks";
 import { vegetationFor } from "./vegetation";
@@ -418,6 +419,7 @@ export const trenchMap: MapDefinition = {
       { x: 3, z: 42, radius: 4, depth: 0.65 },
     ],
     depressions: [
+      ...farmDrainage,
       { x: -3, z: -39, radiusX: 10, radiusZ: 14, depth: 0.16 },
       { x: 4, z: -17, radiusX: 9, radiusZ: 12, depth: 0.14 },
       { x: -2, z: 3, radiusX: 12, radiusZ: 15, depth: 0.18 },
@@ -495,4 +497,7 @@ trenchMap.landmarks = landmarkLayout.landmarks;
 trenchMap.boxes.push(...landmarkLayout.parts);
 for (const sector of trenchMap.sectors)
   sector.name = trenchMap.landmarks.find((l) => l.id === sector.id)?.name;
+const farmLayout = buildFarmFront(trenchMap);
+trenchMap.farmland = farmLayout.farm;
+trenchMap.boxes.push(...farmLayout.parts);
 trenchMap.vegetation = vegetationFor(trenchMap);

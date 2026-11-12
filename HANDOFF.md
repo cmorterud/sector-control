@@ -2,7 +2,19 @@
 
 Updated November 11, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Battle hitch performance pass — newest checkpoint
+## Farmland frontage and faster bullets — newest checkpoint
+
+Bullet commits `c8b383b` and timing-regression follow-up `80cbbf6` were immediately pushed. Latest [bullet CI43140345438](https://github.com/cmorterud/sector-control/actions/runs/43140345438) succeeds. All bullet speeds multiplied1.5: rifle/serviceRifle/pistol192m/s; machineGun48m/s. Flame jets, grenade/artillery flight, cadence/damage/range unchanged. Existing swept thin-cover/impact checks pass; lifecycle fixtures now check actual respawn deadline and both sides of tick2protection at faster arrival.
+
+Trench Front farmland prototype: `farm-front.ts` builds87new destructible parts (17crates,5carts,41fence components,8bare orchard trees,16masonry pieces). Asymmetric supply clusters and broken field/garden boundaries keep the center readable; low farmhouse facades retain the slender chimney. Two authored wheel-rutted mud roads, three flooded shelter pockets and shallow winding drainage depressions give the field a worked landscape. Six shelter-bay stores sit at corridor edges. Firing stations/flags/spawns remain clear; farm-only standing cross-field rays stay open, and at least70%of previously open firing-step lines are retained by a regression.
+
+`farm-props.ts` supplies simple shared crate/cart primitives, rendered through the existing destructible-cover batch/materials. All major new props use the existing damage/collision/destruction registry. Masonry/trees leave low remnants; light timber props are excluded from stone-rubble generation. Separate footingY avoids raised fence rails being treated as already unsupported; if a cut removes their ground, farm props disappear with collision. Water/decor uses existing crater cleanup. No new per-frame prop simulation or dense foliage screen.
+
+Native production Chrome overview loaded and ran the new map; screenshot review showed supply tracks, wet bays, low clusters and clear central space. The intended45s log-only recording's final report could not be retrieved after the active Chrome window changed; direct browser-tab access returned host unavailable. No completed native timing/video/manual-acceptance claim. Existing preview JPEG retained; its map layout is still representative but predates farmland dressing. Final shader/footing follow-up verified by strictTS/tests/build, not another native review.
+
+Validation: selected8files initially61/65passed; two original bullet fixtures and two new blast-origin fixtures were corrected for faster timing and exterior detonation. All30simulation checks and all six new farm checks subsequently pass, including same-tick protection, bounded density/access, sightlines, timber removal, low remnants, wet roads/bays and excavation support loss. Final30affected checks/4files plus strictTS/build pass. Original budgets retained. Full map CI/publication recorded when complete below. Ignored `farm-layout-final.json` records authored counts; no forest-map code changes were made in response to the user's planning question. Verdun is recommended for that future pass.
+
+## Previous battle hitch checkpoint
 
 **Live version15:** [Trench Front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Tested game source `db69813bbf23a21ab208e2bb14efb44221c7f2d8`; Site source `89eff203c94f189fe37a50d377ac52ea6b6e824b`; saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_43aaf8ba40b08191b63af731ed4c7103`; successful deployment `appgdep_6af51bbecd188191a8a7567d53b7d32d`. Archive `/private/tmp/sector-control-performance-20261112.tar.gz`. Public audience unchanged, source private. Anonymous curl verifies exact JS `index-DeoIDuyr.js`, CSS and all four previews; HTML references the new bundle and may include Cloudflare's platform script. Hashes/byte counts in ignored `performance-live-parity.json`. Owned preview5177 stopped; existing user tabs preserved. The two native diagnostic runs were completed/saved; the final follow-up UI attempt was unavailable as noted below.
 

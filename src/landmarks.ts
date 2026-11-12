@@ -79,13 +79,13 @@ export function buildLandmarks(map: MapDefinition): {
           z,
           1.8,
           0.48,
-          x === -3 ? 2.7 : x === 3 ? 1.2 : 2.1,
+          x === -3 ? 1.8 : x === 3 ? .9 : 1.25,
         );
       }
     for (const x of [-4, 4])
       for (const z of [-2.4, 0, 2.4]) {
         if (x === 4 && z === 0) continue;
-        wall(`end-${x}-${z}`, x, z, 0.48, 1.8, z === 0 ? 3.4 : 2.4);
+        wall(`end-${x}-${z}`, x, z, 0.48, 1.8, z === 0 ? 2.1 : 1.1);
       }
     wall("chimney", -2.7, 2.3, 1.1, 1.1, 4.8);
     for (const x of [-3.4, 3.4])
@@ -271,7 +271,7 @@ export function buildLandmarks(map: MapDefinition): {
 }
 export const isStructure = (b: Box) =>
   ["masonry", "concrete", "gun"].includes(b.kind) ||
-  (b.kind === "wood" && !!b.landmark);
+  (b.kind === "wood" && !!b.landmark && !b.farmProp);
 // Persistent, low collision pieces. No recursive rubble generation or tall
 // invisible walls; loose visual fragments are handled separately by the renderer.
 export function collapsedStructureParts(

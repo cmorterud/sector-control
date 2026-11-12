@@ -6,7 +6,7 @@ const smooth = (a: number, b: number, n: number) => {
   const t = clamp((n - a) / (b - a));
   return t * t * (3 - 2 * t);
 };
-type Segment = { a: Vec; b: Vec };
+type Segment = { a: Vec; b: Vec; width?:number };
 function distance(p: Vec, { a, b }: Segment) {
   const dx = b.x - a.x,
     dz = b.z - a.z;
@@ -17,7 +17,7 @@ function distance(p: Vec, { a, b }: Segment) {
 }
 const contexts = new WeakMap<
   NonNullable<MapDefinition["terrain"]>,
-  { paths: Segment[]; base: MapDefinition }
+  { paths: Segment[]; farmPaths:Segment[]; base: MapDefinition }
 >();
 function context(map: MapDefinition) {
   let c = contexts.get(map.terrain!);
@@ -39,7 +39,9 @@ function context(map: MapDefinition) {
       for (let i = 1; i < points.length; i++)
         paths.push({ a: points[i - 1], b: points[i] });
     }
-    c = { paths, base: { ...map, destruction: undefined } };
+    const farmPaths:Segment[]=[];
+    for(const track of map.farmland?.tracks??[])for(let i=1;i<track.points.length;i++)farmPaths.push({a:track.points[i-1],b:track.points[i],width:track.width});
+    c = { paths, farmPaths, base: { ...map, destruction: undefined } };
     contexts.set(map.terrain!, c);
   }
   return c;
@@ -59,15 +61,16 @@ export function groundField(map: MapDefinition, x: number, z: number) {
   const c = context(map);
   const wx = x + (lookNoise(x * 0.028 + 17, z * 0.028) - 0.5) * 9;
   const wz = z + (lookNoise(x * 0.028, z * 0.028 + 31) - 0.5) * 9;
-  const wet = smooth(0.28, 0.73, lookNoise(wx * 0.057 + 40, wz * 0.057 + 17));
+  let road=0,ruts=0;
+  for(const path of c.farmPaths){const d=distance({x,z},path);road=Math.max(road,1-smooth(path.width!/2,path.width!/2+1,d));ruts=Math.max(ruts,Math.exp(-(((d-.72)/.16)**2))*(1-smooth(path.width!/2,path.width!/2+.5,d)));}
+  let wet = Math.max(smooth(0.28, 0.73, lookNoise(wx * 0.057 + 40, wz * 0.057 + 17)),ruts*.85);
+  for(const pool of map.farmland?.pools??[])wet=Math.max(wet,(1-smooth(.8,2.8,Math.hypot(x-pool.x,z-pool.z)))*.95);
   const dry =
     smooth(0.32, 0.76, lookNoise(wx * 0.041 - 13, wz * 0.041 + 9)) *
     (1 - wet * 0.75);
   let near = 1e9;
   for (const path of c.paths) near = Math.min(near, distance({ x, z }, path));
-  const wear =
-    (1 - smooth(0.3, 2.3, near)) *
-    (0.35 + lookNoise(x * 0.29, z * 0.29) * 0.65);
+  const wear = Math.max((1-smooth(.3,2.3,near))*(.35+lookNoise(x*.29,z*.29)*.65),road*(.7+lookNoise(x*.7,z*.7)*.3));
   const grass =
     smooth(0.51, 0.76, lookNoise(wx * 0.047 + 3, wz * 0.047 - 20)) *
     (1 - wet * 0.65) *
@@ -212,7 +215,7 @@ export function groundPuddles(map: MapDefinition): GroundPuddle[] {
     ...(map.terrain.shellScars ?? []),
     ...(map.terrain.depressions ?? []),
   ];
-  return candidates.slice(0, 9).flatMap((c, index) => {
+  return [...candidates.slice(0,9),...(map.farmland?.pools??[])].flatMap((c, index) => {
     let center = { x: c.x, z: c.z },
       low = groundHeight(c.x, c.z, base);
     for (let x = c.x - 0.6; x <= c.x + 0.6; x += 0.3)
