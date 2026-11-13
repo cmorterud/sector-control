@@ -237,6 +237,8 @@ Battle navigation retains unaffected adjacency rows and walk checks after local 
 
 For a stutter report, open `?map=trenches&playtest=1&video=0&clip=60` on the local server or public trial, begin play, and use **Save perf.json** when the minute finishes. Omit autoplay for direct play; add `autoplay=1` for a repeatable bot-driven player. The small report contains frame p95/p99/max, CPU phase timings, event counts and the worst60 frames with preceding-work attribution. Recording is opt-in and stays local; it adds overhead. Nested phase totals overlap; render submission measures CPU work rather than GPU execution. Deployment/loading stalls are retained and can appear at tick0.
 
+Terrain patch builds reuse exact shared height probes. Explosion-removable scenery uses local32m static batch groups, so destruction rebuilds nearby geometry; terrain and collision updates remain synchronous. `tools/performance-scenery.ts` measures actual PlayCanvas duckboard batching without a GPU. Local batching increases the number of static batches; CPU savings are measured, while the optimized browser frame impact still needs confirmation.
+
 `tools/performance-battle.ts` runs seeded CPU-only Trench/Verdun simulations with event/final-state hashes; `tools/performance-terrain.ts` checks exact terrain/lighting output and real Ammo replacement cost. Bundle these scripts with esbuild for Node. Neither is a substitute for browser/GPU measurements. See HANDOFF.md for the before/after native recordings and remaining blast-related spikes.
 
 ## Rules and architecture

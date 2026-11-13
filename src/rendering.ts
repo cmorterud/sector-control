@@ -1,5 +1,6 @@
 import {farmPropParts} from "./farm-props";
 import { battlePerformance } from "./battle-performance";
+import { SceneryBatches } from "./scenery-batches";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
 import { factions, scoped } from "./loadouts";
@@ -174,6 +175,7 @@ export class Renderer implements CollisionWorld {
   private actorBatch = -1;
   private coverBatch = -1;
   private batchGroup = -1;
+  private sceneryBatches?: SceneryBatches;
   private projectiles = new Map<number, pc.Entity>();
   private previousProjectiles = new Map<number, V3>();
   private grenades = new Map<number, pc.Entity>();
@@ -242,6 +244,7 @@ export class Renderer implements CollisionWorld {
       true,
       200,
     ).id;
+    if (map.terrain) this.sceneryBatches = new SceneryBatches(this.app.batcher!);
     this.batchGroup = this.mapBatch;
     const trenches = map.id !== "industrial";
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
@@ -428,6 +431,7 @@ export class Renderer implements CollisionWorld {
       this.mapBatch,
       this.coverBatch,
       this.boardBatch,
+      ...(this.sceneryBatches?.ids() ?? []),
     ]);
     this.worldParent = undefined;
   }
@@ -590,6 +594,11 @@ export class Renderer implements CollisionWorld {
       root.enabled = intactBoard(b, this.map);
       this.boardVisuals.push({ root, ...b });
     }
+    for (const prop of [...this.boardVisuals, ...this.groundDecor.filter(p => p.batched)]) {
+      const group = this.worldBatch(this.boardBatch, prop.x, prop.z);
+      for (const render of prop.root.findComponents("render") as pc.RenderComponent[])
+        if (render.batchGroupId === this.boardBatch) render.batchGroupId = group;
+    }
     this.batchGroup = previousBatch;
   }
   setMap(map: MapDefinition) {
@@ -610,6 +619,9 @@ export class Renderer implements CollisionWorld {
     this.waterMeshes = [];
     this.boardVisuals = [];
     this.mapRoot.destroy();
+    this.dirtyWorldBatches?.clear();
+    this.sceneryBatches?.clear();
+    this.sceneryBatches = map.terrain ? new SceneryBatches(this.app.batcher!) : undefined;
     this.terrainPhysics = new TerrainPhysics();
     this.buildMap();
   }
@@ -835,7 +847,7 @@ export class Renderer implements CollisionWorld {
     this.objectVisuals.delete(object.id);
     if (object.stage === 2) return true;
     const previousBatch = this.batchGroup;
-    this.batchGroup = this.coverBatch;
+    this.batchGroup = this.worldBatch(this.coverBatch, b.x, b.z);
     const root = this.joint(object.id, this.mapRoot);
     const h = b.h * (object.stage === 1 ? 0.6 : 1),
       base = b.baseY ?? 0;
@@ -858,7 +870,7 @@ export class Renderer implements CollisionWorld {
             ? this.surfaceMaterial("wood", tint) : this.material(tint),
           castShadows: true,
           receiveShadows: true,
-          batchGroupId: this.coverBatch,
+          batchGroupId: this.batchGroup,
         });
         e.setLocalPosition(x, y, z);
         e.setLocalScale(w, h, d);
@@ -1306,11 +1318,11 @@ export class Renderer implements CollisionWorld {
     }
     invalidateTerrainNormals(this.map,change);
     for (const key of change.patches) this.rebuildTerrainPatch(key);
-    let coverChanged = false;
-    for (const changed of change.objects)
-      coverChanged =
-        this.buildDestructible(this.map.destruction!.objects[changed.id]) ||
-        coverChanged;
+    for (const changed of change.objects) {
+      const object = this.map.destruction!.objects[changed.id];
+      if (this.buildDestructible(object))
+        this.queueWorldBatch(this.worldBatch(this.coverBatch, object.original.x, object.original.z));
+    }
     for (const fall of this.fallingTrees) {
       if (fall.hidden) continue;
       const hide = (id: string) => {
@@ -1328,19 +1340,15 @@ export class Renderer implements CollisionWorld {
         stump: hide(`stump-${fall.source.id}`),
       };
     }
-    if (coverChanged) this.queueWorldBatch(this.coverBatch);
     if (change.crater) {
-      let changed = false;
       for (const board of this.boardVisuals) {
         const enabled = intactBoard(board, this.map);
         if (board.root.enabled !== enabled) {
           board.root.enabled = enabled;
-          changed = true;
+          this.queueWorldBatch(this.worldBatch(this.boardBatch, board.x, board.z));
         }
       }
-      if (changed) this.queueWorldBatch(this.boardBatch);
     }
-    let decorChanged = false;
     if (change.crater)
       for (const decor of this.groundDecor)
         if (
@@ -1349,9 +1357,12 @@ export class Renderer implements CollisionWorld {
             decor.radius + change.crater.radius
         ) {
           decor.root.enabled = false;
-          decorChanged ||= !!decor.batched;
+          if (decor.batched)
+            this.queueWorldBatch(this.worldBatch(this.boardBatch, decor.x, decor.z));
         }
-    if (decorChanged) this.queueWorldBatch(this.boardBatch);
+  }
+  private worldBatch(base: number, x: number, z: number) {
+    return this.sceneryBatches?.group(base, x, z) ?? base;
   }
   private dirtyWorldBatches?: Set<number>;
   private queueWorldBatch(id:number) { (this.dirtyWorldBatches ??= new Set()).add(id); }

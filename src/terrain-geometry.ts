@@ -42,6 +42,17 @@ export function terrainGeometry(
     indices: number[] = [],
     colors: number[] = [],
     uvs: number[] = [];
+  // Adjacent quads repeatedly probe the same side of shared corners. Cache
+  // exact coordinates only for this build; the next blast gets fresh samples.
+  // Keep opposite epsilon probes distinct so authored cliffs stay vertical.
+  const heights = new Map<number, Map<number, number>>();
+  const height = (x: number, z: number) => {
+    let row = heights.get(x);
+    if (!row) { row = new Map(); heights.set(x, row); }
+    let y = row.get(z);
+    if (y === undefined) { y = groundHeight(x, z, map); row.set(z, y); }
+    return y;
+  };
   const quad = (points: number[][], dark = false) => {
     const start = positions.length / 3;
     const acrossX =
@@ -50,8 +61,10 @@ export function terrainGeometry(
     for (const [x, y, z] of points) {
       uvs.push((dark ? (acrossX ? x : z) : x) / 3, (dark ? y : z) / 3);
       positions.push(x, y, z);
-      if (map.terrain)
-        colors.push(...soilColor(x, y, z, dark, terrainCut(x, z, map)), exposedEarth(terrainCut(x, z, map), dark));
+      if (map.terrain) {
+        const cut = terrainCut(x, z, map);
+        colors.push(...soilColor(x, y, z, dark, cut), exposedEarth(cut, dark));
+      }
       else
         colors.push(
           ...[0.46, 0.49, 0.43].map(
@@ -161,39 +174,39 @@ export function terrainGeometry(
         for (let z = cellZ; z < Math.min(z1, cellZ + 2) - epsilon; z += step) {
           const right = Math.min(x1, cellX + 2, x + step),
             back = Math.min(z1, cellZ + 2, z + step);
-          const a = [x, groundHeight(x + epsilon, z + epsilon, map), z];
-          const b = [x, groundHeight(x + epsilon, back - epsilon, map), back];
+          const a = [x, height(x + epsilon, z + epsilon), z];
+          const b = [x, height(x + epsilon, back - epsilon), back];
           const c = [
             right,
-            groundHeight(right - epsilon, back - epsilon, map),
+            height(right - epsilon, back - epsilon),
             back,
           ];
-          const d = [right, groundHeight(right - epsilon, z + epsilon, map), z];
+          const d = [right, height(right - epsilon, z + epsilon), z];
           quad([a, b, c, d]);
           const sides = [
             [
               a,
               d,
-              groundHeight(x + epsilon, z - epsilon, map),
-              groundHeight(right - epsilon, z - epsilon, map),
+              height(x + epsilon, z - epsilon),
+              height(right - epsilon, z - epsilon),
             ],
             [
               d,
               c,
-              groundHeight(right + epsilon, z + epsilon, map),
-              groundHeight(right + epsilon, back - epsilon, map),
+              height(right + epsilon, z + epsilon),
+              height(right + epsilon, back - epsilon),
             ],
             [
               c,
               b,
-              groundHeight(right - epsilon, back + epsilon, map),
-              groundHeight(x + epsilon, back + epsilon, map),
+              height(right - epsilon, back + epsilon),
+              height(x + epsilon, back + epsilon),
             ],
             [
               b,
               a,
-              groundHeight(x - epsilon, back - epsilon, map),
-              groundHeight(x - epsilon, z + epsilon, map),
+              height(x - epsilon, back - epsilon),
+              height(x - epsilon, z + epsilon),
             ],
           ] as const;
           for (const [p, q, lowP, lowQ] of sides)

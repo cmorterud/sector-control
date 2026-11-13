@@ -2,7 +2,21 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Verdun forest immersion — newest checkpoint
+## Explosion hitch reduction — newest checkpoint
+
+November13: user clarified that autonomous playtesting is welcome; no manual intervention required. Baseline production Chrome run completed via native CUA: `sector-control-2026-11-13T20-10-58-159Z`, 60wall seconds,1767recorded ticks,100soldiers,35artillery impacts,130deaths,4captures and zero errors.55.67FPS,17.2ms p95/50.6ms p99,63frames over33ms. Maximum500.1ms includes startup; worst captured battle frame183.3ms at tick419 included83.6ms world rebuild,41.6ms scenery batching and10terrain patches. Timing phases overlap; do not add nested stages. Ignored `explosion-hitch-baseline.json`/`.perf.json` preserve logs. No heavy offline checks ran during capture.
+
+Implemented exact per-build height sampling reuse in `terrainGeometry`: adjacent quads share identical probes, opposite epsilon sides of cliffs remain distinct, caches expire when each patch build finishes. Reuse each vertex's runtime cut between color and exposure. Mesh topology, geometry, colors, UVs and lighting remain byte-identical in the existing47patch/12overlapping blast diagnostic: hash `11a2a681f8f092631805d22c9ea3ea217952483cd6bc7a0ec8187f84dfe608de`. Six alternating CPU runs give median geometry289.06→207.41ms (28% reduction); lighting184.00→184.53ms and actual Ammo replacement252.87→252.39ms. These are CPU diagnostic totals, not GPU/frame-rate measurements. Ignored `hitch-terrain-comparison.json` retains all runs; previous bundled geometry is retained for reproduction.
+
+`SceneryBatches` assigns destructible cover and removable floor/duckboard dressing to independent32m static regions. A blast regenerates only groups whose actual object or visibility changed; simultaneous impacts coalesce each local group. Collision/terrain replacement still happens synchronously. Other distant batch buffers remain intact. Initial generation includes every region; restoring a map removes old groups and pending IDs. Industrial retains its original global groups. More static batches are the tradeoff; actual browser frame impact remains unmeasured.
+
+`tools/performance-scenery.ts` exercises actual PlayCanvas BatchManager with NullGraphicsDevice, real Verdun duckboard transforms/material grouping and12deterministic4m clearings:1701planks, identical34344remaining vertices. Whole/global vs local:450360→102816vertices recopied (77% reduction),46.23→9.44ms total rebatch CPU; median3.11→0.77ms. Initial board-only batches2→16. This isolates duckboard batching and excludes other scenery, textures, GPU/shadows and actor simulation; it is not a browser benchmark. Ignored `hitch-scenery-comparison.json` retains results.
+
+Validation: strictTypeScript, all410tests/68files in85.94s, production build5.00s and whitespace checks pass with original budgets. Added a real NullGraphicsDevice batch-mesh regression verifying local destruction removes pieces while distant buffers retain identity, plus a region-boundary/cover-removal/floor-detail/reset regression. Final focused4batch checks pass after type-only harness adjustments. Initial14affected checks also pass, including real Ammo terrain replacement and forest mesh/material uploads.
+
+Autonomous optimized Chrome comparison was attempted but not completed: native AX remained at pre-frame08:00/recording after deployment, screenshots degraded to1px, scroll reported noWindowsAvailable and key/raise actions produced no change. Browser host remains unavailable. No cause established; no optimized FPS/runtime acceptance claim. Baseline capture remains valid. Publication/teardown recorded below when complete; preserve the same public Site and private repository, push immediately after committing.
+
+## Previous Verdun forest immersion checkpoint
 
 **Live version19:** [Play Verdun](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Game source `75abaece3acc551f733258453e96f40b6050f5c1` was committed and immediately pushed to private `origin/main`. November13 retry resolved the hosting blocker: refreshed native Sites credentials returned supported `http_extra_header`; the unchanged official helper successfully opened the existing checkout, committed/pushed the exact tested static output, and packaged it. Public audience unchanged, game repository private.
 
