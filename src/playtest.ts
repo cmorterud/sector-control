@@ -118,6 +118,9 @@ export class PlaytestLog {
       suppressions: this.events.filter((e) => e.type === "suppression").length,
       ducks: this.events.filter((e) => e.type === "duck" && e.phase === "start")
         .length,
+      combatReactions: this.events.filter(e => e.type === "combatReaction").length,
+      reactionCoverMoves: this.events.filter(e => e.type === "reactionCover" && e.phase === "move").length,
+      reactionCoverArrivals: this.events.filter(e => e.type === "reactionCover" && e.phase === "arrived").length,
       assaults: this.events.filter((e) => e.type === "assaultStart").length,
       craterArrivals: this.events.filter(
         (e) => e.type === "assaultProgress" && e.stage === "crater",

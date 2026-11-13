@@ -46,7 +46,6 @@ type Harness = {
   map: typeof trenchMap;
   people: Entity[];
   soldiers: Rig[];
-  blastFlinches: Map<number, { tick: number; strength: number }>;
   cube: Renderer["cube"];
   createSoldier(p: Soldier): void;
   riflePart(name: string, x: number, y: number, z: number, w: number, h: number, d: number, tint: string, parent: Entity, shape: RifleShape): Entity;
@@ -200,7 +199,8 @@ it("aligns the actual cloned front post and rear notch with the camera through a
     const r = rigFor(p);
     r.createFirstPersonRig();
     for (const pitch of [-0.8, 0, 0.7]) for (const crouched of [false, true]) {
-      Object.assign(p, { pitch, yaw: 1.3, crouched, recoilPitch: 0.025, recoilYaw: -0.01 });
+      Object.assign(p, { pitch, yaw: 1.3, crouched, recoilPitch: 0.025, recoilYaw: -0.01,
+        combatReaction: {kind:"nearMiss",tick:97,strength:.8,from:{x:p.x+4,y:p.y+1,z:p.z},pauseUntil:106,braceUntil:115} });
       const view = weaponAim(p), direction = viewDirection(view.yaw, view.pitch);
       r.camera.setPosition(p.x, p.y + eyeHeightOf(p), p.z);
       r.camera.lookAt(p.x + direction.x, p.y + eyeHeightOf(p) + direction.y, p.z + direction.z);
@@ -520,7 +520,7 @@ it("braces after a nearby blast without detaching the support hand, then settles
   const p = game.players[0],
     r = rigFor(p),
     rig = r.soldiers[0];
-  r.blastFlinches = new Map([[p.id, { tick: 100, strength: 1 }]]);
+  p.combatReaction = {kind: "blast", tick: 100, strength: 1, from: {x:p.x+4,y:p.y,z:p.z}, pauseUntil:109,braceUntil:122};
   r.animateSoldier(p, p.x, p.z, 1 / 60, 99);
   const rest = rig.upper.forward.clone();
   const control = rigFor(p);
@@ -534,7 +534,7 @@ it("braces after a nearby blast without detaching the support hand, then settles
   expect(wrist.distance(rig.supportHand.getPosition())).toBeLessThan(0.0001);
   r.animateSoldier(p, p.x, p.z, 1 / 60, 130);
   expect(rig.upper.forward.distance(futureIdle)).toBeLessThan(0.0001);
-  expect(r.blastFlinches.size).toBe(0);
+  expect(p.combatReaction.tick).toBe(100);
 });
 
 it("varies cadence and idle upper-body motion without moving planted boots or simulation state", () => {

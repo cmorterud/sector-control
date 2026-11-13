@@ -62,8 +62,9 @@ describe("capture", () => {
   });
 });
 describe("combat and lifecycle", () => {
-  function scene() {
-    const g = new Game({ ...empty, move: (p) => ({ x: p.x, z: p.z }) }, false);
+  function scene(stationaryTarget = false) {
+    const g = new Game({ ...empty, move: (p) => ({ x: p.x, z: p.z }) }, false,
+      14400, 12345, undefined, {humanPlayerIds: stationaryTarget ? [0, 1] : [0]});
     g.botSettings.engagementRange = 0;
     g.players[0].x = 0;
     g.players[0].z = 0;
@@ -78,7 +79,9 @@ describe("combat and lifecycle", () => {
     return { g, p: g.players[0], enemy };
   }
   it("deals 25 damage and kills after four shots; restores on respawn", () => {
-    const { g, p, enemy } = scene();
+    const { g, p, enemy } = scene(true);
+    // This stationary damage dummy has external input, like the human slot.
+    // Bot reaction/crouching under real hits is exercised separately.
     for (let i = 0; i < 4; i++) {
       // Recenter each deliberate shot; this fixture isolates damage/lifecycle.
       p.pitch = -p.recoilPitch;

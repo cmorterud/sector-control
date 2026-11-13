@@ -1,4 +1,5 @@
 import { weaponProfiles } from "./weapons";
+import { reactToThreat } from "./combat-reaction";
 import { stanceDrop } from "./crouch";
 import type { Game, Soldier, Projectile, V3, Command } from "./simulation";
 import { idle, firingPosition } from "./simulation";
@@ -50,6 +51,8 @@ export function suppressNearMiss(
     1,
     p.suppression + 0.16 + 0.12 * (1 - distance / suppressionRules.radius),
   );
+  if (distance < .9 || p.suppression >= .5)
+    reactToThreat(g, p, from, "nearMiss", .35 + .45 * (1 - distance / suppressionRules.radius));
   if (
     previous < suppressionRules.threshold &&
     p.suppression >= suppressionRules.threshold

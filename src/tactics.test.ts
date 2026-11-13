@@ -588,7 +588,10 @@ describe("covered squad advances", () => {
     }
     expect(summary.assaults).toBeGreaterThan(0);
     expect(summary.smokeClouds).toBeGreaterThan(0);
-    expect(summary.ducks).toBeGreaterThan(0);
+    // Quick bracing can now prevent the old high-suppression retreat threshold.
+    // Verify actual crouching, rather than requiring that particular strategy.
+    expect(summary.combatReactions).toBeGreaterThan(0);
+    expect(log.events.some(e => e.type === "stance" && e.crouched)).toBe(true);
     expect(summary.craterArrivals).toBeGreaterThan(0);
     expect(
       log.events.some(

@@ -1,5 +1,6 @@
 import { NavigationEdges } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
+import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction, type CombatCover } from "./combat-reaction";
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
@@ -319,6 +320,10 @@ export interface Soldier extends Vec {
   grenades: number;
   smokes: number;
   suppression: number;
+  combatReaction?: CombatReaction | null;
+  combatCover?: CombatCover | null;
+  nextCombatReaction?: number;
+  nextCombatCover?: number;
   duckUntil: number;
   nextDuck: number;
   nextNearMiss: number;
@@ -455,6 +460,8 @@ export type Event = { id: number; tick: number } & (
     }
   | { type: "smokeEnd"; cloud: number }
   | { type: "suppression"; actor: number; source: number; level: number }
+  | { type: "combatReaction"; actor: number; kind: import("./combat-reaction").ReactionKind; from: V3; strength: number; pauseUntil: number; braceUntil: number }
+  | { type: "reactionCover"; actor: number; phase: "move" | "arrived" | "resume"; kind: import("./combat-reaction").ReactionKind; goal: Vec }
   | {
       type: "nearMiss";
       actor: number;
@@ -873,6 +880,10 @@ export class Game {
         grenades: 3,
         smokes: 2,
         suppression: 0,
+        combatReaction: null,
+        combatCover: null,
+        nextCombatReaction: 0,
+        nextCombatCover: 0,
         duckUntil: 0,
         nextDuck: 0,
         nextNearMiss: 0,
@@ -1003,6 +1014,8 @@ export class Game {
     p.grenades = 3;
     p.smokes = 2;
     p.suppression = 0;
+    p.combatReaction = p.combatCover = null;
+    p.nextCombatReaction = p.nextCombatCover = this.tick;
     p.duckUntil = 0;
     p.nextDuck = this.tick;
     p.nextNearMiss = this.tick;
@@ -1639,7 +1652,7 @@ export class Game {
             suppressNearMiss(this, q, shot, from, shot);
       shot.remaining = Math.max(0, shot.remaining - travel);
       if (nearest < 1)
-        this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim);
+        this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim, from);
       else if (shot.remaining > 0) active.push(shot);
     }
     this.projectiles = active;
@@ -1672,19 +1685,22 @@ export class Game {
       victim.throwAction = null;
       victim.mantle = null;
       victim.crouched = false;
+      victim.combatReaction = victim.combatCover = null;
       victim.hop = null;
       victim.fall = null;
       victim.y = groundHeight(victim.x, victim.z, this.map);
       this.emit({ type: "death", actor: victim.id });
     }
   }
-  private impact(shot: Projectile, at: V3, victim?: Soldier) {
+  private impact(shot: Projectile, at: V3, victim?: Soldier, from = at) {
     const hit =
       !!victim &&
       victim.team !== shot.team &&
       this.tick >= victim.protectedUntil;
-    if (hit && victim)
+    if (hit && victim) {
       this.damage(victim, shot.damage ?? 25, shot.actor, shot.team);
+      reactToThreat(this, victim, from, "hit", .95);
+    }
     if (!victim) {
       const change = damageVegetation(this.map, at);
       if (change) this.applyDestruction(shot.actor, change);
@@ -1903,6 +1919,14 @@ export class Game {
   explode(at: V3, actor: number, team: Team | null, profile: ExplosionProfile) {
     const hits: { target: number; damage: number }[] = [];
     for (const p of this.players) {
+      if (p.hp > 0 && this.tick >= p.protectedUntil) {
+        const reach = profile.radius * 1.8;
+        const distance = Math.hypot(p.x - at.x, p.y + 1 - at.y, p.z - at.z);
+        if (distance < reach) {
+          const sheltered = this.collision.ray(at, {x: p.x, y: p.y + 1, z: p.z}) < .98;
+          reactToThreat(this, p, at, "blast", (1 - distance / reach) * (sheltered ? .3 : 1));
+        }
+      }
       if (
         p.hp <= 0 ||
         (p.team === team && p.id !== actor) ||
@@ -2221,8 +2245,10 @@ export function botCommand(g: Game, p: Soldier): Command {
 function chooseBotCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
   if (evasion) return evasion;
+  const coverReaction = reactionCoverCommand(g, p);
+  if (coverReaction) return coverReaction;
   const duck = suppressionCommand(g, p);
-  if (duck) return duck;
+  if (duck) return braceCommand(g, p, duck);
   const c = idle();
   c.artillery = botArtilleryTarget(g, p) ?? undefined;
   c.reload =
@@ -2463,6 +2489,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       (!g.botSettings.awareness ||
         (p.awareness.confidence >= 0.75 &&
           Math.abs(angleDelta(c.yaw, aimYaw)) < 0.12));
+    if (p.combatReaction && g.tick < p.combatReaction.pauseUntil) c.fire = false;
     if (c.fire) {
       c.fire = semiAutoIntent(g, p);
       if (c.fire && g.botSettings.awareness) {
@@ -2535,5 +2562,5 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   }
   if ((g.map.id === "village" || g.map.id === "verdun"))
     villageSteering(g, p, c, target ? dist(p, target) : Infinity);
-  return assaultCommand(g, p, c);
+  return braceCommand(g, p, assaultCommand(g, p, c));
 }

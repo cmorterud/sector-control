@@ -1,6 +1,7 @@
 import {farmPropParts} from "./farm-props";
 import { battlePerformance } from "./battle-performance";
 import { SceneryBatches } from "./scenery-batches";
+import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
 import { factions, scoped } from "./loadouts";
@@ -135,7 +136,6 @@ export class Renderer implements CollisionWorld {
   camera: pc.Entity;
   cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
   private boardBatch = -1;
-  private blastFlinches = new Map<number, { tick: number; strength: number }>();
   private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
@@ -2843,15 +2843,9 @@ export class Renderer implements CollisionWorld {
       rig.body.rotateLocal(-14 * reaction, 0, 4 * reaction);
       rig.upper.rotateLocal(-8 * reaction, 0, 0);
     }
-    const flinch = this.blastFlinches?.get(p.id);
-    if (flinch && p.hp > 0 && !p.mantle) {
-      const age = Math.max(0, (tick - flinch.tick) / 30);
-      const brace =
-        flinch.strength *
-        Math.sin(Math.min(1, age / 0.4) * Math.PI) *
-        Math.exp(-age * 2);
-      rig.upper.rotateLocal(12 * brace, 0, -5 * brace);
-      if (age > 0.6) this.blastFlinches.delete(p.id);
+    if (p.hp > 0 && !p.mantle && !p.hop) {
+      const {brace, side} = combatReactionPose(p, tick);
+      rig.upper.rotateLocal(12 * brace, 0, side * 5 * brace);
     }
     // Keep all actor renderers in their batches. Visibility is an animated
     // transform, using the ordinary bind pose captured before the first draw.
@@ -3078,7 +3072,6 @@ export class Renderer implements CollisionWorld {
     this.previousShells.clear();
     this.artilleryMarkers.clear();
     this.artilleryPreview = null;
-    this.blastFlinches.clear();
     this.blastSequence = 0;
     this.cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
     this.previousGrenades.clear();
@@ -3778,23 +3771,6 @@ export class Renderer implements CollisionWorld {
         const cover = this.ray(e.at, p) < 0.98 ? 0.25 : 1;
         c.ragdoll.blast(at, e.radius * 1.25, (e.type === "artilleryImpact" ? 140 : 90) * cover);
       }
-      this.people.forEach((person, id) => {
-        const p = person.getPosition();
-        const distance = Math.hypot(
-          p.x - e.at.x,
-          p.y + 1 - e.at.y,
-          p.z - e.at.z,
-        );
-        if (distance < e.radius * 1.8)
-          this.blastFlinches.set(id, {
-            tick: e.tick,
-            strength:
-              (1 - distance / (e.radius * 1.8)) *
-              (this.ray({ x: p.x, y: p.y + 1, z: p.z }, e.at) < 0.98
-                ? 0.45
-                : 1),
-          });
-      });
     }
     if (e.type === "destruction") {
       for (const [i, id] of (e.change.collapses ?? []).slice(0, 4).entries()) {
