@@ -103,6 +103,8 @@ Three forward sap trenches turn through the woods, joining the existing rear/fro
 
 The forest presentation uses tapered bark trunks, fine branching limbs, irregular needle sprays and torn broadleaf crowns. Up to 180 small fern, root, branch and curled-leaf details sit on stable ground, add no collision, and disappear where explosions excavate the surface. Shared mesh variants and static batches bound their cost; no foliage animation runs per tree.
 
+The latest forest geometry, floor detail and ambient audio are committed locally and pushed; publication is pending a Sites authentication compatibility fix. The public trial currently remains version18 with the central groves. See HANDOFF.md for the tested build and release blocker.
+
 Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden steps and fresh craters sound muddy. Quiet wind/rustling, occasional creaks and off-map distant battle sounds add ambience. Wind rustling weakens as nearby crowns are stripped or felled. Tree damage and falling timber produce positional cracks/thuds, including Verdun's tree IDs. All sounds use the existing volume, pause/reset, capture and voice-budget controls; no spoken callouts were added.
 
 France versus Imperial Germany, 50 soldiers per team, four-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
