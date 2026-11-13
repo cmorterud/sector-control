@@ -6,6 +6,7 @@ import {
   authoredTerrainCut,
   type MapDefinition,
 } from "./map";
+import type { DestructionChange } from "./destruction";
 import { terrainPatchSize, terrainResolution } from "./destruction";
 
 export interface TerrainGeometry {
@@ -29,9 +30,10 @@ export function terrainPatchKeys(map: MapDefinition) {
       keys.push(`${x},${z}`);
   return keys;
 }
-export function terrainGeometry(
+function buildTerrainGeometry(
   map: MapDefinition,
   key: string,
+  cells?: Map<string, TerrainGeometry>,
 ): TerrainGeometry {
   const [ix, iz] = key.split(",").map(Number);
   const x0 = Math.max(-map.width / 2, ix * terrainPatchSize),
@@ -112,17 +114,27 @@ export function terrainGeometry(
             refine(x, z);
         }
     } else {
-      for (const cutKey of Object.keys(field.cuts)) {
-        const [gx, gz] = cutKey.split(",").map(Number);
-        const wx = gx * terrainResolution,
-          wz = gz * terrainResolution;
-        if (wx < x0 || wx > x1 || wz < z0 || wz > z1) continue;
-        refine(wx, wz);
-      }
+      // Probe only this patch instead of scanning every cut accumulated during
+      // the entire match. Sparse samples are keyed in integer grid coordinates.
+      for (let gx = Math.ceil(x0 / terrainResolution); gx <= Math.floor(x1 / terrainResolution); gx++)
+        for (let gz = Math.ceil(z0 / terrainResolution); gz <= Math.floor(z1 / terrainResolution); gz++)
+          if (Object.hasOwn(field.cuts, `${gx},${gz}`))
+            refine(gx * terrainResolution, gz * terrainResolution);
     }
   }
   for (let cellX = x0; cellX < x1; cellX += 2)
     for (let cellZ = z0; cellZ < z1; cellZ += 2) {
+      const cellKey = `${cellX},${cellZ}`;
+      const cached = cells?.get(cellKey);
+      if (cached) {
+        const base = positions.length / 3;
+        for (const value of cached.positions) positions.push(value);
+        for (const value of cached.colors) colors.push(value);
+        for (const value of cached.uvs) uvs.push(value);
+        for (const value of cached.indices) indices.push(value + base);
+        continue;
+      }
+      const startVertex = positions.length / 3, startIndex = indices.length;
       const terrain = map.terrain;
       let authoredStep = 2;
       if (terrain && terrain.cellSize < 2) {
@@ -213,6 +225,59 @@ export function terrainGeometry(
             if ((p[1] + q[1]) / 2 > (lowP + lowQ) / 2 + 0.001)
               quad([p, q, [q[0], lowQ, q[2]], [p[0], lowP, p[2]]], true);
         }
+      cells?.set(cellKey, {
+        positions: positions.slice(startVertex * 3),
+        colors: colors.slice(startVertex * 4),
+        uvs: uvs.slice(startVertex * 2),
+        indices: indices.slice(startIndex).map(i => i - startVertex),
+      });
     }
   return { positions, indices, colors, uvs };
+}
+
+export function terrainGeometry(map: MapDefinition, key: string): TerrainGeometry {
+  return buildTerrainGeometry(map, key);
+}
+
+// Keep a bounded working set of recently rebuilt patches. Each two-meter cell
+// keeps its exact topology and colors until a changed height sample can reach it.
+export class TerrainGeometryCache {
+  private patches = new Map<string, Map<string, TerrainGeometry>>();
+  private revision: number;
+  constructor(private map: MapDefinition, private capacity = 64) {
+    this.revision = this.currentRevision();
+  }
+  private currentRevision() {
+    return this.map.destruction?.terrainRevision ?? this.map.destruction?.revision ?? 0;
+  }
+  invalidate(change: Pick<DestructionChange, "terrain">) {
+    const revision = this.currentRevision();
+    if (revision === this.revision) return;
+    if (revision !== this.revision + 1 || !change.terrain.length) this.patches.clear();
+    else {
+      let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+      for (const edit of change.terrain) {
+        const [x, z] = edit.key.split(",").map(v => Number(v) * terrainResolution);
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+      }
+      // Bilinear height/color sampling and opposite-side cliff probes.
+      const pad = terrainResolution + 0.0001;
+      for (const cells of this.patches.values()) for (const key of cells.keys()) {
+        const [x, z] = key.split(",").map(Number);
+        if (x <= maxX + pad && x + 2 >= minX - pad && z <= maxZ + pad && z + 2 >= minZ - pad)
+          cells.delete(key);
+      }
+    }
+    this.revision = revision;
+  }
+  build(key: string) {
+    if (this.currentRevision() !== this.revision) {
+      this.patches.clear(); this.revision = this.currentRevision();
+    }
+    const cells = this.patches.get(key) ?? new Map<string, TerrainGeometry>();
+    this.patches.delete(key); this.patches.set(key, cells);
+    if (this.patches.size > this.capacity) this.patches.delete(this.patches.keys().next().value!);
+    return buildTerrainGeometry(this.map, key, cells);
+  }
 }

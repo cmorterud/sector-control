@@ -6,6 +6,7 @@ import { Game, TestCollision, type Soldier, type Event } from "./simulation";
 import { industrialMap, groundHeight } from "./map";
 import { grenadeExplosionProfile } from "./destruction";
 import { TerrainPhysics } from "./physics";
+import { VisualWorkQueue } from "./visual-work";
 import { terrainGeometry } from "./terrain-geometry";
 import type { Ragdoll, RagdollPhysics } from "./ragdoll";
 
@@ -52,8 +53,12 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
     cube: Renderer["cube"];
     createSoldier(p: Soldier): void;
     retainCasualty(p: Soldier): void;
+    casualtyMesh(p: Soldier): pc.Mesh;
     drawCasualties(dt: number): void;
     effect(e: Event): void;
+    visualWork: VisualWorkQueue;
+    casualtyTemplates: Map<string, pc.Mesh>;
+    pendingCasualties: Map<number, unknown>;
   };
   const r = Object.create(Renderer.prototype) as Harness;
   Object.assign(r, {
@@ -86,6 +91,7 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
       Object.assign(e, {
         render: { entity: e, meshInstances: options.meshInstances },
       });
+      e.once("destroy", () => { for (const instance of options.meshInstances) instance.destroy(); });
       return e.render;
     }) as typeof e.addComponent;
     return e;
@@ -131,10 +137,13 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   const patchKeys = ["-1,-1", "-1,0", "0,-1", "0,0"];
   for (const key of patchKeys) r.terrainPhysics.setPatch(key, terrainGeometry(g.map, key), root);
   const before = g.snapshot();
+  const prepared = r.casualtyMesh(p);
+  expect(r.ragdollPhysics).toBeUndefined();
   r.retainCasualty(p);
   expect(r.casualties).toHaveLength(1);
   const first = r.casualties[0],
     points: number[] = [];
+  expect(first.mesh).toBe(prepared);
   first.mesh.getPositions(points);
   expect(points.length).toBeGreaterThan(500);
   expect(points.every(Number.isFinite)).toBe(true);
@@ -177,13 +186,14 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   const release = vi.spyOn(first.mesh, "destroy");
   for (let i = 0; i < casualtyRules.max; i++) r.retainCasualty(p);
   expect(r.casualties).toHaveLength(casualtyRules.max);
-  expect(release).toHaveBeenCalledOnce();
+  expect(release).not.toHaveBeenCalled();
+  expect(r.casualties.every(c => c.mesh === first.mesh)).toBe(true);
   expect(r.soldierStats.peakRemnants).toBe(casualtyRules.max);
   expect(r.ragdollPhysics!.ragdolls.size).toBe(casualtyRules.max);
   const final = vi.spyOn(r.casualties[0].mesh, "destroy");
   r.drawCasualties(30);
   expect(r.casualties).toHaveLength(0);
-  expect(final).toHaveBeenCalledOnce();
+  expect(final).not.toHaveBeenCalled();
   expect(r.soldierStats.expired).toBe(casualtyRules.max);
   expect(r.ragdollPhysics!.ragdolls.size).toBe(0);
   // First person scales the local world actor to zero. Death must capture its
@@ -193,6 +203,10 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   r.people[0].setLocalScale(pc.Vec3.ZERO);
   const death: Event = { type: "death", actor: 0, id: 10000, tick: g.tick };
   r.effect(death); r.effect(death);
+  expect(r.casualties).toHaveLength(0);
+  expect(r.visualWork.size).toBe(1);
+  expect(r.people[0].getLocalScale().equals(pc.Vec3.ONE)).toBe(true);
+  r.visualWork.flush();
   expect(r.casualties).toHaveLength(1);
   expect(r.people[0].getLocalScale().equals(pc.Vec3.ZERO)).toBe(true);
   const visible: number[] = [];
@@ -200,6 +214,20 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   expect(Math.max(...visible.filter((_, i) => i % 3 === 1)) - Math.min(...visible.filter((_, i) => i % 3 === 1))).toBeGreaterThan(1.8);
   r.drawCasualties(30);
   expect(r.ragdollPhysics!.ragdolls.size).toBe(0);
+  // Reusing a canonical mesh still follows a different death's world pose.
+  r.people[0].setLocalScale(pc.Vec3.ONE);
+  r.people[0].setPosition(4, 0, 3);
+  r.retainCasualty(p);
+  const moved = r.casualties[0];
+  expect(moved.mesh).toBe(first.mesh);
+  moved.skin.updateMatrixPalette(moved.entity, 500);
+  const vertex = new pc.Vec3(points[0], points[1], points[2]);
+  const transformed = (moved.skin.matrices[0] as pc.Mat4).transformPoint(vertex);
+  expect(transformed.x - vertex.x).toBeCloseTo(4, 4);
+  expect(transformed.z - vertex.z).toBeCloseTo(3, 4);
+  r.drawCasualties(30);
+  for (const template of r.casualtyTemplates.values()) { template.decRefCount(); template.destroy(); }
+  expect(release).toHaveBeenCalledOnce();
   r.ragdollPhysics!.destroy();
   r.terrainPhysics.destroy();
   mesh.destroy();

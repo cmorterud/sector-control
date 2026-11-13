@@ -1,5 +1,6 @@
 import {farmPropParts} from "./farm-props";
 import { battlePerformance } from "./battle-performance";
+import { VisualWorkQueue } from "./visual-work";
 import { SceneryBatches } from "./scenery-batches";
 import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
@@ -55,7 +56,7 @@ import {
   type Destructible,
   type DestructionChange,
 } from "./destruction";
-import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
+import { TerrainGeometryCache, terrainPatchKeys, type TerrainGeometry } from "./terrain-geometry";
 import { scarRubble } from "./terrain-relief";
 import { treeHasCrown } from "./vegetation";
 import { battlefieldProps, trenchRoots } from "./battlefield-dressing";
@@ -141,6 +142,11 @@ export class Renderer implements CollisionWorld {
   private soldiers: SoldierRig[] = [];
   private firstPersonRig?: FirstPersonRig;
   private ragdollPhysics?: RagdollPhysics;
+  private casualtyTemplates = new Map<string, pc.Mesh>();
+  private pendingCasualties = new Map<number, {
+    rig: SoldierRig;
+    blasts: { at: pc.Vec3; radius: number; power: number }[];
+  }>();
   private activeGame?: Game;
   private deathHits = new Map<number, pc.Vec3>();
   rings: pc.Entity[] = [];
@@ -202,6 +208,8 @@ export class Renderer implements CollisionWorld {
   private mapRoot!: pc.Entity;
   private worldParent?: pc.Entity;
   private terrainPhysics = new TerrainPhysics();
+  private terrainGeometryCache?: TerrainGeometryCache;
+  private visualWork = new VisualWorkQueue();
   private terrainPatches = new Map<
     string,
     { entity: pc.Entity; mesh: pc.Mesh }
@@ -603,9 +611,19 @@ export class Renderer implements CollisionWorld {
   }
   setMap(map: MapDefinition) {
     const restore = !!this.map.destruction?.revision || this.map.id !== map.id;
+    if (map !== this.map) this.terrainGeometryCache = undefined;
     this.map = map;
     if (!restore) return;
     this.clearEnvironmentEffects();
+    this.visualWork.clear();
+    this.pendingCasualties.clear();
+    // Dynamic bodies belong to this terrain world; release them before it.
+    for (const c of this.casualties) this.releaseCasualty(c);
+    this.casualties = [];
+    this.ragdollPhysics?.destroy(); this.ragdollPhysics = undefined;
+    for (const mesh of this.casualtyTemplates.values()) { mesh.decRefCount(); mesh.destroy(); }
+    this.casualtyTemplates.clear();
+    this.terrainGeometryCache = undefined;
     this.terrainPhysics.destroy();
     for (const patch of this.terrainPatches.values()) {
       patch.entity.destroy();
@@ -625,46 +643,48 @@ export class Renderer implements CollisionWorld {
     this.terrainPhysics = new TerrainPhysics();
     this.buildMap();
   }
-  private rebuildTerrainPatch(key: string) {
+  private rebuildTerrainPatch(key: string, deferVisual = false) {
     const geometryStart = battlePerformance.begin();
-    const data = terrainGeometry(this.map, key);
-    battlePerformance.end("terrainGeometry",geometryStart);
-    const meshStart = battlePerformance.begin();
+    this.terrainGeometryCache ??= new TerrainGeometryCache(this.map);
+    const data = this.terrainGeometryCache.build(key);
+    battlePerformance.end("terrainGeometry", geometryStart);
     if (!data.indices.length) return;
-    const old = this.terrainPatches.get(key);
-    const entity = this.joint(`terrain ${key}`, this.mapRoot);
-    const mesh = new pc.Mesh(this.app.graphicsDevice);
+    // Reuse the entity and mesh. Native collision still changes synchronously.
+    let patch = this.terrainPatches.get(key);
+    if (!patch) {
+      patch = { entity: this.joint(`terrain ${key}`, this.mapRoot), mesh: new pc.Mesh(this.app.graphicsDevice) };
+      this.terrainPatches.set(key, patch);
+    }
+    const physicsStart = battlePerformance.begin();
+    this.terrainPhysics.setPatch(key, data, patch.entity);
+    battlePerformance.end("terrainCollision", physicsStart);
+    battlePerformance.count("terrainPatches");
+    if (deferVisual) {
+      this.visualWork.set(`terrain:${key}`, { kind: "terrain", run: () => this.uploadTerrainPatch(key, data) });
+    } else this.uploadTerrainPatch(key, data);
+  }
+  private uploadTerrainPatch(key: string, data: TerrainGeometry) {
+    const start = battlePerformance.begin();
+    const { entity, mesh } = this.terrainPatches.get(key)!;
     mesh.setPositions(data.positions);
     const normals = terrainNormals(this.map, data, pc.calculateNormals(data.positions, data.indices));
     mesh.setNormals(normals);
     mesh.setUvs(0, data.uvs);
     if (this.map.terrain)
-      mesh.setVertexStream(
-        pc.SEMANTIC_TANGENT,
-        pc.calculateTangents(data.positions, normals, data.uvs, data.indices),
-        4,
-      );
+      mesh.setVertexStream(pc.SEMANTIC_TANGENT,
+        pc.calculateTangents(data.positions, normals, data.uvs, data.indices), 4);
     mesh.setColors(data.colors);
     mesh.setIndices(data.indices);
     mesh.update(pc.PRIMITIVE_TRIANGLES);
-    const material = this.map.terrain
-      ? this.surfaceMaterial("mud", "#ffffff")
-      : this.material("#ffffff");
-    material.diffuseVertexColor = true;
-    material.update();
-    const instance = new pc.MeshInstance(mesh, material, entity);
-    instance.castShadow = true;
-    entity.addComponent("render", { meshInstances: [instance] });
-    battlePerformance.end("terrainMesh",meshStart);
-    const physicsStart = battlePerformance.begin();
-    this.terrainPhysics.setPatch(key, data, entity);
-    battlePerformance.end("terrainCollision",physicsStart);
-    battlePerformance.count("terrainPatches");
-    if (old) {
-      old.entity.destroy();
-      old.mesh.destroy();
+    if (!entity.render) {
+      const material = this.map.terrain ? this.surfaceMaterial("mud", "#ffffff") : this.material("#ffffff");
+      material.diffuseVertexColor = true;
+      material.update();
+      const instance = new pc.MeshInstance(mesh, material, entity);
+      instance.castShadow = true;
+      entity.addComponent("render", { meshInstances: [instance] });
     }
-    this.terrainPatches.set(key, { entity, mesh });
+    battlePerformance.end("terrainMesh", start);
   }
   private clearEnvironmentEffects() {
     for (const fall of this.fallingTrees) fall.pivot.destroy();
@@ -1317,7 +1337,8 @@ export class Renderer implements CollisionWorld {
         this.startTreeFall(object);
     }
     invalidateTerrainNormals(this.map,change);
-    for (const key of change.patches) this.rebuildTerrainPatch(key);
+    this.terrainGeometryCache?.invalidate(change);
+    for (const key of change.patches) this.rebuildTerrainPatch(key, true);
     for (const changed of change.objects) {
       const object = this.map.destruction!.objects[changed.id];
       if (this.buildDestructible(object))
@@ -2899,11 +2920,36 @@ export class Renderer implements CollisionWorld {
     return { parts, bindings, head: head.getPosition().clone(), up };
   }
   private releaseCasualty(c: (typeof this.casualties)[number]) {
-    c.ragdoll.destroy(); c.skin.destroy(); c.entity.destroy(); c.mesh.destroy();
+    c.ragdoll.destroy(); c.entity.destroy();
+  }
+  private queueCasualty(p: Soldier) {
+    this.visualWork ??= new VisualWorkQueue();
+    this.pendingCasualties ??= new Map();
+    const rig = this.soldiers[p.id], actor = this.people[p.id];
+    if (rig.remnantCreated) return;
+    rig.remnantCreated = true;
+    if (Math.hypot(p.x - this.camera.getPosition().x, p.z - this.camera.getPosition().z) > casualtyRules.range) {
+      actor.setLocalScale(pc.Vec3.ZERO); return;
+    }
+    const pending = { rig, blasts: [] as { at: pc.Vec3; radius: number; power: number }[] };
+    this.pendingCasualties.set(p.id, pending);
+    const impulse = this.deathHits.get(p.id)?.clone();
+    const game = this.activeGame;
+    this.visualWork.set(`casualty:${p.id}`, { kind: "casualty", run: () => {
+      this.pendingCasualties.delete(p.id);
+      // A respawn, kit replacement or map reset invalidates the old death.
+      if (this.activeGame !== game || this.soldiers[p.id] !== rig || p.hp > 0) return;
+      actor.setLocalScale(pc.Vec3.ONE);
+      try {
+        const corpse = this.retainCasualty(p, impulse);
+        if (corpse) for (const blast of pending.blasts)
+          corpse.ragdoll.blast(blast.at, blast.radius, blast.power);
+      } finally { actor.setLocalScale(pc.Vec3.ZERO); }
+    } });
   }
   private retainCasualty(p: Soldier, impulse = new pc.Vec3(0.5, 0, 1.5)) {
     const start = battlePerformance.begin();
-    try { this.buildCasualty(p,impulse); } finally { battlePerformance.end("ragdollCreate",start); }
+    try { return this.buildCasualty(p,impulse); } finally { battlePerformance.end("ragdollCreate",start); }
   }
   private buildCasualty(p: Soldier, impulse: pc.Vec3) {
     if (
@@ -2918,14 +2964,51 @@ export class Renderer implements CollisionWorld {
       this.releaseCasualty(old);
       this.soldierStats.evicted++;
     }
+    const pose = this.ragdollPose(p);
+    const mesh = this.casualtyMesh(p, pose);
+    if (!mesh) return;
+    this.ragdollPhysics ??= new RagdollPhysics(this.terrainPhysics.world, this.map);
+    const ragdoll = this.ragdollPhysics.create(pose.parts, new pc.Vec3(p.vx, 0, p.vz));
+    ragdoll.hit(impulse, pose.parts[1].position.clone().add(new pc.Vec3(0.08, 0.08, 0)));
+    const entity = this.joint("fallen soldier", this.app.root);
+    let material = this.materials.get("casualty");
+    if (!material) {
+      material = new pc.StandardMaterial();
+      material.diffuse = new pc.Color(1, 1, 1);
+      material.diffuseVertexColor = true;
+      material.blendType = pc.BLEND_NORMAL;
+      material.depthWrite = false;
+      material.update();
+      this.materials.set("casualty", material);
+    }
+    const instance = new pc.MeshInstance(mesh, material, entity);
+    const bones = pose.parts.map(part => {
+      const bone = this.joint(part.name, entity);
+      bone.setPosition(part.position); bone.setRotation(part.rotation);
+      return bone;
+    });
+    const skin = new pc.SkinInstance(mesh.skin!);
+    skin.bones = bones; skin.rootBone = entity; instance.skinInstance = skin;
+    instance.castShadow = false;
+    entity.addComponent("render", { meshInstances: [instance] });
+    const corpse = { entity, mesh, skin, bones, ragdoll, x: p.x, z: p.z, age: 0 };
+    this.casualties.push(corpse);
+    this.soldierStats.remnants++;
+    this.soldierStats.peakRemnants = Math.max(
+      this.soldierStats.peakRemnants,
+      this.casualties.length,
+    );
+    return corpse;
+  }
+  private casualtyMesh(p: Soldier, pose = this.ragdollPose(p)) {
+    this.casualtyTemplates ??= new Map();
+    const key = `${p.team}-${this.actorKits?.get(p.id) ?? `${p.faction}-${p.weapon}-${p.weaponId}`}`;
+    const existing = this.casualtyTemplates.get(key);
+    if (existing) return existing;
     const positions: number[] = [],
       normals: number[] = [],
       indices: number[] = [],
       colors: number[] = [], weights: number[] = [], blendIndices: number[] = [];
-    const pose = this.ragdollPose(p);
-    this.ragdollPhysics ??= new RagdollPhysics(this.terrainPhysics.world, this.map);
-    const ragdoll = this.ragdollPhysics.create(pose.parts, new pc.Vec3(p.vx, 0, p.vz));
-    ragdoll.hit(impulse, pose.parts[1].position.clone().add(new pc.Vec3(0.08, 0.08, 0)));
     for (const component of this.people[p.id].findComponents(
       "render",
     ) as pc.RenderComponent[]) {
@@ -2984,7 +3067,7 @@ export class Renderer implements CollisionWorld {
         indices.push(...is.map((i) => i + base));
       }
     }
-    if (!indices.length) { ragdoll.destroy(); return; }
+    if (!indices.length) return;
     const mesh = new pc.Mesh(this.app.graphicsDevice);
     mesh.setPositions(positions);
     mesh.setNormals(normals);
@@ -2992,35 +3075,29 @@ export class Renderer implements CollisionWorld {
     mesh.setIndices(indices);
     mesh.setVertexStream(pc.SEMANTIC_BLENDINDICES, blendIndices, 4, undefined, pc.TYPE_UINT8);
     mesh.setVertexStream(pc.SEMANTIC_BLENDWEIGHT, weights, 4);
-    mesh.skin = new pc.Skin(this.app.graphicsDevice, ragdoll.bind.map(m => m.clone().invert()), pose.parts.map(p => p.name));
+    mesh.skin = new pc.Skin(this.app.graphicsDevice, pose.parts.map(part => new pc.Mat4().setTRS(part.position, part.rotation, pc.Vec3.ONE).invert()), pose.parts.map(p => p.name));
     mesh.update(pc.PRIMITIVE_TRIANGLES);
-    const entity = this.joint("fallen soldier", this.app.root);
-    let material = this.materials.get("casualty");
-    if (!material) {
-      material = new pc.StandardMaterial();
-      material.diffuse = new pc.Color(1, 1, 1);
-      material.diffuseVertexColor = true;
-      material.blendType = pc.BLEND_NORMAL;
-      material.depthWrite = false;
-      material.update();
-      this.materials.set("casualty", material);
-    }
-    const instance = new pc.MeshInstance(mesh, material, entity);
-    const bones = pose.parts.map(part => {
-      const bone = this.joint(part.name, entity);
-      bone.setPosition(part.position); bone.setRotation(part.rotation);
-      return bone;
-    });
-    const skin = new pc.SkinInstance(mesh.skin);
-    skin.bones = bones; skin.rootBone = entity; instance.skinInstance = skin;
-    instance.castShadow = false;
-    entity.addComponent("render", { meshInstances: [instance] });
-    this.casualties.push({ entity, mesh, skin, bones, ragdoll, x: p.x, z: p.z, age: 0 });
-    this.soldierStats.remnants++;
-    this.soldierStats.peakRemnants = Math.max(
-      this.soldierStats.peakRemnants,
-      this.casualties.length,
-    );
+    // Retain a template reference so evicting its last corpse keeps buffers warm.
+    mesh.incRefCount();
+    this.casualtyTemplates.set(key, mesh);
+    return mesh;
+  }
+  private blastCasualties(e: Extract<Event, { type: "grenadeExplosion" | "artilleryImpact" }>) {
+      const at = new pc.Vec3(e.at.x, e.at.y, e.at.z);
+      // Death events precede the impact effect. Preserve that killing impulse
+      // for bodies whose physical setup is deferred to a later frame.
+      for (const [id, pending] of this.pendingCasualties ?? []) {
+        const p = this.activeGame!.players[id];
+        if (Math.hypot(p.x - e.at.x, p.y + 1 - e.at.y, p.z - e.at.z) > e.radius * 1.25) continue;
+        const cover = this.ray(e.at, { x: p.x, y: p.y + 1, z: p.z }) < 0.98 ? 0.25 : 1;
+        if (pending.blasts.length < 4) pending.blasts.push({ at, radius: e.radius * 1.25, power: (e.type === "artilleryImpact" ? 140 : 90) * cover });
+      }
+      for (const c of this.casualties) {
+        c.ragdoll.read();
+        const p = c.ragdoll.positions[0];
+        const cover = this.ray(e.at, p) < 0.98 ? 0.25 : 1;
+        c.ragdoll.blast(at, e.radius * 1.25, (e.type === "artilleryImpact" ? 140 : 90) * cover);
+      }
   }
   private drawCasualties(dt: number) {
     this.ragdollPhysics?.step(dt);
@@ -3043,6 +3120,8 @@ export class Renderer implements CollisionWorld {
     });
   }
   reset(g: Game) {
+    this.visualWork.clear();
+    this.pendingCasualties.clear();
     this.dirtyWorldBatches?.clear();
     this.clearEnvironmentEffects();
     for (const c of this.casualties) {
@@ -3050,6 +3129,8 @@ export class Renderer implements CollisionWorld {
     }
     this.casualties = [];
     this.ragdollPhysics?.destroy(); this.ragdollPhysics = undefined;
+    for (const mesh of this.casualtyTemplates.values()) { mesh.decRefCount(); mesh.destroy(); }
+    this.casualtyTemplates.clear();
     this.activeGame = g; this.deathHits.clear();
     for (const key of Object.keys(
       this.soldierStats,
@@ -3096,6 +3177,8 @@ export class Renderer implements CollisionWorld {
     this.soldiers = [];
     this.batchGroup = this.actorBatch;
     for (const p of g.players) this.createSoldier(p);
+    // Merge each distinct rendered kit once during deployment, not mid-blast.
+    for (const p of g.players) this.casualtyMesh(p);
     this.batchGroup = -1;
     this.app.batcher!.generate([this.actorBatch]);
     this.createFirstPersonRig();
@@ -3168,8 +3251,11 @@ export class Renderer implements CollisionWorld {
   private flamePickups = new Map<number,pc.Entity>();
   private actorKits = new Map<number,string>();
   draw(g: Game, alpha: number, dt: number, overview = false) {
-    // All synchronous collision/mesh changes are complete. Rebatch each scenery
-    // group once before render, even if several shells hit during catch-up ticks.
+    // Collision is current already. Coalesce uploads and spread presentation
+    // work over frames instead of flushing every shell's visuals in one burst.
+    const visualStart = battlePerformance.begin();
+    battlePerformance.count("visualJobs", this.visualWork.flush());
+    battlePerformance.end("visualWork", visualStart);
     this.flushWorldBatches();
     for (const kit of g.flames?.kits ?? []) {
       let marker=this.flamePickups.get(kit.id);
@@ -3213,6 +3299,8 @@ export class Renderer implements CollisionWorld {
         e.setLocalScale(1, 1, 1);
         rig.deathAt = null;
         rig.remnantCreated = false;
+        this.visualWork.delete(`casualty:${p.id}`);
+        this.pendingCasualties.delete(p.id);
         this.animateSoldier(visible, position.x, position.z, dt, tick);
       } else {
         if (rig.deathAt === null) {
@@ -3222,11 +3310,16 @@ export class Renderer implements CollisionWorld {
         rig.alive = false;
         if (!rig.remnantCreated) {
           e.setLocalScale(pc.Vec3.ONE);
-          this.retainCasualty(p, this.deathHits.get(p.id));
-          rig.remnantCreated = true;
+          this.queueCasualty(p);
         }
-        // Preserve the original actor bind poses and batch membership at death.
-        e.setLocalScale(rig.remnantCreated ? pc.Vec3.ZERO : pc.Vec3.ONE);
+        const pending = this.pendingCasualties.has(p.id);
+        e.setLocalScale(pending ? pc.Vec3.ONE : pc.Vec3.ZERO);
+        if (pending) {
+          // Immediate, allocation-free collapse while physical setup waits.
+          const fall = Math.min(1, Math.max(0, (tick - rig.deathAt) / 9));
+          rig.body.setLocalPosition(0, 0.94 - fall * 0.35, 0);
+          rig.body.setLocalEulerAngles(fall * 30, 0, fall * 12);
+        }
       }
     }
     this.drawCasualties(dt);
@@ -3757,21 +3850,12 @@ export class Renderer implements CollisionWorld {
       const p = this.activeGame.players[e.actor], rig = this.soldiers[e.actor], actor = this.people[e.actor];
       if (p && rig && actor && !rig.remnantCreated) {
         actor.setLocalScale(pc.Vec3.ONE);
-        this.retainCasualty(p, this.deathHits.get(e.actor));
-        rig.deathAt = e.tick; rig.remnantCreated = true; rig.alive = false;
+        this.queueCasualty(p);
+        rig.deathAt = e.tick; rig.alive = false;
         this.soldierStats.collapses++;
-        actor.setLocalScale(pc.Vec3.ZERO);
       }
     }
-    if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") {
-      const at = new pc.Vec3(e.at.x, e.at.y, e.at.z);
-      for (const c of this.casualties) {
-        c.ragdoll.read();
-        const p = c.ragdoll.positions[0];
-        const cover = this.ray(e.at, p) < 0.98 ? 0.25 : 1;
-        c.ragdoll.blast(at, e.radius * 1.25, (e.type === "artilleryImpact" ? 140 : 90) * cover);
-      }
-    }
+    if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") this.blastCasualties(e);
     if (e.type === "destruction") {
       for (const [i, id] of (e.change.collapses ?? []).slice(0, 4).entries()) {
         const b = this.map.destruction!.objects[id].original;
