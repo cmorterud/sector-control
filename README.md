@@ -105,7 +105,7 @@ Three forward sap trenches turn through the woods, joining the existing rear/fro
 
 The forest presentation uses tapered bark trunks, fine branching limbs, irregular needle sprays and torn broadleaf crowns. Up to 180 small fern, root, branch and curled-leaf details sit on stable ground, add no collision, and disappear where explosions excavate the surface. Shared mesh variants and static batches bound their cost; no foliage animation runs per tree.
 
-The latest forest geometry, floor detail and ambient audio are included in public trial version20. The published JS, CSS and map previews match the tested build byte for byte. See HANDOFF.md for validation and deployment provenance.
+The latest forest geometry, floor detail and ambient audio are included in public trial version21. The published JS, CSS and map previews match the tested build byte for byte. See HANDOFF.md for validation and deployment provenance.
 
 Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden steps and fresh craters sound muddy. Quiet wind/rustling, occasional creaks and off-map distant battle sounds add ambience. Wind rustling weakens as nearby crowns are stripped or felled. Tree damage and falling timber produce positional cracks/thuds, including Verdun's tree IDs. All sounds use the existing volume, pause/reset, capture and voice-budget controls; no spoken callouts were added.
 
