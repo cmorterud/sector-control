@@ -10,6 +10,9 @@ import { Game, TestCollision, idle, type Event } from "./simulation";
 import { trenchMap } from "./trench-map";
 import { industrialMap } from "./map";
 import { grenadeExplosionProfile } from "./destruction";
+import { artilleryExplosionProfile } from "./destruction";
+import { verdunMap } from "./verdun-map";
+import { groundHeight } from "./map";
 function scene(trench = true) {
   const g = new Game(
     new TestCollision(trench ? trenchMap : { ...industrialMap, boxes: [] }),
@@ -26,6 +29,39 @@ function scene(trench = true) {
 }
 const event = (e: object) => ({ tick: 0, id: 1, ...e }) as Event;
 describe("battlefield presentation", () => {
+  it("adds leaf steps only on intact forest floor, with irregular ambient cues that do not mutate the simulation",()=>{
+    const g=new Game(new TestCollision(verdunMap),false,5000,12345,undefined,{map:verdunMap});
+    const cues:SoundCue[]=[],f=new BattlefieldFeedback(c=>cues.push(c));
+    let point:{x:number;z:number}|undefined;
+    for(let x=-14;x<20&&!point;x++)for(let z=-14;z<20;z++)if(footSurface({x,z},g.map)==="leaves"){point={x,z};break;}
+    expect(point).toBeDefined();
+    expect(footSurface(point!,g.map)).toBe("leaves");
+    Object.assign(g.players[0],{...point,y:groundHeight(point!.x,point!.z,g.map),protectedUntil:0});
+    g.tick=450;f.reset(g);const snapshot=g.snapshot();f.step(g);
+    expect(g.snapshot()).toEqual(snapshot);
+    expect(cues.map(c=>c.kind)).toEqual(["forestWind","forestCreak","distantBattle"]);
+    expect(cues.find(c=>c.kind==="forestWind")!.volume).toBeLessThan(.05);
+    f.step(g);expect(cues).toHaveLength(3);
+    g.explode({...point!,y:g.players[0].y+.03},-1,null,{...grenadeExplosionProfile,damage:0});
+    expect(footSurface(point!,g.map)).toBe("mud");
+    const plain=scene(false);plain.g.tick=500;plain.feedback.step(plain.g);
+    expect(plain.cues).toHaveLength(0);
+  });
+  it("plays crown breakage and falling timber for Verdun IDs, with bounded nearby sounds",()=>{
+    const g=new Game(new TestCollision(verdunMap),false,5000,12345,undefined,{map:verdunMap});
+    const source=g.map.vegetation!.find(b=>b.id!.startsWith("verdun-wood-central")&&b.treeStyle==="pine")!;
+    Object.assign(g.players[0],{x:source.x+4,z:source.z,y:source.baseY!,protectedUntil:0});
+    const cues:SoundCue[]=[],f=new BattlefieldFeedback(c=>cues.push(c));f.reset(g);
+    const at={x:source.x+source.w/2+.2,y:source.baseY!+.7,z:source.z};
+    g.events=[];g.explode(at,-1,null,{...grenadeExplosionProfile,damage:0,craterRadius:0,terrainReach:0});
+    for(const e of g.events)f.event(g,e);
+    expect(cues.some(c=>c.kind==="branchSnap")).toBe(true);
+    cues.length=0;g.events=[];
+    g.explode(at,-1,null,{...artilleryExplosionProfile,damage:0,craterRadius:0,terrainReach:0});
+    for(const e of g.events)f.event(g,e);
+    expect(cues.some(c=>c.kind==="timber")).toBe(true);
+    expect(cues.filter(c=>c.kind==="timber").length).toBeLessThanOrEqual(4);
+  });
   it("plays close melee swings and contact sounds without speech or distant chatter", () => {
     const { g, p, feedback, cues } = scene();
     const at = { x: p.x, y: p.y + 1.2, z: p.z };

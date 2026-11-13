@@ -2,6 +2,7 @@ import { shotVoice, mechanicalVoice } from "./weapon-sound";
 import { voiceLines, type VoiceLine } from "./soldier-chatter";
 import type { SoundCue } from "./battlefield";
 import { treeFallTime } from "./environment-effects";
+import { forestVoice } from "./forest-sound";
 import type { V3 } from "./simulation";
 
 // Local synthesized effects and bundled voice clips; no microphone or speech service.
@@ -46,7 +47,7 @@ export class BattleAudio {
     limiter.connect(c.destination);
     this.capture = c.createMediaStreamDestination();
     limiter.connect(this.capture);
-    this.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    this.noise = c.createBuffer(1, c.sampleRate * 8, c.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
   }
@@ -130,6 +131,8 @@ export class BattleAudio {
   play(cue: SoundCue) {
     if (!this.running) return;
     const speech = cue.kind === "voice";
+    const background = ["forestWind","forestCreak","distantBattle"].includes(cue.kind);
+    const forest = forestVoice(cue.kind);
     if (speech && (!this.voicesEnabled || this.speech)) return;
     const spoken = speech
       ? this.speechBuffers.get(`${cue.line}-${Math.abs(cue.seed) % 2}`)
@@ -141,11 +144,11 @@ export class BattleAudio {
     const speechRate = 0.97 + (Math.abs(cue.seed) % 5) * 0.012;
     const important =
       speech ||
-      cue.local ||
+      (cue.local && !background) ||
       ["crack", "artillery", "grenade", "whistle", "timber"].includes(cue.kind);
     const priority = ["artillery", "grenade"].includes(cue.kind)
       ? 3
-      : speech || cue.local || cue.kind === "crack"
+      : speech || (cue.local && !background) || cue.kind === "crack"
         ? 2
         : ["whistle", "timber"].includes(cue.kind)
           ? 1
@@ -168,7 +171,7 @@ export class BattleAudio {
     this.stats.occluded += Number(!!cue.occluded);
     const c = this.context;
     const explosion = cue.kind === "artillery" || cue.kind === "grenade";
-    const foot = ["mud", "wood", "concrete"].includes(cue.kind);
+    const foot = ["mud", "wood", "concrete", "leaves"].includes(cue.kind);
     const rifle =
       cue.kind === "rifle" ||
       cue.kind === "serviceRifle" ||
@@ -180,7 +183,7 @@ export class BattleAudio {
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
-    const length = mechanical ? mechanical.length : cue.kind === "flame" ? .14 : melee
+    const length = forest?.length ?? (mechanical ? mechanical.length : cue.kind === "flame" ? .14 : melee
       ? cue.kind === "meleeSwing"
         ? 0.17
         : 0.11
@@ -206,7 +209,7 @@ export class BattleAudio {
                     ? 0.16
                     : cue.kind === "timber"
                       ? 1.5
-                      : 0.65;
+                      : 0.65);
     const delay =
       cue.local || crack || foot || whistle
         ? 0
@@ -214,9 +217,9 @@ export class BattleAudio {
     const start = c.currentTime + delay;
     const end = start + length;
     const filter = c.createBiquadFilter();
-    filter.type = crack || whistle || mechanism ? "bandpass" : "lowpass";
+    filter.type = forest ? forest.band ? "bandpass" : "lowpass" : crack || whistle || mechanism ? "bandpass" : "lowpass";
     filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
-    filter.frequency.value = mechanical ? mechanical.frequency : cue.kind === "flame" ? 1500 : melee
+    filter.frequency.value = forest?.frequency ?? (mechanical ? mechanical.frequency : cue.kind === "flame" ? 1500 : melee
       ? cue.kind === "meleeSwing"
         ? 2400
         : 650
@@ -244,7 +247,7 @@ export class BattleAudio {
                         ? 1700
                         : speech
                           ? 4600 * (1 - distant * 0.5)
-                          : 8500 * (1 - distant * 0.85);
+                          : 8500 * (1 - distant * 0.85));
     if (cue.occluded)
       filter.frequency.value = Math.min(
         filter.frequency.value,
@@ -258,7 +261,7 @@ export class BattleAudio {
     const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1);
     envelope.gain.exponentialRampToValueAtTime(
       Math.max(0.0002, volume),
-      start + (whistle ? 0.1 : explosion ? 0.001 : 0.004),
+      start + (forest?.attack ?? (whistle ? 0.1 : explosion ? 0.001 : 0.004)),
     );
     if (explosion) {
       envelope.gain.exponentialRampToValueAtTime(
@@ -302,6 +305,20 @@ export class BattleAudio {
         start + treeFallTime - 0.02,
         0.015,
       );
+    }
+    if (cue.kind === "leaves") {
+      for(const [offset,level] of [[.045,.28],[.08,.7],[.15,.18]])
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);
+    }
+    if(cue.kind === "forestWind") envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.55),start+3.8);
+    if(cue.kind === "forestCreak") {
+      envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.22),start+.45);
+      envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.65),start+.9);
+      filter.frequency.exponentialRampToValueAtTime(cue.occluded?160:240,end);
+    }
+    if(cue.kind === "distantBattle") {
+      for(const [offset,level] of [[.12,.12],[.24,.6],[.4,.08],[.64,.3],[1,.035]])
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);
     }
     if (speech)
       envelope.gain.setValueAtTime(Math.max(0.0001, volume), end - 0.045);
@@ -357,7 +374,7 @@ export class BattleAudio {
     }
     const noise = c.createBufferSource();
     noise.buffer = this.noise;
-    noise.playbackRate.value = mechanical?.rate ?? ((cue.kind === "serviceRifle" ? .78 : .92)+Math.abs(Math.sin(cue.seed*2.4))*.16)*shotPitch;
+    noise.playbackRate.value = forest?.rate ?? mechanical?.rate ?? ((cue.kind === "serviceRifle" ? .78 : .92)+Math.abs(Math.sin(cue.seed*2.4))*.16)*shotPitch;
     noise.loop = true;
     noise.connect(filter);
     noise.start(start, Math.abs(Math.sin(cue.seed)) * 0.15);

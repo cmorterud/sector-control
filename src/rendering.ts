@@ -57,6 +57,8 @@ import { terrainGeometry, terrainPatchKeys } from "./terrain-geometry";
 import { scarRubble } from "./terrain-relief";
 import { treeHasCrown } from "./vegetation";
 import { battlefieldProps, trenchRoots } from "./battlefield-dressing";
+import { forestFloorProps } from "./forest-floor";
+import { forestGeometry, forestVariant, type ForestShape } from "./forest-geometry";
 import {
   industrialMap,
   invalidateCoverLookup,
@@ -570,6 +572,13 @@ export class Renderer implements CollisionWorld {
         part.render!.castShadows = false;
       }
     }
+    for (const prop of forestFloorProps(this.map)) {
+      const root = this.joint("forest floor detail", this.mapRoot, prop.x, prop.y, prop.z);
+      root.setLocalEulerAngles(0, prop.yaw, 0);
+      const piece = this.forestPart(prop.shape, prop.shape, forestVariant(`${prop.x}:${prop.z}`), 0, 0, 0, ...prop.scale, prop.tint, root);
+      piece.render!.castShadows = false;
+      this.groundDecor.push({ root, x: prop.x, z: prop.z, radius: prop.radius, batched: true });
+    }
     for (const b of duckboards(this.map)) {
       const root = this.joint("duckboard walkway", this.mapRoot, b.x, 0, b.z);
       for (let i = 0; i < 9; i++) {
@@ -871,6 +880,16 @@ export class Renderer implements CollisionWorld {
           root,
         );
         solid.render!.enabled = false;
+        if (this.map.woodland && b.kind === "tree") {
+          const variant = forestVariant(object.id);
+          this.forestPart("tapered bark trunk", "trunk", variant, b.x, base, b.z, b.w, h, b.d, object.stage ? "#494136" : "#665746", root);
+          this.forestPart("fine branching limbs", treeHasCrown(b) ? "limbs" : "deadLimbs", variant, b.x, base, b.z, h, h, h, "#62513f", root);
+          if (object.stage === 0 && treeHasCrown(b))
+            this.forestPart("ragged woodland crown", b.treeStyle === "pine" ? "pine" : "crown", variant, b.x, base, b.z, h, h, h, b.treeStyle === "pine" ? "#536047" : "#626d4f", root);
+          this.objectVisuals.set(object.id, root);
+          this.batchGroup = previousBatch;
+          return true;
+        }
         if (b.kind === "log") {
           const alongX = b.w > b.d;
           const log = primitive(
@@ -1400,7 +1419,7 @@ export class Renderer implements CollisionWorld {
       m.glossMapChannel = "r";
       // Broad soil highlights must not bleach an entire bank as its normal
       // turns toward the sun. Separate puddles retain their glossy water finish.
-      m.gloss = ground ? 0.35 : 0.6;
+      m.gloss = ground ? 0.35 : kind === "bark" ? .18 : 0.6;
       m.specular = color(ground ? "#343b30" : "#252728");
       if (ground) {
         for (const channel of ["diffuse", "normal", "gloss"] as const) {
@@ -1578,6 +1597,24 @@ export class Renderer implements CollisionWorld {
     parent.addChild(joint);
     joint.setLocalPosition(x, y, z);
     return joint;
+  }
+  private forestPart(
+    name: string, shape: ForestShape, variant: number,
+    x: number, y: number, z: number, w: number, h: number, d: number,
+    tint: string, parent: pc.Entity,
+  ) {
+    const entity = this.cube(name, x, y, z, w, h, d, tint, false, parent);
+    const key = `forest-${shape}-${variant % 4}`;
+    if (!this.kitMeshes.has(key)) {
+      const data = forestGeometry(shape, variant), mesh = new pc.Mesh(this.app.graphicsDevice);
+      mesh.setPositions(data.positions); mesh.setNormals(data.normals); mesh.setUvs(0, data.uvs);
+      mesh.setIndices(data.indices);
+      mesh.setVertexStream(pc.SEMANTIC_TANGENT, pc.calculateTangents(data.positions, data.normals, data.uvs, data.indices), 4);
+      mesh.update(pc.PRIMITIVE_TRIANGLES); mesh.incRefCount(); this.kitMeshes.set(key, mesh);
+    }
+    const bark = ["trunk", "limbs", "deadLimbs", "branch", "root"].includes(shape);
+    entity.render!.meshInstances = [new pc.MeshInstance(this.kitMeshes.get(key)!, bark ? this.surfaceMaterial("bark", tint) : this.material(tint), entity)];
+    return entity;
   }
   private organic(
     name: string,

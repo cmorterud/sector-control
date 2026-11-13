@@ -107,6 +107,21 @@ const cue: SoundCue = {
   distance: 10,
   seed: 1,
 };
+it("uses unpitched forest layers, keeps background below the combat voice budget and cleans them up on pause/reset",()=>{
+ const {a,c}=setup();
+ for(const kind of ["leaves","forestWind","forestCreak","branchSnap","distantBattle"] as const)a.play({...cue,kind,local:kind==="forestWind"});
+ expect(c.oscillators).toBe(0);
+ expect(a.stats.byKind.leaves).toBe(1);expect(a.stats.byKind.forestWind).toBe(1);
+ expect(c.nodes.some(n=>n.frequency.value===850)).toBe(true);
+ expect(c.nodes.some(n=>n.gain.ramps.some(r=>r.time===1.2&&r.value===.3))).toBe(true);
+ a.pause();expect(c.state).toBe("suspended");expect(c.nodes.filter(n=>n.onended)).toHaveLength(0);
+ a.resume();a.reset();
+ for(let i=0;i<28;i++)a.play(cue);
+ a.play({...cue,kind:"forestWind",local:true});
+ expect(a.stats.byKind.forestWind??0).toBe(0);expect(a.stats.dropped).toBe(1);
+ a.play({...cue,kind:"artillery"});expect(a.stats.byKind.artillery).toBe(1);
+ a.reset();expect(c.nodes.filter(n=>n.onended)).toHaveLength(0);
+});
 it("gives service rifles a deeper report and uses short unpitched bolt and clip mechanisms", () => {
   const { a, c } = setup();
   a.play({ ...cue, kind: "serviceRifle", local: true });

@@ -1,4 +1,5 @@
-import { villageRoad } from "./ground-surface";
+import { groundField, villageRoad } from "./ground-surface";
+import { treeHasCrown } from "./vegetation";
 import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
@@ -30,6 +31,11 @@ export type SoundKind =
   | "whistle"
   | "debris"
   | "timber"
+  | "leaves"
+  | "forestWind"
+  | "forestCreak"
+  | "branchSnap"
+  | "distantBattle"
   | "voice";
 export type SoundCue = {
   kind: SoundKind;
@@ -80,7 +86,7 @@ export function footSurface(
   p: Vec,
   map: MapDefinition,
   boards = duckboards(map),
-): "wood" | "mud" | "concrete" {
+): "wood" | "mud" | "concrete" | "leaves" {
   if (!map.terrain) return "concrete";
   if (
     villageRoad(map, p.x, p.z) > 0.7 &&
@@ -90,7 +96,10 @@ export function footSurface(
   const board = boards.find(
     (b) => Math.abs(p.x - b.x) <= 0.65 && Math.abs(p.z - b.z) <= 0.9,
   );
-  return board && intactBoard(board, map) ? "wood" : "mud";
+  if (board && intactBoard(board, map)) return "wood";
+  const y = groundHeight(p.x, p.z, map);
+  if (map.woodland && y > 1.5 && y >= baseGroundHeight(p.x, p.z, map) - .15 && groundField(map,p.x,p.z).litter > .35) return "leaves";
+  return "mud";
 }
 
 // Presentation only: never writes commands, simulation state or gameplay RNG.
@@ -101,11 +110,16 @@ export class BattlefieldFeedback {
   private nextCrack = 0;
   private nextMechanism = 0;
   private lastLife = -1;
+  private nextWind = 0;
+  private nextCreak = 0;
+  private nextDistant = 0;
   stats = {
     footsteps: 0,
     woodSteps: 0,
     mudSteps: 0,
     concreteSteps: 0,
+    leafSteps: 0,
+    forestSounds: 0,
     cracks: 0,
     rifles: 0,
     distantRifles: 0,
@@ -130,6 +144,9 @@ export class BattlefieldFeedback {
     this.nextCrack = 0;
     this.nextMechanism = 0;
     this.lastLife = g.players[0].deaths;
+    this.nextWind = 60;
+    this.nextCreak = 210;
+    this.nextDistant = 400;
     for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[])
       this.stats[key] = 0;
     this.recent = [];
@@ -181,7 +198,7 @@ export class BattlefieldFeedback {
       if (e.change.collapses?.length)
         this.cue(g, "debris", e.change.at, 0.32, false, true, e.id);
       const fallen = e.change.objects
-        .filter((o) => o.id.startsWith("tree-") && o.stage === 2)
+        .filter((o) => g.map.destruction?.objects[o.id]?.original.kind === "tree" && o.stage === 2)
         .map((o) => g.map.destruction!.objects[o.id].original)
         .sort(
           (a, b) =>
@@ -198,6 +215,11 @@ export class BattlefieldFeedback {
           true,
           e.id,
         );
+      for (const changed of e.change.objects.filter(o=>e.change.geometry!==false && o.stage===1 && g.map.destruction?.objects[o.id]?.original.kind==="tree").slice(0,3)) {
+        const tree=g.map.destruction!.objects[changed.id].original;
+        if(Math.hypot(tree.x-p.x,tree.z-p.z)<45)
+          this.cue(g,"branchSnap",{x:tree.x,y:(tree.baseY??0)+tree.h*.6,z:tree.z},.24,false,true,e.id);
+      }
     }
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
@@ -324,6 +346,7 @@ export class BattlefieldFeedback {
       this.lastLife = g.players[0].deaths;
     }
     const listener = g.players[0];
+    if (g.map.woodland && g.phase === "playing" && listener.hp > 0) this.forestAmbience(g);
     const nearby = g.players
       .filter(
         (p) => p.hp > 0 && Math.hypot(p.x - listener.x, p.z - listener.z) < 18,
@@ -361,6 +384,8 @@ export class BattlefieldFeedback {
           this.stats[
             surface === "wood"
               ? "woodSteps"
+              : surface === "leaves"
+                ? "leafSteps"
               : surface === "mud"
                 ? "mudSteps"
                 : "concreteSteps"
@@ -368,6 +393,31 @@ export class BattlefieldFeedback {
         }
       }
       this.feet.set(p.id, { x: p.x, z: p.z, stride });
+    }
+  }
+  private forestAmbience(g: Game) {
+    const p=g.players[0], n=Math.abs(Math.sin(g.tick*1.731+g.map.width));
+    if(g.tick>=this.nextWind) {
+      this.nextWind=g.tick+165+Math.floor(n*120);
+      let canopy=0;
+      for(const tree of g.map.vegetation??[])
+        if(tree.kind==="tree" && treeHasCrown(tree) && (g.map.destruction?.objects[tree.id!]?.stage??0)===0)
+          canopy+=Math.max(0,1-Math.hypot(tree.x-p.x,tree.z-p.z)/24);
+      const volume=(.012+Math.min(1,canopy/4)*.025)*(p.y<1.5?.45:1);
+      this.cue(g,"forestWind",{x:p.x,y:p.y+2,z:p.z},volume,true,false,g.tick);
+      this.stats.forestSounds++;
+    }
+    if(g.tick>=this.nextCreak) {
+      this.nextCreak=g.tick+240+Math.floor(n*330);
+      const trees=(g.map.vegetation??[]).filter(b=>b.kind==="tree" && (g.map.destruction?.objects[b.id!]?.stage??0)<2 && Math.hypot(b.x-p.x,b.z-p.z)<25);
+      const tree=trees[Math.floor(n*trees.length)];
+      if(tree){this.cue(g,"forestCreak",{x:tree.x,y:(tree.baseY??0)+3,z:tree.z},.12,false,true,g.tick);this.stats.forestSounds++;}
+    }
+    if(g.tick>=this.nextDistant) {
+      this.nextDistant=g.tick+540+Math.floor(n*480);
+      const side=n<.5?-1:1;
+      this.cue(g,"distantBattle",{x:side*(g.map.width/2+45),y:3,z:(n-.5)*g.map.depth},.4,false,false,g.tick);
+      this.stats.forestSounds++;
     }
   }
   state(tick: number, enabled = true) {

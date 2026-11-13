@@ -2,7 +2,17 @@
 
 Updated November 12, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Verdun central groves — newest checkpoint
+## Verdun forest immersion — newest checkpoint
+
+Implemented the approved three-part forest pass. `forest-geometry.ts` provides four shared variants per normalized shape: tapered, slightly crooked trunks with fissured bark, fine branching limbs, ragged pine sprays and irregular broadleaf clusters. Verdun trees use two/three custom meshes with original box colliders and existing stage/fall rules; stage1 removes crowns. Other battlefields retain their tree models. `forest-floor.ts` deterministically spreads at most180 low fern/root/branch/curled-leaf details across the woods and central groves. Whole footprints reject steep ground, ramps, nearby flags and fresh cuts; floor details have no collision/shadow and use the existing once-per-frame scenery batching and crater removal. No per-tree foliage animation added.
+
+Audio: intact wooded ground gains leaf-crunch footsteps, with boards prioritized and fresh cuts/trench floors remaining mud. Presentation-only irregular wind/rustle, nearby living-tree creaks and off-map distant battle cues consume no game RNG. Crown loss/felling reduces local rustle. Ambient voices have low priority and cannot consume combat's reserved slots; pause/reset stops them. Fixed the old `tree-` ID filter that silenced Verdun/farm tree-fall sounds: all original.kind tree falls now produce bounded timber cues; stage1 geometry changes add branch snaps. No spoken audio/callouts added.
+
+Validation: strictTypeScript, all408tests/68files locally in72.85s, production build4.03s, whitespace checks pass.41focused tests/6files cover finite geometry/UVs/normals/tangents, bounded triangles, actual NullGraphicsDevice mesh/material sharing, crown stripping, bounded nonblocking floor details, crater cleanup/coalesced batches, leaf-to-mud transitions, presentation state purity, Verdun timber IDs and ambient audio priority/pause/reset. Existing budgets unchanged. Native Chrome getApp returned cgWindowNotFound; CUA summarized, no local server started. No new native visual/audio listening/FPS acceptance claim. Software raster review of actual shared meshes `playtest-artifacts/forest-sheet.png` caught/fixed disconnected fern fronds. `tools/forest-sheet.ts` reproduces that diagnostic; it is not a browser screenshot.
+
+Static cost audit using installed PlayCanvas primitive defaults: old148-tree presentation2,142render components /427,860triangles; new tree meshes371components /128,443triangles; including180new floor props551components /167,173triangles,36shared mesh variants. Unchanged existing props excluded from both totals. This is an authored geometry estimate, not measured draw calls or browser performance. Ignored `forest-cost.ts/.json` retain the calculation. Existing preview JPEG predates the central/visual polish. Final CI/publication recorded when complete; source commits must be pushed immediately and the same public Site updated.
+
+## Previous Verdun central groves checkpoint
 
 **Live version 18:** [Play Verdun](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Game source `efce91e41e2621a3cce18ed7b258b179470a5f68`, committed and immediately pushed. Final full local retry passes all401tests/67files in72.61s, including the unchanged Ammo test with its original5s budget. Strict TypeScript, production build3.93s and whitespace checks pass. [Workflow43219490420](https://github.com/cmorterud/sector-control/actions/runs/43219490420) did not start; its annotation confirms the existing account payment/spending-limit restriction. No workflow reruns or billing changes made.
 

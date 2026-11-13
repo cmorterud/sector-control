@@ -11,3 +11,11 @@ test("updates every impacted patch immediately and coalesces scenery batches bef
  r.updateWorld(impact('0,0'));r.updateWorld(impact('0,1'));expect(rebuilt).toEqual(['0,0','0,1']);expect(generate).not.toHaveBeenCalled();
  r.flushWorldBatches();expect(generate.mock.calls).toEqual([[[4]]]);r.flushWorldBatches();expect(generate).toHaveBeenCalledTimes(1);
 });
+test("removes blasted forest floor details and rebuilds their static batch once",()=>{
+ const generate=vi.fn(),near={enabled:true},far={enabled:true};
+ const r=Object.create(Renderer.prototype);
+ Object.assign(r,{app:{batcher:{generate}},map:{destruction:{objects:{}}},fallingTrees:[],boardVisuals:[],groundDecor:[{root:near,x:0,z:0,radius:.8,batched:true},{root:far,x:20,z:20,radius:.8,batched:true}],coverBatch:4,boardBatch:5});
+ r.updateWorld({at:{x:0,y:0,z:0},objects:[],patches:[],crater:{radius:2}} as unknown as DestructionChange);
+ expect(near.enabled).toBe(false);expect(far.enabled).toBe(true);expect(generate).not.toHaveBeenCalled();
+ r.flushWorldBatches();expect(generate.mock.calls).toEqual([[[5]]]);
+});
