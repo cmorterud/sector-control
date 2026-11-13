@@ -58,6 +58,7 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
     effect(e: Event): void;
     visualWork: VisualWorkQueue;
     casualtyTemplates: Map<string, pc.Mesh>;
+    actorKits: Map<number,string>;
     pendingCasualties: Map<number, unknown>;
   };
   const r = Object.create(Renderer.prototype) as Harness;
@@ -139,6 +140,11 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   const before = g.snapshot();
   const prepared = r.casualtyMesh(p);
   expect(r.ragdollPhysics).toBeUndefined();
+  r.actorKits = new Map([[p.id, `${p.faction}-${p.weapon}-${p.weaponId}`]]);
+  const heldWeapon = p.weapon;
+  p.weapon = "pistol";
+  expect(r.casualtyMesh(p)).toBe(prepared); // Actual rig still holds its primary.
+  p.weapon = heldWeapon;
   r.retainCasualty(p);
   expect(r.casualties).toHaveLength(1);
   const first = r.casualties[0],

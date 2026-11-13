@@ -3176,7 +3176,10 @@ export class Renderer implements CollisionWorld {
     this.remember(g);
     this.soldiers = [];
     this.batchGroup = this.actorBatch;
-    for (const p of g.players) this.createSoldier(p);
+    for (const p of g.players) {
+      this.createSoldier(p);
+      this.actorKits.set(p.id, `${p.faction}-${p.weapon}-${p.weaponId}`);
+    }
     // Merge each distinct rendered kit once during deployment, not mid-blast.
     for (const p of g.players) this.casualtyMesh(p);
     this.batchGroup = -1;
@@ -3282,7 +3285,8 @@ export class Renderer implements CollisionWorld {
         this.app.batcher!.generate([this.actorBatch]);
         if (p.id === 0) this.createFirstPersonRig();
       }
-      this.actorKits.set(p.id, kit);
+      // Dead actors keep the kit actually rendered at death while setup waits.
+      if (p.hp > 0) this.actorKits.set(p.id, kit);
       const e = this.people[p.id],
         previous = this.previous[p.id] ?? p,
         teleported = Math.hypot(previous.x - p.x, previous.z - p.z) > 2;
