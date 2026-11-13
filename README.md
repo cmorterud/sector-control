@@ -12,6 +12,8 @@ This is a frozen production-build snapshot, updated November 13, 2026 through Si
 
 Trench and village terrain now use close-up clumped earth, grit and broken soil fissures alongside broad wet/dry/grass variation. Explosions replace excavated grass, paving and wet surface finishes with fresh earth; the detail follows steep banks and crater walls without stretching. Individual worn duckboard planks, split timber grain, small exposed roots and rounded rubble add trench detail. Terrain lighting now shares smooth normals across patch seams, decodes surface colors consistently and uses softer soil highlights to prevent bright bands on trench banks. These are cosmetic changes; movement and cover collision keep their existing shapes.
 
+Artillery destruction reuses unchanged terrain cells and existing mesh buffers. Visual uploads and ragdoll setup are spread across frames, while damage and collision update immediately. Corpse meshes are shared per kit and prepared during deployment. The latest autonomous two-minute Verdun test runs 100 soldiers through 71 shell impacts and 297 deaths with zero game errors; remaining hitches are documented in HANDOFF.md.
+
 ## Player options and equipment
 
 **Controls** in the briefing and pause menu remaps actions, switches hold/toggle sprint (hold Shift by default), and saves camera and keyboard preferences locally. Escape always pauses/resumes. Reset restores defaults. Browser modifier shortcuts and duplicate bindings are rejected; browser-owned shortcuts can still close a tab.
