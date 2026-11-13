@@ -8,7 +8,7 @@ Local single-player shooter with toggleable first- and third-person views. Indus
 
 Try [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun), [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. [Start trenches in first person](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches&view=first), or press T during play. Each visitor plays an independent match against bots.
 
-This is a frozen production-build snapshot, updated November 11, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
+This is a frozen production-build snapshot, updated November 13, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
 
 Trench and village terrain now use close-up clumped earth, grit and broken soil fissures alongside broad wet/dry/grass variation. Explosions replace excavated grass, paving and wet surface finishes with fresh earth; the detail follows steep banks and crater walls without stretching. Individual worn duckboard planks, split timber grain, small exposed roots and rounded rubble add trench detail. Terrain lighting now shares smooth normals across patch seams, decodes surface colors consistently and uses softer soil highlights to prevent bright bands on trench banks. These are cosmetic changes; movement and cover collision keep their existing shapes.
 
@@ -103,7 +103,7 @@ Three forward sap trenches turn through the woods, joining the existing rear/fro
 
 The forest presentation uses tapered bark trunks, fine branching limbs, irregular needle sprays and torn broadleaf crowns. Up to 180 small fern, root, branch and curled-leaf details sit on stable ground, add no collision, and disappear where explosions excavate the surface. Shared mesh variants and static batches bound their cost; no foliage animation runs per tree.
 
-The latest forest geometry, floor detail and ambient audio are live in public trial version19. The published JS, CSS and map previews match the tested build byte for byte. See HANDOFF.md for validation and deployment provenance.
+The latest forest geometry, floor detail and ambient audio are included in public trial version20. The published JS, CSS and map previews match the tested build byte for byte. See HANDOFF.md for validation and deployment provenance.
 
 Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden steps and fresh craters sound muddy. Quiet wind/rustling, occasional creaks and off-map distant battle sounds add ambience. Wind rustling weakens as nearby crowns are stripped or felled. Tree damage and falling timber produce positional cracks/thuds, including Verdun's tree IDs. All sounds use the existing volume, pause/reset, capture and voice-budget controls; no spoken callouts were added.
 
