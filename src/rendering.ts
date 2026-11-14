@@ -1,3 +1,4 @@
+import {handlingPath,handlingWrist} from "./handling-pose";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
@@ -95,6 +96,7 @@ const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
 type SoldierRig = {
   farDetail?: boolean;
+  shoulderReady?: number;
   feetActive?: boolean;
   weight?: MovementWeight;
   feet?: (FootContact|undefined)[];
@@ -2301,6 +2303,8 @@ export class Renderer implements CollisionWorld {
       rib.setLocalPosition(Math.cos(i*Math.PI/10)*.28,.52,Math.sin(i*Math.PI/10)*.28);rib.setLocalEulerAngles(0,-i*18,0);rib.setLocalScale(.3,.06,.02);
     }
     if(design?.family === "mg08")for(let i=0;i<8;i++)this.riflePart("belt cartridge",(i-3.5)*.1,0,0,.025,.7,.025,"edge",magazine,"pin").setLocalEulerAngles(90,0,0);
+    const carryHand=arms[1].elbow.findByName("hand") as pc.Entity;
+    if(carryHand?.tags.has("hand-side:right")){reloadMagazine.reparent(carryHand);reloadMagazine.setLocalPosition(0,.012,-.01);}
     const supportHand = this.joint(
       "left hand grip",
       rifle,
@@ -2421,9 +2425,12 @@ export class Renderer implements CollisionWorld {
       ),
     );
   }
-  private alignGripHand(rig:Pick<SoldierRig,"arms"|"rifle">) {
+  private alignGripHand(rig:Pick<SoldierRig,"arms"|"rifle"|"bolt">,p:Soldier,tick:number) {
     const hand=rig.arms[1].elbow.findByName("hand") as pc.Entity;
-    if(hand?.tags.has("hand-side:right"))hand.setLocalRotation(rig.arms[1].elbow.getRotation().clone().invert().mul(rig.rifle.getRotation()));
+    if(!hand?.tags.has("hand-side:right"))return;
+    const pose=handlingWrist(p,tick),rotation=new pc.Quat().slerp(rig.rifle.getRotation(),rig.bolt.getRotation(),pose.bolt);
+    rotation.mul(new pc.Quat().setFromEulerAngles(pose.pitch,0,pose.roll));
+    hand.setLocalRotation(rig.arms[1].elbow.getRotation().clone().invert().mul(rotation));
   }
   private attachSupportArm(rig: SoldierRig) {
     const hand = rig.rifle
@@ -2504,9 +2511,10 @@ export class Renderer implements CollisionWorld {
     const melee = p.melee ? meleePose(p.melee, tick) : null;
     const throwLower = throwing?.lower ?? 0;
     const sway = (1-rig.ads)*Math.sin(source.phase)*source.motion*.008;
+    const hipBob=!p.command.sprint&&!p.melee&&!loading&&!throwing?(1-rig.ads)*(Math.cos(source.phase*2)-1)*source.motion*.004:0;
     rig.rifle.setLocalPosition(
       position.x + sway + lower * 0.06 + sprint * (0.07 + Math.sin(source.phase) * 0.012) - charge.ready * 0.045 + charge.side * 0.016,
-      position.y - change.lower*.55 - lower * 0.12 - throwLower * 0.15 - sprint * 0.09 + charge.ready * 0.11 + charge.bob * 0.006,
+      position.y + hipBob - change.lower*.55 - lower * 0.12 - throwLower * 0.15 - sprint * 0.09 + charge.ready * 0.11 + charge.bob * 0.006,
       position.z + change.lower*.22 + sprint * 0.05 + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18 - charge.ready * 0.04 + charge.bob * 0.008,
     );
     rig.rifle.setLocalEulerAngles(
@@ -2550,7 +2558,7 @@ export class Renderer implements CollisionWorld {
     rig.smoke.enabled = !!p.throwAction?.smoke;
     if (throwing?.held) rig.grenade.setLocalPosition(right.x, right.y + 0.035, right.z - 0.025);
     this.poseArm(rig, 1, right, armLengths.upper, armLengths.forearm);
-    this.alignGripHand(rig);
+    this.alignGripHand(rig,p,tick);
   }
   private plantFeet(p:Soldier,rig:SoldierRig,dt:number,tick:number,teleported:boolean) {
     const root=this.people[p.id],distance=root.getPosition().distance(this.camera.getPosition());
@@ -2593,7 +2601,9 @@ export class Renderer implements CollisionWorld {
   ) {
     const rig = this.soldiers[p.id], design=weaponDesign(p);
     rig.arms[0].shoulder.setLocalPosition(-0.27, 0.41, -0.12);
-    rig.arms[1].shoulder.setLocalPosition(0.29, 0.41, 0);
+    const shoulderTarget=(p.weapon==="serviceRifle"||p.weapon==="machineGun")&&!p.reloadAt&&!p.mantle&&!p.melee&&p.throwUntil<=tick&&(p.command.aim||p.command.fire||tick-p.lastShotAt<18)?1:0;
+    rig.shoulderReady=(rig.shoulderReady??0)+(shoulderTarget-(rig.shoulderReady??0))*(1-Math.exp(-14*dt));
+    rig.arms[1].shoulder.setLocalPosition(.29-.04*rig.shoulderReady,.41+.03*rig.shoulderReady,.02*rig.shoulderReady);
     let magazineVisible = true,
       carryingMagazine = false;
     const dx = x - rig.x,
@@ -2838,29 +2848,22 @@ export class Renderer implements CollisionWorld {
       const keys = service
         ? [
             { t: 0, p: trigger },
-            { t: 0.14, p: bolt },
+            { t: 0.14, p: bolt, contact:true },
             { t: 0.32, p: belt },
-            { t: 0.48, p: well },
-            { t: 0.65, p: well.clone().add(new pc.Vec3(0, -0.09, 0)) },
-            { t: 0.84, p: bolt },
+            { t: 0.48, p: well, contact:true },
+            { t: 0.65, p: well.clone().add(new pc.Vec3(0, -0.09, 0)), contact:true },
+            { t: 0.84, p: bolt, contact:true },
             { t: 1, p: trigger },
           ]
         : [
             { t: 0, p: trigger },
             { t: 0.18, p: well },
             { t: 0.4, p: belt },
-            { t: 0.64, p: well },
+            { t: 0.64, p: well, contact:true },
             { t: 0.79, p: bolt },
             { t: 1, p: trigger },
           ];
-      const end = keys.findIndex((k) => k.t >= t),
-        b = keys[Math.max(1, end)],
-        a = keys[Math.max(0, end - 1)];
-      const hand = new pc.Vec3().lerp(
-        a.p,
-        b.p,
-        smooth((t - a.t) / (b.t - a.t)),
-      );
+      const sampled=handlingPath(keys,t),hand=new pc.Vec3(sampled.x,sampled.y,sampled.z);
       if((design?.reload === "tube" || design?.reload === "revolver") && t>.2 && t<.78){
         const stroke=(t-.2)/.58*(design.reload === "tube"?5:6)%1;
         hand.lerp(belt,well,smooth(Math.min(1,stroke*2))*(1-smooth(Math.max(0,(stroke-.8)*5))));
@@ -2982,9 +2985,17 @@ export class Renderer implements CollisionWorld {
       const hand=rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(...(design?.trigger??[0,-.03,.14]) as [number,number,number]));
       this.poseArm(rig,1,hand,armLengths.upper,armLengths.forearm);
     }
+    if(rig.shoulderReady && this.map.terrain && !loading && !cycling && !p.mantle && !p.melee && p.throwUntil<=tick){
+      const position=rig.rifle.getLocalPosition().clone(),shift=.018*rig.shoulderReady;
+      const grip=rig.rifle.getLocalTransform().transformPoint(rig.supportHand.getLocalPosition());grip.x+=shift;
+      if(grip.distance(rig.arms[0].shoulder.getLocalPosition())<supportUpperLength+supportForearmLength-.005){
+        rig.rifle.setLocalPosition(position.x+shift,position.y,position.z);
+        this.poseArm(rig,1,rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(...(design?.trigger??[0,-.03,.14]) as [number,number,number])),armLengths.upper,armLengths.forearm);
+      }
+    }
     this.plantFeet(p,rig,dt,tick,distance>=2);
     this.attachSupportArm(rig);
-    this.alignGripHand(rig);
+    this.alignGripHand(rig,p,tick);
   }
   private ragdollPose(p: Soldier) {
     const rig = this.soldiers[p.id], root = this.people[p.id];

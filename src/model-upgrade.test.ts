@@ -75,7 +75,9 @@ test.each(['french','german'] as const)('%s actual rig retains material UVs thro
     r.animateSoldier(p,0,0,1/60,tick);r.drawFirstPerson(p,tick,1/60);
     const wrist=view.arms[0].elbow.getWorldTransform().transformPoint(new pc.Vec3(0,-armLengths.forearm,0));
     expect(wrist.distance(view.supportHand.getPosition())).toBeLessThan(.001);
-    const hand=view.arms[1].elbow.findByName('hand');expect(Math.abs(hand.getRotation().dot(view.rifle.getRotation()))).toBeCloseTo(1);
+    const hand=view.arms[1].elbow.findByName('hand');
+    expect([...hand.getWorldTransform().data].every(Number.isFinite)).toBe(true);
+    if(!loading)expect(Math.abs(hand.getRotation().dot(view.rifle.getRotation()))).toBeCloseTo(1);
    }
    expect(p).toEqual(before);
   }
