@@ -2,18 +2,21 @@ import {test,expect} from "vitest";
 import {verdunMap} from "./verdun-map";
 import {Game,TestCollision,pathfind,botCommand,idle} from "./simulation";
 import {groundHeight, walkSegment, blocked} from "./map";
-import { buildVerdunForest, woodlandDensity } from "./verdun-forest";
+import { buildVerdunForest, woodlandDensity, verdunFlankX } from "./verdun-forest";
 import { artilleryExplosionProfile, grenadeExplosionProfile } from "./destruction";
 import { treeHasCrown, foliageBlocks } from "./vegetation";
 import { groundField, groundSurfacePixels } from "./ground-surface";
-test("Verdun initializes French and German rosters with four reachable open objectives",()=>{
+test("Verdun initializes French and German rosters with five reachable open objectives",()=>{
  const g=new Game(new TestCollision(verdunMap),true,100,41,undefined,{map:verdunMap,ambientArtillery:false});
  expect(g.players).toHaveLength(100); expect(g.players[0].faction).toBe("french"); expect(g.players[50].faction).toBe("german");
- expect(g.sectors).toHaveLength(4);
+ expect(g.sectors.map(s=>s.id)).toEqual(["A","B","C","D","E"]);
+ expect(g.map.width).toBe(208);
+ expect(g.sectors.filter(s=>s.home==="blue")).toHaveLength(2);
+ expect(g.sectors.filter(s=>s.home==="red")).toHaveLength(2);
  for(const flag of g.sectors) {
   expect(blocked(flag.x,flag.z,.4,g.map)).toBe(false);
   for (const side of [-1, 1])
-   expect(pathfind({x:side*67,z:0},flag,g.map).length, `${flag.id} from ${side}`).toBeGreaterThan(0);
+   expect(pathfind(g.map.spawn[side<0?"blue":"red"],flag,g.map).length, `${flag.id} from ${side}`).toBeGreaterThan(0);
  }
 });
 
@@ -77,7 +80,8 @@ test("keeps broad cross-field breaks between central tree clusters instead of a 
  expect(after/before).toBeGreaterThanOrEqual(.7);
  for (const z of [-20,1,22]) {
   expect(g.collision.ray({x:-31,y:4.1,z},{x:31,y:4.1,z})).toBe(1);
-  expect(walkSegment({x:-12,z},{x:12,z},g.map)).toBe(true);
+  // The center now has a sunken relay with dogleg entries (tested below).
+  if (z !== 1) expect(pathfind({x:-12,z},{x:12,z},g.map).length).toBeGreaterThan(0);
  }
 });
 
@@ -139,8 +143,8 @@ test("rear ramps are walkable and trench floors protect below the banks",()=>{
  expect(t.shelterBays).toHaveLength(6); expect(t.communicationRoutes!.length).toBeGreaterThan(6);
  for(const team of ["blue","red"] as const){
   const side=team==="blue"?-1:1;
-  expect(groundHeight(side*51,0,verdunMap)).toBeLessThan(.1);
-  expect(groundHeight(side*48,15,verdunMap)).toBeGreaterThan(2);
-  expect(walkSegment({x:side*60,z:0},{x:side*51,z:0},verdunMap)).toBe(true);
+  expect(groundHeight(verdunFlankX(side*51),0,verdunMap)).toBeLessThan(.1);
+  expect(groundHeight(verdunFlankX(side*48),15,verdunMap)).toBeGreaterThan(2);
+  expect(walkSegment({x:verdunFlankX(side*60),z:0},{x:verdunFlankX(side*51),z:0},verdunMap)).toBe(true);
  }
 });

@@ -8,7 +8,7 @@ export interface Woodland {
 
 // Broad, asymmetric tree belts and broken central groves leave clear flag
 // approaches. This authoring stream never consumes the battle's random seed.
-export const verdunWoodland: Woodland = {
+const originalWoodland: Woodland = {
   belts: [
     { x: -24, z: -47, radiusX: 48, radiusZ: 15 },
     { x: 38, z: -42, radiusX: 30, radiusZ: 17 },
@@ -27,6 +27,21 @@ export const verdunWoodland: Woodland = {
     { width: 2.3, points: [{ x: -65, z: -25 }, { x: -45, z: -28 }, { x: -30, z: -32 }, { x: -18, z: -31 }, { x: 0, z: -25 }, { x: 20, z: -17 }, { x: 43, z: -21 }, { x: 64, z: -25 }] },
     { width: 2.1, points: [{ x: -63, z: 24 }, { x: -43, z: 28 }, { x: -21, z: 25 }, { x: -3, z: 20 }, { x: 13, z: 23 }, { x: 25, z: 29 }, { x: 43, z: 31 }, { x: 64, z: 25 }] },
     { width: 1.8, points: [{ x: -18, z: -31 }, { x: -11, z: -13 }, { x: -14, z: 8 }, { x: -21, z: 25 }] },
+  ],
+};
+
+// Insert a central sector while keeping each side's original local distances.
+export const verdunFlankX = (x: number) => x + (x < 0 ? -24 : x > 0 ? 24 : 0);
+export const verdunWoodland: Woodland = {
+  belts: originalWoodland.belts.map(b => ({ ...b, x: verdunFlankX(b.x) })),
+  groves: [
+    {x:-15,z:-16,radiusX:5.5,radiusZ:5}, {x:15,z:-17,radiusX:5.5,radiusZ:5},
+    {x:-15,z:17,radiusX:6,radiusZ:5}, {x:16,z:16,radiusX:5,radiusZ:6},
+  ],
+  tracks: [
+    ...originalWoodland.tracks.map(t => ({...t,points:t.points.map(p => ({...p,x:verdunFlankX(p.x)}))})),
+    {width:2.2,points:[{x:-31,z:-9},{x:-20,z:-9},{x:-10,z:-3},{x:0,z:0},{x:10,z:-3},{x:20,z:-10},{x:31,z:-10}]},
+    {width:2,points:[{x:-31,z:9},{x:-20,z:9},{x:-10,z:3},{x:0,z:0},{x:10,z:3},{x:20,z:9},{x:31,z:9}]},
   ],
 };
 
@@ -56,16 +71,16 @@ function trackDistance(p: Vec, woodland: Woodland): number {
 
 export function buildVerdunForest(map: MapDefinition): Box[] {
   const parts: Box[] = [];
-  // Central additions have their own stream, preserving the original flank
-  // trees, brush and fallen timber exactly as previously authored.
-  const flanks = { ...verdunWoodland, groves: undefined };
+  // Separate streams retain reproducible flanks and central grove placement.
+  const woodland = map.woodland ?? verdunWoodland;
+  const flanks = { ...woodland, groves: undefined };
   let seed = 0x7e4d1917;
   const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
   const place = (b: Box, clearance: number): boolean => {
     if (Object.values(map.spawn).some((s) => dist(s, b) < 15)) return false;
-    if (map.sectors.some((s) => dist(s, b) < 5)) return false;
+    if (map.sectors.some((s) => dist(s, b) < (s.name === "Broken Relay" ? 8 : 5))) return false;
     if (map.terrain?.ramps.some((r) => Math.abs(r.x - b.x) < (r.w + b.w) / 2 + .9 && Math.abs(r.z - b.z) < (r.d + b.d) / 2 + .9)) return false;
-    if (trackDistance(b, verdunWoodland) < clearance + Math.max(b.w, b.d) / 2) return false;
+    if (trackDistance(b, woodland) < clearance + Math.max(b.w, b.d) / 2) return false;
     if ([...map.boxes, ...parts].some((q) => Math.abs(q.x - b.x) < (q.w + b.w) / 2 + clearance && Math.abs(q.z - b.z) < (q.d + b.d) / 2 + clearance)) return false;
     const levels: number[] = [];
     // Full footprint plus walking clearance, including the inside of long logs.
@@ -79,7 +94,7 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   };
   let trees = 0;
   for (let attempt = 0; attempt < 2400 && trees < 124; attempt++) {
-    const x = (random() - .5) * 148, z = (random() - .5) * 116;
+    const x = (random() - .5) * (map.width - 12), z = (random() - .5) * 116;
     const density = woodlandDensity(flanks, x, z);
     if (random() > density || (Math.abs(x) < 24 && Math.abs(z) < 28)) continue;
     if (parts.some((b) => dist(b, { x, z }) < 3.8 + random() * .8)) continue;
@@ -93,7 +108,7 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   // ground texture, never a hedge that hides an entire flank.
   let brush = 0, logs = 0, stumps = 0;
   for (let attempt = 0; attempt < 1200 && (brush < 42 || logs < 14 || stumps < 12); attempt++) {
-    const x = (random() - .5) * 144, z = (random() - .5) * 114;
+    const x = (random() - .5) * (map.width - 16), z = (random() - .5) * 114;
     if (woodlandDensity(flanks, x, z) < .45) continue;
     const kind = attempt % 5 === 0 && logs < 14 ? "log" : attempt % 4 === 0 && stumps < 12 ? "stump" : "brush";
     if (kind === "brush" && brush >= 42) continue;
@@ -112,7 +127,7 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
     }
   }
   seed = 0xc37a1917;
-  for (const [groveIndex, grove] of (verdunWoodland.groves ?? []).entries()) {
+  for (const [groveIndex, grove] of (woodland.groves ?? []).entries()) {
     let count = 0;
     for (let attempt = 0; attempt < 240 && count < 6; attempt++) {
       const angle = random() * Math.PI * 2, radius = Math.sqrt(random());

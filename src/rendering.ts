@@ -1099,6 +1099,20 @@ export class Renderer implements CollisionWorld {
       this.batchGroup = previousBatch;
       return true;
     }
+    const detail = b.farmProp ? farmPropParts(b,h) : [];
+    if (detail.length) {
+      const solid = this.cube(b.kind,b.x,base+h/2,b.z,b.w,h,b.d,"#756044",!object.lining,root);
+      solid.render!.enabled = false;
+      for (const part of detail) {
+        const piece=this.cube(part.name,b.x+part.at[0],base+part.at[1],b.z+part.at[2],...part.size,part.tint,false,root);
+        piece.render!.type=part.shape;
+        if(part.rotation)piece.setLocalEulerAngles(...part.rotation);
+        if(part.wood)piece.render!.material=this.surfaceMaterial("wood",part.tint);
+      }
+      this.objectVisuals.set(object.id,root);
+      this.batchGroup=previousBatch;
+      return true;
+    }
     if (["masonry", "concrete", "rubble", "gun"].includes(b.kind)) {
       const tint =
         b.kind === "masonry"
@@ -1122,15 +1136,7 @@ export class Renderer implements CollisionWorld {
         true,
         root,
       );
-      if (b.farmProp === "crate" || b.farmProp === "cart") {
-        solid.render!.enabled = false;
-        for (const part of farmPropParts(b,h)) {
-          const piece=this.cube(part.name,b.x+part.at[0],base+part.at[1],b.z+part.at[2],...part.size,part.tint,false,root);
-          piece.render!.type=part.shape;
-          if(part.rotation)piece.setLocalEulerAngles(...part.rotation);
-          if(part.wood)piece.render!.material=this.surfaceMaterial("wood",part.tint);
-        }
-      } else if (b.kind === "gun") {
+      if (b.kind === "gun") {
         solid.render!.enabled = false;
         const primitive = (
           name: string,

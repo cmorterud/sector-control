@@ -4,7 +4,7 @@ import type { Destructible } from "./destruction";
 export interface Landmark extends Vec {
   id: string;
   name: string;
-  kind: "farmhouse" | "woodland" | "gunpit" | "bunker";
+  kind: "farmhouse" | "woodland" | "gunpit" | "bunker" | "relay";
   radius: number;
 }
 export function buildLandmarks(map: MapDefinition): {

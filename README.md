@@ -2,7 +2,7 @@
 
 Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
 
-Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front, Village front and Verdun sector are 50v50 domination maps with four flags. Matches last up to eight minutes.
+Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front and Village front are 50v50 domination maps with four flags; Verdun sector has five. Matches last up to eight minutes.
 
 ## Public trial
 
@@ -24,7 +24,7 @@ Western Front maps use British and Imperial German uniforms and equipment; **Ver
 
 Two rare **flame kits** are placed in forward trenches on each historical map. Press **E** nearby to exchange the primary, retaining the pistol. A kit has eight seconds of fuel, an 8 m jet, 30 damage per second and a brief nonstacking burn. Earth and cover stop the jet; wood can burn through the existing destruction system. Bots react to visible flame danger and seek cover. Death drops remaining fuel; supply replenishes after two minutes with at most two kits in circulation. Bots do not pick up kits in this prototype.
 
-All four maps have actual game screenshots in their selection cards. The tactical map draws terrain and current cover, updating after destruction. Verdun is a 160 × 128 m, four-flag battlefield inspired by the 1917 fighting, with woodland, crater and communication-trench routes. It is an authored layout rather than a geographical reconstruction.
+All four maps have actual game screenshots in their selection cards. The tactical map draws terrain and current cover, updating after destruction. Verdun is a 208 × 128 m, five-flag battlefield inspired by the 1917 fighting, with woodland, crater and communication-trench routes. Its central C flag, Broken Relay, is a shallow shell-torn clearing with four dogleg approaches, a broken signal mast, severed wires, a collapsed dugout and destructible low cover. A/B sit toward the French side; D/E sit toward the German side. It is an authored layout rather than a geographical reconstruction.
 
 Artillery cooldowns, fixed objectives and blast rules remain unchanged. Snapshots and playtest summaries now include repeat calls near flags, blast deaths, capture interruptions and potential damage prevented by cover. `tools/battle-audit.ts` runs three seeded full matches to gather evidence before proposing balance changes. See HANDOFF.md for results and validation limits.
 
@@ -111,7 +111,7 @@ The latest forest geometry, floor detail and ambient audio are included in publi
 
 Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden steps and fresh craters sound muddy. Quiet wind/rustling, occasional creaks and off-map distant battle sounds add ambience. Wind rustling weakens as nearby crowns are stripped or felled. Tree damage and falling timber produce positional cracks/thuds, including Verdun's tree IDs. All sounds use the existing volume, pause/reset, capture and voice-budget controls; no spoken callouts were added.
 
-France versus Imperial Germany, 50 soldiers per team, four-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
+France versus Imperial Germany, 50 soldiers per team, five-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
 
 ## Farmland trench front
 
