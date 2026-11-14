@@ -1,8 +1,9 @@
 export type CharacterShape =
-  "soft" | "limb" | "tunic" | "head" | "helmet" | "disc" | "stock" | "coat" | "sleeve" | "trouser" | "boot" | "palm" | "face" | "adrian" | "stahlhelm" | "pouch";
+  "soft" | "limb" | "tunic" | "head" | "helmet" | "disc" | "stock" | "coat" | "coatHem" | "sleeve" | "trouser" | "boot" | "palm" | "face" | "adrian" | "stahlhelm" | "pouch";
 type Ring = [number, number, number];
 const profiles: Record<CharacterShape, Ring[]> = {
   coat: [[-.5,.43,.43],[-.42,.46,.44],[-.18,.37,.37],[.08,.45,.44],[.3,.5,.44],[.43,.39,.34],[.5,.24,.25]],
+  coatHem: [[-.5,.5,.49],[-.38,.49,.48],[.05,.45,.43],[.36,.42,.4],[.5,.41,.39]],
   sleeve: [[-.5,.32,.34],[-.39,.36,.37],[-.16,.4,.41],[.1,.45,.46],[.34,.5,.5],[.5,.42,.42]],
   trouser: [[-.5,.32,.34],[-.34,.37,.38],[-.03,.43,.45],[.28,.5,.5],[.5,.43,.43]],
   boot: [[-.5,.41,.44],[-.38,.5,.5],[-.12,.48,.48],[.02,.39,.38],[.18,.3,.26],[.5,.29,.24]],

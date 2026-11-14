@@ -2,6 +2,12 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
+## Hip silhouette correction — implementation checkpoint
+
+November13: user reported small foot-like pieces hanging from the player hips. The new pair of static coat-skirt panels used the full coat profile below the pelvis and read as an extra short pair of legs while the actual legs moved. Replaced them on French/German rigs with one short, flared continuous coat hem overlapping the waist (.18m/.14m high). Removed both separate panels. Actual legs/boots, animation joints, weapon models and gameplay are unchanged; one fewer rendered part per upgraded actor.
+
+StrictTypeScript,32affected tests/5files in7.89s, production build8.14s and whitespace pass. New regressions cover both factions: exactly one waist hem, no former skirt panels, exactly two boots under their ankle joints, broad/short hem bounds and waist attachment through walking/sprint/crouch poses. Existing geometry, first-person alignment, rig, corpse conversion and native settled-ragdoll checks pass. This focused validation follows the prior441test full run; no new full-suite claim. Reviewed updated actual posed meshes through the existing offline software rasterizer (ignored hem-before.png/hem-after.png). These are mesh reviews, not native screenshots; previous browser/GPU limits remain. No browser tab or server started this turn. Ignored hem-build-manifest.json records tested index-DNdTCPCx.js. Publish the matching compiled snapshot after this commit.
+
 ## Weapon and character model prototype — live version27
 
 [Play the model prototype](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private game feature `55b3fd2d686bc16d067de4f23f87f956efdb00d0` committed and immediately pushed. Hosting source `14461db8cc7176aee2a0cdd7316ab12912ecb61a`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_2c02c4af6abc81918232a8d5021131c9`, successful deployment `appgdep_6af7d55fd5ec8191856da2fefd74fb52`. Archive `/private/tmp/sector-control-model-upgrade-20261113.tar.gz`, native hash `sha256:29ca388a8176c06b65392afff375262888382e0f39b35247e08ae7a1415e1e27`. Public audience unchanged, private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references tested `index-2zDHZDYT.js`/`index-awARFtve.css`. Platform HTML differs. Ignored models-build-manifest.json/models-live-parity.json retain evidence.

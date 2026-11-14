@@ -9,7 +9,7 @@ import {idle} from './simulation';
 import {armLengths,weaponProfiles} from './weapons';
 
 test('sculpted uniforms, boots, faces, helmets and mirrored hands have finite UVs, unit normals and bounded meshes',()=>{
- for(const shape of ['coat','sleeve','trouser','boot','face','adrian','stahlhelm','pouch'] as CharacterShape[]){
+ for(const shape of ['coat','coatHem','sleeve','trouser','boot','face','adrian','stahlhelm','pouch'] as CharacterShape[]){
   const mesh=characterGeometry(shape,16);expect(mesh.positions.every(Number.isFinite)).toBe(true);
   expect(mesh.uvs.length).toBe(mesh.positions.length/3*2);expect(mesh.indices.length/3).toBeLessThan(400);
   for(let i=0;i<mesh.normals.length;i+=3)expect(Math.hypot(...mesh.normals.slice(i,i+3))).toBeCloseTo(1);
@@ -22,6 +22,29 @@ test('sculpted uniforms, boots, faces, helmets and mirrored hands have finite UV
  }
  expect(characterGeometry('adrian').positions).not.toEqual(characterGeometry('stahlhelm').positions);
  expect(rifleGeometry('berthierStock').positions).not.toEqual(rifleGeometry('gewehrStock').positions);
+});
+
+test.each(['french','german'] as const)('%s coat stays joined at the waist without a second pair of dangling panels',faction=>{
+ const {r,p,destroy}=modelScene(faction);
+ try{
+  const rig=r.soldiers[0],root=r.people[0],hem=root.findByName('coat hem') as pc.Entity;
+  expect(root.findByName('coat skirt')).toBeNull();
+  expect(root.find((e:pc.GraphNode)=>e.name==='coat hem')).toHaveLength(1);
+  expect(root.find((e:pc.GraphNode)=>e.name==='boot')).toHaveLength(2);
+  expect(hem.parent).toBe(rig.hips);expect(hem.getLocalScale().y).toBeLessThan(.2);
+  const bounds=hem.render!.meshInstances[0].mesh!.aabb;
+  expect(bounds.halfExtents.x*hem.getLocalScale().x*2).toBeGreaterThan(.48);
+  for(const crouched of [false,true]){
+   p.crouched=crouched;p.command={...idle(),sprint:!crouched};
+   for(let i=0;i<30;i++){
+    r.animateSoldier(p,0,-i*.08,1/60,100+i);
+    const hipSpace=rig.hips.getWorldTransform().clone().invert();
+    const waist=hipSpace.transformPoint(hem.getPosition());
+    expect(waist.y-hem.getLocalScale().y/2).toBeGreaterThan(-.09);
+    for(const leg of rig.legs)expect((leg.ankle.findByName('boot') as pc.Entity).parent).toBe(leg.ankle);
+   }
+  }
+ }finally{destroy();}
 });
 
 test('material atlas isolates cloth, skin, leather and metal tiles; rifle reflectance follows grain',()=>{

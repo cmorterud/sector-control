@@ -1872,8 +1872,10 @@ export class Renderer implements CollisionWorld {
       for(const side of [-1,1]){
         part("chin strap",side*.12,.635,-.018,.016,.21,.017,leather,upper,"limb").setLocalEulerAngles(0,0,side*13);
         part("turned coat collar",side*.075,.47,-.12,.095,.13,.045,shirt,upper,"pouch").setLocalEulerAngles(0,0,side*24);
-        part("coat skirt",side*.125,-.09,-.035,.255,p.faction==="french"?.32:.24,.29,shirt,hips,"coat");
       }
+      // A single short hem overlaps the waist. Separate thigh-shaped panels
+      // stayed vertical during the gait and looked like extra dangling legs.
+      part("coat hem",0,.015,0,.51,p.faction==="french"?.18:.14,.34,shirt,hips,"coatHem");
       for(let i=0;i<5;i++)part("coat button",p.faction==="french"?.045:0,.09+i*.073,-.185,.017,.017,.009,"#515345",upper,"disc");
       part("belt buckle",0,.025,-.201,.085,.057,.022,"#767867",upper,"pouch");
     }
