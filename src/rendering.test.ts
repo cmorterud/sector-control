@@ -182,7 +182,7 @@ it("uploads real wood pixels and shares detailed rifle buffers/materials between
   const mesh = first.mesh!;
   expect(first.mesh).toBe(second.mesh); expect(first.material).toBe(second.material);
   const indices: number[] = []; mesh.getIndices(indices);
-  expect(indices.length).toBe(rifleGeometry("stock").indices.length);
+  expect(indices.length).toBe(rifleGeometry("stock","world").indices.length);
   const material = first.material as StandardMaterial, texture = material.diffuseMap!;
   const pixels = texture.lock({ mode: TEXTURELOCK_READ }) as Uint8Array;
   expect(pixels.length).toBe(rifleTextureSize ** 2 * 4);

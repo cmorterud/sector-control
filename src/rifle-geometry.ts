@@ -4,7 +4,7 @@ import { BoxGeometry } from "playcanvas";
 type MeshData = ReturnType<typeof characterGeometry> & { uvs: number[] };
 type Ring = [number, number, number, number?];
 export type RifleShape = "stock" | "handguard" | "steel" | "barrel" |
-  "band" | "guard" | "hood" | "sling" | "buttplate" | "screw" | "knob" | "shroud" | "notch" | "pin" | "slot" | "crescent";
+  "band" | "guard" | "hood" | "sling" | "buttplate" | "screw" | "knob" | "shroud" | "notch" | "pin" | "slot" | "crescent" | "berthierStock" | "gewehrStock";
 
 export const rifleTextureSize = 256;
 const limitedSlope = (a: number, b: number) => a * b <= 0 ? 0 : Math.sign(a) * Math.min(Math.abs(a), Math.abs(b));
@@ -26,9 +26,9 @@ function refineProfile(profile: Ring[]): Ring[] {
 
 // These profiles describe the furniture and machined parts, independently of
 // the inexpensive cloth/limb meshes. All meshes are shared by every rifle.
-function lathe(profile: Ring[], sides: number, caps = true): MeshData {
-  profile = refineProfile(profile);
-  sides *= 2;
+function latheMesh(profile: Ring[], sides: number, caps = true, refined = true): MeshData {
+  if(refined)profile = refineProfile(profile);
+  sides = Math.max(6,Math.round(sides * (refined ? 2 : 1)));
   const positions: number[] = [], normals: number[] = [], indices: number[] = [], uvs: number[] = [];
   for (let ring = 0; ring < profile.length; ring++) {
     const [y, rx, rz, offset = 0] = profile[ring];
@@ -72,8 +72,8 @@ function merge(meshes: MeshData[]): MeshData {
 }
 
 // Open elliptical loops: a real trigger guard, sling swivel and sight hood.
-function loop(segments: number, tubeSides: number, thickness: number): MeshData {
-  segments *= 2; tubeSides *= 2;
+function loopMesh(segments: number, tubeSides: number, thickness: number, refined=true): MeshData {
+  segments *= refined?2:1; tubeSides *= refined?2:1;
   const positions: number[] = [], normals: number[] = [], indices: number[] = [], uvs: number[] = [];
   for (let i = 0; i <= segments; i++) for (let j = 0; j <= tubeSides; j++) {
     const a = i / segments * Math.PI * 2, b = j / tubeSides * Math.PI * 2;
@@ -90,7 +90,15 @@ function loop(segments: number, tubeSides: number, thickness: number): MeshData 
   return { positions, normals, indices, uvs };
 }
 
-export function rifleGeometry(shape: RifleShape): MeshData {
+export function rifleGeometry(shape: RifleShape, detail:"view"|"world"|"far"="view"): MeshData {
+  const lathe=(p:Ring[],s:number,c=true)=>latheMesh(p,detail==="far"?Math.max(6,s/2):s,c,detail==="view");
+  const loop=(s:number,t:number,r:number)=>loopMesh(detail==="far"?Math.max(8,s/2):s,t,r,detail==="view");
+  if(shape==="berthierStock" || shape==="gewehrStock")return lathe(shape==="berthierStock"?[
+    [-.5,.23,.17,-.1],[-.46,.3,.2,-.08],[-.26,.33,.22,-.06],[-.05,.36,.24,-.025],
+    [.12,.34,.24,0],[.21,.23,.22,.055],[.28,.25,.28,.1],[.34,.37,.4,.15],[.46,.49,.48,.2],[.5,.46,.46,.2],
+  ]:[[-.5,.25,.18,-.08],[-.46,.34,.21,-.065],[-.24,.39,.23,-.035],[.06,.41,.26,0],
+    [.17,.27,.23,.04],[.26,.24,.24,.08],[.34,.36,.38,.15],[.46,.49,.48,.24],[.5,.47,.46,.24]],24);
+
   if (shape === "crescent") {
     const result: MeshData = {positions:[], normals:[], indices:[], uvs:[]};
     const steps=48;
@@ -168,8 +176,9 @@ export function rifleGeometry(shape: RifleShape): MeshData {
         normals[index] += uy * vz - uz * vy; normals[index + 1] += uz * vx - ux * vz; normals[index + 2] += ux * vy - uy * vx;
       }
     }
-    for (let ring = 0; ring < 21; ring++) {
-      const a = ring * 49 * 3, b = a + 48 * 3;
+    const ringCount=detail==="view"?21:11,stride=detail==="view"?49:detail==="far"?13:25;
+    for (let ring = 0; ring < ringCount; ring++) {
+      const a = ring * stride * 3, b = a + (stride-1) * 3;
       for (let axis = 0; axis < 3; axis++) normals[a + axis] = normals[b + axis] = normals[a + axis] + normals[b + axis];
     }
     for (let i = 0; i < normals.length; i += 3) {
@@ -249,4 +258,19 @@ export function rifleSurfacePixels(kind: "walnut" | "steel", size = rifleTexture
     pixels.set([...base.map(c => Math.round(c * shade)), 255], (y * size + x) * 4);
   }
   return pixels;
+}
+
+// Close-view reflectance follows the grain/machining rather than a uniform gloss.
+export function rifleSurfaceMaps(kind:"walnut"|"steel",size=rifleTextureSize) {
+  const diffuse=rifleSurfacePixels(kind,size),normal=new Uint8Array(diffuse.length),gloss=new Uint8Array(diffuse.length);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const at=(y*size+x)*4,u=x/size,v=y/size,wood=kind==="walnut";
+    const grain=Math.sin(u*157+Math.sin(v*6.28)*3),edge=Math.exp(-(Math.min(u,1-u)**2)*900);
+    const wear=wood?1: .78+edge*.18;
+    for(let c=0;c<3;c++)diffuse[at+c]=Math.round(diffuse[at+c]*wear);
+    normal.set([Math.round(128+grain*(wood?10:2)),Math.round(128+Math.sin(y*1.9)*(wood?2:4)),255,255],at);
+    const value=wood?68+grain*11:90+edge*70+Math.sin(y*1.9)*7;
+    gloss.set([value,value,value,255],at);
+  }
+  return {diffuse,normal,gloss};
 }

@@ -8,6 +8,7 @@ export interface WeaponDesign {
   kind: WeaponKind;
   parts: RiflePart[];
   actionParts: RiflePart[];
+  viewParts?: RiflePart[];
   magazine: RiflePart;
   reload: ReloadStyle;
   muzzle: number;
@@ -67,8 +68,28 @@ function rifle(family: string): WeaponDesign {
     parts.push(part("Gewehr Lange sight ramp", "handguard", [0, .067, -.16], [.055, .16, .047], "steel", [90, 0, 0]));
     parts.push(box("Gewehr straight bolt stop", [-.047, .038, .12], [.018, .045, .055]));
   }
+  const upgraded=berthier || family==="gewehr";
+  if(upgraded){
+    parts[0].shape=berthier?"berthierStock":"gewehrStock";
+    parts[0].size=[berthier?.091:.102,berthier?1.03:1.01,berthier?.17:.18];
+    parts.push(box("receiver left rail",[-.034,.052,.025],[.009,.012,.18],"edge"));
+    parts.push(box("receiver right rail",[.034,.052,.025],[.009,.012,.18],"steel"));
+    parts.push(part("rear sling loop","sling",[.034,-.105,.38],[.009,.04,.055]));
+    parts.push(box("recessed stock channel",[-.046,-.01,-.13],[.003,.018,.24],"dark"));
+    parts.push(box("stock wrist transition",[0,-.05,.24],[.067,.07,.11],"walnut"));
+  }
+  const viewParts:RiflePart[]=!upgraded?[]:[
+    ...[-.1,.31].flatMap(z=>[
+      part("flush stock screw","screw",[.047,-.048,z],[.018,.003,.018],"edge",[0,0,90]),
+      box("engraved screw slot",[.049,-.048,z],[.001,.003,.012],"dark"),
+    ]),
+    box("receiver proof stamp",[-.037,.031,.035],[.001,.008,.025],"dark"),
+    box("sight leaf graduation",[-.019,.088,-.17],[.002,.003,.095],"edge"),
+    part("rear sling washer","band",[.045,-.09,.4],[.027,.004,.027],"steel",[0,0,90]),
+    box("barrel band spring",[-.04,-.015,-.49],[.005,.025,.09],"steel"),
+  ];
   return {
-    family, kind: "serviceRifle", parts, actionParts: rifleAction(!smle, grip),
+    family, kind: "serviceRifle", parts, viewParts, actionParts: rifleAction(!smle, grip),
     magazine: box("weapon magazine", [0, smle ? -.115 : berthier ? -.12 : -.08, .09], [smle ? .09 : .067, smle ? .13 : berthier ? .15 : .025, smle ? .18 : .13]),
     reload: lebel ? "tube" : "clip", muzzle, front: muzzle + .055, rear: smle ? -.17 : -.13,
     feed: lebel ? [-.045, .09, -.015] : [.015, .15, .035], grip: [-.035, -.06, -.17],

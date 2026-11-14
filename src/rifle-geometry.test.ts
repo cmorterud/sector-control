@@ -1,14 +1,14 @@
 import { expect, it } from "vitest";
 import { detailedRifleParts, detailedBoltParts, rifleGeometry, rifleSurfacePixels, type RifleShape } from "./rifle-geometry";
 
-const shapes: RifleShape[] = ["stock", "handguard", "steel", "barrel", "band", "guard", "hood", "sling", "buttplate", "screw", "knob", "shroud", "notch", "pin", "slot", "crescent"];
+const shapes: RifleShape[] = ["stock", "handguard", "steel", "barrel", "band", "guard", "hood", "sling", "buttplate", "screw", "knob", "shroud", "notch", "pin", "slot", "crescent", "berthierStock", "gewehrStock"];
 
 it("builds finite UV-mapped rifle meshes with outward faces and unit normals", () => {
   for (const shape of shapes) {
     const g = rifleGeometry(shape);
     expect(g.positions.length).toBe(g.normals.length);
     expect(g.uvs.length).toBe(g.positions.length / 3 * 2);
-    expect(g.positions.every(v => Number.isFinite(v) && Math.abs(v) <= (shape === "stock" ? 0.751 : 0.601))).toBe(true);
+    expect(g.positions.every(v => Number.isFinite(v) && Math.abs(v) <= (shape.toLowerCase().endsWith("stock") ? 0.751 : 0.601))).toBe(true);
     expect(g.uvs.every(v => Number.isFinite(v) && v >= 0 && v <= 1)).toBe(true);
     for (let i = 0; i < g.normals.length; i += 3)
       expect(Math.hypot(...g.normals.slice(i, i + 3)), `${shape} vertex${i / 3}`).toBeCloseTo(1);
@@ -32,7 +32,7 @@ it("provides roughly four times the previous service-rifle triangles while shari
     + detailedBoltParts.reduce((sum, p) => sum + rifleGeometry(p.shape).indices.length / 3, 0);
   expect(triangles).toBeGreaterThanOrEqual(4444 * 3.8);
   expect(triangles).toBeLessThanOrEqual(4444 * 4.4);
-  expect(shapes.length).toBeLessThanOrEqual(16); // One shared curved magazine mesh added.
+  expect(shapes.length).toBeLessThanOrEqual(18); // One shared curved magazine mesh added.
 });
 
 it("carves the side finger grooves into the stock geometry", () => {
@@ -70,4 +70,12 @@ it("generates distinct deterministic walnut grain and steel surfaces", () => {
     expect(a.every((v, i) => i % 4 !== 3 || v === 255)).toBe(true);
   }
   expect(rifleSurfacePixels("walnut", 32)).not.toEqual(rifleSurfacePixels("steel", 32));
+});
+
+it("keeps every reduced world/distant weapon surface finite and smaller than the close view",()=>{
+ for(const shape of shapes)for(const detail of ["world","far"] as const){
+  const mesh=rifleGeometry(shape,detail);expect(mesh.positions.length).toBe(mesh.normals.length);
+  expect(mesh.normals.every(Number.isFinite)).toBe(true);expect(mesh.indices.length).toBeLessThanOrEqual(rifleGeometry(shape).indices.length);
+  for(let i=0;i<mesh.normals.length;i+=3)expect(Math.hypot(...mesh.normals.slice(i,i+3))).toBeCloseTo(1);
+ }
 });

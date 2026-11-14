@@ -1,3 +1,5 @@
+import {gripHandGeometry} from "./hand-geometry";
+import {modelSurfaceAtlas,modelAtlasSize,modelUV,modelSurfaceFor,type ModelSurface} from "./model-surfaces";
 import {farmPropParts} from "./farm-props";
 import { battlePerformance } from "./battle-performance";
 import { VisualWorkQueue } from "./visual-work";
@@ -11,7 +13,7 @@ import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./envi
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
 import { RagdollPhysics, type Ragdoll, type RagdollPart } from "./ragdoll";
-import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfacePixels, rifleTextureSize, type RifleShape } from "./rifle-geometry";
+import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfaceMaps, rifleTextureSize, type RifleShape } from "./rifle-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
   groundSurfacePixels,
@@ -90,6 +92,8 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
 type SoldierRig = {
+  farDetail?: boolean;
+  design?: ReturnType<typeof weaponDesign>;
   body: pc.Entity;
   hips: pc.Entity;
   upper: pc.Entity;
@@ -1655,6 +1659,56 @@ export class Renderer implements CollisionWorld {
     entity.render!.meshInstances = [new pc.MeshInstance(this.kitMeshes.get(key)!, bark ? this.surfaceMaterial("bark", tint) : this.material(tint), entity)];
     return entity;
   }
+  private modelMesh(key:string,build:()=>{positions:number[];normals:number[];indices:number[];uvs:number[];colors?:number[]}) {
+    this.kitMeshes ??= new Map();
+    if(!this.kitMeshes.has(key)){
+      const data=build(),mesh=new pc.Mesh(this.app.graphicsDevice);
+      mesh.setPositions(data.positions);mesh.setNormals(data.normals);mesh.setUvs(0,data.uvs);mesh.setIndices(data.indices);
+      if(data.colors)mesh.setColors(data.colors);
+      mesh.setVertexStream(pc.SEMANTIC_TANGENT,pc.calculateTangents(data.positions,data.normals,data.uvs,data.indices).map(v=>Number.isFinite(v)?v:0),4);
+      mesh.update(pc.PRIMITIVE_TRIANGLES);mesh.incRefCount();this.kitMeshes.set(key,mesh);
+    }
+    return this.kitMeshes.get(key)!;
+  }
+  private modelMaterial(tint:string,merged=false) {
+    this.textures ??= new Map();
+    if(!this.textures.has("model-atlas-diffuse")){
+      const maps=modelSurfaceAtlas();
+      for(const channel of ["diffuse","normal","gloss"] as const){
+        const texture=new pc.Texture(this.app.graphicsDevice,{name:`soldier ${channel}`,width:modelAtlasSize.width,height:modelAtlasSize.height,
+          format:pc.PIXELFORMAT_RGBA8,mipmaps:true,minFilter:pc.FILTER_LINEAR_MIPMAP_LINEAR,magFilter:pc.FILTER_LINEAR,addressU:pc.ADDRESS_CLAMP_TO_EDGE,addressV:pc.ADDRESS_CLAMP_TO_EDGE});
+        (texture.lock() as Uint8Array).set(maps[channel]);texture.unlock();this.textures.set(`model-atlas-${channel}`,texture);
+      }
+    }
+    const key=merged?"soldier-kit-textured":`model-material-${tint}`;
+    if(!this.materials.has(key)){
+      const material=new pc.StandardMaterial();material.diffuse=color(tint);material.diffuseVertexColor=merged;
+      material.diffuseMap=this.textures.get("model-atlas-diffuse")!;material.normalMap=this.textures.get("model-atlas-normal")!;
+      material.bumpiness=.45;material.glossMap=this.textures.get("model-atlas-gloss")!;material.glossMapChannel="r";material.gloss=.7;
+      material.specular=color("#45473e");material.update();this.materials.set(key,material);
+    }
+    return this.materials.get(key)!;
+  }
+  private gripHand(name:string,parent:pc.Entity,side:"left"|"right") {
+    const e=this.cube(name,0,0,0,1,1,1,"#bba185",false,parent);
+    if(!this.app.graphicsDevice || !e.render)return e;
+    for(const detail of ["world","far"] as const)this.modelMesh(`hand-${side}-${detail}`,()=>gripHandGeometry(side,detail));
+    e.render.meshInstances=[new pc.MeshInstance(this.kitMeshes.get(`hand-${side}-world`)!,this.modelMaterial("#bba185"),e)];
+    e.tags.add(`model-near:hand-${side}-world`,`model-far:hand-${side}-far`,`hand-side:${side}`);
+    return e;
+  }
+  private applyModelDetail(p:Soldier,rig:SoldierRig) {
+    const distance=this.people[p.id].getPosition().distance(this.camera.getPosition());
+    const far=p.id!==0 && distance>(rig.farDetail?32:42);
+    if(rig.farDetail===far)return;
+    rig.farDetail=far;
+    // This single torso/head/equipment mesh is deliberately outside actor
+    // batches: swapping a batched source would leave the copied batch stale,
+    // or force a whole-roster rebuild on every distance transition.
+    const prefix=far?"model-far:":"model-near:";
+    const tag=rig.upper.tags.list().find(t=>t.startsWith(prefix));
+    if(rig.upper.render?.batchGroupId===-1&&tag)rig.upper.render.meshInstances[0].mesh=this.kitMeshes.get(tag.slice(prefix.length))!;
+  }
   private organic(
     name: string,
     x: number,
@@ -1666,28 +1720,22 @@ export class Renderer implements CollisionWorld {
     tint: string,
     parent: pc.Entity,
     shape: CharacterShape = "soft",
+    surface?: ModelSurface,
   ) {
     const entity = this.cube(name, x, y, z, w, h, d, tint, false, parent);
     if (this.app.graphicsDevice && entity.render) {
       this.kitMeshes ??= new Map();
-      const key = `organic-${shape}`;
-      if (!this.kitMeshes.has(key)) {
-        const data = characterGeometry(shape),
-          mesh = new pc.Mesh(this.app.graphicsDevice);
-        mesh.setPositions(data.positions);
-        mesh.setNormals(data.normals);
-        mesh.setIndices(data.indices);
-        mesh.update(pc.PRIMITIVE_TRIANGLES);
-        mesh.incRefCount();
-        this.kitMeshes.set(key, mesh);
+      const key = `organic-${shape}${surface?`-${surface}`:""}`;
+      for(const detail of ["near","far"] as const){
+        const meshKey=`${key}-${detail}`;
+        this.modelMesh(meshKey,()=>{
+          const data=characterGeometry(shape,surface?(detail==="near"?16:8):10);
+          if(surface)data.uvs=data.uvs.flatMap((_,i,a)=>i%2?[]:modelUV(a[i],a[i+1],surface));
+          return data;
+        });
       }
-      entity.render.meshInstances = [
-        new pc.MeshInstance(
-          this.kitMeshes.get(key)!,
-          this.material(tint),
-          entity,
-        ),
-      ];
+      entity.render.meshInstances=[new pc.MeshInstance(this.kitMeshes.get(`${key}-near`)!,surface?this.modelMaterial(tint):this.material(tint),entity)];
+      entity.tags.add(`model-near:${key}-near`,`model-far:${key}-far`);
     }
     return entity;
   }
@@ -1699,14 +1747,8 @@ export class Renderer implements CollisionWorld {
     const base = tint === "walnut" ? "#715037" : tint === "edge" ? "#858d85" : tint === "dark" ? "#151b1c" : "#353c3a";
     const entity = this.cube(name, x, y, z, w, h, d, base, false, parent);
     if (!this.app.graphicsDevice || !entity.render) return entity;
-    const key = `rifle-${shape}`;
-    if (!this.kitMeshes.has(key)) {
-      const data = rifleGeometry(shape), mesh = new pc.Mesh(this.app.graphicsDevice);
-      mesh.setPositions(data.positions); mesh.setNormals(data.normals);
-      mesh.setUvs(0, data.uvs); mesh.setIndices(data.indices);
-      mesh.update(pc.PRIMITIVE_TRIANGLES); mesh.incRefCount();
-      this.kitMeshes.set(key, mesh);
-    }
+    this.modelMesh(`rifle-${shape}-world`,()=>rifleGeometry(shape,"world"));
+    entity.tags.add(`rifle-shape:${shape}`,`rifle-tint:${tint}`);
     const materialKey = `rifle-material-${tint}`;
     let material = this.materials.get(materialKey);
     if (!material) {
@@ -1716,20 +1758,26 @@ export class Renderer implements CollisionWorld {
       material.specular = color(tint === "walnut" ? "#514439" : tint === "dark" ? "#252b2b" : "#8c9897");
       if (tint === "walnut" || tint === "steel") {
         const kind = tint === "walnut" ? "walnut" : "steel";
-        const texture = new pc.Texture(this.app.graphicsDevice, {
-          name: `rifle ${kind}`, width: rifleTextureSize, height: rifleTextureSize,
-          format: pc.PIXELFORMAT_RGBA8, mipmaps: true,
-          minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR,
-          addressU: pc.ADDRESS_REPEAT, addressV: pc.ADDRESS_REPEAT,
-        });
-        (texture.lock() as Uint8Array).set(rifleSurfacePixels(kind)); texture.unlock();
-        this.textures.set(materialKey, texture);
-        material.diffuseMap = texture;
+        const maps=rifleSurfaceMaps(kind);
+        for(const channel of ["diffuse","normal","gloss"] as const){
+          const texture = new pc.Texture(this.app.graphicsDevice, {
+            name: `rifle ${kind} ${channel}`, width: rifleTextureSize, height: rifleTextureSize,
+            format: pc.PIXELFORMAT_RGBA8, mipmaps: true,
+            minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR,
+            addressU: pc.ADDRESS_REPEAT, addressV: pc.ADDRESS_REPEAT,
+          });
+          (texture.lock() as Uint8Array).set(maps[channel]);texture.unlock();
+          this.textures.set(`${materialKey}-${channel}`,texture);
+          if(channel==="diffuse")material.diffuseMap=texture;
+          else if(channel==="normal")material.normalMap=texture;
+          else material.glossMap=texture;
+        }
+        material.bumpiness=.4;material.glossMapChannel="r";
         material.diffuse = new pc.Color(1, 1, 1);
       }
       material.update(); this.materials.set(materialKey, material);
     }
-    entity.render.meshInstances = [new pc.MeshInstance(this.kitMeshes.get(key)!, material, entity)];
+    entity.render.meshInstances = [new pc.MeshInstance(this.kitMeshes.get(`rifle-${shape}-world`)!, material, entity)];
     return entity;
   }
   private createSoldier(p: Soldier) {
@@ -1740,6 +1788,7 @@ export class Renderer implements CollisionWorld {
     const hips = this.joint("hips", body);
     const upper = this.joint("upper body", body, 0, 0.08);
     const faction = factions[p.faction ?? (p.team === "blue" ? "trainingBlue" : "trainingRed")];
+    const refined=p.faction==="french"||p.faction==="german";
     const shirt = faction.shirt, trousers = faction.trousers;
     const equipment = "#68634d",
       skin = "#bba185",
@@ -1755,10 +1804,13 @@ export class Renderer implements CollisionWorld {
       c: string,
       parent: pc.Entity,
       shape: CharacterShape = "soft",
-    ) => this.organic(name, x, y, z, w, h, d, c, parent, shape);
+    ) => {
+      const shaped:Record<string,CharacterShape>={torso:"coat","upper arm":"sleeve",forearm:"sleeve",thigh:"trouser",shin:"trouser",boot:"boot",head:"face",backpack:"pouch","ammunition pouch":"pouch",helmet:p.faction==="french"?"adrian":"stahlhelm"};
+      return this.organic(name,x,y,z,w,h,d,c,parent,refined?(shaped[name]??shape):shape,refined?modelSurfaceFor(name):undefined);
+    };
     part("pelvis", 0, -0.015, 0, 0.43, 0.24, 0.3, trousers, hips);
     part("torso", 0, 0.25, 0, 0.55, 0.55, 0.34, shirt, upper, "tunic");
-    part("vest", 0, 0.27, -0.166, 0.39, 0.34, 0.035, equipment, upper, "tunic");
+    if(!refined)part("vest", 0, 0.27, -0.166, 0.39, 0.34, 0.035, equipment, upper, "tunic");
     part(
       "backpack",
       0,
@@ -1773,8 +1825,8 @@ export class Renderer implements CollisionWorld {
     );
     part("neck", 0, 0.53, 0, 0.13, 0.17, 0.14, skin, upper, "limb");
     part("head", 0, 0.66, -0.005, 0.255, 0.32, 0.27, skin, upper, "head");
-    part("nose", 0, 0.665, -0.145, 0.043, 0.067, 0.075, skin, upper);
-    part("chin", 0, 0.55, -0.075, 0.14, 0.075, 0.12, skin, upper);
+    if(!refined)part("nose", 0, 0.665, -0.145, 0.043, 0.067, 0.075, skin, upper);
+    if(!refined)part("chin", 0, 0.55, -0.075, 0.14, 0.075, 0.12, skin, upper);
     for (const side of [-1, 1]) {
       part("ear", side * 0.131, 0.665, 0, 0.045, 0.085, 0.06, skin, upper);
       part(
@@ -1790,8 +1842,8 @@ export class Renderer implements CollisionWorld {
       );
     }
     const helmetTint = faction.helmet;
-    part("helmet", 0, 0.83, 0, 0.375, 0.2, 0.395, helmetTint, upper, "helmet");
-    part(
+    part("helmet", 0, refined?.86:.83, 0, refined?.4:.375, refined?.265:.2, refined?.46:.395, helmetTint, upper, "helmet");
+    if(!refined)part(
       "helmet brim",
       0,
       0.752,
@@ -1803,7 +1855,7 @@ export class Renderer implements CollisionWorld {
       upper,
       "disc",
     );
-    part(
+    if(!refined)part(
       "helmet band",
       0,
       0.77,
@@ -1816,6 +1868,15 @@ export class Renderer implements CollisionWorld {
       "disc",
     );
     if (p.faction === "french") part("Adrian helmet crest", 0, .91, 0, .04, .08, .33, helmetTint, upper);
+    if(refined){
+      for(const side of [-1,1]){
+        part("chin strap",side*.12,.635,-.018,.016,.21,.017,leather,upper,"limb").setLocalEulerAngles(0,0,side*13);
+        part("turned coat collar",side*.075,.47,-.12,.095,.13,.045,shirt,upper,"pouch").setLocalEulerAngles(0,0,side*24);
+        part("coat skirt",side*.125,-.09,-.035,.255,p.faction==="french"?.32:.24,.29,shirt,hips,"coat");
+      }
+      for(let i=0;i<5;i++)part("coat button",p.faction==="french"?.045:0,.09+i*.073,-.185,.017,.017,.009,"#515345",upper,"disc");
+      part("belt buckle",0,.025,-.201,.085,.057,.022,"#767867",upper,"pouch");
+    }
     part("team recognition band", .278, .25, 0, .018, .09, .29, p.team === "blue" ? "#5c9bb5" : "#b47c6c", upper);
     part("web belt", 0, 0.025, 0, 0.56, 0.075, 0.38, equipment, upper, "disc");
     for (const side of [-1, 1]) {
@@ -1917,7 +1978,7 @@ export class Renderer implements CollisionWorld {
         elbow,
         "limb",
       );
-      if (!support)
+      if (!support && !refined)
         part(
           "hand",
           0,
@@ -1929,6 +1990,8 @@ export class Renderer implements CollisionWorld {
           skin,
           elbow,
         );
+      if(!support && refined)this.gripHand("hand",elbow,"right").setLocalPosition(0,-armLengths.forearm,0);
+      if(refined)part("sleeve cuff",0,-armLengths.forearm+.024,0,.15,.07,.17,shirt,elbow,"pouch");
       return { shoulder, elbow };
     });
     const rifle = this.joint(
@@ -2238,11 +2301,13 @@ export class Renderer implements CollisionWorld {
       design?.grip[1] ?? (service ? -0.06 : -0.1),
       design?.grip[2] ?? (service ? -0.16 : -0.1),
     );
-    part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
+    if(refined)this.gripHand("left hand",supportHand,"left");
+    else part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
     if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p);
     this.people.push(root);
     this.soldiers.push({
       body,
+      design,
       hips,
       upper,
       legs,
@@ -2271,72 +2336,38 @@ export class Renderer implements CollisionWorld {
   private mergeSoldierKit(upper: pc.Entity, p: Soldier) {
     this.kitMeshes ??= new Map();
     const key = `${p.team}-${p.faction}-${p.weapon}-${p.weaponId}`;
-    const parts = upper.children.filter(
-      (e) => (e as pc.Entity).render,
-    ) as pc.Entity[];
-    if (!this.kitMeshes.has(key)) {
-      const positions: number[] = [],
-        normals: number[] = [],
-        indices: number[] = [],
-        colors: number[] = [];
-      const basis = upper.getWorldTransform().clone().invert();
-      for (const e of parts) {
-        const matrix = new pc.Mat4().mul2(basis, e.getWorldTransform()),
-          normalMatrix = matrix.clone().invert().transpose();
-        for (const instance of e.render!.meshInstances) {
-          if (!instance.mesh) continue;
-          const points: number[] = [],
-            ns: number[] = [],
-            is: number[] = [];
-          instance.mesh.getPositions(points);
-          instance.mesh.getNormals(ns);
-          instance.mesh.getIndices(is);
-          const base = positions.length / 3,
-            tint = (instance.material as pc.StandardMaterial).diffuse;
-          for (let i = 0; i < points.length; i += 3) {
-            const v = matrix.transformPoint(
-              new pc.Vec3(points[i], points[i + 1], points[i + 2]),
-            );
-            positions.push(v.x, v.y, v.z);
-            const n = normalMatrix
-              .transformVector(new pc.Vec3(ns[i], ns[i + 1], ns[i + 2]))
-              .normalize();
-            normals.push(n.x, n.y, n.z);
-            colors.push(tint.r ** 2.2, tint.g ** 2.2, tint.b ** 2.2, 1);
+    const textured=p.faction==="french"||p.faction==="german";
+    const parts=upper.children.filter(e=>(e as pc.Entity).render) as pc.Entity[];
+    for(const detail of (textured?["near","far"]:["near"]) as ("near"|"far")[]){
+      const meshKey=`${key}-${detail}`;
+      if(this.kitMeshes.has(meshKey))continue;
+      const positions:number[]=[],normals:number[]=[],indices:number[]=[],colors:number[]=[],uvs:number[]=[];
+      const basis=upper.getWorldTransform().clone().invert();
+      for(const e of parts){
+        const matrix=new pc.Mat4().mul2(basis,e.getWorldTransform()),normalMatrix=matrix.clone().invert().transpose();
+        const tag=e.tags.list().find(t=>t.startsWith(`model-${detail}:`));
+        for(const instance of e.render!.meshInstances){
+          const mesh=tag?this.kitMeshes.get(tag.slice(`model-${detail}:`.length)):instance.mesh;
+          if(!mesh)continue;
+          const points:number[]=[],ns:number[]=[],is:number[]=[],sourceUV:number[]=[];
+          mesh.getPositions(points);mesh.getNormals(ns);mesh.getIndices(is);mesh.getUvs(0,sourceUV);
+          const base=positions.length/3,tint=(instance.material as pc.StandardMaterial).diffuse;
+          for(let i=0;i<points.length;i+=3){
+            const v=matrix.transformPoint(new pc.Vec3(points[i],points[i+1],points[i+2]));positions.push(v.x,v.y,v.z);
+            const n=normalMatrix.transformVector(new pc.Vec3(ns[i],ns[i+1],ns[i+2])).normalize();normals.push(n.x,n.y,n.z);
+            colors.push(tint.r**2.2,tint.g**2.2,tint.b**2.2,1);
+            uvs.push(sourceUV[i/3*2]??modelUV(.5,.5,"solid")[0],sourceUV[i/3*2+1]??modelUV(.5,.5,"solid")[1]);
           }
-          indices.push(...is.map((i) => i + base));
+          indices.push(...is.map(i=>i+base));
         }
       }
-      const mesh = new pc.Mesh(this.app.graphicsDevice);
-      mesh.setPositions(positions);
-      mesh.setNormals(normals);
-      mesh.setColors(colors);
-      mesh.setIndices(indices);
-      mesh.update(pc.PRIMITIVE_TRIANGLES);
-      mesh.incRefCount(); // The renderer cache owns it across match restarts.
-      this.kitMeshes.set(key, mesh);
+      this.modelMesh(meshKey,()=>({positions,normals,indices,uvs,colors}));
     }
-    for (const part of parts) part.removeComponent("render");
-    let material = this.materials.get("soldier-kit");
-    if (!material) {
-      material = new pc.StandardMaterial();
-      material.diffuse = new pc.Color(1, 1, 1);
-      material.diffuseVertexColor = true;
-      material.gloss = 0.1;
-      material.update();
-      this.materials.set("soldier-kit", material);
-    }
-    const instance = new pc.MeshInstance(
-      this.kitMeshes.get(key)!,
-      material,
-      upper,
-    );
-    upper.addComponent("render", {
-      meshInstances: [instance],
-      batchGroupId: this.actorBatch,
-      castShadows: true,
-      receiveShadows: true,
-    });
+    for(const part of parts)part.removeComponent("render");
+    let material=textured?this.modelMaterial("#ffffff",true):this.materials.get("soldier-kit");
+    if(!material){material=new pc.StandardMaterial();material.diffuse=new pc.Color(1,1,1);material.diffuseVertexColor=true;material.gloss=.1;material.update();this.materials.set("soldier-kit",material);}
+    upper.addComponent("render",{meshInstances:[new pc.MeshInstance(this.kitMeshes.get(`${key}-near`)!,material,upper)],batchGroupId:textured?-1:this.actorBatch,castShadows:true,receiveShadows:true});
+    upper.tags.add(`model-near:${key}-near`,`model-far:${key}-${textured?"far":"near"}`);
   }
   private poseArm(
     rig: Pick<SoldierRig, "arms">,
@@ -2383,6 +2414,10 @@ export class Renderer implements CollisionWorld {
       ),
     );
   }
+  private alignGripHand(rig:Pick<SoldierRig,"arms"|"rifle">) {
+    const hand=rig.arms[1].elbow.findByName("hand") as pc.Entity;
+    if(hand?.tags.has("hand-side:right"))hand.setLocalRotation(rig.arms[1].elbow.getRotation().clone().invert().mul(rig.rifle.getRotation()));
+  }
   private attachSupportArm(rig: SoldierRig) {
     const hand = rig.rifle
       .getLocalTransform()
@@ -2414,6 +2449,18 @@ export class Renderer implements CollisionWorld {
       component.enabled = true;
       component.castShadows = false;
       for (const mesh of component.meshInstances) mesh.visible = true;
+    }
+    for(const component of root.findComponents("render") as pc.RenderComponent[]){
+      const tags=component.entity.tags.list(),shape=tags.find(t=>t.startsWith("rifle-shape:"))?.slice(12) as RifleShape|undefined;
+      const side=tags.find(t=>t.startsWith("hand-side:"))?.slice(10) as "left"|"right"|undefined;
+      if(shape)component.meshInstances[0].mesh=this.modelMesh(`rifle-${shape}-view`,()=>rifleGeometry(shape,"view"));
+      if(side)component.meshInstances[0].mesh=this.modelMesh(`hand-${side}-view`,()=>gripHandGeometry(side,"view"));
+    }
+    for(const spec of source.design?.viewParts??[]){
+      const e=this.riflePart(spec.name,...spec.at,...spec.size,spec.tint,rifle,spec.shape);
+      if(spec.rotation)e.setLocalEulerAngles(...spec.rotation);
+      if(e.render){e.render.meshInstances[0].mesh=this.modelMesh(`rifle-${spec.shape}-view`,()=>rifleGeometry(spec.shape,"view"));
+        e.render.batchGroupId=-1;e.render.castShadows=false;}
     }
     this.firstPersonRig = {
       root, rifle, arms, grenade, explosive, smoke, pullback: 0,
@@ -2496,6 +2543,7 @@ export class Renderer implements CollisionWorld {
     rig.smoke.enabled = !!p.throwAction?.smoke;
     if (throwing?.held) rig.grenade.setLocalPosition(right.x, right.y + 0.035, right.z - 0.025);
     this.poseArm(rig, 1, right, armLengths.upper, armLengths.forearm);
+    this.alignGripHand(rig);
   }
   private animateSoldier(
     p: Soldier,
@@ -2892,6 +2940,7 @@ export class Renderer implements CollisionWorld {
       this.poseArm(rig,1,hand,armLengths.upper,armLengths.forearm);
     }
     this.attachSupportArm(rig);
+    this.alignGripHand(rig);
   }
   private ragdollPose(p: Soldier) {
     const rig = this.soldiers[p.id], root = this.people[p.id];
@@ -2980,9 +3029,7 @@ export class Renderer implements CollisionWorld {
     const entity = this.joint("fallen soldier", this.app.root);
     let material = this.materials.get("casualty");
     if (!material) {
-      material = new pc.StandardMaterial();
-      material.diffuse = new pc.Color(1, 1, 1);
-      material.diffuseVertexColor = true;
+      material = this.modelMaterial("#ffffff",true).clone();
       material.blendType = pc.BLEND_NORMAL;
       material.depthWrite = false;
       material.update();
@@ -3015,7 +3062,7 @@ export class Renderer implements CollisionWorld {
     const positions: number[] = [],
       normals: number[] = [],
       indices: number[] = [],
-      colors: number[] = [], weights: number[] = [], blendIndices: number[] = [];
+      colors: number[] = [], uvs:number[]=[], weights: number[] = [], blendIndices: number[] = [];
     for (const component of this.people[p.id].findComponents(
       "render",
     ) as pc.RenderComponent[]) {
@@ -3040,8 +3087,9 @@ export class Renderer implements CollisionWorld {
         const points: number[] = [],
           ns: number[] = [],
           is: number[] = [],
-          sourceColors: number[] = [];
+          sourceColors: number[] = [],sourceUV:number[]=[];
         instance.mesh.getColors(sourceColors);
+        instance.mesh.getUvs(0,sourceUV);
         instance.mesh.getPositions(points);
         instance.mesh.getNormals(ns);
         instance.mesh.getIndices(is);
@@ -3063,6 +3111,10 @@ export class Renderer implements CollisionWorld {
             .transformVector(new pc.Vec3(ns[i], ns[i + 1], ns[i + 2]))
             .normalize();
           normals.push(n.x, n.y, n.z);
+          const material=instance.material as pc.StandardMaterial,atlas=this.textures?.get("model-atlas-diffuse");
+          const sourceU=sourceUV[i/3*2]??.5,sourceV=sourceUV[i/3*2+1]??.5;
+          const tile=material===this.materials.get("rifle-material-walnut")?"walnut":material===this.materials.get("rifle-material-steel")?"steel":"solid";
+          uvs.push(...(atlas&&material.diffuseMap===atlas?[sourceU,sourceV]:modelUV(sourceU,sourceV,tile)));
           const ci = (i / 3) * 4;
           colors.push(
             tint.r ** 2.2 * (sourceColors[ci] ?? 1),
@@ -3079,6 +3131,8 @@ export class Renderer implements CollisionWorld {
     mesh.setPositions(positions);
     mesh.setNormals(normals);
     mesh.setColors(colors);
+    mesh.setUvs(0,uvs);
+    mesh.setVertexStream(pc.SEMANTIC_TANGENT,pc.calculateTangents(positions,normals,uvs,indices).map(v=>Number.isFinite(v)?v:0),4);
     mesh.setIndices(indices);
     mesh.setVertexStream(pc.SEMANTIC_BLENDINDICES, blendIndices, 4, undefined, pc.TYPE_UINT8);
     mesh.setVertexStream(pc.SEMANTIC_BLENDWEIGHT, weights, 4);
@@ -3316,6 +3370,7 @@ export class Renderer implements CollisionWorld {
         this.visualWork.delete(`casualty:${p.id}`);
         this.pendingCasualties.delete(p.id);
         this.animateSoldier(visible, position.x, position.z, dt, tick);
+        this.applyModelDetail(p,rig);
       } else {
         if (rig.deathAt === null) {
           rig.deathAt = tick;
