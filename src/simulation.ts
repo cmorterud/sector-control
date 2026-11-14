@@ -1207,7 +1207,7 @@ export class Game {
         p.reloadAt = 0;
       }
       if (
-        c.reload &&
+        (c.reload || (p.triggerPressed && p.ammo === 0)) &&
         this.tick >= p.throwUntil &&
         !p.melee &&
         this.tick >= p.staggerUntil &&

@@ -16,7 +16,9 @@ it("cycles a five-round service rifle between individual clicks, preserves trave
   const shots: number[] = [],
     actions: string[] = [];
   for (let i = 0; i < 190; i++) {
-    g.step({ ...idle(), fire: i % 2 === 0 });
+    // Stop clicking after the fifth shot so the subsequent manual reload can
+    // be checked independently of empty-trigger automatic reloading.
+    g.step({ ...idle(), fire: i % 2 === 0 && shots.length < 5 });
     for (const e of g.events) {
       if (e.type === "fire") shots.push(e.tick);
       if (e.type === "weaponAction") actions.push(e.action);

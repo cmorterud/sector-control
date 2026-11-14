@@ -2,6 +2,12 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
+## Empty-trigger reload — implementation checkpoint
+
+November13: attempting to fire an empty magazine now starts the existing reload action when reserve ammo remains. The shared reload condition accepts manual R or an actual empty trigger intent; it preserves all existing throw/melee/mantle/stagger/death guards, drawing delay, reload duration, animations/mechanical cues and reserve transfer at completion. Idling empty and the final shot alone do not initiate a reload. Held semi-auto input does not turn into automatic fire after reloading; release/click fires normally. Human machine guns retain held automatic fire and resume after reloading. No fuel is created for an exhausted flamethrower (no reserve). Briefing/README explain the shortcut.
+
+StrictTypeScript,455tests/78files in85.46s and whitespace pass. Twelve new cases exercise the actual Game.step input path across training/service rifles, pistols and machine guns: one reload event/deadline, no premature reserve spending, partial reserve transfer, post-reload fire, no-reserve dry fire, semi-auto click edges, held machine-gun resumption, throw/stagger/death/idle guards and switching/drawing delay. The existing service-rifle manual-reload fixture now stops clicking after the fifth shot so its independent manual reload/bolt cue checks remain meaningful. Full battle, weapon handling, models and native corpse tests also pass. Production build/publication follow this checkpoint; no native browser/server or video capture was started for this input/simulation change.
+
 ## Hip silhouette correction — live version28
 
 [Play the fixed build](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private feature `7aed0250257a137281b56a301b840f293909414d` committed and immediately pushed. Hosting source `e5dbd8ea9dc09cf11907d94cf10732a9fe598357`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_40b5735670e08191bd64404ee28e7fb9`, successful deployment `appgdep_6af7d7bcfa948191be99a450521655bd`. Archive `/private/tmp/sector-control-hip-hem-fix-20261113.tar.gz`, native hash `sha256:40d3225b3f5408d0b2d7c6f71002049bb6374011705e9995ef3fc7983999d3f9`. Audience unchanged; private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references `index-DNdTCPCx.js`/`index-awARFtve.css`; platform HTML differs. Ignored hem-build-manifest.json/hem-live-parity.json retain evidence.
