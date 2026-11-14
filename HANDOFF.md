@@ -2,7 +2,13 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Extended Verdun and Broken Relay — implementation checkpoint
+## Extended Verdun and Broken Relay — live version25
+
+[Play extended Verdun](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private game feature `505366fc6701cce4d0a51b500e9e7015de78acaa` committed and immediately pushed. Hosting source `f3cb89085d08425f55708087372cba93b088a26e`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_534fb4467a688191b7ec4623aa6ecb2b`, successful deployment `appgdep_6af7b1b6b6188191a4b82791e764beef`. Archive `/private/tmp/sector-control-broken-relay-20261113.tar.gz`, native hash `sha256:665825bd8bc968a8283322812259248a1f85e8d7d45a87aff0316757f54490d6`. Public audience unchanged; private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references tested `index-BZoNTsP7.js`/`index-awARFtve.css`; platform HTML itself differs. Ignored `relay-build-manifest.json`/`relay-live-parity.json` retain evidence.
+
+[CI43537303318](https://github.com/cmorterud/sector-control/actions/runs/43537303318) could not start: check132269297010 confirms the existing failed account payments/spending-limit restriction. No GitHub tests ran; local436test/strictTS/build validation below passed. No billing change or workflow rerun made.
+
+## Extended Verdun implementation
 
 November13: approved extension from160×128m to208×128m, inserting48m between intact home trench systems. Spawns move to±93m. Five domination flags: A Supply Ruin/B Shattered Wood toward France, neutral C Broken Relay at(0,0), D Gun Pit/E Fortification toward Germany. Existing match length, scoring, artillery, bot counts and combat rules are unchanged. Briefing, objective range and map card reflect five flags.
 
@@ -10,7 +16,7 @@ Broken Relay is a14×12m clearing0.9m below the field with four2m-wide shallow d
 
 Validation on final source: strictTypeScript, all436tests/76files in91.65s, production build4.76s, whitespace checks pass with original budgets. New regressions cover both spawn-to-all-five paths, four approaches/bidirectional slopes, each team's real capture/scoring, low/open center, blast/support cleanup, and actual renderer mast/wire/telephone detail/stage lifecycle. Existing90second forest/destruction battle passes. Two additional CPU-only180second/100soldier battles (seeds12345/91821) reach/capture allfive flags;12blue/16red and10blue/12red soldiers respectively enter C, contested28.73/14.43seconds. Minute shot totals496/627/774 and297/671/628,268/315deaths,108/109shells, finite state. Red captures C in both seeds; these are activity/access checks, not balanced-match acceptance. Reproduce with bundled tools/verdun-relay-audit.ts180<seed>; ignored relay-audit-*.json retain reports.
 
-Native Chrome review of the owned localhost relay scene returned blank/stale output, followed by AX timeout/kernel reset. No current visual acceptance, screenshot or rendered-performance claim. Existing Verdun selection preview predates the expanded layout. The owned5173Vite server is stopped; the owned relay-review tab may remain because control timed out. Original user tabs were preserved. Do not bypass native control or ask for another restart. Tested dist is recorded in ignored relay-build-manifest.json (14files, JS index-BZoNTsP7.js). Publication follows this implementation commit.
+Native Chrome review of the owned localhost relay scene returned blank/stale output, followed by AX timeout/kernel reset. No current visual acceptance, screenshot or rendered-performance claim. Existing Verdun selection preview predates the expanded layout. The owned5173Vite server is stopped; the owned relay-review tab may remain because control timed out. Original user tabs were preserved. Do not bypass native control or ask for another restart. Tested dist is recorded in ignored relay-build-manifest.json (14files, JS index-BZoNTsP7.js). Publication is complete as recorded above.
 
 ## Navigation and resting corpses — live version24
 
