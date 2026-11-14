@@ -89,10 +89,10 @@ it("lets both teams advance and contest the village in a live 100-soldier battle
 it("screens exposed village road crossings with a limited individual smoke throw", () => {
   const g = scene(true),
     p = g.players[8];
-  p.x = -15;
+  p.x = -23;
   p.z = 5;
   p.y = groundHeight(p.x, p.z, g.map);
-  p.objective = 2;
+  p.objective = 3;
   p.nextThink = Infinity;
   g.tick = 248;
   const supply = p.smokes;

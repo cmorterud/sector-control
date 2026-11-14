@@ -23,7 +23,10 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
       { side: "west", x: -building.w/2, z: 0, length: building.d, alongX: false },
       { side: "east", x: building.w/2, z: 0, length: building.d, alongX: false },
       // Internal stone partitions prevent firing through the entire ground floor.
-      ...(building.stories > 1 ? [-4.8,4.8].map((x,i) => ({side:"hall"+i,x,z:0,length:building.d-1,alongX:false})) :
+      ...(building.stories > 1 ? [
+        ...[-4.8,4.8].map((x,i) => ({side:"hall"+i,x,z:0,length:building.d-1,alongX:false})),
+        ...[-10,10].flatMap((x,i)=>[-10,8].map((z,j)=>({side:"room"+i+j,x,z,length:9,alongX:true}))),
+      ] :
         [{side:"partition",x:0,z:2.5,length:building.w-1,alongX:true}]),
     ];
     for (const run of runs) {
@@ -31,7 +34,7 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
       const rows: Box[][] = [[],[],[]];
       for (let col=0;col<count;col++) {
         const offset=-run.length/2+(col+.5)*width;
-        const internal=run.side.startsWith("hall")||run.side==="partition";
+        const internal=run.side.startsWith("hall")||run.side.startsWith("room")||run.side==="partition";
         const door=(level===0 || internal) && (col===Math.floor(count/2) || (run.side.startsWith("hall") && col===2));
         if(door)for(const n of [-1.3,0,1.3])map.navigationPoints!.push({
           x:building.x+run.x+(run.alongX?offset:n),
@@ -87,6 +90,16 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     building.posts.push({x:building.x+side*(building.w/2-1.2),z:building.z+z,y:base+rise});
   }
   const roofLevel=building.stories-1;
+  // Closed gable ends sit beneath the pitched roof, rather than exposing a
+  // large triangular opening above every otherwise intact house.
+  for(const side of [-1,1]) {
+    const count=Math.ceil(building.w/1.25),w=building.w/count;
+    for(let i=0;i<count;i++) {
+      const x=-building.w/2+(i+.5)*w,h=Math.tan(.3)*(building.w/2-Math.abs(x))+.2;
+      const gable=add("gable-"+side+"-"+i,x,side*building.d/2,w,.4,h,building.stories*rise,"wall",building.stories);
+      gable.supports=supportFor(gable.x,gable.z,roofLevel,5);
+    }
+  }
   const nx=Math.ceil(building.w/3.2),nz=Math.ceil(building.d/3.2),w=building.w/nx,d=building.d/nz;
   for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nz;iz++) {
     const x=-building.w/2+(ix+.5)*w,z=-building.d/2+(iz+.5)*d;
@@ -95,6 +108,23 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     roof.architecture!.roofPitch=pitch;
     roof.supports=supportFor(roof.x,roof.z,roofLevel);
     roof.architecture!.tint=variant%2?"#605c58":"#68534a";
+  }
+  if(building.flag) {
+    const columns=[-3.4,3.4].map((x,i)=>add("porch-column-"+i,x,-building.d/2-1.3,.65,.65,2.7,0,"detail",0));
+    const canopy=add("porch",0,-building.d/2-1.1,7.5,2.6,.2,2.7,"roof",0,"wood");
+    canopy.supports=columns.map(p=>p.id!);canopy.architecture!.tint="#6b6558";
+  }
+  for(const side of (building.id==="manor"||building.id==="hall"?[-1,1]:[1])) {
+    const x=side*building.w/4,z=building.d/2-2;
+    const y=building.stories*rise+Math.tan(.3)*building.w/4;
+    const chimney=add("chimney-"+side,x,z,.9,.9,1.65,y-.4,"detail",building.stories);
+    chimney.supports=parts.filter(p=>p.architecture!.part==="roof"&&Math.hypot(p.x-chimney.x,p.z-chimney.z)<3).map(p=>p.id!);
+    chimney.architecture!.tint="#7a6658";
+  }
+  if(building.stories>1)for(const level of [0,1])for(const side of [-1,1]) {
+    const cabinet=add("library-"+level+"-"+side,side*12,10.8,2.2,1,1.15,level*rise,"detail",level,"wood");
+    if(level)cabinet.supports=parts.filter(p=>p.architecture!.part==="floor"&&Math.hypot(p.x-cabinet.x,p.z-cabinet.z)<2).map(p=>p.id!);
+    cabinet.architecture!.tint="#564536";
   }
   // Low furniture is substantial cover, with deliberate room and doorway clearance.
   const furnishing=building.id==="stable"?"stall":building.id==="smithy"?"hearth":building.id==="bakery"?"oven":"cabinet";

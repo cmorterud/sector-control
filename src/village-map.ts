@@ -36,13 +36,13 @@ const building=(id:string,name:string,x:number,z:number,w:number,d:number,flag?:
 const buildings=[
   building("school","Schoolhouse / aid post",-46,-48,20,18,"A"),
   building("stable","Carriage stable",0,-48,16,14),
-  building("inn","Village inn",46,-48,22,18,"C"),
+  building("inn","Village inn",46,-48,22,18,"D"),
   building("bakery","Bakery and workshop",-46,0,16,16),
-  building("manor","Saint-Martin Manor",0,0,30,26,undefined,2),
+  building("manor","Saint-Martin Manor",0,0,30,26,"C",2),
   building("smithy","Smithy and storehouse",46,0,18,14),
   building("farm","Orchard farmhouse",-46,48,20,18,"B"),
   building("cottage","Groundskeeper's cottage",0,48,14,14),
-  building("hall","Town hall / post office",46,48,22,20,"D"),
+  building("hall","Town hall / post office",46,48,22,20,"E"),
 ];
 const streets=[
   ...[-23,23].map(x=>({width:6.5,points:[{x,z:-69},{x,z:69}]})),
@@ -54,7 +54,7 @@ export const villageMap:MapDefinition={
   id:"village",name:"Village front",width,depth,navSpacing:4,navigationPoints:[],buildings,streets,
   scoring:"domination",spawn:{blue:{x:-81,z:0},red:{x:81,z:0}},
   sectors:buildings.filter(b=>b.flag).sort((a,b)=>a.flag!.localeCompare(b.flag!)).map(b=>({
-    id:b.flag!,name:b.name,x:b.x,z:b.z-2,home:b.x<0?"blue" as const:"red" as const})),
+    id:b.flag!,name:b.name,x:b.x,z:b.z-2,...(b.x===0?{}:{home:b.x<0?"blue" as const:"red" as const})})),
   landmarks:buildings.map(b=>({id:b.flag??b.id,name:b.name,kind:"farmhouse" as const,x:b.x,z:b.z,radius:Math.max(b.w,b.d)/2})),
   boxes,vegetation,
   terrain:{columns:width,rows:depth,cellSize:1,heights,bankHeight,rectangles,ramps,trenchLines,communicationRoutes,

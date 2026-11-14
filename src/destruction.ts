@@ -195,6 +195,9 @@ export function deformExplosion(
   const state = map.destruction;
   if (!state) return null;
   const objects: DestructionChange["objects"] = [];
+  // Fixed anchors are unchanged until cover application; avoid scanning every
+  // small wall/floor panel for each quarter-meter excavation sample.
+  const terrainAnchors=map.boxes.filter(b=>["building","bunker","container","barrier"].includes(b.kind));
   // Evaluate all cover against the world as it stood before this explosion.
   for (const object of Object.values(state.objects)) {
     if (object.stage === 2) continue;
@@ -236,9 +239,8 @@ export function deformExplosion(
     if (Math.abs(wx) >= map.width / 2 - 1 || Math.abs(wz) >= map.depth / 2 - 1)
       return;
     if (
-      map.boxes.some(
+      terrainAnchors.some(
         (box) =>
-          ["building", "bunker", "container", "barrier"].includes(box.kind) &&
           (box.baseY ?? 0) <= baseGroundHeight(wx, wz, map) + 0.1 &&
           Math.abs(wx - box.x) <= box.w / 2 &&
           Math.abs(wz - box.z) <= box.d / 2,

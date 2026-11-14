@@ -1,6 +1,6 @@
 # Playtest feedback and Village Front proposal
 
-Recorded November 14, 2026. These are design notes, not implemented changes. The user requested a Village Front proposal first; implementation awaits approval.
+Recorded November 14, 2026. The user approved implementation on November 14. This file preserves the original feedback and records the accepted design, including subsequent corrections.
 
 ## Friend's feedback to preserve
 
@@ -23,18 +23,18 @@ Recorded November 14, 2026. These are design notes, not implemented changes. The
 - Artillery removes localized chunks of walls, roofs and floors. Sufficient structural damage ultimately causes full collapse.
 - Propose the building identities and spaces between them before implementation.
 
-## Proposed layout (awaiting approval)
+## Approved layout
 
-Top means the top of the tactical map. French and German approaches remain left/right respectively; corner flag lettering is proposed, not final.
+Top means the top of the tactical map. British and German approaches remain left/right respectively; corner flag lettering is proposed, not final.
 
 | | Left | Center | Right |
 | --- | --- | --- | --- |
-| Top | A: Schoolhouse / aid post | Stable and carriage house | C: Village inn |
-| Middle | Bakery and workshop | Two-story manor | Smithy and storehouse |
-| Bottom | B: Farmhouse / orchard | Groundskeeper's cottage | D: Town hall / post office |
+| Top | A: Schoolhouse / aid post | Stable and carriage house | D: Village inn |
+| Middle | Bakery and workshop | C: Two-story manor | Smithy and storehouse |
+| Bottom | B: Farmhouse / orchard | Groundskeeper's cottage | E: Town hall / post office |
 
 - Use a readable grid of plots, varied building footprints/orientations, and staggered door/window positions. Three-by-three does not mean nine identical boxes or perfectly straight shooting lanes.
-- Start with a roughly 180 by 160 m envelope; validate distances/density before finalizing. Retain four flags, with the manor serving as an optional strong route and observation position rather than a fifth objective.
+- Start with a roughly 180 by 160 m envelope; validate distances/density before finalizing. User correction: the manor IS the fifth flag. Use central C in its ground-floor entrance hall; A/B are the left corners and D/E the right corners. Upper-floor occupants must not capture through the floor.
 - Provide short cobbled street crossings, walled gardens, back lanes, hedges/fences, modest grade changes and sparse orchard trees. Garden walls and other substantial cover can be destroyed. Include sheltered connections and outer bypass routes; avoid both bare intersections and clutter mazes.
 - Start most buildings standing with limited prior damage. Corner buildings have useful rooms, multiple entrances and capture pockets near their ground floors/courtyards. Flags remain accessible after collapse.
 - Mansion: vestibule/hall, substantial internal partitions, side rooms, rear access, two routes upstairs, selective upper windows, and no required rooftop play. Break cross-map sightlines through the interior; surrounding buildings screen distant flags from a single dominant window.
@@ -43,4 +43,4 @@ Top means the top of the tactical map. French and German approaches remain left/
 - Real upper floors require vertical support, stair movement, bot navigation, fall handling, projectile/explosion occlusion and ragdoll support beyond the current ground-oriented movement model. Build and verify one representative two-story structure before scaling to all nine buildings.
 - Validate cover/window openings against actual collision, local blast damage and support loss; verify bots use both stories and reroute after breaches/collapse. Compare intact and heavily bombarded map states.
 
-Suggested sequence: validate one two-story destructible building; establish nine-building blockout and routes; implement detailed architecture/materials; verify bots, destruction and performance before publishing. This does not authorize implementation by itself.
+Suggested sequence: validate one two-story destructible building; establish nine-building blockout and routes; implement detailed architecture/materials; verify bots, destruction and performance before publishing. Implementation is authorized; the remaining friend-feedback suggestions stay on the backlog.

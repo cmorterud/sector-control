@@ -1,3 +1,4 @@
+import { villageRoad } from "./ground-surface";
 import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
@@ -2628,9 +2629,9 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     p.smokes > 0 &&
     p.reloadAt === 0 &&
     g.tick >= p.throwUntil &&
-    Math.abs(p.x) > 6 &&
-    Math.abs(p.x) < 19 &&
-    p.x * objective.x < 0 &&
+    (g.map.streets
+      ? (villageRoad(g.map,p.x,p.z)>.65 || villageRoad(g.map,p.x+Math.sign(objective.x-p.x)*3,p.z)>.65) && Math.abs(objective.x-p.x)>12 && p.y<groundHeight(p.x,p.z,g.map)+.25
+      : Math.abs(p.x)>6 && Math.abs(p.x)<19 && p.x*objective.x<0) &&
     g.tick % 240 === p.id % 240 &&
     !g.smokeClouds.some((cloud) => dist(p, cloud) < 16)
   ) {

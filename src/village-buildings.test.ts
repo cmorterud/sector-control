@@ -2,13 +2,14 @@ import { expect, it } from "vitest";
 import { villageMap } from "./village-map";
 import { bodyBlocked, groundHeight, supportHeight, walkSegment } from "./map";
 import { Game, TestCollision, idle, pathfind } from "./simulation";
+import { flagContains } from "./domination";
 import { artilleryExplosionProfile } from "./destruction";
 const scene=()=>new Game(new TestCollision(villageMap),false,6000,12345,undefined,{map:villageMap,ambientArtillery:false});
 const localBlast={...artilleryExplosionProfile,damage:0,structuralDamage:2000,structuralRadius:1,craterRadius:0,craterDepth:0,terrainReach:0};
-it("authors nine distinct standing buildings around four accessible corner flags",()=>{
+it("authors nine distinct standing buildings around four accessible corner flags and the central manor flag",()=>{
   expect(villageMap.buildings).toHaveLength(9);
   expect(villageMap.buildings!.filter(b=>b.stories===2).map(b=>b.id)).toEqual(["manor"]);
-  expect(villageMap.sectors.map(s=>s.id)).toEqual(["A","B","C","D"]);
+  expect(villageMap.sectors.map(s=>s.id)).toEqual(["A","B","C","D","E"]);
   for(const b of villageMap.buildings!) {
     const parts=villageMap.boxes.filter(p=>p.architecture?.building===b.id);
     expect(parts.filter(p=>p.architecture!.part==="roof").length).toBeGreaterThan(10);
@@ -81,4 +82,11 @@ it("makes real window holes and roof surfaces block only where their geometry ex
   g.explode({x:roof.x,y:hitY+.05,z:roof.z},-1,null,localBlast);
   expect(g.map.destruction!.objects[roof.id!].stage).toBe(2);
   expect(g.collision.ray(from,to)).toBeGreaterThan(before);
+});
+
+it("captures central C in the manor hall, without capturing through its upstairs floor",()=>{
+  const g=scene(),c=g.sectors.find(s=>s.id==="C")!;
+  expect(c.x).toBe(0);expect(c.home).toBeUndefined();
+  expect(flagContains(g,{...c,y:2.4},c)).toBe(true);
+  expect(flagContains(g,{...c,y:5.8},c)).toBe(false);
 });
