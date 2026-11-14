@@ -1,8 +1,14 @@
 # Sector Control — continuation handoff
 
-Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
+Updated November 14, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Movement polish — validated implementation
+## Movement polish — live version 30
+
+[Play in third person](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun&view=third). Private game source `6a1f6dd424cd7df7183b75279ae8076bef69cadb`; each staged implementation/validation commit was immediately pushed. Hosting source `0be6328249769cfc2a6c549d3911fa7618f46d6e`, saved version `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_aa6b9a65a8308191849ecc9b61ea2357`, successful deployment `appgdep_6af7ea4ef1888191ac891d8eb900f59f`. Archive `/private/tmp/sector-control-movement-polish-20261113.tar.gz`, native hash `sha256:09f950afe84508dccd5e1667945920f8cf48a298ea5f7071330e6cb6e52b7294`. Audience unchanged; private source excluded. Anonymous curl verified all 13 published assets byte-for-byte and homepage references `index-BnpgkOXC.js` / `index-awARFtve.css`; platform HTML differs. Ignored `motion-build-manifest.json` / `motion-live-parity.json` retain evidence.
+
+[CI run 43558937441](https://github.com/cmorterud/sector-control/actions/runs/43558937441) did not start; check 132338040029 confirms the existing account payment/spending-limit restriction. Local 467 tests, strict TypeScript and build pass. No billing changes or reruns. Native scene inspection succeeded briefly; sustained rendered performance/diagnostic completion was interrupted as detailed below.
+
+## Movement polish implementation
 
 November13: completed the approved foot placement, movement transitions and handling prototype in staged commits, each immediately pushed: foot placement `83e7cc3`, stance/weight `02cd298`, handling `427bc0a`. Presentation-only leg IK uses five-point sole supports, bounded foot pitch/roll, unchanged .42/.4m leg lengths, world-space stance anchors, swing clearance and travel-scaled cadence. Human feet always qualify; bots use26/32m hysteresis and retain inexpensive distant gait. Airborne/mantle/dead/teleported/unsupported rigs release contacts. Excavation revisions replant contacts; foot tilt/yaw and downward settling ease while rising immediately to avoid clipping. No additional simulation or native-physics queries enter the solver.
 
@@ -14,7 +20,7 @@ Updated tools/model-budget.ts now moves100actual rigs over valid current terrain
 
 Native production Chrome review used a separate owned window, preserving the user's paused public match. The current localhost100soldier Verdun battle rendered successfully and advanced to07:48, with visible crouched/standing soldiers, woodland and capture progress, using third-person autoplay and diagnostics-only recording. Subsequent inspection/reacquisition failed repeatedly with cgWindowNotFound; browser host inventory was also unavailable. No complete saved diagnostic, FPS result or sustained artillery/performance acceptance is claimed. Owned window cleanup is unconfirmed because control failed; owned5173production preview is stopped. No tests/build/audits ran during this attempted native capture. Do not bypass browser control or ask for repeated restarts. Full controlled rendered performance and manual uneven-step inspection remain follow-ups.
 
-Publication follows the final validation commit. The tested build is recorded in ignored motion-build-manifest.json (index-BnpgkOXC.js). Existing map selection preview still predates expanded Verdun.
+The matching compiled build is live as recorded above. The tested build is recorded in ignored motion-build-manifest.json (index-BnpgkOXC.js). Existing map selection preview still predates expanded Verdun.
 
 ## Empty-trigger reload — live version29
 
