@@ -2,7 +2,13 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Weapon and character model prototype — implementation checkpoint
+## Weapon and character model prototype — live version27
+
+[Play the model prototype](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private game feature `55b3fd2d686bc16d067de4f23f87f956efdb00d0` committed and immediately pushed. Hosting source `14461db8cc7176aee2a0cdd7316ab12912ecb61a`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_2c02c4af6abc81918232a8d5021131c9`, successful deployment `appgdep_6af7d55fd5ec8191856da2fefd74fb52`. Archive `/private/tmp/sector-control-model-upgrade-20261113.tar.gz`, native hash `sha256:29ca388a8176c06b65392afff375262888382e0f39b35247e08ae7a1415e1e27`. Public audience unchanged, private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references tested `index-2zDHZDYT.js`/`index-awARFtve.css`. Platform HTML differs. Ignored models-build-manifest.json/models-live-parity.json retain evidence.
+
+[CI43551696719](https://github.com/cmorterud/sector-control/actions/runs/43551696719) did not start; check132315378799 confirms the existing failed account payment/spending-limit restriction. Local441tests/strictTS/build pass below. No billing changes or reruns. Fresh browser/GPU acceptance remains outstanding; software mesh review and null-device checks are explicitly separate.
+
+## Weapon and character model implementation
 
 November13: user approved the representative Berthier/Gewehr + French/German soldier/first-person hand pass. Purpose-shaped, UV-mapped procedural furniture replaces the shared stock silhouette on these two rifles; receiver rails, wrist transitions, sling fittings and first-person-only screws, proof stamp and sight detail add shape. All rifle world buffers now use reduced geometry; independent first-person clones receive detailed buffers. Shared wood/steel diffuse, normal and gloss maps add grain/machining with restrained wear. Existing sights, muzzle/grip/action anchors, projectile rules and fast reload/bolt timings are unchanged.
 
@@ -12,7 +18,7 @@ Human torso stays detailed. Bots change shared torso/head/equipment buffers beyo
 
 Validation: strictTypeScript, all441tests/77files in82.63s, final production build4.09s, whitespace pass. Regressions cover all detailed/reduced weapon buffers, unit normals/UVs, distinct stocks/helmets, actual null-device component/mesh/material creation and first-person cloning, wrist/grip/reload alignment, LOD hysteresis/material retention,14bone corpse UVs and unchanged simulation state. Existing sight/projectile alignment, animation, native Ammo corpse settling/cleanup and100soldier battle tests pass. A100rig CPU-only audit holds72shared meshes/58materials/9textures over300pose passes; representative French rig15728triangles near/13192far. Timings114.9ms construction/0.274ms per100actor pose are diagnostics, not browser/render/GPU measurements. Initial new-attribute upload ordering and reduced-stock normal seam indexing were fixed; final full suite passes. Ignored model-budget.json retains evidence; tools/model-budget.ts reproduces after bundling.
 
-Offline software review of actual posed renderer mesh exports checked silhouette, clothing, rifle and first-person view; helmet height/coat overlap were adjusted before final tests. Ignored model-review-offline.png/model-meshes.json are software raster reviews, not game screenshots. Native Chrome initially recovered enough to open a separate New Tab, then control returned to another user workflow and the owned tab disappeared before the model page could load. Original tabs were preserved, no new rendered acceptance/video/FPS claim, owned5173preview stopped. Avoid fighting concurrent tab activity or bypassing native control. Publication follows this implementation commit.
+Offline software review of actual posed renderer mesh exports checked silhouette, clothing, rifle and first-person view; helmet height/coat overlap were adjusted before final tests. Ignored model-review-offline.png/model-meshes.json are software raster reviews, not game screenshots. Native Chrome initially recovered enough to open a separate New Tab, then control returned to another user workflow and the owned tab disappeared before the model page could load. Original tabs were preserved, no new rendered acceptance/video/FPS claim, owned5173preview stopped. Avoid fighting concurrent tab activity or bypassing native control. Matching compiled snapshot is live as recorded above.
 
 ## Denser woods around C — live version26
 
