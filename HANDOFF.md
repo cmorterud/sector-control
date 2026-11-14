@@ -2,11 +2,17 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Hip silhouette correction — implementation checkpoint
+## Hip silhouette correction — live version28
+
+[Play the fixed build](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private feature `7aed0250257a137281b56a301b840f293909414d` committed and immediately pushed. Hosting source `e5dbd8ea9dc09cf11907d94cf10732a9fe598357`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_40b5735670e08191bd64404ee28e7fb9`, successful deployment `appgdep_6af7d7bcfa948191be99a450521655bd`. Archive `/private/tmp/sector-control-hip-hem-fix-20261113.tar.gz`, native hash `sha256:40d3225b3f5408d0b2d7c6f71002049bb6374011705e9995ef3fc7983999d3f9`. Audience unchanged; private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references `index-DNdTCPCx.js`/`index-awARFtve.css`; platform HTML differs. Ignored hem-build-manifest.json/hem-live-parity.json retain evidence.
+
+[CI43552598885](https://github.com/cmorterud/sector-control/actions/runs/43552598885) did not start; check132318186642 confirms the existing failed account payment/spending-limit restriction. Local focused validation passes below. No billing changes/reruns or new native browser/GPU claim.
+
+## Hip silhouette implementation
 
 November13: user reported small foot-like pieces hanging from the player hips. The new pair of static coat-skirt panels used the full coat profile below the pelvis and read as an extra short pair of legs while the actual legs moved. Replaced them on French/German rigs with one short, flared continuous coat hem overlapping the waist (.18m/.14m high). Removed both separate panels. Actual legs/boots, animation joints, weapon models and gameplay are unchanged; one fewer rendered part per upgraded actor.
 
-StrictTypeScript,32affected tests/5files in7.89s, production build8.14s and whitespace pass. New regressions cover both factions: exactly one waist hem, no former skirt panels, exactly two boots under their ankle joints, broad/short hem bounds and waist attachment through walking/sprint/crouch poses. Existing geometry, first-person alignment, rig, corpse conversion and native settled-ragdoll checks pass. This focused validation follows the prior441test full run; no new full-suite claim. Reviewed updated actual posed meshes through the existing offline software rasterizer (ignored hem-before.png/hem-after.png). These are mesh reviews, not native screenshots; previous browser/GPU limits remain. No browser tab or server started this turn. Ignored hem-build-manifest.json records tested index-DNdTCPCx.js. Publish the matching compiled snapshot after this commit.
+StrictTypeScript,32affected tests/5files in7.89s, production build8.14s and whitespace pass. New regressions cover both factions: exactly one waist hem, no former skirt panels, exactly two boots under their ankle joints, broad/short hem bounds and waist attachment through walking/sprint/crouch poses. Existing geometry, first-person alignment, rig, corpse conversion and native settled-ragdoll checks pass. This focused validation follows the prior441test full run; no new full-suite claim. Reviewed updated actual posed meshes through the existing offline software rasterizer (ignored hem-before.png/hem-after.png). These are mesh reviews, not native screenshots; previous browser/GPU limits remain. No browser tab or server started this turn. Ignored hem-build-manifest.json records tested index-DNdTCPCx.js. The matching compiled snapshot is live as recorded above.
 
 ## Weapon and character model prototype — live version27
 
