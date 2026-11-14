@@ -2,7 +2,7 @@
 
 Updated November 14, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Village movement and structure repair — validated, publication pending
+## Village movement and structure repair — live version 32
 
 November 14 follow-up to the user's stuck-in-stairs screenshots: walking off a damaged stair/floor no longer assigns the lower support height immediately. The actor preserves its real vertical position, starts a gravity fall for drops over 23 cm, keeps hop/fall state airborne and uses a 45 cm support footprint. Support includes reachable low solid tops. A pre-existing overlap with a walkable tread can only move outward with decreasing overlap; it cannot enter a new solid or phase through a brick wall. Regression fixtures destroy real manor treads before walking and hopping, check bounded vertical drops, absence of embedding and continued escape movement.
 
@@ -12,7 +12,11 @@ Ground-floor modules cover the interior grass with physical planks or paving, sl
 
 Artillery structural splash is **20% of previous damage** for architectural/structural cover when the nearest surface is over 20 cm from the burst. Contact/direct hits retain full structural damage. This applies to player and ambient artillery; soldier blast damage, crater rules and grenade damage are unchanged. Regressions verify nearby shelling leaves a masonry wall standing while exposed soldiers remain vulnerable, contact hits breach it, and grenade damage retains its existing two-hit result.
 
-Validation: strict TypeScript, **482 tests / 86 files pass in 107.87 s**, original budgets. The final expanded destroyed-stair hop, redeploy and blast checks pass again (six tests, 1.66 s). Production build **4.71 s**: `index-BJHJhqow.js` / `index-CwOMIyZc.css`; whitespace check passes. Chrome automation remains unavailable; no new rendered acceptance, menu-click recording or frame-rate result is claimed. Source commit and public release follow this validation entry.
+Validation: strict TypeScript, **482 tests / 86 files pass in 107.87 s**, original budgets. The final expanded destroyed-stair hop, redeploy and blast checks pass again (six tests, 1.66 s). Production build **4.71 s**: `index-BJHJhqow.js` / `index-CwOMIyZc.css`; whitespace check passes. Chrome automation remains unavailable; no new rendered acceptance, menu-click recording or frame-rate result is claimed. [Play the repaired Village map](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village&view=first); reload an existing tab to load this build. Private repair source `b800e62c807b2c821e5b7b16ddbe9bd2d018af22` is committed on GitHub and synchronized locally through the connected GitHub tools. Its tested tree is `7b85fb6fc360f694ad5bef727256efe5526092fb`. The broader detail-pass plan is committed in the same source.
+
+Hosting source `7d9aac35b62587d391f15e09fc6dc3e77c94e072`; saved version `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_6530e0c7274c8191ac3a9edf15db8259`; successful deployment `appgdep_6af8dd2974948191ae9b93c8bdcce194`. Archive `/private/tmp/sector-control-village-repair-20261114.tar.gz`, native hash `sha256:a4da2cf884b0155a28fd8aa71116d728886fdf4b66f3f4054453292f09b6cbc1`. Public audience and URL unchanged; private source/diagnostics excluded. All **14 published assets** match the tested build byte-for-byte; homepage references match `index-BJHJhqow.js` / `index-CwOMIyZc.css`. Platform HTML differs. Ignored `village-repair-build-manifest.json` / `village-repair-live-parity.json` retain evidence.
+
+[CI run 43646618936](https://github.com/cmorterud/sector-control/actions/runs/43646618936) failed its build-and-test check (`132605759004`) without executing any steps. Local acceptance above is separate; no CI success or current billing diagnosis is claimed. No workflow rerun or account changes.
 
 ## Village Front redesign — live version 31
 
