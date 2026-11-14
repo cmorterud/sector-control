@@ -2,11 +2,17 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Empty-trigger reload — implementation checkpoint
+## Empty-trigger reload — live version29
+
+[Play the updated build](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private feature `d32aa330b18815bd47f562eabe80b786dab66a5b` committed and immediately pushed. Hosting source `35b43ab6fab0c232cc0d6ca7be4f458c30a92ff3`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_4d0b02c1a30c8191aee45c868babd1c1`, successful deployment `appgdep_6af7dafc83cc81918fa7f8fbf976f657`. Archive `/private/tmp/sector-control-auto-reload-20261113.tar.gz`, native hash `sha256:fce397d2a674b878f3874b32a82ccad6c4748aa868cd03354a8a5c251a11d3f4`. Audience unchanged; private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references `index-PsSQaw8J.js`/`index-awARFtve.css`; platform HTML differs. Ignored auto-reload-build-manifest.json/auto-reload-live-parity.json retain evidence. Final production build4.18s passes.
+
+[CI43553741029](https://github.com/cmorterud/sector-control/actions/runs/43553741029) did not start; check132321785245 confirms the existing failed account payment/spending-limit restriction. Local455tests/strictTS/build pass. No billing changes/reruns. No new native browser/GPU claim for this input change.
+
+## Empty-trigger reload implementation
 
 November13: attempting to fire an empty magazine now starts the existing reload action when reserve ammo remains. The shared reload condition accepts manual R or an actual empty trigger intent; it preserves all existing throw/melee/mantle/stagger/death guards, drawing delay, reload duration, animations/mechanical cues and reserve transfer at completion. Idling empty and the final shot alone do not initiate a reload. Held semi-auto input does not turn into automatic fire after reloading; release/click fires normally. Human machine guns retain held automatic fire and resume after reloading. No fuel is created for an exhausted flamethrower (no reserve). Briefing/README explain the shortcut.
 
-StrictTypeScript,455tests/78files in85.46s and whitespace pass. Twelve new cases exercise the actual Game.step input path across training/service rifles, pistols and machine guns: one reload event/deadline, no premature reserve spending, partial reserve transfer, post-reload fire, no-reserve dry fire, semi-auto click edges, held machine-gun resumption, throw/stagger/death/idle guards and switching/drawing delay. The existing service-rifle manual-reload fixture now stops clicking after the fifth shot so its independent manual reload/bolt cue checks remain meaningful. Full battle, weapon handling, models and native corpse tests also pass. Production build/publication follow this checkpoint; no native browser/server or video capture was started for this input/simulation change.
+StrictTypeScript,455tests/78files in85.46s and whitespace pass. Twelve new cases exercise the actual Game.step input path across training/service rifles, pistols and machine guns: one reload event/deadline, no premature reserve spending, partial reserve transfer, post-reload fire, no-reserve dry fire, semi-auto click edges, held machine-gun resumption, throw/stagger/death/idle guards and switching/drawing delay. The existing service-rifle manual-reload fixture now stops clicking after the fifth shot so its independent manual reload/bolt cue checks remain meaningful. Full battle, weapon handling, models and native corpse tests also pass. Production build and publication are complete as recorded above; no native browser/server or video capture was started for this input/simulation change.
 
 ## Hip silhouette correction — live version28
 
