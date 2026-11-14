@@ -2,7 +2,15 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-## Navigation and resting corpses — current implementation
+## Navigation and resting corpses — live version24
+
+[Play Verdun](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Game source `1e76fd7bdedce85279305dd0512c8df1a1f663dd` committed and immediately pushed. Final Site source `4cdd689c9d450812a8920c396215b66ceab0b4a3`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_ae411af7468481918e64cadaccf6f68c`, successful deployment `appgdep_6af7a5e56a588191ba59015d418105aa`. Archive `/private/tmp/sector-control-navigation-rest-20261113.tar.gz`, native hash `sha256:cac46a150beaeff6ee2fabbf6f570fc539704f606ec38fc64a185e35870da3fc`. Public audience unchanged; game source remains private. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references tested `index-BTbofhPO.js`/CSS; Sites adds platform HTML markup. Ignored `nav-rest-build-manifest.json`/`nav-rest-live-parity.json` retain evidence.
+
+StrictTypeScript, all431tests/75files in86.74s, final production build4.14s and whitespace checks pass with original budgets. [CI43531263455](https://github.com/cmorterud/sector-control/actions/runs/43531263455) did not start; check132249266349 annotations confirm the existing account payment/spending-limit restriction. No billing changes or workflow reruns made.
+
+Native production Chrome capture `sector-control-2026-11-14T00-01-56-949Z` is unusable for gameplay performance:0recorded ticks/one frame/zero game errors. Its displayed60FPS average is not battle evidence. Native AX/screenshot stayed stale, menu action/getApp returned cgWindowNotFound; later control recovered enough to inspect the console (onlyfavicon404), save the diagnostic and close DevTools. Reload/public handoff remained blank to AX despite verified served assets. No current rendered artillery acceptance or speedup claim. Ignored `nav-rest-interrupted.perf.json` preserves the actual0tick result. The owned review tab is closed, original paused user match preserved and owned5173preview stopped. Do not replace user tabs or repeatedly ask the user to restart Chrome. Continue native-only control when the infrastructure recovers; no CDP/shell browser workaround.
+
+## Navigation and resting-corpse implementation
 
 November13: approved follow-up to spread navigation work and reduce settled-corpse physics. Runtime graph edges now rebuild through a deterministic256-new-walk-check budget per30Hz simulation tick. Repeated edits cancel obsolete jobs but preserve completed unaffected checks; occupied areas are processed first. The last complete graph remains available until an entire current graph can publish. Public synchronous path queries/deployment warm-up remain supported. Both ordinary bot planning and artillery evasion use deferred graphs. Unaffected paths survive local blasts; shared `safeBotDestination` checks the next waypoint against current geometry before following it, with short staggered replanning on failure. Physical collision and blast damage are still immediate. No wall-clock scheduler enters gameplay RNG/state.
 
@@ -10,7 +18,7 @@ November13: approved follow-up to spread navigation work and reduce settled-corp
 
 Validation: strictTypeScript, all431tests/75files in86.74s, production build and whitespace pass with original budgets. New regressions cover yielding adjacency/order equality, bounded overlapping rebuilds/cancellation, distant-route preservation, stale next-step rejection, artillery-evasion budget bypass prevention, actual Ammo solver removal/pose retention/local blast wake, terrain/cover support loss, full14body soldier settling and skipped bone writes. An initial audit exposed two synchronous evasion calls and the full rig exposed persistent limb jitter; both were corrected before final431test run.
 
-Two CPU-only120second/100soldier Verdun audits (12345/91821) capture all4flags and maintain finite state:300/288deaths,71shells each, shots613+581 /552+788,23/20navigation publications, maximum256new checks in any tick. Ignored `nav-rest-final-audit-*.json` retain evidence; `tools/reaction-audit.ts120<seed>--perf` reproduces after bundling with esbuild. These establish activity/work bounds, not GPU performance or faction balance. CPU timings varied with host load and are not a controlled speedup claim. Production native playtest and publication pending.
+Two CPU-only120second/100soldier Verdun audits (12345/91821) capture all4flags and maintain finite state:300/288deaths,71shells each, shots613+581 /552+788,23/20navigation publications, maximum256new checks in any tick. Ignored `nav-rest-final-audit-*.json` retain evidence; `tools/reaction-audit.ts120<seed>--perf` reproduces after bundling with esbuild. These establish activity/work bounds, not GPU performance or faction balance. CPU timings varied with host load and are not a controlled speedup claim. Final publication and native verification limits are recorded above.
 
 ## Artillery performance — live version23
 
