@@ -49,6 +49,8 @@ npm run build
 npm run preview
 ```
 
+Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores.
+
 Use **Select map** in the pause menu to leave the current match and open another battlefield’s start screen. The results screen also offers map choices. Your selected camera view carries over.
 
 GitHub Actions runs `npm ci`, `npm run check -- --maxWorkers=1` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
@@ -102,6 +104,8 @@ The manor has two playable floors, two stairways, internal rooms and upper windo
 Walls consist of separate masonry panels with actual door/window openings. Pitched roof panels, gable ends, upper floor sections, porches and chimneys share the destruction system. Local blasts open breaches and remove floor/roof sections; losing supports causes connected failures, and losing about two-thirds of ground-floor bearing sections collapses the remaining structure. Persistent low rubble replaces destroyed sections with a bounded number of colliders. Terrain and trees remain destructible. Falling floor occupants and physical corpses lose their support; collision, shots and bot routes update with the surviving geometry.
 
 Playtest logs include `botPosition` reasons and destruction events. The November 14 redesign has simulation and native Ammo checks; Chrome's inspection service failed to start, so no new rendered performance result or current-layout gameplay recording is claimed. Earlier Village recordings describe the superseded seven-ruin layout. See HANDOFF.md for final validation and publication status.
+
+The November 14 repair keeps the soldier's height when leaving a destroyed tread or floor, then uses gravity instead of snapping to ground level. Footprint support prevents falling into surviving stairs; hops keep their airborne state. Space can vault low walls and cover with a checked far-side landing and head/body clearance, while retaining terrain mantles. Ground floors now have physical planks or paving with bare foundation soil underneath. Artillery pressure does 20% of its former structural damage to buildings and structural cover unless the burst is in direct contact (within 20 cm); soldier damage, crater rules and grenade damage are unchanged. The next proposed architectural art pass is in [VILLAGE_DETAIL_PASS.md](VILLAGE_DETAIL_PASS.md).
 
 ## Verdun forest trenches
 

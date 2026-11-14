@@ -119,6 +119,7 @@ export interface Command {
   equip?: WeaponSlot;
   loadout?: Loadout;
   interact?: boolean;
+  redeploy?: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -186,6 +187,7 @@ export interface Projectile extends V3 {
   bornAt: number;
 }
 export interface Mantle {
+  vault?: boolean;
   from: V3;
   to: V3;
   edge: V3;
@@ -214,6 +216,7 @@ export const mantleProgress = (m: Mantle, tick: number) =>
 // Root height represents a standing base. Tucked legs lift the actual feet while crossing.
 export function mantleFootLift(m: Mantle, tick: number): number {
   const t = mantleProgress(m, tick);
+  if(m.vault)return .45*smooth((t-.16)/.22)*(1-smooth((t-.78)/.22));
   return m.to.y > m.from.y
     ? 0.45 * smooth((t - 0.34) / 0.28) * (1 - smooth((t - 0.82) / 0.18))
     : 0.45 * smooth(t / 0.2) * (1 - smooth((t - 0.45) / 0.37));
@@ -225,8 +228,15 @@ export function mantlePosition(m: Mantle, tick: number): V3 {
   const dz = (m.to.z - m.from.z) / Math.max(length, 0.001);
   const up = m.to.y > m.from.y;
   const approach = { x: m.edge.x - dx * 0.34, z: m.edge.z - dz * 0.34 };
-  const points: { t: number; p: V3 }[] = up
+  const points: { t: number; p: V3 }[] = m.vault
     ? [
+      {t:0,p:m.from},
+      {t:.18,p:{x:m.edge.x-dx*.65,z:m.edge.z-dz*.65,y:m.from.y}},
+      {t:.4,p:{x:m.edge.x-dx*.65,z:m.edge.z-dz*.65,y:Math.max(m.from.y,m.edge.y-.2)}},
+      {t:.78,p:{...m.to,y:Math.max(m.to.y,m.edge.y-.2)}},
+      {t:1,p:m.to},
+    ]
+    : up ? [
         { t: 0, p: m.from },
         { t: 0.16, p: { ...approach, y: m.from.y } },
         {
@@ -1057,10 +1067,19 @@ export class Game {
     p.command = idle();
     this.emit({ type: "respawn", actor: p.id });
   }
+  redeploy(actor = 0): boolean {
+    const p=this.players[actor];
+    if(this.phase!=="playing" || !p || p.hp<=0)return false;
+    // Intentional self-death follows the same corpse/action/respawn lifecycle,
+    // without awarding anyone a kill or changing domination team scores.
+    this.damage(p,p.hp,-1,null);
+    return true;
+  }
   step(human: Command) {
     this.events = [];
     if (this.phase !== "playing") return;
     this.tick++;
+    if(human.redeploy)this.redeploy(0);
     advanceNavigation(this.map, this.players.filter(p => p.hp > 0));
     this.smokeClouds = this.smokeClouds.filter((s) => {
       if (this.tick < s.expiresAt) return true;
@@ -1195,7 +1214,7 @@ export class Game {
         p.x = pos.x;
         p.z = pos.z;
         if (pos.y !== undefined && !p.hop && !p.fall) p.y = pos.y;
-        const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
+        const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23, .45);
         if (p.hop) this.advanceHop(p);
         else {
           if (!p.fall && p.y - ground > 0.23) this.startFall(p);
@@ -1350,7 +1369,7 @@ export class Game {
     const h = p.hop!;
     const next = p.y + h.velocity / 30 - hopGravity / (2 * 30 * 30);
     h.velocity -= hopGravity / 30;
-    const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
+    const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23, .45);
     let height = Math.max(ground, next);
     if (height > p.y) {
       const from = { x: p.x, y: p.y + 1.9, z: p.z };
@@ -1387,7 +1406,7 @@ export class Game {
   }
   private advanceFall(p: Soldier) {
     const fall = p.fall!;
-    const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
+    const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23, .45);
     p.y += fall.velocity / 30 - hopGravity / (2 * 30 * 30);
     fall.velocity -= hopGravity / 30;
     p.mode = "Falling";
@@ -1414,12 +1433,13 @@ export class Game {
     if (!route) return false;
     const to = {
       ...route.landing,
-      y: groundHeight(route.landing.x, route.landing.z, this.map),
+      y: route.landing.y ?? groundHeight(route.landing.x, route.landing.z, this.map),
     };
     const m: Mantle = {
       from: { x: p.x, y: p.y, z: p.z },
       to,
-      edge: { ...route.edge, y: Math.max(p.y, to.y) },
+      edge: { ...route.edge, y: route.edge.y ?? Math.max(p.y, to.y) },
+      ...(route.vault ? {vault:true} : {}),
       yaw: Math.atan2(to.x - p.x, -(to.z - p.z)),
       startTick: this.tick,
       endTick: this.tick + 36,
@@ -1429,14 +1449,16 @@ export class Game {
     for (let i = 1; i <= 36; i++) {
       const next = mantlePosition(m, this.tick + i);
       const lift = mantleFootLift(m, this.tick + i);
+      const sideX=Math.cos(m.yaw)*.3,sideZ=Math.sin(m.yaw)*.3;
+      for (const [ox,oz] of (m.vault ? [[0,0],[sideX,sideZ],[-sideX,-sideZ]] : [[0,0]]))
       for (const height of [0.1, 0.8, 1.8])
         if (
           this.collision.ray(
             {
-              ...previous,
+              ...previous, x:previous.x+ox,z:previous.z+oz,
               y: previous.y + height + (height < 0.2 ? previousLift : 0),
             },
-            { ...next, y: next.y + height + (height < 0.2 ? lift : 0) },
+            { ...next,x:next.x+ox,z:next.z+oz,y: next.y + height + (height < 0.2 ? lift : 0) },
           ) < 0.99
         )
           return false;
@@ -1695,7 +1717,6 @@ export class Game {
       victim.combatReaction = victim.combatCover = null;
       victim.hop = null;
       victim.fall = null;
-      victim.y = supportHeight(victim.x, victim.z, this.map, victim.y + 0.23);
       this.emit({ type: "death", actor: victim.id });
     }
   }
@@ -2010,15 +2031,15 @@ export class Game {
       if (p.mantle) {
         const m = p.mantle;
         if (
-          Math.abs(groundHeight(m.from.x, m.from.z, this.map) - m.from.y) <
+          Math.abs(supportHeight(m.from.x,m.from.z,this.map,m.from.y+.05) - m.from.y) <
             0.02 &&
-          Math.abs(groundHeight(m.to.x, m.to.z, this.map) - m.to.y) < 0.02
+          Math.abs(supportHeight(m.to.x,m.to.z,this.map,m.to.y+.05) - m.to.y) < 0.02 && !bodyBlocked(m.to.x,m.to.z,m.to.y,.45,this.map)
         )
           continue;
         p.mantle = null;
         p.landedAt = this.tick;
       }
-      const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
+      const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23, .45);
       if (!p.hop && !p.fall) {
         if (p.hp > 0 && p.y - ground > 0.23) this.startFall(p);
         else p.y = ground;

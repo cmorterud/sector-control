@@ -55,11 +55,20 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
         b.supports=[col,col-1,col+1,col-2,col+2].map(c=>rows[row-1][c]?.id).filter((id):id is string=>!!id);
       }
       if(level>0)for(const b of rows[0].filter(Boolean)) {
-        b.supports=parts.filter(p=>p.architecture?.part==="floor" && Math.hypot(p.x-b.x,p.z-b.z)<4.2).map(p=>p.id!);
+        b.supports=parts.filter(p=>p.architecture?.part==="floor" && p.architecture.level===level && Math.hypot(p.x-b.x,p.z-b.z)<4.2).map(p=>p.id!);
       }
     }
   };
   walls(0);
+  // Actual interior floors cover grass and share the building's destruction.
+  // Their shallow thickness preserves the existing ground-level capture area.
+  const fx=Math.ceil(building.w/3),fz=Math.ceil(building.d/3),fw=building.w/fx,fd=building.d/fz;
+  for(let ix=0;ix<fx;ix++)for(let iz=0;iz<fz;iz++) {
+    const x=-building.w/2+(ix+.5)*fw,z=-building.d/2+(iz+.5)*fd;
+    const paved=["stable","smithy","bakery","hall"].includes(building.id);
+    const floor=add("ground-floor-"+ix+"-"+iz,x,z,fw,fd,.14,-.12,"floor",0,paved?"concrete":"wood");
+    floor.walkable=true;floor.architecture!.tint=paved?"#8a8170":"#7c674e";
+  }
   const supportFor=(x:number,z:number,level:number,reach=9)=>parts.filter(p=>p.architecture?.part==="wall" && p.architecture.level===level &&
     (p.baseY??0)+p.h>=base+(level+1)*rise-.02 && Math.hypot(p.x-x,p.z-z)<reach)
     .sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z)).slice(0,6).map(p=>p.id!);
@@ -123,7 +132,7 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
   }
   if(building.stories>1)for(const level of [0,1])for(const side of [-1,1]) {
     const cabinet=add("library-"+level+"-"+side,side*12,10.8,2.2,1,1.15,level*rise,"detail",level,"wood");
-    if(level)cabinet.supports=parts.filter(p=>p.architecture!.part==="floor"&&Math.hypot(p.x-cabinet.x,p.z-cabinet.z)<2).map(p=>p.id!);
+    if(level)cabinet.supports=parts.filter(p=>p.architecture!.part==="floor"&&p.architecture!.level===level&&Math.hypot(p.x-cabinet.x,p.z-cabinet.z)<2).map(p=>p.id!);
     cabinet.architecture!.tint="#564536";
   }
   // Low furniture is substantial cover, with deliberate room and doorway clearance.

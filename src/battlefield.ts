@@ -89,7 +89,10 @@ export function footSurface(
   boards = duckboards(map),
 ): "wood" | "mud" | "concrete" | "leaves" {
   if (!map.terrain) return "concrete";
-  if(map.buildings && p.y !== undefined && supportHeight(p.x,p.z,map,p.y+.05)>groundHeight(p.x,p.z,map)+.15)return "wood";
+  if(map.buildings && p.y !== undefined) {
+    const floor=map.boxes.find(b=>b.walkable && Math.abs((b.baseY??0)+b.h-p.y!)<.12 && Math.abs(p.x-b.x)<=b.w/2 && Math.abs(p.z-b.z)<=b.d/2);
+    if(floor)return floor.kind==="wood"?"wood":"concrete";
+  }
   if (
     villageRoad(map, p.x, p.z) > 0.7 &&
     groundHeight(p.x, p.z, map) > baseGroundHeight(p.x, p.z, map) - 0.15

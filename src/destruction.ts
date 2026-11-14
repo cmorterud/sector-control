@@ -223,7 +223,8 @@ export function deformExplosion(
       0,
       object.hp -
         Math.ceil(
-          profile.structuralDamage * (1 - distance / profile.structuralRadius),
+          profile.structuralDamage * (1 - distance / profile.structuralRadius) *
+          (profile.kind.startsWith("artillery") && (box.architecture || isStructure(box)) && distance > .2 ? .2 : 1),
         ),
     );
     const stage = hp === 0 ? 2 : hp <= object.maxHp / 2 ? 1 : 0;

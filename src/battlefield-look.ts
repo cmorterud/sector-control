@@ -15,12 +15,13 @@ export const lookNoise = (x: number, z: number, period = 0): number => {
     (hash(ix, iz + 1) * (1 - u) + hash(ix + 1, iz + 1) * u) * v
   );
 };
-export type SurfaceKind = "mud" | "wood" | "bark" | "plaster";
+export type SurfaceKind = "mud" | "wood" | "bark" | "plaster" | "floorboards";
 export function surfacePixels(kind: SurfaceKind, size = 256) {
   const diffuse = new Uint8Array(size * size * 4),
     normal = new Uint8Array(diffuse.length),
     gloss = new Uint8Array(diffuse.length);
   const heights = new Float32Array(size * size);
+  const isWood=kind==="wood"||kind==="floorboards";
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size,
@@ -35,7 +36,8 @@ export function surfacePixels(kind: SurfaceKind, size = 256) {
       const knot = Math.sin(v * Math.PI * 2) * Math.sin(u * Math.PI * 2 * 3);
       const split = Math.max(0, 1 - Math.abs(Math.sin(u * Math.PI * 2 * 13 + large * 2 + knot * 0.5)) / 0.045);
       const pore = Math.max(0, grain - 0.65) * 0.4;
-      const wood = 0.57 + large * 0.24 + ridge * 0.09 + grain * 0.08 - split * 0.29 - pore;
+      const plankSeam=kind==="floorboards" && ((u*8)%1)<.025?1:0;
+      const wood = -.32*plankSeam + 0.57 + large * 0.24 + ridge * 0.09 + grain * 0.08 - split * 0.29 - pore;
       const mud =
         0.63 +
         large * 0.3 +
@@ -44,22 +46,22 @@ export function surfacePixels(kind: SurfaceKind, size = 256) {
       const fissure = kind === "bark" ? Math.max(0, 1 - Math.abs(Math.sin(u * Math.PI * 2 * 17 + large * 2 + Math.sin(v * Math.PI * 6) * .3)) / .13) : 0;
       const bark = .49 + large * .22 + grain * .13 - fissure * .32;
       const plaster=.83+grain*.11-large*.13-Math.max(0,Math.sin(u*31+large*4)*Math.sin(v*23+large*7)-.94)*3;
-      const tone = Math.max(0, Math.min(0.98, kind === "plaster" ? plaster : kind === "bark" ? bark : kind === "wood" ? wood : mud)),
+      const tone = Math.max(0, Math.min(0.98, kind === "plaster" ? plaster : kind === "bark" ? bark : isWood ? wood : mud)),
         i = (y * size + x) * 4;
       diffuse.set(
         [
           tone * 255,
-          tone * (kind === "bark" ? 244 : kind === "wood" ? 246 : 252),
-          tone * (kind === "bark" ? 220 : kind === "wood" ? 226 : 245),
+          tone * (kind === "bark" ? 244 : isWood ? 246 : 252),
+          tone * (kind === "bark" ? 220 : isWood ? 226 : 245),
           255,
         ],
         i,
       );
       heights[y * size + x] =
-        kind === "plaster" ? grain*.04+large*.03 : kind === "bark" ? grain * .1 + large * .12 - fissure * .5 : kind === "wood"
-          ? ridge * 0.12 + grain * 0.08 - split * 0.35
+        kind === "plaster" ? grain*.04+large*.03 : kind === "bark" ? grain * .1 + large * .12 - fissure * .5 : isWood
+          ? ridge * 0.12 + grain * 0.08 - split * 0.35 - plankSeam*.4
           : large * 0.5 + grain * 0.25;
-      const shine = kind === "plaster" ? 12 : kind === "bark" ? 9 : kind === "wood" ? 20 : 22 + Math.max(0, 0.5 - large) * 210;
+      const shine = kind === "plaster" ? 12 : kind === "bark" ? 9 : isWood ? 20 : 22 + Math.max(0, 0.5 - large) * 210;
       gloss.set([shine, shine, shine, 255], i);
     }
   const h = (x: number, y: number) =>

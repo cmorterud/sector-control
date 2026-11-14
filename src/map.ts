@@ -485,13 +485,14 @@ function nearbyCover(
 // Floors and stair treads are explicit solids, separate from the height field.
 // Select only support reachable from the actor's current height: the same x/z
 // can be a downstairs room or an upstairs landing, without snapping between.
-export function supportHeight(x: number, z: number, map: MapDefinition, maxY = Infinity): number {
+export function supportHeight(x: number, z: number, map: MapDefinition, maxY = Infinity, radius = 0): number {
   let height = groundHeight(x, z, map);
   if (!map.buildings) return height;
-  for (const b of nearbyCover(x, z, 0, map)) {
+  for (const b of nearbyCover(x, z, radius, map)) {
     const top = (b.baseY ?? 0) + b.h;
-    if (b.walkable && top <= maxY + 0.001 && top > height &&
-      Math.abs(x - b.x) <= b.w / 2 + 0.001 && Math.abs(z - b.z) <= b.d / 2 + 0.001)
+    const solidTop=b.walkable || (["masonry","wood","sandbag","barrier","rubble","concrete","container","log"].includes(b.kind) && b.architecture?.part!=="roof");
+    if (solidTop && top <= maxY + 0.001 && top > height &&
+      Math.abs(x - b.x) <= b.w / 2 + radius + 0.001 && Math.abs(z - b.z) <= b.d / 2 + radius + 0.001)
       height = top;
   }
   return height;
@@ -519,11 +520,42 @@ export function blocked(
     )
   );
 }
+// Keep the actor's actual vertical position when a tread/floor ends. Only
+// small grounded steps can adjust it immediately; larger drops enter gravity.
+function moveAcrossSupports(p:Vec & {fall?:unknown;hop?:unknown;crouched?:boolean},d:Vec,map:MapDefinition):Vec {
+  let x=p.x,z=p.z,feet=p.y??groundHeight(x,z,map);
+  const floor=supportHeight(x,z,map,feet+.23,.45);
+  let airborne=!!(p.hop||p.fall)||feet-floor>.23;
+  if(!airborne)feet=floor;
+  const n=Math.max(1,Math.ceil(Math.hypot(d.x,d.z)/.15));
+  const area=(b:Box,nx:number,nz:number)=>Math.max(0,b.w/2+.45-Math.abs(nx-b.x))*Math.max(0,b.d/2+.45-Math.abs(nz-b.z));
+  const advance=(nx:number,nz:number)=>{
+    const next=supportHeight(nx,nz,map,feet+(airborne?0:.23),.45);
+    const targetFeet=!airborne&&next>=feet-.23?next:feet;
+    if(Math.abs(nx)>map.width/2-1.45||Math.abs(nz)>map.depth/2-1.45)return;
+    if(map.terrain?.banks&&!airborne&&next>feet+.00001 && groundHeight(x+Math.sign(nx-x)*.15,z+Math.sign(nz-z)*.15,map)-feet>.23)return;
+    const collision=nearbyCover(nx,nz,.45,map).some(b=>{
+      const overlap=area(b,nx,nz);
+      if(!overlap || (b.baseY??0)+b.h<=targetFeet+.025 || (b.baseY??0)>=targetFeet+(p.crouched?1.25:1.8)-.025)return false;
+      if(b.walkable && (b.baseY??0)+b.h<=targetFeet+.23)return false;
+      // A survivor of a previously embedded state may move OUT of a tread;
+      // this never permits entry into another solid or through a brick wall.
+      return !(b.walkable && area(b,x,z)>0 && overlap<area(b,x,z)-.000001);
+    });
+    if(collision)return;
+    x=nx;z=nz;
+    if(!airborne&&next<feet-.23)airborne=true;
+    feet=targetFeet;
+  };
+  for(let i=0;i<n;i++){advance(x+d.x/n,z);advance(x,z+d.z/n);}
+  return {x,z,y:feet};
+}
 export function moveOnMap(
   p: Vec & { y?: number; fall?: unknown; hop?: { velocity: number } | null; crouched?: boolean },
   d: Vec,
   map: MapDefinition = industrialMap,
 ): Vec {
+  if(map.buildings)return moveAcrossSupports(p,d,map);
   const steps = Math.max(1, Math.ceil(Math.hypot(d.x, d.z) / 0.15));
   let x = p.x,
     z = p.z;
@@ -554,7 +586,6 @@ export function moveOnMap(
       Math.abs(nz) > map.depth / 2 - 1.45
     )
       return false;
-    if (map.buildings) return !bodyBlocked(nx,nz,Math.max(feet,next),0.45,map,p.crouched ? 1.25 : 1.8);
     return !nearbyCover(nx, nz, 0.45, map).some((b) => {
       if (
         Math.abs(nx - b.x) >= b.w / 2 + 0.45 ||
@@ -588,7 +619,7 @@ export function moveOnMap(
     const nz = z + d.z / steps;
     if (canMove(x, nz)) { z = nz; support = supportHeight(x,z,map,(airborne ? p.y! : support)+0.23); }
   }
-  return map.buildings ? { x, z, y: airborne ? p.y : support } : { x, z };
+  return { x, z };
 }
 export function walkSegment(
   a: Vec,
@@ -608,13 +639,45 @@ export function walkSegment(
 }
 export const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.z - b.z);
 
-// Mantles apply to terrain ledges. Solid cover is never treated as a climbable bank.
+// Low solid cover uses a vault with an explicitly clear far-side landing.
+function coverVaultRoute(p:Vec,direction:Vec,map:MapDefinition):{landing:Vec;edge:Vec;vault:true}|null {
+  const length=Math.hypot(direction.x,direction.z);if(length<.1)return null;
+  const dx=direction.x/length,dz=direction.z/length,from=p.y??groundHeight(p.x,p.z,map);
+  const hits:{b:Box;near:number;far:number}[]=[];
+  for(const b of nearbyCover(p.x+dx,p.z+dz,2.8,map)) {
+    if(["tree","brush","wire"].includes(b.kind) || (b.baseY??0)>from+1.8 || (b.baseY??0)+b.h<from+.26)continue;
+    let near=-Infinity,far=Infinity;
+    for(const [a,c,half,v] of [[p.x,b.x,b.w/2,dx],[p.z,b.z,b.d/2,dz]]) {
+      if(Math.abs(v)<.0001){if(Math.abs(a-c)>half){near=Infinity;break;}continue;}
+      const t1=(c-half-a)/v,t2=(c+half-a)/v;
+      near=Math.max(near,Math.min(t1,t2));far=Math.min(far,Math.max(t1,t2));
+    }
+    if(near<=far && near>=-.1 && near<=1.5 && far>0)hits.push({b,near,far});
+  }
+  hits.sort((a,b)=>a.near-b.near);
+  const first=hits[0];if(!first)return null;
+  const top=(first.b.baseY??0)+first.b.h;
+  if(top-from>1.6)return null;
+  for(let distance=Math.max(first.far+.8,first.near+1);distance<=3.6;distance+=.15) {
+    const x=p.x+dx*distance,z=p.z+dz*distance;
+    const y=supportHeight(x,z,map,top+.05);
+    if(y-from>1.6 || from-y>1 || bodyBlocked(x,z,y,.45,map,1.98))continue;
+    if([[0,0],[-.45,0],[.45,0],[0,-.45],[0,.45]].some(([ox,oz])=>
+      Math.abs(supportHeight(x+ox,z+oz,map,y+.23)-y)>.23))continue;
+    return {landing:{x,z,y},edge:{x:p.x+dx*first.near,z:p.z+dz*first.near,y:top},vault:true};
+  }
+  return null;
+}
+
+// Preserve the terrain ledge route, with a separate checked route for low cover.
 export function mantleRoute(
   p: Vec,
   direction: Vec,
   map: MapDefinition,
-): { landing: Vec; edge: Vec } | null {
-  if (!map.terrain) return null;
+): { landing: Vec; edge: Vec; vault?: boolean } | null {
+  const cover=coverVaultRoute(p,direction,map);
+  if(cover)return cover;
+  if (!map.terrain || (p.y!==undefined && Math.abs(p.y-groundHeight(p.x,p.z,map))>.24)) return null;
   const length = Math.hypot(direction.x, direction.z);
   if (length < 0.1) return null;
   const dx = direction.x / length,

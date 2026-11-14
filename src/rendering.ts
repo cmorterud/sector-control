@@ -888,7 +888,7 @@ export class Renderer implements CollisionWorld {
       const a=b.architecture;
       const tint=object.stage ? "#736253" : a.tint ?? "#aa9680";
       const solid=this.cube(a.part,b.x,base+h/2,b.z,b.w,h,b.d,tint,true,root,(a.roofPitch??0)*180/Math.PI);
-      if(b.kind === "wood")solid.render!.material=this.surfaceMaterial("wood",tint);
+      if(b.kind === "wood")solid.render!.material=this.surfaceMaterial(a.part==="floor" ? "floorboards" : "wood",tint);
       else solid.render!.material=this.surfaceMaterial("plaster",tint);
       // Shallow mortar courses and stone sills share the panel lifecycle.
       if(a.part === "wall") {
@@ -1493,7 +1493,7 @@ export class Renderer implements CollisionWorld {
       m.glossMapChannel = "r";
       // Broad soil highlights must not bleach an entire bank as its normal
       // turns toward the sun. Separate puddles retain their glossy water finish.
-      m.gloss = ground ? 0.35 : kind === "bark" ? .18 : 0.6;
+      m.gloss = ground ? 0.35 : kind === "bark" ? .18 : kind === "floorboards" ? .25 : 0.6;
       m.specular = color(ground ? "#343b30" : "#252728");
       if (ground) {
         for (const channel of ["diffuse", "normal", "gloss"] as const) {

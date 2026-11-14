@@ -1,0 +1,20 @@
+import {expect,it} from "vitest";
+import {Game,TestCollision,idle} from "./simulation";
+import {villageMap} from "./village-map";
+it("redeploys through a recorded self-death and the normal five-second respawn, without awarding a kill",()=>{
+ const g=new Game(new TestCollision(villageMap),false,6000,1,undefined,{map:villageMap,ambientArtillery:false}),p=g.players[0];
+ p.protectedUntil=Infinity;p.reloadAt=100;p.throwUntil=200;
+ Object.assign(p,{x:10.5,z:0,y:4.78});
+ const scores={...g.scores};
+ g.step({...idle(),redeploy:true});
+ expect([p.x,p.y,p.z]).toEqual([10.5,4.78,0]);
+ expect(p.hp).toBe(0);expect(p.deaths).toBe(1);expect(p.kills).toBe(0);expect(g.scores).toEqual(scores);
+ expect(p.reloadAt).toBe(0);expect(p.mantle).toBeNull();expect(p.hop).toBeNull();expect(p.fall).toBeNull();
+ expect(g.events.filter(e=>e.type==="death"&&e.actor===0)).toHaveLength(1);
+ const due=p.respawnAt;expect(due-g.tick).toBe(150);
+ expect(g.redeploy()).toBe(false);expect(p.deaths).toBe(1);
+ while(g.tick<due)g.step(idle());
+ expect(p.hp).toBe(100);expect(p.deaths).toBe(1);expect(p.protectedUntil).toBeGreaterThan(g.tick);
+ expect(Math.abs(p.x)).toBeGreaterThan(70);expect(g.events.some(e=>e.type==="respawn"&&e.actor===0)).toBe(true);
+ g.phase="ended";expect(g.redeploy()).toBe(false);expect(g.redeploy(999)).toBe(false);
+});

@@ -91,7 +91,8 @@ export function groundField(map: MapDefinition, x: number, z: number) {
     (1 - wet * 0.65) *
     (1 - wear) *
     (0.35 + smooth(8, 42, Math.abs(x)) * 0.65) * (1 - litter * .85);
-  return { wet, dry, grass, wear, litter };
+  const indoors=map.buildings?.some(b=>Math.abs(x-b.x)<b.w/2 && Math.abs(z-b.z)<b.d/2);
+  return { wet, dry, grass:indoors?0:grass, wear:indoors?Math.max(.8,wear):wear, litter };
 }
 
 // One map-sized atlas: two rotated/incommensurate mud samples and a warped,

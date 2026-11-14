@@ -416,9 +416,10 @@ button span {
 }
 .pause-actions {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
+.pause-actions .secondary:disabled { opacity: .45; cursor: default; }
 .pause-actions .secondary:hover {
   color: #1c302e;
 }

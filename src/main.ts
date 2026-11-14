@@ -80,6 +80,7 @@ let fire = false,
   smoke = false,
   melee = false;
 let pendingEquip: WeaponSlot | undefined;
+let pendingRedeploy = false;
 let chosenLoadout: Loadout = "rifleman";
 let pendingArtillery: Command["artillery"];
 const tacticalMap = new ArtilleryMap(
@@ -154,6 +155,7 @@ function clear() {
   melee = false;
   pendingArtillery = undefined;
   pendingEquip = undefined;
+  pendingRedeploy = false;
   if (renderer) renderer.artilleryPreview = null;
 }
 function menu(
@@ -269,10 +271,11 @@ function pause() {
   if (!started || game.phase !== "playing") return;
   menu(
     "Operation paused",
-    "Press Escape or click Resume to continue.",
+    "Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.",
     "Resume operation",
     () => resume(),
     `<div class="pause-actions">
+      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
       <button class="secondary" id="restart">Restart match</button>
       <button class="secondary" id="select-map" aria-expanded="false" aria-controls="pause-map-picker">Select map</button>
     </div>
@@ -281,6 +284,7 @@ function pause() {
       ${battlefieldChoices()}
     </div>`,
   );
+  el("redeploy").onclick = () => { pendingRedeploy = true; resume(true); };
   el("restart").onclick = start;
   const selectMap = el("select-map");
   selectMap.onclick = () => {
@@ -611,6 +615,7 @@ function frame(now: number) {
             ? botCommand(game, game.players[0])
             : command();
         input.firstPerson = preferredFirstPerson;
+        input.redeploy = pendingRedeploy; pendingRedeploy = false;
         const simStart = battlePerformance.begin();
         game.step(input);
         battlePerformance.end("simulation",simStart);

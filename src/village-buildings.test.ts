@@ -28,7 +28,7 @@ it("keeps downstairs and upstairs support separate and lets a soldier walk up bo
     for(let i=0;i<30;i++)g.step(idle());
     expect(p.y).toBeCloseTo(5.8);
   }
-  expect(supportHeight(0,0,villageMap,2.63)).toBeCloseTo(2.4);
+  expect(supportHeight(0,0,villageMap,2.63)).toBeCloseTo(2.42);
   expect(supportHeight(0,0,villageMap,6)).toBeCloseTo(5.8);
   expect(walkSegment({x:0,z:0,y:2.4},{x:0,z:0,y:5.8},villageMap)).toBe(false);
 });
@@ -42,8 +42,8 @@ it("routes to a genuine upper-floor position through stairs, without a floor tel
   for(const next of route){expect(walkSegment(p,next,g.map),JSON.stringify([p,next])).toBe(true);p={...next,y:next.y??groundHeight(next.x,next.z,g.map)};}
 });
 it("blasts a local floor hole, drops its occupant and preserves neighboring support",()=>{
-  const g=scene(),p=g.players[0];p.x=0;p.z=6;p.y=5.8;p.protectedUntil=Infinity;
-  const floor=g.map.boxes.find(b=>b.architecture?.part==="floor" && Math.abs(b.x-p.x)<b.w/2 && Math.abs(b.z-p.z)<b.d/2)!;
+  const g=scene(),p=g.players[0];p.x=0;p.z=7.1;p.y=5.8;p.protectedUntil=Infinity;
+  const floor=g.map.boxes.find(b=>b.architecture?.part==="floor" && b.architecture.level===1 && Math.abs(b.x-p.x)<b.w/2 && Math.abs(b.z-p.z)<b.d/2)!;
   expect(floor).toBeDefined();
   g.explode({x:floor.x,y:floor.baseY!-.05,z:floor.z},-1,null,localBlast);
   expect(g.map.destruction!.objects[floor.id!].stage).toBe(2);
