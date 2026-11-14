@@ -2,6 +2,8 @@
 
 Updated November 14, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
+Latest design discussion: [PLAYTEST_FEEDBACK.md](PLAYTEST_FEEDBACK.md) preserves the friend's feedback and the proposed nine-building Village Front layout, including the two-story destructible manor. This is a proposal; implementation awaits approval.
+
 ## Movement polish — live version 30
 
 [Play in third person](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun&view=third). Private game source `6a1f6dd424cd7df7183b75279ae8076bef69cadb`; each staged implementation/validation commit was immediately pushed. Hosting source `0be6328249769cfc2a6c549d3911fa7618f46d6e`, saved version `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_aa6b9a65a8308191849ecc9b61ea2357`, successful deployment `appgdep_6af7ea4ef1888191ac891d8eb900f59f`. Archive `/private/tmp/sector-control-movement-polish-20261113.tar.gz`, native hash `sha256:09f950afe84508dccd5e1667945920f8cf48a298ea5f7071330e6cb6e52b7294`. Audience unchanged; private source excluded. Anonymous curl verified all 13 published assets byte-for-byte and homepage references `index-BnpgkOXC.js` / `index-awARFtve.css`; platform HTML differs. Ignored `motion-build-manifest.json` / `motion-live-parity.json` retain evidence.
