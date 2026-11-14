@@ -1,3 +1,4 @@
+import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
 import {modelSurfaceAtlas,modelAtlasSize,modelUV,modelSurfaceFor,type ModelSurface} from "./model-surfaces";
@@ -95,6 +96,7 @@ const supportForearmLength = armLengths.forearm;
 type SoldierRig = {
   farDetail?: boolean;
   feetActive?: boolean;
+  weight?: MovementWeight;
   feet?: (FootContact|undefined)[];
   design?: ReturnType<typeof weaponDesign>;
   body: pc.Entity;
@@ -2560,7 +2562,7 @@ export class Renderer implements CollisionWorld {
     const rootY=root.getPosition().y,revision=this.map.destruction?.terrainRevision??0;
     const contacts=rig.legs.map((leg,i)=>updateFootContact(rig.feet![i],{
       x:root.getPosition().x,z:root.getPosition().z,rootY,yaw:p.yaw,phase:rig.phase+i*Math.PI,
-      motion:rig.motion,sprint:rig.sprint,crouch:rig.crouch,forward:rig.forward,sideways:rig.sideways,side:i?1:-1,revision,
+      motion:rig.motion,sprint:rig.sprint,crouch:rig.crouch,forward:rig.forward,sideways:rig.sideways,side:i?1:-1,revision,dt,
     },this.map));
     const low=Math.min(0,...contacts.map(c=>c?c.contact.y-footRules.sole-rootY:0));
     const position=rig.body.getLocalPosition();
@@ -2578,7 +2580,7 @@ export class Renderer implements CollisionWorld {
       const end=hip.clone().add(direction.clone().mulScalar(distance));
       const lower=new pc.Quat().setFromDirections(pc.Vec3.DOWN,end.sub(knee).normalize());
       leg.hip.setLocalRotation(upper);leg.knee.setLocalRotation(upper.clone().invert().mul(lower));
-      const foot=new pc.Quat().setFromEulerAngles(result.pitch*180/Math.PI,-p.yaw*180/Math.PI,result.roll*180/Math.PI);
+      const foot=new pc.Quat().setFromEulerAngles(result.pitch*180/Math.PI,-result.contact.yaw*180/Math.PI,result.roll*180/Math.PI);
       leg.ankle.setLocalRotation(leg.knee.getRotation().clone().invert().mul(foot));
     }
   }
@@ -2638,8 +2640,11 @@ export class Renderer implements CollisionWorld {
           rig.style.cadence) %
       (Math.PI * 2);
     const crouchTarget = p.crouched && !p.mantle && !p.hop && p.hp > 0 ? 1 : 0;
-    rig.crouch += (crouchTarget - rig.crouch) * blend;
-    if (Math.abs(rig.crouch - crouchTarget) < 0.001) rig.crouch = crouchTarget;
+    rig.weight??=movementWeight(p.yaw,rig.crouch);
+    advanceMovementWeight(rig.weight,travelForward*speed,travelSideways*speed,p.yaw,crouchTarget,dt,
+      distance>=2||!rig.alive||!!p.mantle||!!p.hop||!!p.fall);
+    const weight=rig.weight;
+    rig.crouch = weight.crouch.value;
     const crouchDrop = crouchRules.drop * rig.crouch;
     const squatAngle =
       (Math.acos(clamp01((0.82 - crouchDrop) / 0.82)) * 180) / Math.PI;
@@ -2647,21 +2652,21 @@ export class Renderer implements CollisionWorld {
     const kick = recoilPulse(p, tick + 1);
     const ready = p.command.aim || p.command.fire || p.reloadAt > 0;
     rig.body.setLocalPosition(
-      0,
+      -weight.side.value*.003,
       0.94 -
         crouchDrop -
         (p.duckUntil > tick && !p.crouched ? 0.09 : 0) +
         (Math.cos(rig.phase * 2) - 1) * 0.022 * rig.motion,
-      0,
+      weight.forward.value*.003,
     );
     rig.body.setLocalEulerAngles(
-      -forward * rig.motion * (2 + 8 * rig.sprint) - 8 * rig.crouch,
+      -forward * rig.motion * (2 + 8 * rig.sprint) - 8 * rig.crouch + weight.forward.value,
       0,
-      -sideways * rig.motion * 4,
+      -sideways * rig.motion * 4 + weight.side.value + weight.turn.value*.15,
     );
     rig.hips.setLocalEulerAngles(
       0,
-      -Math.atan2(sideways, Math.abs(forward) + 0.001) * 40 * rig.motion,
+      -Math.atan2(sideways, Math.abs(forward) + 0.001) * 40 * rig.motion + weight.turn.value*1.5,
       0,
     );
     const breath = Math.sin((tick / 30) * 1.7 + rig.style.phase);
@@ -2673,7 +2678,7 @@ export class Renderer implements CollisionWorld {
     rig.upper.setLocalPosition(0, 0.08 + breath * 0.003 * (1 - rig.motion), 0);
     rig.upper.setLocalEulerAngles(
       -kick * 2 + breath * 0.35 * (1 - rig.motion),
-      stride * (ready ? 1.5 : 4) * rig.style.sway + idleTurn,
+      stride * (ready ? 1.5 : 4) * rig.style.sway + idleTurn + weight.turn.value*.3,
       -stride * 1.5 * rig.style.sway,
     );
     for (let i = 0; i < rig.legs.length; i++) {
@@ -2765,16 +2770,16 @@ export class Renderer implements CollisionWorld {
       const tuck = up
         ? smooth((t - 0.3) / 0.32) * (1 - smooth((t - 0.82) / 0.18))
         : smooth(t / 0.2) * (1 - smooth((t - 0.45) / 0.4));
-      rig.body.setLocalPosition(0, 0.94 - 0.12 * effort, 0);
-      rig.body.setLocalEulerAngles(-(up ? 35 : 20) * effort, 0, 0);
+      const mantleBlend=smooth(t/.16),fromPosition=rig.body.getLocalPosition().clone(),fromRotation=rig.body.getLocalRotation().clone();
+      rig.body.setLocalPosition(fromPosition.lerp(fromPosition,new pc.Vec3(0,0.94-0.12*effort,-.025*Math.sin(t*Math.PI)),mantleBlend));
+      rig.body.setLocalRotation(fromRotation.slerp(fromRotation,new pc.Quat().setFromEulerAngles(-(up?35:20)*effort,0,0),mantleBlend));
       rig.upper.setLocalEulerAngles(10 * effort, 0, -5 * effort);
       rig.hips.setLocalEulerAngles(0, 0, 0);
       for (let i = 0; i < 2; i++) {
         const hip = (i === 0 ? 90 : 100) * tuck + 25 * effort * (1 - tuck);
         const knee = (i === 0 ? -130 : -140) * tuck - 50 * effort * (1 - tuck);
-        rig.legs[i].hip.setLocalEulerAngles(hip, 0, 0);
-        rig.legs[i].knee.setLocalEulerAngles(knee, 0, 0);
-        rig.legs[i].ankle.setLocalEulerAngles(35 * effort - hip - knee, 0, 0);
+        for(const [joint,angle] of [[rig.legs[i].hip,hip],[rig.legs[i].knee,knee],[rig.legs[i].ankle,35*effort-hip-knee]] as const)
+          joint.setLocalRotation(new pc.Quat().slerp(joint.getLocalRotation(),new pc.Quat().setFromEulerAngles(angle,0,0),mantleBlend));
       }
       // Keep the rifle in the left hand; the free right hand braces against the ledge.
       rig.rifle.setLocalPosition(

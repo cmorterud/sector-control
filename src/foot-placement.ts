@@ -1,7 +1,7 @@
 import {groundHeight,type MapDefinition} from './map';
 
 export const footRules={thigh:.42,calf:.4,sole:.1125,near:26,far:32,maxGroundDelta:.34};
-export type FootContact={x:number;y:number;z:number;stance:boolean;yaw:number;revision:number};
+export type FootContact={x:number;y:number;z:number;stance:boolean;yaw:number;revision:number;pitch?:number;roll?:number};
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const smooth=(v:number)=>{v=clamp(v,0,1);return v*v*(3-2*v);};
 
@@ -29,7 +29,7 @@ export function footSupport(map:MapDefinition,x:number,z:number,yaw:number,rootY
  return {height,pitch,roll};
 }
 
-export function updateFootContact(previous:FootContact|undefined,input:{x:number;z:number;yaw:number;rootY:number;phase:number;motion:number;sprint:number;crouch:number;forward:number;sideways:number;side:number;revision:number},map:MapDefinition){
+export function updateFootContact(previous:FootContact|undefined,input:{x:number;z:number;yaw:number;rootY:number;phase:number;motion:number;sprint:number;crouch:number;forward:number;sideways:number;side:number;revision:number;dt?:number},map:MapDefinition){
  const gait=footCycle(input.phase,input.motion,input.sprint,input.crouch);
  const c=Math.cos(input.yaw),s=Math.sin(input.yaw),length=Math.max(.001,Math.hypot(input.forward,input.sideways));
  const dx=(s*input.forward+c*input.sideways)/length,dz=(-c*input.forward+s*input.sideways)/length;
@@ -37,10 +37,17 @@ export function updateFootContact(previous:FootContact|undefined,input:{x:number
  let x=baseX+dx*gait.along,z=baseZ+dz*gait.along;
  const old=previous,plant=old&&old.stance&&gait.stance&&old.revision===input.revision&&Math.hypot(old.x-baseX,old.z-baseZ)<(input.motion<.06?.2:.42);
  if(plant){x=old.x;z=old.z;}
- let support=footSupport(map,x,z,input.yaw,input.rootY);
- if(!support){x=baseX;z=baseZ;support=footSupport(map,x,z,input.yaw,input.rootY);}
+ const blend=1-Math.exp(-18*Math.max(0,input.dt??1/60));
+ const yaw=old?old.yaw+Math.atan2(Math.sin(input.yaw-old.yaw),Math.cos(input.yaw-old.yaw))*blend:input.yaw;
+ let support=footSupport(map,x,z,yaw,input.rootY);
+ if(!support){x=baseX;z=baseZ;support=footSupport(map,x,z,yaw,input.rootY);}
  if(!support)return null;
+ const pitch=(old?.pitch??support.pitch)+(support.pitch-(old?.pitch??support.pitch))*blend;
+ const roll=(old?.roll??support.roll)+(support.roll-(old?.roll??support.roll))*blend;
+ const clearance=Math.abs(support.pitch-pitch)*.21+Math.abs(support.roll-roll)*.1;
+ let y=support.height+gait.lift+clearance;
+ if(old&&old.stance&&gait.stance&&y<old.y)y=Math.max(y,old.y+(y-old.y)*blend);
  const contact:FootContact=previous??{x,y:support.height,z,stance:gait.stance,yaw:input.yaw,revision:input.revision};
- Object.assign(contact,{x,y:support.height+gait.lift,z,stance:gait.stance,yaw:input.yaw,revision:input.revision});
- return {contact,pitch:support.pitch,roll:support.roll};
+ Object.assign(contact,{x,y,z,stance:gait.stance,yaw,revision:input.revision,pitch,roll});
+ return {contact,pitch,roll};
 }
