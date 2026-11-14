@@ -5,6 +5,7 @@ import { blocked, dist, groundHeight, walkSegment, type Vec } from "./map";
 import {
   idle,
   pathfind,
+  safeBotDestination,
   type Game,
   type Soldier,
   type Team,
@@ -532,7 +533,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     let destination: Vec | undefined,
       route: Vec[] = [];
     for (const candidate of safe.slice(0, 8)) {
-      const path = pathfind(p, candidate, g.map);
+      const path = pathfind(p, candidate, g.map, true);
       if (
         path.length &&
         (!g.map.terrain ||
@@ -571,7 +572,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     !p.path.length &&
     g.tick >= p.nextThink
   ) {
-    p.path = pathfind(p, evade.destination, g.map);
+    p.path = pathfind(p, evade.destination, g.map, true);
     p.nextThink = g.tick + 30;
   }
   if (g.tick - evade.checkedAt >= 15) {
@@ -598,7 +599,7 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
   )
     p.path.shift();
   const c = idle();
-  const destination = p.path[0];
+  const destination = safeBotDestination(g, p);
   if (destination) {
     const distance = Math.max(0.7, dist(p, destination));
     c.x = (destination.x - p.x) / distance;

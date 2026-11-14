@@ -179,7 +179,11 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   r.drawCasualties(0);
   expect(first.age).toBe(0);
   expect(g.snapshot()).toEqual(before);
-  for (let i = 0; i < 240; i++) r.drawCasualties(1 / 60);
+  for (let i = 0; i < 600 && !first.ragdoll.frozen; i++) r.drawCasualties(1 / 60);
+  expect(first.ragdoll.frozen).toBe(true);
+  const applyPose = vi.spyOn(first.bones[0], "setPosition");
+  r.drawCasualties(.1);
+  expect(applyPose).not.toHaveBeenCalled();
   const settled = first.ragdoll.positions[0].clone();
   expect(first.ragdoll.positions[1].y).toBeLessThan(0.8);
   first.skin.updateMatrixPalette(first.entity, 2);

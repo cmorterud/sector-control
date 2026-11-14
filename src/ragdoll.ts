@@ -33,6 +33,12 @@ export class Ragdoll {
   readonly bind: Mat4[];
   readonly positions: Vec3[];
   readonly rotations: Quat[];
+  frozen = false;
+  poseVersion = 0;
+  private age = 0;
+  private restClock = 0;
+  private quietTime = 0;
+  private velocity = new Vec3();
   constructor(readonly owner: RagdollPhysics, readonly parts: RagdollPart[], velocity: Vec3) {
     this.bind = parts.map(p => new Mat4().setTRS(p.position, p.rotation, Vec3.ONE));
     this.positions = parts.map(p => p.position.clone());
@@ -49,25 +55,60 @@ export class Ragdoll {
         owner.world.addBody(body, BODYGROUP_USER_1, BODYGROUP_STATIC | BODYGROUP_USER_2);
         this.bodies.push(body);
       }
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        if (!p.parent || !p.anchor) continue;
-        const parent = parts.findIndex(q => q.name === p.parent);
-        const rotation = new Quat().setFromDirections(Vec3.RIGHT, p.axis ?? Vec3.UP);
-        const frame = new Mat4().setTRS(p.anchor, rotation, Vec3.ONE);
-        this.joints.push(owner.world.createJoint({ type: p.hinge ? "hinge" : "ball",
-          bodyA: this.bodies[parent], bodyB: this.bodies[i], enableCollision: false,
-          frameA: new Mat4().mul2(this.bind[parent].clone().invert(), frame),
-          frameB: new Mat4().mul2(this.bind[i].clone().invert(), frame), settings: jointSettings(p) }));
-      }
+      this.connect();
     } catch (error) { this.destroy(); throw error; }
   }
+  private connect() {
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i];
+      if (!p.parent || !p.anchor) continue;
+      const parent = this.parts.findIndex(q => q.name === p.parent);
+      const rotation = new Quat().setFromDirections(Vec3.RIGHT, p.axis ?? Vec3.UP);
+      const frame = new Mat4().setTRS(p.anchor, rotation, Vec3.ONE);
+      this.joints.push(this.owner.world.createJoint({ type: p.hinge ? "hinge" : "ball",
+        bodyA: this.bodies[parent], bodyB: this.bodies[i], enableCollision: false,
+        frameA: new Mat4().mul2(this.bind[parent].clone().invert(), frame),
+        frameB: new Mat4().mul2(this.bind[i].clone().invert(), frame), settings: jointSettings(p) }));
+    }
+  }
+  // Remove constraints and bodies from the solver, retaining their native
+  // allocations and final pose for fast reactivation without remeshing.
+  freeze() {
+    if (this.frozen) return;
+    this.read();
+    for (const joint of this.joints.splice(0)) this.owner.world.destroyJoint(joint);
+    for (const body of this.bodies) this.owner.world.removeBody(body);
+    this.frozen = true;
+    battlePerformance.count("ragdollsFrozen");
+  }
+  readyToFreeze(dt: number) {
+    if (this.frozen) return false;
+    this.age += dt; this.restClock += dt;
+    if (this.age < 1.25 || this.restClock < .15) return false;
+    const elapsed = this.restClock; this.restClock = 0;
+    for (let i = 0; i < this.bodies.length; i++) {
+      const body = this.bodies[i], core = this.parts[i].name === "torso" || this.parts[i].name === "pelvis";
+      body.getLinearVelocity(this.velocity);
+      if (this.velocity.lengthSq() > (core ? .08 : .4) ** 2) { this.quietTime = 0; return false; }
+      body.getAngularVelocity(this.velocity);
+      // Tiny constrained feet can keep spinning in contact after the trunk
+      // rests. Bound limb translation and core rotation without letting that
+      // solver jitter keep the entire corpse active for its full lifetime.
+      if (!this.parts[i].name.endsWith("foot") && this.velocity.lengthSq() > (core ? .4 : 1.2) ** 2) {
+        this.quietTime = 0; return false;
+      }
+    }
+    this.quietTime += Math.min(elapsed, .2);
+    return this.quietTime >= .75;
+  }
   read() {
+    if (this.frozen) return;
+    this.poseVersion++;
     for (let i = 0; i < this.bodies.length; i++)
       this.bodies[i].getTransform(this.positions[i], this.rotations[i]);
   }
   hit(impulse: Vec3, at?: Vec3) {
-    this.read();
+    this.wake(); this.read();
     let nearest = this.parts.findIndex(p => p.name === "torso");
     if (at) nearest = this.positions.reduce((best, p, i) => p.distance(at) < this.positions[best].distance(at) ? i : best, 0);
     const relative = at ? at.clone().sub(this.positions[nearest]) : new Vec3();
@@ -78,16 +119,29 @@ export class Ragdoll {
     this.read();
     const center = this.positions[0], delta = center.clone().sub(at), distance = delta.length();
     if (distance >= radius) return;
+    this.wake();
     delta.y = Math.max(0.3, delta.y); delta.normalize();
     const strength = (1 - distance / radius) * power;
     const mass = this.parts.reduce((sum, p) => sum + p.mass, 0);
     for (let i = 0; i < this.bodies.length; i++)
       this.bodies[i].applyImpulse(delta.clone().mulScalar(strength * this.parts[i].mass / mass), Vec3.ZERO);
   }
-  wake() { for (const b of this.bodies) b.applyImpulse(Vec3.ZERO, Vec3.ZERO); }
+  wake() {
+    if (this.frozen) {
+      this.frozen = false;
+      for (const body of this.bodies) {
+        body.setLinearVelocity(Vec3.ZERO); body.setAngularVelocity(Vec3.ZERO);
+        this.owner.world.addBody(body, BODYGROUP_USER_1, BODYGROUP_STATIC | BODYGROUP_USER_2);
+      }
+      this.connect(); this.owner.reactivated(this);
+      battlePerformance.count("ragdollsWoken");
+    }
+    this.quietTime = this.restClock = 0;
+    for (const body of this.bodies) body.activate();
+  }
   destroy() {
     for (const joint of this.joints.splice(0)) this.owner.world.destroyJoint(joint);
-    for (const body of this.bodies.splice(0)) { this.owner.world.removeBody(body); this.owner.world.destroyBody(body); }
+    for (const body of this.bodies.splice(0)) { if (!this.frozen) this.owner.world.removeBody(body); this.owner.world.destroyBody(body); }
     this.owner.ragdolls.delete(this);
   }
 }
@@ -102,6 +156,7 @@ export class RagdollPhysics {
   private supports = new WeakMap<Ragdoll, number[]>();
   private coverAge = Infinity;
   private revision = -1;
+  private terrainRevision = -1;
   constructor(readonly world: AmmoPhysicsWorld, readonly map: MapDefinition) {
     world.setGravity(new Vec3(0, -9.81, 0));
   }
@@ -124,14 +179,20 @@ export class RagdollPhysics {
     this.ragdolls.add(doll); this.coverAge = Infinity;
     return doll;
   }
+  reactivated(doll: Ragdoll) { this.coverAge = Infinity; this.supports.delete(doll); }
   private syncCover() {
+    const terrainRevision = this.map.destruction?.terrainRevision ?? this.map.destruction?.revision ?? 0;
     const centers = [...this.ragdolls].map(d => {
       d.read();
-      const old = this.supports.get(d), heights = d.positions.map(p => groundHeight(p.x, p.z, this.map));
-      if (old && heights.some((h, i) => Math.abs(h - old[i]) > 0.025)) d.wake();
-      this.supports.set(d, heights);
+      const old = this.supports.get(d);
+      if (!d.frozen || !old || terrainRevision !== this.terrainRevision) {
+        const heights = d.positions.map(p => groundHeight(p.x, p.z, this.map));
+        if (old && heights.some((h, i) => Math.abs(h - old[i]) > 0.025)) d.wake();
+        this.supports.set(d, heights);
+      }
       return d.positions[0];
     });
+    this.terrainRevision = terrainRevision;
     const desired = new Map<string, Box>();
     for (let i = 0; i < this.map.boxes.length; i++) {
       const b = this.map.boxes[i];
@@ -158,6 +219,7 @@ export class RagdollPhysics {
   }
   step(dt: number) {
     if (dt <= 0) return;
+    const updateStart = battlePerformance.begin();
     const revision = this.map.destruction?.revision ?? 0;
     this.coverAge += dt;
     if (this.coverAge >= 0.25 || revision !== this.revision) {
@@ -165,8 +227,14 @@ export class RagdollPhysics {
       this.revision = revision;
     }
     const start = battlePerformance.begin();
-    if (this.ragdolls.size) this.world.step(Math.min(dt, 0.1), 6, 1 / 60);
+    if ([...this.ragdolls].some(d => !d.frozen)) this.world.step(Math.min(dt, 0.1), 6, 1 / 60);
     battlePerformance.end("ragdollPhysics",start);
+    let frozen = 0;
+    for (const doll of this.ragdolls) if (doll.readyToFreeze(Math.min(dt, .1)) && frozen < 2) {
+      doll.freeze(); frozen++;
+      this.supports.set(doll, doll.positions.map(p => groundHeight(p.x, p.z, this.map)));
+    }
+    battlePerformance.end("ragdollUpdate", updateStart);
   }
   destroy() {
     for (const doll of [...this.ragdolls]) doll.destroy();

@@ -36,3 +36,12 @@ test("a cosmetic bullet hit preserves route checks pending a local explosion reb
   expect(extra).toBeLessThan(original/2);
  } finally {battlePerformance.enabled=false;battlePerformance.reset();}
 });
+
+test("incremental adjacency yields one new check at a time and preserves complete graph ordering",()=>{
+ const nodes=Array.from({length:100},(_,i)=>({x:i%10,z:Math.floor(i/10)})),keys=nodes.map(p=>`${p.x},${p.z}`);
+ const cache=new NavigationEdges();let calls=0;const first:Vec[]=[];
+ const work=cache.slices(nodes,keys,2,(a,b)=>{calls++;if(first.length<1)first.push(a);return a.x!==4 || b.x!==5;},[{x:9,z:9}]);
+ let result=work.next();expect(calls).toBe(1);expect(first[0].x).toBeGreaterThanOrEqual(4);
+ while(!result.done){const before=calls;result=work.next();expect(calls-before).toBeLessThanOrEqual(1);}
+ expect(result.value).toEqual(rebuild(nodes,2,(a,b)=>a.x!==4 || b.x!==5));
+});

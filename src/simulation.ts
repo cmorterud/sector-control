@@ -1,4 +1,4 @@
-import { NavigationEdges } from "./navigation-edges";
+import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
 import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction, type CombatCover } from "./combat-reaction";
 import { weaponDesign } from "./weapon-design";
@@ -1056,6 +1056,7 @@ export class Game {
     this.events = [];
     if (this.phase !== "playing") return;
     this.tick++;
+    advanceNavigation(this.map, this.players.filter(p => p.hp > 0));
     this.smokeClouds = this.smokeClouds.filter((s) => {
       if (this.tick < s.expiresAt) return true;
       this.emit({ type: "smokeEnd", cloud: s.id });
@@ -1977,16 +1978,29 @@ export class Game {
       // of discarding all its directed checks on the next path request.
       const memo = navigationSegments.get(this.map);
       if (memo && memo.revision === change.revision - 1) memo.revision = change.revision;
+      const cached = navigation.get(this.map), pending = navigationWork.get(this.map);
+      if (cached?.revision === change.revision - 1) cached.revision = change.revision;
+      if (pending) pending.revision = change.revision;
       this.collision.updateWorld?.(change);
       this.emit({ type: "destruction", actor, change });
       return;
     }
-    invalidateNavigationSegments(this.map, change);
-    navigation.delete(this.map);
+    const bounds = navigationChangeBounds(this.map, change);
+    invalidateNavigationSegments(this.map, change, bounds);
+    // Keep the last complete graph available while new checks are scheduled.
+    // Completed local checks survive cancellation by overlapping shell edits.
+    if (navigationWork.delete(this.map)) battlePerformance.count("navigationRestarts");
     this.collision.updateWorld?.(change);
     for (const p of this.players) {
-      p.path = [];
-      p.nextThink = this.tick + (p.id % 30);
+      let previous: Vec = p;
+      const affected = !bounds || p.path.some(point => {
+        const touches = navigationSegmentTouches(previous, point, bounds);
+        previous = point; return touches;
+      });
+      if (affected) {
+        p.path = [];
+        p.nextThink = this.tick + (p.id % 30);
+      }
       if (p.mantle) {
         const m = p.mantle;
         if (
@@ -2010,17 +2024,16 @@ export class Game {
 // Each map owns a cached height-aware navigation graph.
 const navigation = new WeakMap<
   MapDefinition,
-  { nodes: Vec[]; edges: number[][] }
+  { nodes: Vec[]; edges: number[][]; revision: number }
 >();
 // Reuse unchanged graph-edge walk checks across local explosions. Directed keys
 // preserve the original sample order and exact route tie-breaking.
 const navigationSegments = new WeakMap<MapDefinition, {revision:number;edges:NavigationEdges}>();
-function invalidateNavigationSegments(
-  map: MapDefinition,
-  change: DestructionChange,
-) {
-  const memo = navigationSegments.get(map);
-  if (!memo) return;
+export function navigationSegmentTouches(a: Vec, b: Vec, bounds: NavigationBounds) {
+  return Math.min(a.x,b.x) - .7 <= bounds.maxX && Math.max(a.x,b.x) + .7 >= bounds.minX &&
+    Math.min(a.z,b.z) - .7 <= bounds.maxZ && Math.max(a.z,b.z) + .7 >= bounds.minZ;
+}
+function navigationChangeBounds(map: MapDefinition, change: DestructionChange): NavigationBounds | undefined {
   let minX = Infinity,
     maxX = -Infinity,
     minZ = Infinity,
@@ -2044,13 +2057,55 @@ function invalidateNavigationSegments(
     const b = map.destruction?.objects[object.id]?.original;
     if (b) include(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
   }
-  memo.edges.invalidate(Number.isFinite(minX)?{minX,maxX,minZ,maxZ}:undefined);
+  return Number.isFinite(minX) ? {minX,maxX,minZ,maxZ} : undefined;
+}
+function invalidateNavigationSegments(map: MapDefinition, change: DestructionChange, bounds?: NavigationBounds) {
+  const memo = navigationSegments.get(map);
+  if (!memo) return;
+  memo.edges.invalidate(bounds);
   memo.revision = map.destruction?.revision ?? 0;
 }
-function graph(map: MapDefinition) {
+const navigationWork = new WeakMap<MapDefinition, {
+  revision: number;
+  nodes: Vec[];
+  work: Generator<void, number[][]>;
+}>();
+export const navigationChecksPerTick = 256;
+// A deterministic work limit keeps path scheduling independent of render FPS.
+export function advanceNavigation(map: MapDefinition, near: Vec[] = [], budget = navigationChecksPerTick) {
+  const revision = map.destruction?.revision ?? 0;
   const cached = navigation.get(map);
-  if (cached) return cached;
-  const profileStart = battlePerformance.begin();
+  if (cached?.revision === revision || (!cached && !revision)) return;
+  const start = battlePerformance.begin();
+  try {
+    let pending = navigationWork.get(map);
+    if (!pending || pending.revision !== revision) {
+      const { nodes, nodeKeys } = navigationNodes(map);
+      pending = { revision, nodes, work: navigationMemo(map).slices(nodes, nodeKeys, map.navSpacing,
+        (a,b) => { battlePerformance.count("navigationChecks"); return walkSegment(a,b,map); }, near) };
+      navigationWork.set(map, pending);
+    }
+    for (let i = 0; i < budget; i++) {
+      const result = pending.work.next();
+      if (result.done) {
+        navigation.set(map, { nodes: pending.nodes, edges: result.value, revision: pending.revision });
+        navigationWork.delete(map);
+        battlePerformance.count("navigationPublishes");
+        return;
+      }
+    }
+  } finally { battlePerformance.end("navigationSlice", start); }
+}
+function navigationMemo(map: MapDefinition) {
+  const revision = map.destruction?.revision ?? 0;
+  let memo = navigationSegments.get(map);
+  if (!memo || memo.revision !== revision) {
+    memo = { revision, edges: new NavigationEdges() };
+    navigationSegments.set(map, memo);
+  }
+  return memo.edges;
+}
+function navigationNodes(map: MapDefinition) {
   const step = map.navSpacing,
     nodes: Vec[] = [],
     nodeKeys: string[] = [];
@@ -2109,22 +2164,21 @@ function graph(map: MapDefinition) {
       [0, 1],
     ])
       add(crater.x + dx * crater.radius, crater.z + dz * crater.radius);
-  battlePerformance.end("navigationNodes",profileStart);
-  const edgeStart = battlePerformance.begin();
+  return { nodes, nodeKeys };
+}
+function graph(map: MapDefinition) {
   const revision = map.destruction?.revision ?? 0;
-  let memo = navigationSegments.get(map);
-  if (!memo || memo.revision !== revision) {
-    memo = { revision, edges:new NavigationEdges() };
-    navigationSegments.set(map, memo);
-  }
-  const edges = memo.edges.build(nodes,nodeKeys,step,(a,b)=>{
-    battlePerformance.count("navigationChecks");
-    return walkSegment(a,b,map);
+  const cached = navigation.get(map);
+  if (cached?.revision === revision) return cached;
+  const start = battlePerformance.begin();
+  const { nodes, nodeKeys } = navigationNodes(map);
+  const edges = navigationMemo(map).build(nodes, nodeKeys, map.navSpacing, (a,b) => {
+    battlePerformance.count("navigationChecks"); return walkSegment(a,b,map);
   });
-  battlePerformance.end("navigationEdges",edgeStart);
-  const result = { nodes, edges };
+  const result = { nodes, edges, revision };
   navigation.set(map, result);
-  battlePerformance.end("navigationBuild",profileStart);
+  navigationWork.delete(map);
+  battlePerformance.end("navigationBuild", start);
   return result;
 }
 export function prepareNavigation(map:MapDefinition) { graph(map); }
@@ -2132,9 +2186,12 @@ export function pathfind(
   a: Vec,
   b: Vec,
   map: MapDefinition = industrialMap,
+  deferred = false,
 ): Vec[] {
   if (walkSegment(a, b, map)) return [{ ...b }];
-  const { nodes, edges } = graph(map);
+  const available = deferred ? navigation.get(map) ?? ((map.destruction?.revision ?? 0) ? undefined : graph(map)) : graph(map);
+  if (!available) return [];
+  const { nodes, edges } = available;
   const closest = (p: Vec) =>
     nearestCandidates(nodes, p).find(({ i }) => walkSegment(p, nodes[i], map))
       ?.i;
@@ -2237,6 +2294,20 @@ function changeBotTarget(g: Game, p: Soldier, target: number) {
   p.focusUntil = 0;
   if (target >= 0) beginBotFocus(g, p);
 }
+const navigationSteps = new WeakMap<Soldier, { revision: number; point: Vec }>();
+export function safeBotDestination(g: Game, p: Soldier): Vec | undefined {
+  let dest: Vec | undefined = p.path[0];
+  const revision = g.map.destruction?.revision ?? 0;
+  const checked = navigationSteps.get(p);
+  if (dest && (checked?.revision !== revision || checked.point !== dest)) {
+    navigationSteps.set(p, { revision, point: dest });
+    if (!walkSegment(p, dest, g.map)) {
+      p.path = []; dest = undefined;
+      p.nextThink = Math.min(p.nextThink, g.tick + 1 + p.id % 5);
+    }
+  }
+  return dest;
+}
 export function botCommand(g: Game, p: Soldier): Command {
   if (!battlePerformance.enabled) return chooseBotCommand(g,p);
   const start = battlePerformance.begin();
@@ -2259,7 +2330,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   const station = firingPosition(g, p);
   if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;
-    if (station) p.path = pathfind(p, station, g.map);
+    if (station) p.path = pathfind(p, station, g.map, true);
     else {
       const ranks = g.sectors.map((s, i) => ({
         i,
@@ -2276,8 +2347,8 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       const current = ranks.find((rank) => rank.i === p.objective)!;
       if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
       if ((g.map.id === "village" || g.map.id === "verdun"))
-        planVillageMove(g, p, (a, b) => pathfind(a, b, g.map));
-      else p.path = pathfind(p, g.sectors[p.objective], g.map);
+        planVillageMove(g, p, (a, b) => pathfind(a, b, g.map, true));
+      else p.path = pathfind(p, g.sectors[p.objective], g.map, true);
     }
   }
   const range = Math.min(projectileRange - 1, g.botSettings.engagementRange);
@@ -2382,7 +2453,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     (p.path.length === 1 || walkSegment(p, p.path[1], g.map))
   )
     p.path.shift();
-  const dest = p.path[0];
+  const dest = safeBotDestination(g, p);
   if (
     dest &&
     (dist(p, objective) > (p.villagePlan ? 0.8 : station ? 0.15 : 4) ||

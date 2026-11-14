@@ -165,6 +165,7 @@ export class Renderer implements CollisionWorld {
     mesh: pc.Mesh;
     skin: pc.SkinInstance;
     ragdoll: Ragdoll;
+    poseVersion?: number;
     bones: pc.Entity[];
     x: number;
     z: number;
@@ -3109,8 +3110,11 @@ export class Renderer implements CollisionWorld {
         return false;
       }
       c.ragdoll.read();
-      for (let i = 0; i < c.bones.length; i++) {
-        c.bones[i].setPosition(c.ragdoll.positions[i]); c.bones[i].setRotation(c.ragdoll.rotations[i]);
+      if (c.poseVersion !== c.ragdoll.poseVersion) {
+        for (let i = 0; i < c.bones.length; i++) {
+          c.bones[i].setPosition(c.ragdoll.positions[i]); c.bones[i].setRotation(c.ragdoll.rotations[i]);
+        }
+        c.poseVersion = c.ragdoll.poseVersion;
       }
       c.entity.render!.meshInstances[0].setParameter(
         "material_opacity",
