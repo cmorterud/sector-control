@@ -4,6 +4,7 @@ import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
   groundHeight,
+  supportHeight,
   type MapDefinition,
   type Vec,
 } from "./map";
@@ -88,6 +89,7 @@ export function footSurface(
   boards = duckboards(map),
 ): "wood" | "mud" | "concrete" | "leaves" {
   if (!map.terrain) return "concrete";
+  if(map.buildings && p.y !== undefined && supportHeight(p.x,p.z,map,p.y+.05)>groundHeight(p.x,p.z,map)+.15)return "wood";
   if (
     villageRoad(map, p.x, p.z) > 0.7 &&
     groundHeight(p.x, p.z, map) > baseGroundHeight(p.x, p.z, map) - 0.15

@@ -73,14 +73,12 @@ export class ArtilleryMap {
     svg.setAttribute("viewBox", `0 0 ${g.map.width} ${g.map.depth}`);
     svg.setAttribute("preserveAspectRatio", "none");
     if (g.map.id === "village") {
-      for (const d of [
-        `M${g.map.width / 2},0 v${g.map.depth}`,
-        `M${g.map.width / 2 - 34},${g.map.depth / 2} h68`,
-      ]) {
+      for (const street of g.map.streets ?? []) {
+        const d=street.points.map((p,i)=>(i ? "L" : "M")+(p.x+g.map.width/2)+","+(p.z+g.map.depth/2)).join(" ");
         const road = document.createElementNS(svg.namespaceURI, "path");
         road.setAttribute("d", d);
         road.setAttribute("stroke", "#b1a587");
-        road.setAttribute("stroke-width", "5");
+        road.setAttribute("stroke-width", String(street.width));
         svg.append(road);
       }
 

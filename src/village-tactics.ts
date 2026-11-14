@@ -1,5 +1,7 @@
 import {
   blocked,
+  bodyBlocked,
+  supportHeight,
   dist,
   groundHeight,
   walkSegment,
@@ -30,7 +32,7 @@ const forward = (p: Soldier) => (p.team === "blue" ? 1 : -1);
 // Probe actual geometry toward the opposing approach, or a recently observed
 // threat. No hidden enemy position or future artillery plan is consulted.
 export function villageCover(g: Game, p: Soldier, at: Vec, observed = false) {
-  const y = groundHeight(at.x, at.z, g.map);
+  const y = at.y ?? groundHeight(at.x, at.z, g.map);
   const memory =
     observed && p.awareness.observed && g.tick - p.awareness.seenAt < 90
       ? p.awareness.observed
@@ -76,6 +78,10 @@ function posts(g: Game, p: Soldier) {
         cover: villageCover(g, p, at),
       });
     }
+  for(const building of g.map.buildings??[])for(const at of building.posts) {
+    if(at.y===undefined || bodyBlocked(at.x,at.z,at.y,.6,g.map) || Math.abs(supportHeight(at.x,at.z,g.map,at.y+.02)-at.y)>.1)continue;
+    found.push({...at,capture:false,cover:villageCover(g,p,at)});
+  }
   cache.set(key, { until: g.tick + 180, posts: found });
   return found;
 }
@@ -91,7 +97,7 @@ export function villageSpawn(g: Game, p: Soldier): Vec | null {
   const slot = Math.floor(p.teamIndex / routes.length),
     side = -forward(p);
   return {
-    x: entrance.x + side * (15 + ((slot % 4) - 1.5) * 1.8),
+    x: entrance.x + side * ((g.map.buildings ? 7 : 15) + ((slot % 4) - 1.5) * 1.8),
     z: entrance.z + (Math.floor(slot / 4) - 1.5) * 1.8,
   };
 }
@@ -112,7 +118,7 @@ export function planVillageMove(
     !!old && p.suppression > 0.3 && !villageCover(g, p, old.goal, true);
   const invalid =
     !!old &&
-    (blocked(old.goal.x, old.goal.z, 0.65, g.map) ||
+    ((old.goal.y !== undefined ? bodyBlocked(old.goal.x,old.goal.z,old.goal.y,.65,g.map) || Math.abs(supportHeight(old.goal.x,old.goal.z,g.map,old.goal.y+.02)-old.goal.y)>.1 : blocked(old.goal.x, old.goal.z, 0.65, g.map)) ||
       (old.revision !== g.map.destruction!.revision &&
         old.cover > villageCover(g, p, old.goal) + 0.1));
   if (
@@ -135,7 +141,8 @@ export function planVillageMove(
       p.weapon !== "machineGun" &&
       (flag.owner !== p.team || flag.contested) &&
       reserved.filter((q) => q.villagePlan!.capture).length < 3;
-    const candidates = posts(g, p)
+    const manorPost = !!g.map.buildings && !capture && p.teamIndex%11===4;
+    const candidates = posts(g, p).filter(at=>manorPost || at.y===undefined)
       .map((at, index) => {
         const distance = dist(at, flag);
         const crowd = allies.reduce(
@@ -149,10 +156,11 @@ export function planVillageMove(
           at,
           index,
           score:
+            (manorPost && at.y !== undefined ? -45 : 0) +
             crowd +
             dist(p, at) * 0.12 -
             knownCover * 11 +
-            (capture ? (at.capture ? 0 : 35) : Math.abs(distance - 7) * 0.8) +
+            (capture ? (at.capture ? 0 : 35) : manorPost ? 0 : Math.abs(distance - 7) * 0.8) +
             (stalled && old && dist(at, old.goal) < 3 ? 15 : 0) +
             // Stable individual preference breaks ties without combat RNG.
             ((index * 17 + p.id * 13) % 23) * 0.035,
@@ -169,12 +177,12 @@ export function planVillageMove(
     if (lane) {
       const end = lane.points.at(-1)!;
       const exit = { x: end.x + forward(p) * 9.3, z: end.z };
-      if ((exit.x - p.x) * forward(p) > 3) approach = exit;
+      if ((exit.x - p.x) * forward(p) > 3 && !blocked(exit.x,exit.z,.7,g.map)) approach = exit;
     }
     // Reachability matters more than a cover score. Only a bounded shortlist
     // needs full A*: the shared catalog uses cheap footprint/height checks.
     for (const { at } of candidates.slice(0, 10)) {
-      if (blocked(at.x, at.z, 0.65, g.map)) continue;
+      if (at.y !== undefined ? bodyBlocked(at.x,at.z,at.y,.65,g.map) : blocked(at.x, at.z, 0.65, g.map)) continue;
       if (
         capture &&
         !flagContains(g, { ...at, y: groundHeight(at.x, at.z, g.map) }, flag)
@@ -189,7 +197,7 @@ export function planVillageMove(
     if (chosen) {
       p.villagePlan = {
         objective: p.objective,
-        goal: { x: chosen.x, z: chosen.z },
+        goal: { x: chosen.x, z: chosen.z, ...(chosen.y===undefined ? {} : {y:chosen.y}) },
         approach,
         capture: chosen.capture,
         cover: villageCover(g, p, chosen),
@@ -259,7 +267,7 @@ export function villageSteering(
       dz = c.z / length;
     let steer = 0;
     for (const q of g.players) {
-      if (q === p || q.hp <= 0 || q.team !== p.team) continue;
+      if (q === p || q.hp <= 0 || q.team !== p.team || Math.abs(q.y-p.y)>1.8) continue;
       const x = q.x - p.x,
         z = q.z - p.z,
         d = Math.hypot(x, z);

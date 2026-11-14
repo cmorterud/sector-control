@@ -19,7 +19,9 @@ export function nearestCandidates(
     heap[b] = n;
   };
   for (let i = 0; i < points.length; i++) {
-    const d = Math.hypot(points[i].x - p.x, points[i].z - p.z);
+    const d = points[i].y === undefined
+      ? Math.hypot(points[i].x - p.x, points[i].z - p.z)
+      : Math.hypot(points[i].x - p.x, points[i].z - p.z, (points[i].y! - (p.y ?? 0)) * 2);
     // Equal-distance later indices sort after every candidate already visited.
     if (heap.length === limit && d >= heap[0].d) continue;
     const candidate = { i, d };

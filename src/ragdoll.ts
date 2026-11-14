@@ -1,6 +1,6 @@
 import { battlePerformance } from "./battle-performance";
 import { AmmoPhysicsWorld, Vec2, Vec3, Quat, Mat4, BODYGROUP_STATIC, BODYGROUP_USER_1, BODYGROUP_USER_2 } from "playcanvas";
-import { groundHeight, type MapDefinition, type Box } from "./map";
+import { groundHeight, supportHeight, type MapDefinition, type Box } from "./map";
 
 type Body = ReturnType<AmmoPhysicsWorld["createBody"]>;
 type Joint = ReturnType<AmmoPhysicsWorld["createJoint"]>;
@@ -186,7 +186,7 @@ export class RagdollPhysics {
       d.read();
       const old = this.supports.get(d);
       if (!d.frozen || !old || terrainRevision !== this.terrainRevision) {
-        const heights = d.positions.map(p => groundHeight(p.x, p.z, this.map));
+        const heights = d.positions.map(p => supportHeight(p.x, p.z, this.map, p.y));
         if (old && heights.some((h, i) => Math.abs(h - old[i]) > 0.025)) d.wake();
         this.supports.set(d, heights);
       }
@@ -212,7 +212,7 @@ export class RagdollPhysics {
     for (const [id, box] of desired) if (!this.cover.has(id)) {
       const shape = this.world.createShape({ type: "box", halfExtents: new Vec3(box.w / 2, box.h / 2, box.d / 2) });
       const body = this.world.createBody({ type: "static", mass: 0, shape,
-        position: new Vec3(box.x, (box.baseY ?? 0) + box.h / 2, box.z), rotation: new Quat(), entity: null });
+        position: new Vec3(box.x, (box.baseY ?? 0) + box.h / 2, box.z), rotation: new Quat().setFromEulerAngles(0,0,(box.architecture?.roofPitch??0)*180/Math.PI), entity: null });
       this.world.addBody(body, BODYGROUP_USER_2, BODYGROUP_USER_1);
       this.cover.set(id, { body, shape, box: { ...box }, signature: `${box.x}:${box.z}:${box.w}:${box.h}:${box.d}:${box.baseY ?? 0}` });
     }
@@ -232,7 +232,7 @@ export class RagdollPhysics {
     let frozen = 0;
     for (const doll of this.ragdolls) if (doll.readyToFreeze(Math.min(dt, .1)) && frozen < 2) {
       doll.freeze(); frozen++;
-      this.supports.set(doll, doll.positions.map(p => groundHeight(p.x, p.z, this.map)));
+      this.supports.set(doll, doll.positions.map(p => supportHeight(p.x, p.z, this.map, p.y)));
     }
     battlePerformance.end("ragdollUpdate", updateStart);
   }

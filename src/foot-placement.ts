@@ -1,4 +1,4 @@
-import {groundHeight,type MapDefinition} from './map';
+import {supportHeight,type MapDefinition} from './map';
 
 export const footRules={thigh:.42,calf:.4,sole:.1125,near:26,far:32,maxGroundDelta:.34};
 export type FootContact={x:number;y:number;z:number;stance:boolean;yaw:number;revision:number;pitch?:number;roll?:number};
@@ -16,7 +16,7 @@ export function footCycle(phase:number,motion:number,sprint:number,crouch:number
 // nearby vertical trench wall is not a surface that can pull the boot upward.
 export function footSupport(map:MapDefinition,x:number,z:number,yaw:number,rootY:number){
  const c=Math.cos(yaw),s=Math.sin(yaw);
- const sample=(dx:number,dz:number)=>groundHeight(x+c*dx-s*dz,z+s*dx+c*dz,map);
+ const sample=(dx:number,dz:number)=>supportHeight(x+c*dx-s*dz,z+s*dx+c*dz,map,rootY+.23);
  const center=sample(0,0),toe=sample(0,-.18),heel=sample(0,.07),left=sample(-.08,0),right=sample(.08,0);
  if([center,toe,heel,left,right].some(y=>!Number.isFinite(y)||Math.abs(y-rootY)>footRules.maxGroundDelta))return null;
  const pitch=clamp(-Math.atan2(heel-toe,.25),-.38,.38),roll=clamp(Math.atan2(right-left,.16),-.3,.3);

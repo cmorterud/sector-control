@@ -7,6 +7,7 @@ const smooth = (a: number, b: number, n: number) => {
   const t = clamp((n - a) / (b - a));
   return t * t * (3 - 2 * t);
 };
+const streetSegments=new WeakMap<NonNullable<MapDefinition["streets"]>,Segment[]>();
 type Segment = { a: Vec; b: Vec; width?:number };
 function distance(p: Vec, { a, b }: Segment) {
   const dx = b.x - a.x,
@@ -54,6 +55,13 @@ function context(map: MapDefinition) {
 // a separate road mesh floating over an excavated crater.
 export function villageRoad(map: MapDefinition, x: number, z: number) {
   if (map.id !== "village") return 0;
+  if(map.streets) {
+    let segments=streetSegments.get(map.streets);
+    if(!segments){segments=map.streets.flatMap(s=>s.points.slice(1).map((b,i)=>({a:s.points[i],b,width:s.width})));streetSegments.set(map.streets,segments);}
+    let value=0;const p={x,z};
+    for(const segment of segments)value=Math.max(value,1-smooth(segment.width!/2-.6,segment.width!/2+.6,distance(p,segment)));
+    return value;
+  }
   const edge = (lookNoise(x * 0.28 + 53, z * 0.28) - 0.5) * 1.1;
   const main = 1 - smooth(2.6 + edge, 4.1 + edge, Math.abs(x));
   const cross =

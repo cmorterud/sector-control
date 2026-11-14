@@ -40,7 +40,7 @@ it("connects both spawn formations through sunken approaches to every flag", () 
 });
 it("turns ruined walls into low rubble cover and persists excavation without editing the source map", () => {
   const g = scene(),
-    wall = g.map.boxes.find((b) => b.id === "village-school-wall--4--4")!;
+    wall = g.map.boxes.find((b) => b.id === "village-school-north-0-1-0")!;
   expect(wall).toBeDefined();
   const point = { x: wall.x, y: (wall.baseY ?? 0) + 0.7, z: wall.z - 0.5 };
   const before = groundHeight(point.x, point.z, g.map);
@@ -50,7 +50,7 @@ it("turns ruined walls into low rubble cover and persists excavation without edi
   expect(
     g.map.boxes.some(
       (b) =>
-        b.kind === "rubble" && Math.hypot(b.x - point.x, b.z - point.z) < 3,
+        b.kind === "rubble" && Math.hypot(b.x - point.x, b.z - point.z) < 6,
     ),
   ).toBe(true);
   expect(groundHeight(point.x, point.z, g.map)).toBeLessThan(before);
@@ -59,14 +59,14 @@ it("turns ruined walls into low rubble cover and persists excavation without edi
 });
 it("keeps a distinct paved road and makes excavated paving sound like earth", () => {
   const g = scene();
-  expect(villageRoad(g.map, 0, 18)).toBe(1);
+  expect(villageRoad(g.map, 23, 18)).toBe(1);
   expect(villageRoad(g.map, 15, 18)).toBe(0);
-  expect(footSurface({ x: 0, z: 18 }, g.map)).toBe("concrete");
-  g.explode({ x: 0, z: 18, y: groundHeight(0, 18, g.map) + 0.02 }, -1, null, {
+  expect(footSurface({ x: 23, z: 18 }, g.map)).toBe("concrete");
+  g.explode({ x: 23, z: 18, y: groundHeight(23, 18, g.map) + 0.02 }, -1, null, {
     ...artilleryExplosionProfile,
     damage: 0,
   });
-  expect(footSurface({ x: 0, z: 18 }, g.map)).toBe("mud");
+  expect(footSurface({ x: 23, z: 18 }, g.map)).toBe("mud");
 });
 it("lets both teams advance and contest the village in a live 100-soldier battle", () => {
   const g = scene(true);

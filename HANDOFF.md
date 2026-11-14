@@ -2,7 +2,7 @@
 
 Updated November 14, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
-Latest design discussion: [PLAYTEST_FEEDBACK.md](PLAYTEST_FEEDBACK.md) preserves the friend's feedback and the proposed nine-building Village Front layout, including the two-story destructible manor. This is a proposal; implementation awaits approval.
+Latest design discussion: [PLAYTEST_FEEDBACK.md](PLAYTEST_FEEDBACK.md) preserves the friend's feedback and approved nine-building Village Front layout. November 14: first implementation adds a 180×160 m village, nine standing buildings, four corner flags, pitched destructible roofs, protected gardens/streets and a two-story manor. Height-aware support, stair movement and navigation distinguish upstairs/downstairs; connected structural modules open local breaches and collapse after support loss. Village-focused 20 tests and 19 foundation regressions pass; strict TypeScript passes. Native Chrome inspection service failed to start. Final full-suite/performance validation and publication follow; this entry does not claim they are complete.
 
 ## Movement polish — live version 30
 

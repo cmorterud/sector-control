@@ -1,3 +1,5 @@
+import { nearestBoxPoint } from "./box-geometry";
+import { settleBuildings } from "./building-destruction";
 import { collapsedStructureParts, isStructure } from "./landmarks";
 import { fallenTreeParts, timberSupport } from "./vegetation";
 import { craterShape, craterSampler, type CraterShape } from "./crater-shape";
@@ -199,14 +201,7 @@ export function deformExplosion(
     if (profile.kind === "flame" && !["wood", "tree", "brush", "log"].includes(object.original.kind)) continue;
     const box = object.original,
       base = box.baseY ?? 0;
-    const nearest = {
-      x: Math.max(box.x - box.w / 2, Math.min(box.x + box.w / 2, at.x)),
-      y: Math.max(
-        base,
-        Math.min(base + box.h * (object.stage === 1 ? 0.6 : 1), at.y),
-      ),
-      z: Math.max(box.z - box.d / 2, Math.min(box.z + box.d / 2, at.z)),
-    };
+    const nearest = nearestBoxPoint(at, { ...box, h: box.h * (object.stage===1 && !box.architecture ? .6 : 1) });
     const distance = Math.hypot(
       nearest.x - at.x,
       nearest.y - at.y,
@@ -555,10 +550,11 @@ function applyCoverChanges(
     object.hp = change.hp;
     object.stage = change.stage as 0 | 1 | 2;
     const box = map.boxes.find((b) => b.id === object.id);
-    if (box && object.stage === 1) box.h = object.original.h * 0.6;
+    if (box && object.stage === 1 && !box.architecture) box.h = object.original.h * 0.6;
     if (object.stage === 2)
       map.boxes = map.boxes.filter((b) => b.id !== object.id);
-    if (isStructure(object.original) && was !== 2 && object.stage === 2) {
+    if (object.original.architecture && was !== 2 && object.stage===2) collapses.push(object.id);
+    if (!object.original.architecture && isStructure(object.original) && was !== 2 && object.stage === 2) {
       collapses.push(object.id);
       for (const part of collapsedStructureParts(map, object)) {
         const hp = 110;
@@ -593,7 +589,7 @@ function applyCoverChanges(
   for (const change of changes.slice()) apply(change);
   const collapseUnsupportedRoofs = () => {
     for (const roof of Object.values(state.objects)) {
-      if (roof.stage === 2 || !roof.original.supports) continue;
+      if (roof.stage === 2 || !roof.original.supports || roof.original.architecture) continue;
       const remaining = roof.original.supports.filter((id) => {
         const support = state.objects[id];
         return (
@@ -612,6 +608,7 @@ function applyCoverChanges(
     }
   };
   collapseUnsupportedRoofs();
+  if(map.buildings) settleBuildings(map,changes,apply);
   if (!bounds) return collapses;
   for (const object of Object.values(state.objects)) {
     if (object.stage === 2) continue;
@@ -623,6 +620,9 @@ function applyCoverChanges(
       b.z - b.d / 2 - 0.5 > bounds[3]
     )
       continue;
+    if(b.architecture && !b.supports && groundHeight(b.x,b.z,map)<(b.baseY??0)-.45) {
+      const change={id:object.id,hp:0,stage:2};changes.push(change);apply(change);continue;
+    }
     // A blast can excavate beneath cover that was shielded from its pressure.
     // Store the ground footing separately from raised fence rails so unsupported
     // farm props disappear with their colliders rather than hanging over holes.
@@ -704,6 +704,7 @@ function applyCoverChanges(
     }
   }
   collapseUnsupportedRoofs();
+  if(map.buildings) settleBuildings(map,changes,apply);
   return collapses;
 }
 

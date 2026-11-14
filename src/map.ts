@@ -4,7 +4,7 @@ import type { Landmark } from "./landmarks";
 import type { DestructionState } from "./destruction";
 export const terrainResolution = 0.25;
 export const terrainPatchSize = 8;
-export type Vec = { x: number; z: number };
+export type Vec = { x: number; z: number; y?: number };
 export type Box = Vec & {
   id?: string;
   w: number;
@@ -31,6 +31,15 @@ export type Box = Vec & {
   baseY?: number;
   farmProp?: "crate" | "cart" | "fence" | "relayMast" | "radio";
   footingY?: number;
+  architecture?: {
+    building: string;
+    part: "wall" | "floor" | "roof" | "stair" | "detail";
+    level: number;
+    bearing?: boolean;
+    tint?: string;
+    roofPitch?: number;
+  };
+  walkable?: boolean;
   treeStyle?: "bare" | "snapped" | "sparse" | "pine";
 };
 export const sectors = [
@@ -113,6 +122,12 @@ export interface MapDefinition {
   depth: number;
   navSpacing: number;
   navigationPoints?: Vec[];
+  buildings?: {
+    id: string; name: string; x: number; z: number; w: number; d: number;
+    stories: number; baseY: number; flag?: string;
+    posts: Vec[];
+  }[];
+  streets?: { points: Vec[]; width: number }[];
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
@@ -467,12 +482,32 @@ function nearbyCover(
   }
   return lookup.cells.get(`${Math.floor(x / 8)},${Math.floor(z / 8)}`) ?? noCover;
 }
+// Floors and stair treads are explicit solids, separate from the height field.
+// Select only support reachable from the actor's current height: the same x/z
+// can be a downstairs room or an upstairs landing, without snapping between.
+export function supportHeight(x: number, z: number, map: MapDefinition, maxY = Infinity): number {
+  let height = groundHeight(x, z, map);
+  if (!map.buildings) return height;
+  for (const b of nearbyCover(x, z, 0, map)) {
+    const top = (b.baseY ?? 0) + b.h;
+    if (b.walkable && top <= maxY + 0.001 && top > height &&
+      Math.abs(x - b.x) <= b.w / 2 + 0.001 && Math.abs(z - b.z) <= b.d / 2 + 0.001)
+      height = top;
+  }
+  return height;
+}
+export function bodyBlocked(x: number, z: number, feet: number, r: number, map: MapDefinition, bodyHeight = 1.8): boolean {
+  return Math.abs(x) > map.width / 2 - 1 - r || Math.abs(z) > map.depth / 2 - 1 - r ||
+    nearbyCover(x, z, r, map).some(b => Math.abs(x-b.x) < b.w/2+r && Math.abs(z-b.z) < b.d/2+r &&
+      (b.baseY ?? 0) + b.h > feet + (b.walkable ? 0.23 : 0.025) && (b.baseY ?? 0) < feet + bodyHeight - 0.025);
+}
 export function blocked(
   x: number,
   z: number,
   r = 0.5,
   map: MapDefinition = industrialMap,
 ): boolean {
+  if (map.buildings) return bodyBlocked(x, z, groundHeight(x, z, map), r, map);
   return (
     Math.abs(x) > map.width / 2 - 1 - r ||
     Math.abs(z) > map.depth / 2 - 1 - r ||
@@ -485,17 +520,18 @@ export function blocked(
   );
 }
 export function moveOnMap(
-  p: Vec & { y?: number; fall?: unknown; hop?: { velocity: number } | null },
+  p: Vec & { y?: number; fall?: unknown; hop?: { velocity: number } | null; crouched?: boolean },
   d: Vec,
   map: MapDefinition = industrialMap,
 ): Vec {
   const steps = Math.max(1, Math.ceil(Math.hypot(d.x, d.z) / 0.15));
   let x = p.x,
     z = p.z;
-  const airborne = p.y !== undefined && p.y > groundHeight(x, z, map) + 0.23;
+  let support = supportHeight(x, z, map, (p.y ?? groundHeight(x,z,map)) + 0.23);
+  const airborne = p.y !== undefined && p.y > support + 0.23;
   const canMove = (nx: number, nz: number) => {
-    const ground = groundHeight(x, z, map),
-      next = groundHeight(nx, nz, map);
+    const ground = support,
+      next = supportHeight(nx, nz, map, (airborne ? p.y! : ground) + 0.23);
     const feet = airborne ? p.y! : ground;
     // A rounded bank is continuous: checking only this frame's small delta
     // would let a slow soldier creep up a wall that stops a sprinting one.
@@ -518,6 +554,7 @@ export function moveOnMap(
       Math.abs(nz) > map.depth / 2 - 1.45
     )
       return false;
+    if (map.buildings) return !bodyBlocked(nx,nz,Math.max(feet,next),0.45,map,p.crouched ? 1.25 : 1.8);
     return !nearbyCover(nx, nz, 0.45, map).some((b) => {
       if (
         Math.abs(nx - b.x) >= b.w / 2 + 0.45 ||
@@ -547,11 +584,11 @@ export function moveOnMap(
   };
   for (let i = 0; i < steps; i++) {
     const nx = x + d.x / steps;
-    if (canMove(nx, z)) x = nx;
+    if (canMove(nx, z)) { x = nx; support = supportHeight(x,z,map,(airborne ? p.y! : support)+0.23); }
     const nz = z + d.z / steps;
-    if (canMove(x, nz)) z = nz;
+    if (canMove(x, nz)) { z = nz; support = supportHeight(x,z,map,(airborne ? p.y! : support)+0.23); }
   }
-  return { x, z };
+  return map.buildings ? { x, z, y: airborne ? p.y : support } : { x, z };
 }
 export function walkSegment(
   a: Vec,
@@ -559,15 +596,15 @@ export function walkSegment(
   map: MapDefinition = industrialMap,
 ): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / 0.25));
-  let height = groundHeight(a.x, a.z, map);
+  let height = map.buildings ? a.y ?? groundHeight(a.x, a.z, map) : groundHeight(a.x, a.z, map);
   for (let i = 0; i <= n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
       z = a.z + ((b.z - a.z) * i) / n;
-    const next = groundHeight(x, z, map);
-    if (blocked(x, z, 0.6, map) || Math.abs(next - height) > 0.23) return false;
+    const next = supportHeight(x, z, map, height + 0.23);
+    if ((map.buildings ? bodyBlocked(x,z,next,0.6,map) : blocked(x,z,0.6,map)) || Math.abs(next - height) > 0.23) return false;
     height = next;
   }
-  return true;
+  return !map.buildings || Math.abs(height - (b.y ?? groundHeight(b.x,b.z,map))) < 0.23;
 }
 export const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.z - b.z);
 

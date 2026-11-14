@@ -1,3 +1,4 @@
+import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
 import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction, type CombatCover } from "./combat-reaction";
@@ -63,6 +64,8 @@ import {
   dist,
   industrialMap,
   groundHeight,
+  supportHeight,
+  bodyBlocked,
   moveOnMap,
   mantleLanding,
   mantleRoute,
@@ -642,6 +645,7 @@ export class TestCollision implements CollisionWorld {
       maxZ = Math.max(a.z, b.z);
     // Exact slabs matter for short grenade sweeps and very thin timber panels.
     for (const box of this.rayBoxes(minX, maxX, minZ, maxZ)) {
+      if(box.architecture?.roofPitch) { nearest=Math.min(nearest,pitchedBoxRay(a,b,box));continue; }
       // Most bullet/near-miss/canister sweeps are short. Reject distant boxes
       // before allocating slab endpoints and testing all three axes.
       if (
@@ -1189,7 +1193,8 @@ export class Game {
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
         p.x = pos.x;
         p.z = pos.z;
-        const ground = groundHeight(p.x, p.z, this.map);
+        if (pos.y !== undefined && !p.hop && !p.fall) p.y = pos.y;
+        const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
         if (p.hop) this.advanceHop(p);
         else {
           if (!p.fall && p.y - ground > 0.23) this.startFall(p);
@@ -1344,7 +1349,7 @@ export class Game {
     const h = p.hop!;
     const next = p.y + h.velocity / 30 - hopGravity / (2 * 30 * 30);
     h.velocity -= hopGravity / 30;
-    const ground = groundHeight(p.x, p.z, this.map);
+    const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
     let height = Math.max(ground, next);
     if (height > p.y) {
       const from = { x: p.x, y: p.y + 1.9, z: p.z };
@@ -1381,7 +1386,7 @@ export class Game {
   }
   private advanceFall(p: Soldier) {
     const fall = p.fall!;
-    const ground = groundHeight(p.x, p.z, this.map);
+    const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
     p.y += fall.velocity / 30 - hopGravity / (2 * 30 * 30);
     fall.velocity -= hopGravity / 30;
     p.mode = "Falling";
@@ -1689,7 +1694,7 @@ export class Game {
       victim.combatReaction = victim.combatCover = null;
       victim.hop = null;
       victim.fall = null;
-      victim.y = groundHeight(victim.x, victim.z, this.map);
+      victim.y = supportHeight(victim.x, victim.z, this.map, victim.y + 0.23);
       this.emit({ type: "death", actor: victim.id });
     }
   }
@@ -2012,7 +2017,7 @@ export class Game {
         p.mantle = null;
         p.landedAt = this.tick;
       }
-      const ground = groundHeight(p.x, p.z, this.map);
+      const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23);
       if (!p.hop && !p.fall) {
         if (p.hp > 0 && p.y - ground > 0.23) this.startFall(p);
         else p.y = ground;
@@ -2110,18 +2115,20 @@ function navigationNodes(map: MapDefinition) {
     nodes: Vec[] = [],
     nodeKeys: string[] = [];
   const unique = new Set<string>();
-  const add = (x: number, z: number) => {
-    const key = `${x},${z}`;
-    if (!unique.has(key) && !blocked(x, z, 0.7, map)) {
+  const add = (x: number, z: number, y?: number) => {
+    if(map.buildings) y ??= groundHeight(x,z,map);
+    const key = `${x},${z}${y === undefined ? "" : ","+y}`;
+    if (!unique.has(key) && !(map.buildings ? bodyBlocked(x,z,y!,.6,map) || Math.abs(supportHeight(x,z,map,y!+.02)-y!)>.1 : blocked(x, z, 0.7, map))) {
       unique.add(key);
-      nodes.push({ x, z });
+      nodes.push(y === undefined ? { x, z } : { x, z, y });
       nodeKeys.push(key);
     }
   };
   for (let x = -map.width / 2 + step; x <= map.width / 2 - step; x += step)
     for (let z = -map.depth / 2 + step; z <= map.depth / 2 - step; z += step)
       add(x, z);
-  for (const point of map.navigationPoints ?? []) add(point.x, point.z);
+  for (const point of map.navigationPoints ?? []) add(point.x, point.z, point.y);
+  for(const b of map.buildings??[])for(const post of b.posts)add(post.x,post.z,post.y);
   // Include the actual ends/middle of narrow ramps. A regular lattice alone can
   // strand one mirrored firing step when a node falls exactly on a bank edge.
   for (const r of map.terrain?.ramps ?? []) {
@@ -2449,6 +2456,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   const objective = station ?? p.villagePlan?.goal ?? g.sectors[p.objective];
   while (
     p.path.length &&
+    (!g.map.buildings || Math.abs(p.y-(p.path[0].y ?? groundHeight(p.path[0].x,p.path[0].z,g.map)))<.24) &&
     dist(p, p.path[0]) < (station ? (p.path.length === 1 ? 0.15 : 0.6) : 1) &&
     (p.path.length === 1 || walkSegment(p, p.path[1], g.map))
   )

@@ -58,7 +58,7 @@ it("reserves distinct reachable capture and covering positions instead of sendin
   for (const p of soldiers) {
     p.objective = 1;
     plan(g, p);
-    expect(p.villagePlan).toBeTruthy();
+    expect(p.villagePlan, "soldier " + p.id).toBeTruthy();
   }
   const goals = soldiers.map((p) => p.villagePlan!.goal);
   expect(new Set(goals.map((p) => `${p.x},${p.z}`)).size).toBe(12);
@@ -149,7 +149,7 @@ it("rechecks physical cover after an explosion and drops a destroyed protective 
 it("moves toward cover under distant fire, then crouches behind real low cover when reloading", () => {
   const g = scene(),
     p = g.players[1];
-  p.x = -15;
+  p.x = -23;
   p.z = 5;
   p.y = groundHeight(p.x, p.z, g.map);
   p.objective = 2;
@@ -160,7 +160,7 @@ it("moves toward cover under distant fire, then crouches behind real low cover w
   expect(c.fire).toBe(false);
   expect(c.aim).toBe(false);
   // Probe points beside the authored low garden walls, not an invented cover flag.
-  const at = { x: -11.2, z: 14 };
+  const at = { x: -60.9, z: 36 };
   p.x = at.x;
   p.z = at.z;
   p.y = groundHeight(p.x, p.z, g.map);
@@ -174,7 +174,7 @@ it("moves toward cover under distant fire, then crouches behind real low cover w
 it("does not give hidden enemy positions to the cover planner", () => {
   const g = scene(),
     p = g.players[1],
-    at = { x: -11.2, z: 14 };
+    at = { x: -60.9, z: 36 };
   const initial = villageCover(g, p, at, true);
   for (const q of g.players.filter((q) => q.team !== p.team)) {
     q.x = at.x - 4;
@@ -227,7 +227,7 @@ it("disperses the opening 100-soldier advance instead of accumulating a dense st
   );
   expect(Math.max(...neighbors)).toBeLessThanOrEqual(8);
   expect(neighbors.filter((n) => n >= 5).length).toBeLessThanOrEqual(10);
-  expect(live.filter((p) => Math.abs(p.x) < 34).length).toBeGreaterThan(75);
+  expect(live.filter((p) => Math.abs(p.x) < 60).length).toBeGreaterThan(75);
   expect(
     live.filter((p) => p.villagePlan && p.villagePlan.cover > 0).length,
   ).toBeGreaterThan(25);
@@ -238,18 +238,18 @@ it("passes approaching teammates on opposite world sides without steering throug
     a = g.players[1],
     b = g.players[2];
   for (const p of g.players) if (p !== a && p !== b) p.hp = 0;
-  a.x = -14;
-  a.z = 5;
+  a.x = -24;
+  a.z = 18;
   a.y = groundHeight(a.x, a.z, g.map);
   a.vx = 4;
-  b.x = -12.3;
-  b.z = 5;
+  b.x = -22.3;
+  b.z = 18;
   b.y = groundHeight(b.x, b.z, g.map);
   b.vx = -4;
   plan(g, a);
   plan(g, b);
-  a.villagePlan!.goal = { x: 20, z: 5 };
-  b.villagePlan!.goal = { x: -30, z: 5 };
+  a.villagePlan!.goal = { x: 20, z: 18 };
+  b.villagePlan!.goal = { x: -30, z: 18 };
   const ca = { ...idle(), x: 1 },
     cb = { ...idle(), x: -1 };
   villageSteering(g, a, ca, Infinity);
