@@ -35,8 +35,10 @@ export const verdunFlankX = (x: number) => x + (x < 0 ? -24 : x > 0 ? 24 : 0);
 export const verdunWoodland: Woodland = {
   belts: originalWoodland.belts.map(b => ({ ...b, x: verdunFlankX(b.x) })),
   groves: [
-    {x:-15,z:-16,radiusX:5.5,radiusZ:5}, {x:15,z:-17,radiusX:5.5,radiusZ:5},
-    {x:-15,z:17,radiusX:6,radiusZ:5}, {x:16,z:16,radiusX:5,radiusZ:6},
+    {x:-18,z:-14,radiusX:12,radiusZ:7}, {x:18,z:-15,radiusX:13,radiusZ:7},
+    {x:-18,z:14,radiusX:12,radiusZ:7}, {x:19,z:14,radiusX:13,radiusZ:7},
+    {x:-12,z:-33,radiusX:14,radiusZ:10}, {x:15,z:-34,radiusX:14,radiusZ:10},
+    {x:-13,z:34,radiusX:14,radiusZ:10}, {x:15,z:35,radiusX:14,radiusZ:10},
   ],
   tracks: [
     ...originalWoodland.tracks.map(t => ({...t,points:t.points.map(p => ({...p,x:verdunFlankX(p.x)}))})),
@@ -80,6 +82,8 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
     if (Object.values(map.spawn).some((s) => dist(s, b) < 15)) return false;
     if (map.sectors.some((s) => dist(s, b) < (s.name === "Broken Relay" ? 8 : 5))) return false;
     if (map.terrain?.ramps.some((r) => Math.abs(r.x - b.x) < (r.w + b.w) / 2 + .9 && Math.abs(r.z - b.z) < (r.d + b.d) / 2 + .9)) return false;
+    if (map.terrain?.rectangles.some(r => r.h < map.terrain!.bankHeight &&
+      Math.abs(r.x-b.x) < (r.w+b.w)/2+.8 && Math.abs(r.z-b.z) < (r.d+b.d)/2+.8)) return false;
     if (trackDistance(b, woodland) < clearance + Math.max(b.w, b.d) / 2) return false;
     if ([...map.boxes, ...parts].some((q) => Math.abs(q.x - b.x) < (q.w + b.w) / 2 + clearance && Math.abs(q.z - b.z) < (q.d + b.d) / 2 + clearance)) return false;
     const levels: number[] = [];
@@ -129,16 +133,16 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   seed = 0xc37a1917;
   for (const [groveIndex, grove] of (woodland.groves ?? []).entries()) {
     let count = 0;
-    for (let attempt = 0; attempt < 240 && count < 6; attempt++) {
+    for (let attempt = 0; attempt < 600 && count < 14; attempt++) {
       const angle = random() * Math.PI * 2, radius = Math.sqrt(random());
       const x = grove.x + Math.cos(angle) * radius * grove.radiusX;
       const z = grove.z + Math.sin(angle) * radius * grove.radiusZ;
       // Three broad breaks cross the field. Trunks can interrupt other lines,
       // giving attackers real cover without forming a continuous tree screen.
-      if ([-20, 1, 22].some(lane => Math.abs(z - lane) < 2.4)) continue;
-      if (parts.some(b => b.kind === "tree" && dist(b, { x, z }) < 3.1)) continue;
+      if ([-20, 1, 22].some(lane => Math.abs(z - lane) < 3.2)) continue;
+      if (parts.some(b => b.kind === "tree" && dist(b, { x, z }) < 2.8)) continue;
       const choice = random();
-      const treeStyle: Box["treeStyle"] = choice < .3 ? "pine" : choice < .5 ? "sparse" : choice < .85 ? "bare" : "snapped";
+      const treeStyle: Box["treeStyle"] = choice < .45 ? "pine" : choice < .6 ? "sparse" : choice < .9 ? "bare" : "snapped";
       const diameter = .65 + random() * .25;
       const h = treeStyle === "snapped" ? 3 + random() * 1.7 : 6 + random() * 2.5;
       if (place({ id: `verdun-wood-central-${groveIndex}-${count}`, kind: "tree", x, z, w: diameter, d: diameter, h, treeStyle }, .5)) count++;

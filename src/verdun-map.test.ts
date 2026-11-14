@@ -20,22 +20,27 @@ test("Verdun initializes French and German rosters with five reachable open obje
  }
 });
 
-test("forms mixed woodland flanks and small separated central groves with low undergrowth and clear objectives", () => {
+test("forms dense broken woods on both sides of the relay with low undergrowth and clear objectives", () => {
  const trees = verdunMap.vegetation!.filter(b=>b.kind==="tree");
- expect(trees.length).toBeGreaterThanOrEqual(100);
- expect(trees.length).toBeLessThanOrEqual(155);
- expect(trees.filter(treeHasCrown).length).toBeGreaterThan(40);
+ expect(trees.length).toBeGreaterThanOrEqual(220);
+ expect(trees.length).toBeLessThanOrEqual(240);
+ expect(trees.filter(treeHasCrown).length).toBeGreaterThan(115);
  expect(new Set(trees.map(b=>b.treeStyle)).size).toBe(4);
  for(const side of [-1,1])expect(trees.filter(b=>b.z*side>28).length).toBeGreaterThan(35);
  const central = trees.filter(b=>b.id!.startsWith("verdun-wood-central"));
- expect(central.length).toBeGreaterThanOrEqual(20);
- expect(central.length).toBeLessThanOrEqual(24);
- for (let i=0;i<4;i++)expect(central.filter(b=>b.id!.startsWith(`verdun-wood-central-${i}-`)).length).toBeGreaterThanOrEqual(4);
+ expect(central.length).toBeGreaterThanOrEqual(96);
+ expect(central.length).toBeLessThanOrEqual(112);
+ for (let i=0;i<8;i++)expect(central.filter(b=>b.id!.startsWith(`verdun-wood-central-${i}-`)).length).toBeGreaterThanOrEqual(10);
  for (const side of [-1,1]) {
   expect(central.some(b=>b.x*side>0)).toBe(true);
   expect(central.some(b=>b.z*side>0)).toBe(true);
  }
- expect(central.every(b=>Math.abs(b.x)<24 && Math.abs(b.z)<22)).toBe(true);
+ expect(central.every(b=>Math.abs(b.x)<33 && Math.abs(b.z)<46)).toBe(true);
+ // Fill the formerly bare bands beside C, including their outer extensions.
+ for(const side of [-1,1]) for(const end of [-1,1]) {
+  expect(central.filter(b=>b.x*side>0&&b.z*end>0&&Math.abs(b.z)<22).length).toBeGreaterThanOrEqual(10);
+  expect(central.filter(b=>b.x*side>0&&b.z*end>26).length).toBeGreaterThanOrEqual(10);
+ }
  for(const b of trees) {
   expect(woodlandDensity(verdunMap.woodland!,b.x,b.z)).toBeGreaterThan(0);
   expect(b.baseY).toBeCloseTo(groundHeight(b.x,b.z,verdunMap)-.025);
@@ -77,7 +82,9 @@ test("keeps broad cross-field breaks between central tree clusters instead of a 
   if(bare.ray(a,b)>.995){before++;if(g.collision.ray(a,b)>.995)after++;}
  }
  expect(before).toBeGreaterThan(10);
- expect(after/before).toBeGreaterThanOrEqual(.7);
+ // Denser groves add real cover, while at least two thirds of standing lines
+ // and all three deliberately broad breaks remain open.
+ expect(after/before).toBeGreaterThanOrEqual(2/3);
  for (const z of [-20,1,22]) {
   expect(g.collision.ray({x:-31,y:4.1,z},{x:31,y:4.1,z})).toBe(1);
   // The center now has a sunken relay with dogleg entries (tested below).
