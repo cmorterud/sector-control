@@ -1,3 +1,4 @@
+import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
 import {modelSurfaceAtlas,modelAtlasSize,modelUV,modelSurfaceFor,type ModelSurface} from "./model-surfaces";
 import {farmPropParts} from "./farm-props";
@@ -93,6 +94,8 @@ const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
 type SoldierRig = {
   farDetail?: boolean;
+  feetActive?: boolean;
+  feet?: (FootContact|undefined)[];
   design?: ReturnType<typeof weaponDesign>;
   body: pc.Entity;
   hips: pc.Entity;
@@ -2547,6 +2550,38 @@ export class Renderer implements CollisionWorld {
     this.poseArm(rig, 1, right, armLengths.upper, armLengths.forearm);
     this.alignGripHand(rig);
   }
+  private plantFeet(p:Soldier,rig:SoldierRig,dt:number,tick:number,teleported:boolean) {
+    const root=this.people[p.id],distance=root.getPosition().distance(this.camera.getPosition());
+    const active=p.id===0||distance<(rig.feetActive?footRules.far:footRules.near);
+    if(!active||p.hp<=0||p.mantle||p.hop||p.fall||teleported||Math.abs(groundHeight(root.getPosition().x,root.getPosition().z,this.map)-root.getPosition().y)>.34){
+      rig.feetActive=false;rig.feet=undefined;return;
+    }
+    rig.feetActive=true;rig.feet??=[];
+    const rootY=root.getPosition().y,revision=this.map.destruction?.terrainRevision??0;
+    const contacts=rig.legs.map((leg,i)=>updateFootContact(rig.feet![i],{
+      x:root.getPosition().x,z:root.getPosition().z,rootY,yaw:p.yaw,phase:rig.phase+i*Math.PI,
+      motion:rig.motion,sprint:rig.sprint,crouch:rig.crouch,forward:rig.forward,sideways:rig.sideways,side:i?1:-1,revision,
+    },this.map));
+    const low=Math.min(0,...contacts.map(c=>c?c.contact.y-footRules.sole-rootY:0));
+    const position=rig.body.getLocalPosition();
+    rig.body.setLocalPosition(position.x,position.y-rig.motion*(.08+.025*rig.sprint)+Math.max(-.08,low*.35),position.z);
+    const inverse=rig.hips.getWorldTransform().clone().invert();
+    for(let i=0;i<2;i++){
+      const result=contacts[i];if(!result){rig.feet[i]=undefined;continue;}
+      rig.feet[i]=result.contact;
+      const leg=rig.legs[i],hip=leg.hip.getLocalPosition(),target=inverse.transformPoint(new pc.Vec3(result.contact.x,result.contact.y,result.contact.z));
+      const direction=target.clone().sub(hip),distance=Math.max(.06,Math.min(direction.length(),footRules.thigh+footRules.calf-.0005));direction.normalize();
+      const bend=new pc.Vec3(0,0,-1);bend.sub(direction.clone().mulScalar(bend.dot(direction))).normalize();
+      const along=(footRules.thigh**2-footRules.calf**2+distance**2)/(2*distance),height=Math.sqrt(Math.max(0,footRules.thigh**2-along**2));
+      const knee=hip.clone().add(direction.clone().mulScalar(along)).add(bend.mulScalar(height));
+      const upper=new pc.Quat().setFromDirections(pc.Vec3.DOWN,knee.clone().sub(hip).normalize());
+      const end=hip.clone().add(direction.clone().mulScalar(distance));
+      const lower=new pc.Quat().setFromDirections(pc.Vec3.DOWN,end.sub(knee).normalize());
+      leg.hip.setLocalRotation(upper);leg.knee.setLocalRotation(upper.clone().invert().mul(lower));
+      const foot=new pc.Quat().setFromEulerAngles(result.pitch*180/Math.PI,-p.yaw*180/Math.PI,result.roll*180/Math.PI);
+      leg.ankle.setLocalRotation(leg.knee.getRotation().clone().invert().mul(foot));
+    }
+  }
   private animateSoldier(
     p: Soldier,
     x: number,
@@ -2586,6 +2621,7 @@ export class Renderer implements CollisionWorld {
     rig.x = x;
     rig.z = z;
     rig.alive = p.hp > 0;
+    const wasStill=rig.motion<.04;
     rig.motion = rig.alive
       ? rig.motion + (Math.min(1, speed / 4.5) - rig.motion) * blend
       : 0;
@@ -2594,12 +2630,12 @@ export class Renderer implements CollisionWorld {
         ? Math.max(0, Math.min(1, (speed - 4) / 3))
         : 0;
     rig.sprint = rig.alive ? rig.sprint + (sprint - rig.sprint) * blend : 0;
+    if(wasStill && speed>.2 && distance<2)rig.phase=Math.PI*footCycle(0,rig.motion,rig.sprint,rig.crouch).duty+(rig.style.side<0?Math.PI:0);
     rig.phase =
       (rig.phase +
         moved *
-          (2.5 - rig.sprint * 0.35) *
-          rig.style.cadence *
-          (forward < -0.15 ? -1 : 1)) %
+          gaitFrequency(rig.motion,rig.sprint,rig.crouch) *
+          rig.style.cadence) %
       (Math.PI * 2);
     const crouchTarget = p.crouched && !p.mantle && !p.hop && p.hp > 0 ? 1 : 0;
     rig.crouch += (crouchTarget - rig.crouch) * blend;
@@ -2941,6 +2977,7 @@ export class Renderer implements CollisionWorld {
       const hand=rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(...(design?.trigger??[0,-.03,.14]) as [number,number,number]));
       this.poseArm(rig,1,hand,armLengths.upper,armLengths.forearm);
     }
+    this.plantFeet(p,rig,dt,tick,distance>=2);
     this.attachSupportArm(rig);
     this.alignGripHand(rig);
   }

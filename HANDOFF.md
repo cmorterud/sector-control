@@ -2,6 +2,12 @@
 
 Updated November 13, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
+## Movement polish — staged work in progress
+
+November13: user approved foot placement, natural movement transitions and weapon handling, with commits as work progresses. First checkpoint adds presentation-only near-camera leg IK: five-point terrain sole supports, bounded pitch/roll and reach, world-space stance anchors, swing clearance and travel-scaled gait cadence. Airborne/mantle/dead/teleported rigs release contacts; ground mismatches/deep bank edges reject support. Human feet always qualify; bots use26/32m distance hysteresis and retain inexpensive distant gait. The two existing leg segments remain .42/.4m and the simulation, movement collision, camera/sights and hit volumes do not change. Terrain revisions invalidate anchors after excavation.
+
+First checkpoint: strictTypeScript and34affected checks/4files pass (5.51s): actual French/German leg lengths, planted slope/flat/crouched boots, forward/back/side stance stability, finite transforms, airborne/teleport/distant guards, original animation/grip/casualty regressions. Further transition/handling work and final full-suite/build/rendered validation/publication are still pending. Do not mistake this checkpoint for a complete release.
+
 ## Empty-trigger reload — live version29
 
 [Play the updated build](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun). Private feature `d32aa330b18815bd47f562eabe80b786dab66a5b` committed and immediately pushed. Hosting source `35b43ab6fab0c232cc0d6ca7be4f458c30a92ff3`, saved `appgprj_6af10866d7808191a47b22f64e84f15f~appgver_4d0b02c1a30c8191aee45c868babd1c1`, successful deployment `appgdep_6af7dafc83cc81918fa7f8fbf976f657`. Archive `/private/tmp/sector-control-auto-reload-20261113.tar.gz`, native hash `sha256:fce397d2a674b878f3874b32a82ccad6c4748aa868cd03354a8a5c251a11d3f4`. Audience unchanged; private source excluded. Anonymous curl verifies all13compiled assets byte-for-byte and homepage references `index-PsSQaw8J.js`/`index-awARFtve.css`; platform HTML differs. Ignored auto-reload-build-manifest.json/auto-reload-live-parity.json retain evidence. Final production build4.18s passes.
