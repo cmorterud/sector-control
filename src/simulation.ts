@@ -2138,9 +2138,11 @@ function navigationNodes(map: MapDefinition) {
     nodeKeys: string[] = [];
   const unique = new Set<string>();
   const add = (x: number, z: number, y?: number) => {
-    if(map.buildings) y ??= groundHeight(x,z,map);
+    // Match soldiers' support footprint on narrow treads. A point sample can
+    // leave an otherwise valid stair anchor embedded in the next riser.
+    if(map.buildings) y = supportHeight(x,z,map,(y??groundHeight(x,z,map))+.23,.45);
     const key = `${x},${z}${y === undefined ? "" : ","+y}`;
-    if (!unique.has(key) && !(map.buildings ? bodyBlocked(x,z,y!,.6,map) || Math.abs(supportHeight(x,z,map,y!+.02)-y!)>.1 : blocked(x, z, 0.7, map))) {
+    if (!unique.has(key) && !(map.buildings ? bodyBlocked(x,z,y!,.6,map) || Math.abs(supportHeight(x,z,map,y!+.02,.45)-y!)>.1 : blocked(x, z, 0.7, map))) {
       unique.add(key);
       nodes.push(y === undefined ? { x, z } : { x, z, y });
       nodeKeys.push(key);

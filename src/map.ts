@@ -631,7 +631,7 @@ export function walkSegment(
   for (let i = 0; i <= n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
       z = a.z + ((b.z - a.z) * i) / n;
-    const next = supportHeight(x, z, map, height + 0.23);
+    const next = supportHeight(x, z, map, height + 0.23, map.buildings ? .45 : 0);
     if ((map.buildings ? bodyBlocked(x,z,next,0.6,map) : blocked(x,z,0.6,map)) || Math.abs(next - height) > 0.23) return false;
     height = next;
   }

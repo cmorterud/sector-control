@@ -1,6 +1,7 @@
 import { type Box, type MapDefinition } from "./map";
 
 export const villageStoryHeight = 3.4;
+export const villageStairRules = { steps: 16, run: .32, topZ: 4.2, laneX: 10.5, width: 3.1 } as const;
 export type VillageBuilding = NonNullable<MapDefinition["buildings"]>[number];
 
 // All visible structural panels are also the authoritative blast/ray solids.
@@ -73,24 +74,27 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     (p.baseY??0)+p.h>=base+(level+1)*rise-.02 && Math.hypot(p.x-x,p.z-z)<reach)
     .sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z)).slice(0,6).map(p=>p.id!);
   if(building.stories>1) {
+    const {steps,run,topZ,laneX,width}=villageStairRules,step=rise/steps,start=topZ-steps*run;
     const nx=Math.ceil(building.w/2.4), nz=Math.ceil(building.d/2.4), w=building.w/nx,d=building.d/nz;
     for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nz;iz++) {
       const x=-building.w/2+(ix+.5)*w,z=-building.d/2+(iz+.5)*d;
-      // Two long stairwells remain open through the first-floor slab.
-      if(Math.abs(Math.abs(x)-10.5)<2 && z>-8 && z<3.4)continue;
+      // Leave headroom over the shorter flights; close the old long floor gaps.
+      if(Math.abs(Math.abs(x)-laneX)<2 && z>start-.5 && z<topZ+.7)continue;
       const floor=add("floor-"+ix+"-"+iz,x,z,w,d,.22,rise-.22,"floor",1,"wood");
       floor.walkable=true;floor.supports=supportFor(floor.x,floor.z,0);
       if(Math.abs(x)<7 && Math.abs(z)<8)building.posts.push({x:floor.x,z:floor.z,y:base+rise});
     }
     for(const side of [-1,1]) {
-      const steps=20,step=rise/steps,start=-8.2,run=.62;
       for(let i=0;i<steps;i++) {
-        const stair=add("stair-"+side+"-"+i,side*10.5,start+(i+.5)*run,3.1,run,step*(i+1),0,"stair",0,"wood");
+        const stair=add("stair-"+side+"-"+i,side*laneX,start+(i+.5)*run,width,run,step*(i+1),0,"stair",0,"wood");
         stair.walkable=true;
         // Treads stand on the ground; excavation can undermine them individually.
         map.navigationPoints!.push({x:stair.x,z:stair.z,y:base+step*(i+1)});
       }
-      for(const dz of [-.8,steps*run+.8])map.navigationPoints!.push({x:building.x+side*10.5,z:building.z+start+dz,y:base+(dz<0?0:rise)});
+      // Meet the last tread exactly, rather than putting a slab edge through it.
+      const landing=add("stair-landing-"+side,side*laneX,topZ+1,width,2,.22,rise-.22,"floor",1,"wood");
+      landing.walkable=true;landing.supports=supportFor(landing.x,landing.z,0);
+      for(const dz of [-.8,steps*run+.8])map.navigationPoints!.push({x:building.x+side*laneX,z:building.z+start+dz,y:base+(dz<0?0:rise)});
     }
     walls(1);
   }

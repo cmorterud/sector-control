@@ -27,6 +27,11 @@ it("keeps downstairs and upstairs support separate and lets a soldier walk up bo
     expect(p.fall).toBeNull();
     for(let i=0;i<30;i++)g.step(idle());
     expect(p.y).toBeCloseTo(5.8);
+    for(let i=0;i<120;i++)g.step({...idle(),z:-1});
+    expect(p.z).toBeLessThan(-8);
+    expect(p.y).toBeCloseTo(2.42);
+    expect(p.fall).toBeNull();
+    expect(bodyBlocked(p.x,p.z,p.y,.45,g.map)).toBe(false);
   }
   expect(supportHeight(0,0,villageMap,2.63)).toBeCloseTo(2.42);
   expect(supportHeight(0,0,villageMap,6)).toBeCloseTo(5.8);
@@ -37,9 +42,35 @@ it("routes to a genuine upper-floor position through stairs, without a floor tel
   const target={x:0,z:6,y:5.8};
   const route=pathfind(start,target,g.map);
   expect(route.length).toBeGreaterThan(3);
-  expect(route.some(p=>p.y!==undefined&&p.y>2.7&&p.y<5.5)).toBe(true);
+  expect(route.some(p=>p.y!==undefined&&p.y>2.5&&p.y<5.5)).toBe(true);
   let p=start;
   for(const next of route){expect(walkSegment(p,next,g.map),JSON.stringify([p,next])).toBe(true);p={...next,y:next.y??groundHeight(next.x,next.z,g.map)};}
+  const down=pathfind(target,start,g.map);
+  expect(down.length).toBeGreaterThan(3);p=target;
+  for(const next of down){expect(walkSegment(p,next,g.map),JSON.stringify([p,next])).toBe(true);p={...next,y:next.y??groundHeight(next.x,next.z,g.map)};}
+  // Drive the actual soldier through those waypoints, not only graph edges.
+  const soldier=g.players[0];Object.assign(soldier,{...start,protectedUntil:Infinity});
+  for(const leg of [route,down]) {
+    let i=0;
+    for(let tick=0;tick<420&&i<leg.length;tick++) {
+      const next=leg[i],dx=next.x-soldier.x,dz=next.z-soldier.z,length=Math.hypot(dx,dz);
+      if(length<.45 && Math.abs(soldier.y-(next.y??2.4))<.24){i++;continue;}
+      g.step({...idle(),x:dx/Math.max(1,length),z:dz/Math.max(1,length)});
+    }
+    expect(i,JSON.stringify({position:{x:soldier.x,z:soldier.z,y:soldier.y},next:leg[i]})).toBe(leg.length);
+  }
+});
+it("uses compact household stair pitches with a clear top landing on each side",()=>{
+  for(const side of [-1,1]) {
+    const stairs=villageMap.boxes.filter(b=>b.id?.startsWith("village-manor-stair-"+side+"-"));
+    const run=Math.max(...stairs.map(b=>b.z+b.d/2))-Math.min(...stairs.map(b=>b.z-b.d/2));
+    const slope=Math.atan(3.4/run)*180/Math.PI;
+    expect(slope).toBeGreaterThan(30);expect(slope).toBeLessThan(38);
+    const top=stairs.reduce((a,b)=>a.h>b.h?a:b);
+    const z=top.z+top.d/2+.2;
+    expect(supportHeight(top.x,z,villageMap,6,.45)).toBeCloseTo(5.8);
+    expect(bodyBlocked(top.x,z,5.8,.45,villageMap)).toBe(false);
+  }
 });
 it("blasts a local floor hole, drops its occupant and preserves neighboring support",()=>{
   const g=scene(),p=g.players[0];p.x=0;p.z=7.1;p.y=5.8;p.protectedUntil=Infinity;

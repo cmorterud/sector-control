@@ -2,6 +2,16 @@
 
 Updated November 14, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
 
+## Compact manor stairs — committed, not deployed
+
+November 14 follow-up to the repair below. Both manor stairways are now 16 treads of 32 cm (5.12 m run, about 34°) instead of 20 treads over 12.4 m; `villageStairRules` in `src/village-buildings.ts` holds the dimensions. Each flight ends at z = 4.2 on a dedicated 2 m landing panel that meets the top tread, and the first-floor slab closes the remainder of the old long stairwell openings. Navigation anchors and `walkSegment` sample support with the soldiers' 45 cm footprint, since a point sample left steep-tread anchors embedded in the next riser.
+
+Regressions walk a soldier up and back down both stairways, drive the real soldier along pathfound routes to the upper floor and back, and bound the pitch (30–38°) with a clear top landing. The destroyed-tread fixtures now place the soldier from actual tread positions; the hop case checks a clear retreat because the destroyed treads leave a genuine gap ahead.
+
+Validation: strict TypeScript; **483 tests / 86 files pass in 35.48 s**; production build 4.07 s (`index-CkMarJu6.js` / `index-CwOMIyZc.css`); whitespace check passes. `tools/village-audit.ts` (simulation only): 120 s, 746 shots, 160 deaths, five captures, scores 74–61, both teams in the village, three bots upstairs; all 822 manor parts collapse after 50 strikes and all five flags stay reachable. No rendered check was made and nothing was deployed: the live site is still version 32 with the long stairs.
+
+Local tooling note: Homebrew `node` 26.0.0 fails to load `libada.3.dylib` / `libsimdjson.33.dylib` after library upgrades. Validation here ran with `DYLD_FALLBACK_LIBRARY_PATH` pointing at the older kegs still in `/opt/homebrew/Cellar`; `brew reinstall node` should be the lasting fix.
+
 ## Village movement and structure repair — live version 32
 
 November 14 follow-up to the user's stuck-in-stairs screenshots: walking off a damaged stair/floor no longer assigns the lower support height immediately. The actor preserves its real vertical position, starts a gravity fall for drops over 23 cm, keeps hop/fall state airborne and uses a 45 cm support footprint. Support includes reachable low solid tops. A pre-existing overlap with a walkable tread can only move outward with decreasing overlap; it cannot enter a new solid or phase through a brick wall. Regression fixtures destroy real manor treads before walking and hopping, check bounded vertical drops, absence of embedding and continued escape movement.

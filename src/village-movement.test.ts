@@ -10,7 +10,8 @@ it("falls across broken stair treads without snapping to the floor or entering a
  g.explode({x:tread.x-tread.w/2-.1,y:tread.baseY!+tread.h-.1,z:tread.z},-1,null,
   {...artilleryExplosionProfile,damage:0,structuralRadius:.4,structuralDamage:2000,craterRadius:0,craterDepth:0,terrainReach:0});
  expect(g.map.boxes.some(b=>b.id===tread.id)).toBe(false);
- Object.assign(p,{x:10.5,z:.79,y:4.95,vx:0,vz:0,protectedUntil:Infinity});
+ const standing=g.map.boxes.find(b=>b.id==="village-manor-stair-1-12")!;
+ Object.assign(p,{x:standing.x,z:standing.z,y:supportHeight(standing.x,standing.z,g.map,standing.baseY!+standing.h+.23,.45),vx:0,vz:0,protectedUntil:Infinity});
  let fell=false,maxDrop=0;
  for(let i=0;i<85;i++) {
   const old=p.y;g.step({...idle(),z:-1});maxDrop=Math.max(maxDrop,old-p.y);
@@ -28,7 +29,8 @@ it("keeps a hop airborne over a damaged staircase and leaves a traversable landi
  g.explode({x:tread.x-tread.w/2-.1,y:tread.baseY!+tread.h-.1,z:tread.z},-1,null,
   {...artilleryExplosionProfile,damage:0,structuralRadius:.4,structuralDamage:2000,craterRadius:0,craterDepth:0,terrainReach:0});
  expect(g.map.boxes.some(b=>b.id===tread.id)).toBe(false);
- Object.assign(p,{x:10.5,z:0,y:4.78,vx:0,vz:0,protectedUntil:Infinity});
+ const standing=g.map.boxes.find(b=>b.id==="village-manor-stair-1-6")!;
+ Object.assign(p,{x:standing.x,z:standing.z,y:supportHeight(standing.x,standing.z,g.map,standing.baseY!+standing.h+.23,.45),vx:0,vz:0,protectedUntil:Infinity});
  g.step({...idle(),x:1,mantle:true});
  let maxDrop=0;
  for(let i=0;i<80;i++){const old=p.y;g.step({...idle(),x:1});maxDrop=Math.max(maxDrop,old-p.y);}
@@ -36,8 +38,9 @@ it("keeps a hop airborne over a damaged staircase and leaves a traversable landi
  expect(p.fall).toBeNull();expect(p.hop).toBeNull();
  expect(p.y).toBeCloseTo(supportHeight(p.x,p.z,g.map,p.y+.23,.45));
  expect(bodyBlocked(p.x,p.z,p.y,.4,g.map)).toBe(false);
- const oldZ=p.z;for(let i=0;i<25;i++)g.step({...idle(),z:1});
- expect(p.z).toBeGreaterThan(oldZ+1);
+ // The destroyed treads form a real gap ahead; retreat remains clear.
+ const oldZ=p.z;for(let i=0;i<25;i++)g.step({...idle(),z:-1});
+ expect(p.z).toBeLessThan(oldZ-1);
 });
 it("vaults a low brick garden wall and rejects tall walls or a blocked landing",()=>{
  const base={...villageMap,boxes:[{id:"wall",x:0,z:0,w:.45,d:8,h:1.05,baseY:2.4,kind:"masonry" as const}],vegetation:[]};
