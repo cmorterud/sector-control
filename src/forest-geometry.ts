@@ -1,6 +1,6 @@
 // Shared, normalized meshes: four variants per shape, rather than a mesh or
 // animated foliage system per tree. All randomness is authoring-only.
-export type ForestShape = "trunk" | "limbs" | "deadLimbs" | "pine" | "crown" | "fern" | "branch" | "root" | "litter";
+export type ForestShape = "trunk" | "limbs" | "deadLimbs" | "pine" | "crown" | "fern" | "branch" | "root" | "litter" | "grass";
 export interface ForestGeometry { positions: number[]; normals: number[]; uvs: number[]; indices: number[] }
 type Point = [number, number, number];
 const sample = (seed: number, i: number) => {
@@ -82,6 +82,17 @@ export function forestGeometry(shape: ForestShape, variant = 0): ForestGeometry 
       };
       for(let row=0;row<5;row++)for(let col=0;col<9;col++){
         tri(point(row,col),point(row,col+1),point(row+1,col));tri(point(row,col+1),point(row+1,col+1),point(row+1,col));
+      }
+    }
+  } else if(shape === "grass") {
+    for(let blade=0;blade<7;blade++) {
+      const a=blade*2.399+seed,x=(sample(seed,blade)-.5)*.55,z=(sample(seed,blade+10)-.5)*.55;
+      const height=.55+sample(seed,blade+20)*.45,width=.025+sample(seed,blade+30)*.025;
+      let left:Point=[x-Math.cos(a)*width,0,z-Math.sin(a)*width],right:Point=[x+Math.cos(a)*width,0,z+Math.sin(a)*width];
+      for(let row=1;row<=3;row++) {
+        const t=row/3,bend=t*t*.22,half=width*(1-t*.9);
+        const l:Point=[x+bend-Math.cos(a)*half,height*t,z-Math.sin(a)*half],r:Point=[x+bend+Math.cos(a)*half,height*t,z+Math.sin(a)*half];
+        tri(left,right,l,true);tri(right,r,l,true);left=l;right=r;
       }
     }
   } else if(shape === "fern") {

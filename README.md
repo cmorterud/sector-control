@@ -9,9 +9,10 @@ A single-player First World War shooter that runs in the browser. You fight alon
 ## Features
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
-- **Five maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, and an early greybox of Lighthouse point.
+- **Five maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, and the coastal Lighthouse point.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Furnished village interiors.** Framed openings, stone corners, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
+- **Coastal headland.** Layered sea cliffs, foreshore rocks, short coastal grass, rippled water and destructible garden furniture surround Lighthouse Point’s three flags.
 - **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
 - **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
 - **No accounts or backend.** Soldiers, weapons, terrain and most audio are generated in code; a few landmark buildings are contributed models. There is no networking.
@@ -23,7 +24,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | Trench front | 50v50 | Four flags in opposing trench lines across no man's land |
 | Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
-| Lighthouse point (greybox) | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
+| Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Industrial | 5v5 | Three sectors among warehouse cover |
 
 On the flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.

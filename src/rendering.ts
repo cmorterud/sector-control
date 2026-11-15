@@ -2,6 +2,7 @@ import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
 import { architecturePixels, architecturalTextures, type ArchitecturalTexture } from "./architecture-surfaces";
+import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
@@ -171,6 +172,7 @@ export class Renderer implements CollisionWorld {
   private fragments: { entity: pc.Entity; state: Debris }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
   private architecturalModels?: Map<string,{surface:ArchitectureSurface;meshKey:string}[]>;
+  private coastalSea?: {water:pc.StandardMaterial;foam:pc.StandardMaterial;time:number;pending:number};
   private textures = new Map<string, pc.Texture>();
   private kitMeshes = new Map<string, pc.Mesh>();
   private overcastSky?: pc.Entity;
@@ -435,8 +437,7 @@ export class Renderer implements CollisionWorld {
     }
     for (const object of Object.values(map.destruction!.objects))
       this.buildDestructible(object);
-    // A flat sea below the cliff edge replaces the perimeter wall.
-    if (map.coast) this.cube("sea", 0, 0.35, 0, map.width + 600, 0.1, map.depth + 600, "#33586a");
+    if (map.coast) this.buildCoast();
     for (const [x, z, w, d] of map.coast ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
@@ -818,6 +819,14 @@ export class Renderer implements CollisionWorld {
     this.batchGroup = previousBatch;
   }
   private drawEnvironmentEffects(dt: number) {
+    const sea=this.coastalSea;
+    if(sea&&this.map.coast) {
+      sea.time+=Math.min(dt,.1);sea.pending+=dt;
+      if(sea.pending>=.1) {
+        sea.water.normalMapOffset.set((sea.time*.006)%1,(sea.time*.002)%1);sea.water.update();
+        sea.foam.opacity=.25+Math.sin(sea.time*.8)*.05;sea.foam.update();sea.pending=0;
+      }
+    }
     for (const fall of [...this.fallingTrees]) {
       fall.age += dt;
       const pose = treeFallPose(fall.age),
@@ -1153,6 +1162,7 @@ export class Renderer implements CollisionWorld {
         piece.render!.type=part.shape;
         if(part.rotation)piece.setLocalEulerAngles(...part.rotation);
         if(part.wood)piece.render!.material=this.surfaceMaterial("wood",part.tint);
+        if(part.stone)piece.render!.material=this.surfaceMaterial("stone",part.tint);
       }
       this.objectVisuals.set(object.id,root);
       this.batchGroup=previousBatch;
@@ -1436,6 +1446,37 @@ export class Renderer implements CollisionWorld {
   }
   private worldBatch(base: number, x: number, z: number) {
     return this.sceneryBatches?.group(base, x, z) ?? base;
+  }
+  private buildCoast() {
+    const map=this.map,previous=this.batchGroup,meshes=coastalGeometry(map);
+    if(!this.materials.has("coastal rock")) {
+      const material=this.surfaceMaterial("stone","#ffffff").clone();
+      material.diffuseVertexColor=true;material.gloss=.12;material.update();this.materials.set("coastal rock",material);
+    }
+    if(!this.materials.has("coastal water")) {
+      const water=new pc.StandardMaterial();water.diffuse=color("#3d626c");water.specular=color("#bbc9c4");water.gloss=.58;
+      water.normalMap=this.texture("coastal ripples",256,256,()=>coastalWaterNormals());water.normalMapTiling.set(38,32);water.bumpiness=.3;
+      water.update();this.materials.set("coastal water",water);
+      const foam=new pc.StandardMaterial();foam.useLighting=false;foam.emissive=color("#ffffff");foam.emissiveVertexColor=true;
+      foam.opacity=.25;foam.opacityVertexColor=true;foam.opacityVertexColorChannel="a";foam.blendType=pc.BLEND_NORMAL;foam.depthWrite=false;foam.cull=pc.CULLFACE_NONE;
+      foam.update();this.materials.set("coastal foam",foam);
+    }
+    const water=this.materials.get("coastal water")!,foam=this.materials.get("coastal foam")!;
+    this.coastalSea={water,foam,time:0,pending:0};
+    const ocean=this.cube("sea",0,coastalRules.seaLevel-.05,0,map.width+600,.1,map.depth+600,"#33586a");
+    ocean.render!.material=water;ocean.render!.castShadows=false;
+    for(const [name,data,material] of [["rock",meshes.rock,this.materials.get("coastal rock")!],["foam",meshes.foam,foam]] as const) {
+      const e=this.cube("coastal "+name,0,0,0,1,1,1,"#ffffff",false,this.mapRoot);
+      e.render!.meshInstances=[new pc.MeshInstance(this.modelMesh("coast-"+map.id+"-"+name,()=>data),material,e)];
+      e.render!.castShadows=false;
+    }
+    for(const [i,prop] of coastalGrass(map).entries()) {
+      this.batchGroup=this.worldBatch(this.boardBatch,prop.x,prop.z);
+      const root=this.joint("wind-shaped coastal grass",this.mapRoot,prop.x,prop.y,prop.z);root.setLocalEulerAngles(0,prop.yaw,0);
+      const e=this.forestPart("coastal grass","grass",i%4,0,0,0,...prop.scale,prop.tint,root);e.render!.castShadows=false;
+      this.groundDecor.push({root,x:prop.x,z:prop.z,radius:.6,batched:true});
+    }
+    this.batchGroup=previous;
   }
   private dirtyWorldBatches?: Set<number>;
   private queueWorldBatch(id:number) { (this.dirtyWorldBatches ??= new Set()).add(id); }

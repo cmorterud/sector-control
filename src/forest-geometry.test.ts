@@ -8,7 +8,7 @@ import { runtimeMap } from "./destruction";
 import { Renderer } from "./rendering";
 
 it("builds bounded finite forest meshes with tapered trunks, irregular crowns, valid UVs and lighting",()=>{
- for(const shape of ["trunk","limbs","deadLimbs","pine","crown","fern","branch","root","litter"] as ForestShape[])
+ for(const shape of ["trunk","limbs","deadLimbs","pine","crown","fern","grass","branch","root","litter"] as ForestShape[])
   for(let variant=0;variant<4;variant++) {
    const m=forestGeometry(shape,variant);
    expect(m).toEqual(forestGeometry(shape,variant));

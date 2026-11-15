@@ -3,7 +3,7 @@ import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
 import { buildVillageBuilding, type VillageBuilding } from "./village-buildings";
 
-// Greybox of a lighthouse headland: a west-to-east peninsula with the French
+// A lighthouse headland: a west-to-east peninsula with the French
 // approach from the mainland road and the German position behind the
 // lighthouse on the tip. The friend's layout sketch is about 1,100 m long;
 // this compresses it to 0.19 m per sketch pixel so it fits the engine's scale.
@@ -116,7 +116,8 @@ const clear = (x: number, z: number, margin: number) =>
   Object.values(headlandMap.spawn).every(s => Math.hypot(x - s.x, z - s.z) > 12 + margin);
 
 // The fountain stands off the flag so the capture space itself stays open.
-add("fountain", 5, -3, 3.2, 3.2, 1).landmark = "B";
+const fountain=add("fountain", 5, -3, 3.2, 3.2, 1);
+fountain.landmark="B";fountain.farmProp="fountain";
 // Broken rings of low cover around each flag, open toward both approaches.
 for (const flag of headlandMap.sectors) {
   const pieces = flag.id === "A" ? 9 : 7;
@@ -141,6 +142,26 @@ for (const [i, [x, z]] of ([[-96, -6], [-44, -8], [-28, -40], [34, 8], [74, -10]
   if (coastDistance(x, z, headlandMap) > 4) add("bags-" + i, x, z, 2.4, 0.8, 0.9, "sandbag");
 for (const [i, [x, z]] of ([[-2, -14], [14, 2], [-40, 20], [60, -40]] as const).entries())
   if (clear(x, z, 0)) add("cart-" + i, x, z, 2.4, 1.3, 0.95, "wood").farmProp = "cart";
+
+// Small gardens and street furniture give each house a usable outdoor edge.
+// Whole footprints stay off roads and at least two metres from door walls;
+// wood breaks under fire instead of becoming permanent visual clutter.
+const furnishing=(id:string,prop:NonNullable<Box["farmProp"]>,x:number,z:number,w:number,d:number,h:number)=>{
+  const radius=Math.hypot(w,d)/2;
+  if(!clear(x,z,radius+.15)||headlandMap.sectors.some(s=>Math.hypot(x-s.x,z-s.z)<6+radius)||
+    boxes.some(b=>!b.architecture&&Math.abs(x-b.x)<(w+b.w)/2+.65&&Math.abs(z-b.z)<(d+b.d)/2+.65))return;
+  add("street-"+id,x,z,w,d,h,"wood").farmProp=prop;
+};
+for(const b of buildings) {
+  for(const side of [-1,1]) {
+    furnishing(b.id+"-fence-"+side,"fence",b.x+side*(b.w/2+3.2),b.z-b.d*.3,.16,3.2,.88);
+    furnishing(b.id+"-planter-"+side,"planter",b.x+side*b.w*.3,b.z+b.d/2+3,1.5,.85,.72);
+  }
+}
+for(const flag of headlandMap.sectors)for(const side of [-1,1]) {
+  furnishing(flag.id+"-bench-"+side,"bench",flag.x+side*10.5,flag.z+5.5,2.2,.7,.94);
+  furnishing(flag.id+"-planter-"+side,"planter",flag.x+side*10.5,flag.z+8,1.5,.85,.72);
+}
 
 // Scattered trees from a fixed sequence: no gameplay RNG, stable across runs.
 for (let i = 0, placed = 0; i < 900 && placed < 90; i++) {
