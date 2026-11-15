@@ -79,6 +79,7 @@ export class ArtilleryMap {
         road.setAttribute("d", d);
         road.setAttribute("stroke", "#b1a587");
         road.setAttribute("stroke-width", String(street.width));
+        road.setAttribute("fill", "none");
         svg.append(road);
       }
 

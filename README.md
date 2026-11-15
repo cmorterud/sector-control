@@ -4,7 +4,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 ![Verdun sector](public/previews/verdun.jpg)
 
-**[Play it in your browser](https://sector-control-trial-20261108.cody22597.chatgpt.site/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. The hosted build is a snapshot and can lag behind this repository.
+**[Play it in your browser](https://codymorterud.com/sector-control/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Passing builds on `main` publish automatically through GitHub Actions.
 
 ## Features
 
@@ -72,9 +72,9 @@ Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=h
 
 [GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pull requests and pushes to `main`. A passing push to `main` uploads `dist/` and deploys it to GitHub Pages. Pull requests never deploy. You can also run the workflow manually from Actions.
 
-One-time repository setup: open [Settings → Pages](https://github.com/cmorterud/sector-control/settings/pages) and select **GitHub Actions** as the build source. The game will publish at **https://cmorterud.github.io/sector-control/** after a successful deployment. No personal token or repository secret is needed in the workflow. If Actions or Pages is disabled for the repository/account, an owner must enable it first.
+Pages is configured to use **GitHub Actions** as the build source. The game publishes at **https://codymorterud.com/sector-control/**; `https://cmorterud.github.io/sector-control/` redirects there through the account's existing custom domain. No personal token or repository secret is needed in the workflow. For a fork, open **Settings → Pages** and select **GitHub Actions** before the first deployment.
 
-The workflow builds with `/sector-control/` as Vite's base path (derived from the repository name), including map previews, voice clips and landmark models. Ordinary local builds retain `/` for root hosting such as the existing trial. For a GitHub Pages custom domain, change the workflow base path to `/`.
+The workflow builds with `/sector-control/` as Vite's base path (derived from the repository name), including map previews, voice clips and landmark models. The project path is retained on the account's custom domain. Ordinary local builds retain `/` for root hosting. Change the workflow base to `/` only if the game itself is hosted at a domain's root.
 
 ## How it is built
 
