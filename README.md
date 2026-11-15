@@ -4,7 +4,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 ![Verdun sector](public/previews/verdun.jpg)
 
-**[Play it in your browser](https://codymorterud.com/sector-control/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Passing builds on `main` publish automatically through GitHub Actions.
+**[Play it in your browser](https://codymorterud.com/sector-control/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Passing builds and rendered checks on `main` publish automatically through GitHub Actions.
 
 ## Features
 
@@ -73,7 +73,9 @@ Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=h
 
 ## Continuous integration and publishing
 
-[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pull requests and pushes to `main`. A passing push to `main` uploads `dist/` and deploys it to GitHub Pages. Pull requests never deploy. You can also run the workflow manually from Actions.
+[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pushes and pull requests. Five parallel headless Chrome jobs then render that same production build, one per map. Each saves an intact overview, a battle overview, first-person and third-person screenshots, plus browser errors and gameplay diagnostics. Find the `render-<map>` artifacts on each run; screenshots are retained for 14 days. Software rendering provides visual evidence, not a hardware FPS benchmark.
+
+A main push deploys to GitHub Pages only after tests, build and all five browser checks pass. Browser errors, missing assets, WebGL initialization failures and failure to progress through gameplay fail the rendered check. Other branches and pull requests never deploy. You can also run the workflow manually from Actions. See [RENDER_REVIEW.md](docs/RENDER_REVIEW.md).
 
 Pages is configured to use **GitHub Actions** as the build source. The game publishes at **https://codymorterud.com/sector-control/**; `https://cmorterud.github.io/sector-control/` redirects there through the account's existing custom domain. No personal token or repository secret is needed in the workflow. For a fork, open **Settings → Pages** and select **GitHub Actions** before the first deployment.
 

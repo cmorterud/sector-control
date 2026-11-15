@@ -1,0 +1,13 @@
+# Rendered review on every push
+
+The build/test/publish workflow renders its tested production build in headless Chrome on GitHub’s Ubuntu runner. Five matrix jobs cover Industrial, Trenches, Verdun, Village and Lighthouse. Deployment on main waits for every rendered check. Branch pushes and pull requests validate without deployment.
+
+Each `render-<map>` artifact contains four PNGs: `overview-intact.png` (HUD hidden for map inspection), `overview-battle.png`, `first-person.png` and `third-person.png`. `report.json`, the overview and ground playtest logs, and `chrome.log` record the source SHA, WebGL renderer, simulation progress, browser errors and actual battle events. A failure screenshot is retained when possible. The job summary links to its artifact. Screenshot artifacts expire after 14 days; the intermediate production build expires after one day.
+
+The script uses the ordinary game’s existing autoplay/playtest URL parameters, real browser WebGL and the normal view toggle. It does not replace simulation or add production test hooks. A fixed seed helps comparisons, but animation/battle timing still varies, so exact pixel differences are not a merge gate. Missing resources, JavaScript errors/assertions, missing WebGL or a game that does not advance fail the check. All maps must pass before main deploys.
+
+SwiftShader is selected explicitly on the display-less hosted runner. Its FPS is diagnostic only and must not be reported as representative of a player’s GPU. This is also not a complete manual controls, aiming or movement acceptance test. Review screenshots for layout, materials, lighting, models and obvious visual regressions; use the existing simulation/native-physics tests for mechanics.
+
+For a local review after a production build: `node tools/render-review.mjs village dist`. `CHROME_PATH` selects an installed Chrome binary; the default is the Ubuntu runner’s `/usr/bin/google-chrome`. Chrome uses a fresh temporary profile, localhost-only server and debugging connection. The script leaves Chrome’s browser sandbox enabled.
+
+The macOS browser host and installed local Chrome/headless shell currently fail before navigating to the game (Mach-port startup errors). The Linux CI path supplies rendering independently of that local failure.

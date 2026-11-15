@@ -1,11 +1,6 @@
 name: Build, test and publish
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+on: [push, pull_request, workflow_dispatch]
 
 permissions:
   contents: read
@@ -35,15 +30,61 @@ jobs:
           PAGES_BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build -- --base "$PAGES_BASE_PATH"
 
+      - name: Save production build for rendered review
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-build
+          path: dist
+          retention-days: 1
+
       - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
+  render:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      matrix:
+        map: [industrial, trenches, verdun, village, headland]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Download tested production build
+        uses: actions/download-artifact@v8
+        with:
+          name: production-build
+          path: dist
+      - name: Render map and check browser errors
+        run: node tools/render-review.mjs "${{ matrix.map }}"
+      - name: Save screenshots and browser diagnostics
+        id: screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: render-${{ matrix.map }}
+          path: playtest-artifacts/render-${{ matrix.map }}/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Link visual review
+        if: always()
+        env:
+          MAP_NAME: ${{ matrix.map }}
+          ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+        run: |
+          node --input-type=module -e 'import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_STEP_SUMMARY, "### " + process.env.MAP_NAME + " rendered review\n\n[Download screenshots and diagnostics](" + process.env.ARTIFACT_URL + ")\n\nOverview before battle, overview during battle, first person and third person. Software rendering is not a hardware FPS benchmark.\n");'
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: build-and-test
+    needs: [build-and-test, render]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
