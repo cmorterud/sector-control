@@ -1,4 +1,4 @@
-// Production-browser smoke check and visual record. No game test hooks or deps.
+// Production-browser checks and visual record through Chrome's built-in CDP.
 import {createServer} from 'node:http';
 import {spawn} from 'node:child_process';
 import {mkdtemp,readFile,writeFile,mkdir,rm} from 'node:fs/promises';
@@ -8,7 +8,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {inflateSync} from 'node:zlib';
 
 const map=process.argv[2]??'village';
-if(!['industrial','trenches','verdun','village','headland'].includes(map))throw Error('Unknown map');
+if(!['industrial','trenches','verdun','village','headland','training'].includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
 const sitePath=process.env.PAGES_BASE_PATH??`/${process.env.GITHUB_REPOSITORY?.split('/')[1]??'sector-control'}/`;
 if(!/^\/[a-zA-Z0-9_/-]+\/$/.test(sitePath))throw Error('Invalid deployment base path');
@@ -92,6 +92,7 @@ try {
   const graphics=await client.evaluate(`(()=>{const c=document.querySelector('#game'),g=c.getContext('webgl2');if(!g)throw Error('No WebGL 2 context');const e=g.getExtension('WEBGL_debug_renderer_info');return {width:c.width,height:c.height,renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)};})()`);
   await until(()=>client.evaluate(`window.sectorRenderReview?.state().frames>=2`));
   if(mode==='ground'){
+   if(map==='training')await client.evaluate(`window.sectorRenderReview.training(1)`);
    const before=await client.evaluate(`window.sectorRenderReview.survey(true).frames`);
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
@@ -108,6 +109,54 @@ try {
   if(log.summary.ticks<900||log.summary.frames<2)throw Error('Game did not progress through rendered frames');
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
+ }
+ if(map==='training'){
+  report.trainingControls=await client.evaluate(`(()=>{
+   const b=window.sectorRenderReview,check=(ok,text)=>{if(!ok)throw Error(text);};
+   const key=(code,type='keydown')=>window.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
+   const press=code=>{key(code);key(code,'keyup');};
+   const select=(id,value)=>{const el=document.getElementById(id);check(!!el,'Missing '+id);el.value=String(value);el.dispatchEvent(new Event('change',{bubbles:true}));};
+   b.manual();b.training(0);
+   const before=b.state().player;
+   key('KeyW');b.advance(30);key('KeyW','keyup');
+   check(b.state().player.z<before.z-1,'W did not move the trainee');
+   press('KeyC');b.advance(1);check(b.state().player.crouched,'C did not crouch');
+   press('KeyC');b.advance(1);check(!b.state().player.crouched,'C did not stand');
+   const view=b.state().player.firstPerson;press('KeyT');b.advance(1);check(b.state().player.firstPerson!==view,'T did not change view');
+   const stations=[];
+   for(let i=0;i<8;i++){
+    press('Escape');check(b.state().paused,'Escape did not pause');
+    select('training-station',i);select('training-loadout',i===1?'marksman':'rifleman');select('training-faction',i===1?'french':'british');
+    const free=document.getElementById('training-free');free.checked=i===7;free.dispatchEvent(new Event('change',{bubbles:true}));
+    document.getElementById('primary').click();b.advance(2);
+    const state=b.state();check(!state.paused,'Resume did not start the selected exercise');
+    check(state.training.loadout===(i===1?'marksman':'rifleman'),'Armory loadout did not apply');
+    check(state.training.faction===(i===1?'french':'british'),'Faction equipment did not apply');
+    check(state.training.free===(i===7),'Free practice did not apply');stations.push(state.training.id);
+    if(i===1){
+     if(!b.state().player.firstPerson)press('KeyT');
+     window.dispatchEvent(new MouseEvent('mousedown',{button:2,bubbles:true}));b.advance(25);
+     window.dispatchEvent(new MouseEvent('mousedown',{button:0,bubbles:true}));b.advance(12);
+     window.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));check(b.state().player.ammo<5,'LMB did not fire');
+     press('KeyR');b.advance(60);check(b.state().player.ammo===5,'R did not reload');
+     window.dispatchEvent(new MouseEvent('mouseup',{button:2,bubbles:true}));
+    }
+    if(i===4){
+     press('KeyQ');const map=document.getElementById('tactical-map');
+     check(!map.classList.contains('hidden')&&map.textContent.includes('EXERCISE AREA'),'Q did not open the marked training artillery map');
+     window.dispatchEvent(new MouseEvent('mousedown',{button:2,bubbles:true}));
+     window.dispatchEvent(new MouseEvent('mouseup',{button:2,bubbles:true}));
+     check(map.classList.contains('hidden'),'RMB did not cancel the tactical map');
+    }
+   }
+   check(new Set(stations).size===8,'An exercise is missing');
+   press('Escape');check(document.getElementById('training-refill'),'Training resupply is missing');
+   return {walk:true,crouchToggle:true,viewSwitch:true,aimAndFire:true,reload:true,tacticalMap:true,armory:true,factions:true,freePractice:true,stations};
+  })()`);
+  await screenshot('training-menu');
+  await client.evaluate(`(()=>{window.sectorRenderReview.training(4);window.sectorRenderReview.advance(2);window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));})()`);
+  await screenshot('training-artillery-map');
+  console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);
  console.log(JSON.stringify({map,source:report.source,scenarios:report.scenarios.map(s=>({mode:s.mode,ticks:s.summary.ticks,frames:s.summary.frames,shots:s.summary.shots,artilleryImpacts:s.summary.artilleryImpacts,errors:s.summary.errors.length})),errors:report.errors}));

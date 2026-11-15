@@ -123,7 +123,7 @@ export interface CommunicationRoute {
   points: Vec[];
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "village" | "verdun" | "headland";
+  id: "industrial" | "trenches" | "village" | "verdun" | "headland" | "training";
   name: string;
   width: number;
   depth: number;

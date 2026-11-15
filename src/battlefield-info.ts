@@ -1,8 +1,9 @@
 import type { MapDefinition } from "./map";
 import { publicAsset } from "./public-assets";
 export const battlefieldInfo = {
+  training: {setting:"Field training camp",factions:"British, French & German equipment",description:"Eight guided exercises: movement, every weapon, grenades, bayonets, artillery, destruction and squad combat. Free practice and resettable stations."},
   verdun: {setting:"Verdun-inspired · 1917", factions:"France · Imperial Germany", description:"An extended forest front with five flags and the ruined Broken Relay at its center."},
-  industrial: { setting: "Training ground", factions: "Training teams", description: "Close lanes and industrial cover. Three control points." },
+  industrial: { setting: "Industrial skirmish", factions: "Training teams", description: "Close lanes and industrial cover. Three control points." },
   trenches: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Flooded farmland, broken farmyards and exposed trench crossings. Four flags." },
   headland: { setting: "Atlantic coast · 1917", factions: "France · Imperial Germany", description: "Greybox preview. A lighthouse headland with a town square between cliff-top parks. Three flags." },
   village: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Nine village buildings, sheltered gardens and a destructible two-story manor. Five flags, including the manor." },

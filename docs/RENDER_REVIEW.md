@@ -1,6 +1,6 @@
 # Rendered review on every push
 
-The build/test/publish workflow renders its tested build in headless Chrome on GitHub’s Ubuntu runner. Five matrix jobs cover Industrial, Trenches, Verdun, Village and Lighthouse. Production and same-repository PR preview deployments wait for every rendered check. Ordinary branch pushes and fork pull requests validate without deployment. See [PR_PREVIEWS.md](PR_PREVIEWS.md).
+The build/test/publish workflow renders its tested build in headless Chrome on GitHub’s Ubuntu runner. Six matrix jobs cover Industrial, Trenches, Verdun, Village, Lighthouse and Training grounds. Production and same-repository PR preview deployments wait for every rendered check. Ordinary branch pushes and fork pull requests validate without deployment. See [PR_PREVIEWS.md](PR_PREVIEWS.md).
 
 Each `render-<map>` artifact contains four PNGs: `overview-intact.png` (HUD hidden for map inspection), `overview-battle.png`, `first-person.png` and `third-person.png`. `report.json`, the overview and ground playtest logs, and `chrome.log` record the source SHA, WebGL renderer, simulation progress, browser errors and actual battle events. A failure screenshot is retained when possible. The job summary links to its artifact. Screenshot artifacts expire after 14 days; the intermediate build expires after seven days.
 

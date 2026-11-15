@@ -47,11 +47,11 @@ jobs:
   render:
     needs: build-and-test
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: ${{ matrix.map == 'training' && 10 || 6 }}
     strategy:
       fail-fast: false
       matrix:
-        map: [industrial, trenches, verdun, village, headland]
+        map: [industrial, trenches, verdun, village, headland, training]
     steps:
       - name: Check out source
         uses: actions/checkout@v6

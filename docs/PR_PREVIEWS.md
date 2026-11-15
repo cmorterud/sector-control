@@ -18,7 +18,7 @@ The checks must run once before they can be selected in protection settings. A `
 
 ## Publication sequence
 
-`ci.yml` runs with read-only repository access: type checking, simulation tests, publisher regressions, a Vite build and all five rendered map checks. It stamps `revision.json` with the tested merge SHA, PR head SHA, CI run/attempt, deployment base and asset hashes. The stable `pr-ready` job fails if any build or render job failed or was skipped.
+`ci.yml` runs with read-only repository access: type checking, simulation tests, publisher regressions, a Vite build and all six rendered map checks. It stamps `revision.json` with the tested merge SHA, PR head SHA, CI run/attempt, deployment base and asset hashes. The stable `pr-ready` job fails if any build or render job failed or was skipped.
 
 `pages.yml` runs only trusted automation from `main`. It validates the originating workflow, source repository, live PR/head or current main revision, and successful CI conclusion before downloading its `production-build` artifact. Ordinary branch pushes and fork PRs never publish automatically. Old CI completions cannot revive a closed preview or overwrite a newer PR revision. Main must publish once before the first preview, so a PR cannot become the production site.
 

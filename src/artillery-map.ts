@@ -19,6 +19,7 @@ export class ArtilleryMap {
   constructor(
     private game: () => Game,
     private call: (target: Vec & { area: true }) => void,
+    private exerciseTarget?: () => Vec | undefined,
   ) {
     this.panel.id = "tactical-map";
     this.panel.className = "hidden";
@@ -158,6 +159,16 @@ export class ArtilleryMap {
         }
         this.flagMarkers.push({ id: s.id, dot });
       }
+    const exercise=this.exerciseTarget?.();
+    if(exercise){
+      const ring=document.createElementNS(svg.namespaceURI,"circle");
+      ring.setAttribute("cx",String(exercise.x+g.map.width/2));ring.setAttribute("cy",String(exercise.z+g.map.depth/2));
+      ring.setAttribute("r","7");ring.setAttribute("fill","none");ring.setAttribute("stroke","#f3d16a");ring.setAttribute("stroke-width",".8");
+      const label=document.createElementNS(svg.namespaceURI,"text");
+      label.setAttribute("x",String(exercise.x+g.map.width/2));label.setAttribute("y",String(exercise.z+g.map.depth/2-9));
+      label.setAttribute("text-anchor","middle");label.setAttribute("font-size","2.3");label.setAttribute("fill","#f8e9b2");label.textContent="EXERCISE AREA";
+      svg.append(ring,label);
+    }
     this.grid.append(svg, this.you, this.marker);
     this.cursor = {
       x: Math.max(

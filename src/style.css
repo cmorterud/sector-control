@@ -4,6 +4,26 @@
   background: #202c2c;
   font-synthesis: none;
 }
+#training-lesson {
+  position:absolute;top:100px;left:24px;width:min(310px,30vw);
+  padding:14px 16px;background:#142322dd;border-left:3px solid #c7bd8d;
+  color:#eee9d9;pointer-events:none;text-shadow:0 1px 2px #000;
+}
+#training-lesson[hidden] {display:none;}
+#training-lesson h2 {font-size:18px;margin:8px 0;}
+#training-lesson p {font-size:13px;line-height:1.55;margin:10px 0;}
+#training-lesson small {display:block;font-size:10px;line-height:1.8;letter-spacing:.6px;}
+#training-lesson kbd {font:inherit;color:#ddcf8b;}
+.training-bearing {display:inline-block;font-size:19px;margin-right:5px;}
+.training-progress {display:flex;gap:5px;}
+.training-progress i {height:3px;background:#67716b;flex:1;}
+.training-progress i.passed {background:#9ec8a2;}
+.training-menu {margin:16px 0;padding:14px;border:1px solid #727b65;text-align:left;}
+.training-menu legend {padding:0 6px;color:#d1c69a;}
+.training-menu label {display:flex;align-items:center;gap:10px;justify-content:space-between;margin:8px 0;font-size:13px;}
+.training-menu select {max-width:65%;padding:7px;background:#202d29;color:#eee9d9;border:1px solid #6b7665;}
+.training-menu small {display:block;line-height:1.5;color:#b5c1b5;}
+.training-actions {display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
 * {
   box-sizing: border-box;
 }
