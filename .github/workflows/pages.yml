@@ -1,0 +1,155 @@
+name: Publish playable Pages previews
+
+on:
+  workflow_run:
+    workflows: ["Build, test, render and publish"]
+    types: [completed]
+  # Only the trusted base-branch workflow runs for cleanup. Never check out PR code here.
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful CI run to publish again (empty to prune closed previews)
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PAGES_SITE_URL: https://codymorterud.com/sector-control/
+
+# Keep every queued publication, including closes, rather than replacing pending work.
+concurrency:
+  group: pages-publication
+  queue: max
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+      actions: read
+      pages: write
+      id-token: write
+      statuses: write
+      pull-requests: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    outputs:
+      publish: ${{ steps.context.outputs.publish }}
+      pr: ${{ steps.context.outputs.pr }}
+      head: ${{ steps.context.outputs.head }}
+      url: ${{ steps.context.outputs.url }}
+      reason: ${{ steps.context.outputs.reason }}
+      cleanup: ${{ steps.context.outputs.cleanup }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Validate CI provenance and current PR revision
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/pages-preview.mjs resolve
+      - name: Download static files from the validated CI run
+        if: steps.context.outputs.publish == 'true' && steps.context.outputs.run != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: production-build
+          path: playtest-artifacts/pages-incoming
+          run-id: ${{ steps.context.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: Preserve production and other previews; prune closed PRs
+        if: steps.context.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/pages-preview.mjs stage
+      - name: Upload complete Pages site
+        if: steps.context.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: playtest-artifacts/pages-site
+      - uses: actions/configure-pages@v5
+        if: steps.context.outputs.publish == 'true'
+      - uses: actions/deploy-pages@v4
+        if: steps.context.outputs.publish == 'true'
+        id: deploy
+
+  verify:
+    needs: publish
+    if: needs.publish.result == 'success' && needs.publish.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    # Deployed PR JavaScript runs only on this read-only, secret-free runner.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Verify published revision and every asset
+        if: needs.publish.outputs.cleanup != 'true'
+        env:
+          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
+          EXPECTED_HEAD_SHA: ${{ needs.publish.outputs.head }}
+          EXPECTED_PR_NUMBER: ${{ needs.publish.outputs.pr }}
+        run: node tools/pages-preview.mjs verify
+      - name: Play the deployed Village map in Chrome
+        if: needs.publish.outputs.cleanup != 'true'
+        env:
+          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
+        run: node tools/render-review.mjs village dist playtest-artifacts/preview-browser
+      - name: Verify closed preview is gone and production remains available
+        if: needs.publish.outputs.cleanup == 'true'
+        env:
+          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
+          EXPECTED_PR_NUMBER: ${{ needs.publish.outputs.pr }}
+        run: node tools/pages-preview.mjs verify-cleanup
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: deployed-browser-review
+          path: playtest-artifacts/preview-browser
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    needs: [publish, verify]
+    if: always() && needs.publish.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Update preview link and required preview-ready status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PR: ${{ needs.publish.outputs.pr }}
+          PREVIEW_HEAD: ${{ needs.publish.outputs.head }}
+          PREVIEW_URL: ${{ needs.publish.outputs.url }}
+          PREVIEW_REASON: ${{ needs.publish.outputs.reason }}
+          PREVIEW_CLEANUP: ${{ needs.publish.outputs.cleanup }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: node tools/pages-preview.mjs report

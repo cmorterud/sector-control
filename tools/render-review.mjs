@@ -10,7 +10,8 @@ import {inflateSync} from 'node:zlib';
 const map=process.argv[2]??'village';
 if(!['industrial','trenches','verdun','village','headland'].includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
-const sitePath=`/${process.env.GITHUB_REPOSITORY?.split('/')[1]??'sector-control'}/`;
+const sitePath=process.env.PAGES_BASE_PATH??`/${process.env.GITHUB_REPOSITORY?.split('/')[1]??'sector-control'}/`;
+if(!/^\/[a-zA-Z0-9_/-]+\/$/.test(sitePath))throw Error('Invalid deployment base path');
 await mkdir(out,{recursive:true});
 const profile=await mkdtemp(join(tmpdir(),'sector-control-render-'));
 const chrome=process.env.CHROME_PATH??'/usr/bin/google-chrome';
@@ -26,7 +27,8 @@ const server=createServer(async(req,res)=>{
  }catch{res.writeHead(404);res.end('Not found');}
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const base=`http://127.0.0.1:${server.address().port}${sitePath}`;
+const base=process.env.REVIEW_BASE_URL??`http://127.0.0.1:${server.address().port}${sitePath}`;
+if(!base.endsWith('/')||!['https:','http:'].includes(new URL(base).protocol))throw Error('Invalid review URL');
 let browser,client,chromeLog='';
 const report={map,source:process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:'Controlled snapshots advance 900 real simulation/presentation steps; software GPU displays checkpoints. Not a real-time FPS benchmark.'};
 // Inspect the clean overview itself, so a black/flat canvas cannot pass merely

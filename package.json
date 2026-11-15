@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
-    "check": "tsc --noEmit && vitest run"
+    "check": "tsc --noEmit && vitest run",
+    "test:pages": "node --test tools/pages-preview.test.mjs"
   },
   "dependencies": {
     "playcanvas": "^2.0.0",
