@@ -1,3 +1,4 @@
+import { frameSeconds } from "./frame-timing";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
@@ -29,7 +30,7 @@ import { BattlefieldFeedback } from "./battlefield";
 import { weaponAim } from "./recoil";
 import { CrouchToggle, eyeHeightOf } from "./crouch";
 import { PlaytestRecorder } from "./playtest";
-import { mantleLanding, dist, groundHeight, industrialMap } from "./map";
+import { mantleLanding, dist, groundHeight, industrialMap, blocked } from "./map";
 import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
@@ -103,6 +104,8 @@ const params = new URLSearchParams(location.search),
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
+const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
+let reviewFrames = 0;
 const duration = Number(params.get("duration") ?? 480);
 const map =
   params.get("map") === "verdun"
@@ -594,13 +597,42 @@ window.addEventListener("blur", () => {
     pause();
   }
 });
+function stepSimulation() {
+  renderer.remember(game);
+  const input =
+    autoplay && game.players[0].hp > 0
+      ? botCommand(game, game.players[0])
+      : command();
+  input.firstPerson = preferredFirstPerson;
+  input.redeploy = pendingRedeploy; pendingRedeploy = false;
+  const simStart = battlePerformance.begin();
+  game.step(input);
+  battlePerformance.end("simulation",simStart);
+  if (!autoplay && game.players[0].melee) yaw = game.players[0].yaw;
+  const eventStart = battlePerformance.begin();
+  for (const e of game.events) handle(e);
+  battlePerformance.end("events",eventStart);
+  const feedbackStart = battlePerformance.begin();
+  battlefield.step(game);
+  battlePerformance.end("feedback",feedbackStart);
+  const diagnosticsStart = battlePerformance.begin();
+  if (recording)
+    recording.log.presentation = {
+      feedback: { ...battlefield.stats },
+      audio: audio ? structuredClone(audio.stats) : undefined,
+      recent: [...battlefield.recent],
+      soldiers: { ...renderer.soldierStats },
+    };
+  recording?.tick(game, input);
+  battlePerformance.end("diagnostics",diagnosticsStart);
+}
 function frame(now: number) {
   battlePerformance.frame(now, game?.tick ?? 0, !started || paused);
   rawFrameMs = now - last;
-  const dt = Math.min(0.1, (now - last) / 1000);
-  last = now;
+  const dt = frameSeconds(now,last);
+  last = Math.max(last,now);
   if (started) {
-    if (!paused) {
+    if (!paused && !renderReview) {
       const p = game.players[0],
         view = weaponAim(p);
       audio?.listener(
@@ -612,33 +644,7 @@ function frame(now: number) {
       accumulator += dt;
       let steps = 0;
       while (accumulator >= 1 / 30 && steps++ < 4) {
-        renderer.remember(game);
-        const input =
-          autoplay && game.players[0].hp > 0
-            ? botCommand(game, game.players[0])
-            : command();
-        input.firstPerson = preferredFirstPerson;
-        input.redeploy = pendingRedeploy; pendingRedeploy = false;
-        const simStart = battlePerformance.begin();
-        game.step(input);
-        battlePerformance.end("simulation",simStart);
-        if (!autoplay && game.players[0].melee) yaw = game.players[0].yaw;
-        const eventStart = battlePerformance.begin();
-        for (const e of game.events) handle(e);
-        battlePerformance.end("events",eventStart);
-        const feedbackStart = battlePerformance.begin();
-        battlefield.step(game);
-        battlePerformance.end("feedback",feedbackStart);
-        const diagnosticsStart = battlePerformance.begin();
-        if (recording)
-          recording.log.presentation = {
-            feedback: { ...battlefield.stats },
-            audio: audio ? structuredClone(audio.stats) : undefined,
-            recent: [...battlefield.recent],
-            soldiers: { ...renderer.soldierStats },
-          };
-        recording?.tick(game, input);
-        battlePerformance.end("diagnostics",diagnosticsStart);
+        stepSimulation();
         accumulator -= 1 / 30;
         if (paused) break;
       }
@@ -672,8 +678,33 @@ try {
   // Copy the WebGL surface while its drawing buffer is still available.
   renderer.app.on("postrender", () => {
     battlePerformance.end("renderSubmit",renderStart);
-    if (started) recording?.frame(game, rawFrameMs, paused);
+    if (started) { reviewFrames++; recording?.frame(game, rawFrameMs, paused); }
   });
+  // Explicit diagnostic mode: advance the real simulation and presentation
+  // without waiting for a software GPU to display every intermediate frame.
+  // Normal play never installs this bridge or changes its frame loop.
+  if(renderReview)Object.assign(window,{sectorRenderReview:{
+    state:()=>({frames:reviewFrames,tick:started?game.tick:0}),
+    advance:(ticks:number)=>{
+      if(!started||paused||!Number.isInteger(ticks)||ticks<0||ticks>900)throw Error("Invalid review advance");
+      for(let i=0;i<ticks&&game.phase==="playing";i++){
+        stepSimulation();renderer.draw(game,1,1/30,params.has("overview"));
+      }
+      accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
+    },
+    survey:(firstPerson:boolean)=>{
+      const poses:Record<string,[number,number,number,number]>={industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
+      const [x,z,tx,tz]=poses[map.id],p=game.players[0];
+      let at={x,z};
+      for(const dx of [0,-2,2,-4,4])for(const dz of [0,-2,2,-4,4])if(!blocked(x+dx,z+dz,.7,game.map)&&blocked(at.x,at.z,.7,game.map))at={x:x+dx,z:z+dz};
+      if(blocked(at.x,at.z,.7,game.map))throw Error("Review camera has no clear footing");
+      game.respawn(p);Object.assign(p,{...at,y:groundHeight(at.x,at.z,game.map),yaw:Math.atan2(tx-at.x,-(tz-at.z)),pitch:-.04,protectedUntil:Infinity});
+      preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
+      battlefield.reset(game);renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
+      return {tick:game.tick,frames:reviewFrames};
+    },
+    finish:()=>recording?.stop(),
+  }});
   menu(
     map.id !== "industrial" ? map.name : "Sector Control",
     map.id === "verdun"

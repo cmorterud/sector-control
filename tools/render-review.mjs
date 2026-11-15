@@ -28,7 +28,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}${sitePath}`;
 let browser,client,chromeLog='';
-const report={map,source:process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:'Headless SwiftShader rendering is a visual/smoke check, not a hardware FPS benchmark.'};
+const report={map,source:process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:'Controlled snapshots advance 900 real simulation/presentation steps; software GPU displays checkpoints. Not a real-time FPS benchmark.'};
 // Inspect the clean overview itself, so a black/flat canvas cannot pass merely
 // because the HUD and simulation continue running. Chrome emits 8-bit RGB(A).
 function overviewColors(png){
@@ -54,7 +54,7 @@ class CDP {
   else for(const f of this.listeners.get(m.method)??[])f(m.params);
  });}
  on(method,callback){const list=this.listeners.get(method)??[];list.push(callback);this.listeners.set(method,list);}
- send(method,params={}){return new Promise((resolve,reject)=>{const id=++this.sequence,timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout: '+method));},30000);this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
+ send(method,params={}){return new Promise((resolve,reject)=>{const id=++this.sequence,timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout: '+method));},60000);this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
  async evaluate(expression){const r=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text+': '+r.exceptionDetails.exception?.description);return r.result.value;}
  close(){for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Browser closed'));}this.pending.clear();this.ws.close();}
 }
@@ -80,20 +80,26 @@ try {
  await client.send('Runtime.enable');await client.send('Page.enable');await client.send('Network.enable');
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
-  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',video:'0',clip:'30',duration:'120'});if(mode==='overview')query.set('overview','');
+  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:'120',duration:'120'});if(mode==='overview')query.set('overview','');
   await client.send('Page.navigate',{url:base+'?'+query});
   await until(()=>client.evaluate(`(()=>{if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
   await client.evaluate(`document.querySelector('#primary').click()`);
   await until(()=>client.evaluate(`!!document.querySelector('.playtest')`));
   const graphics=await client.evaluate(`(()=>{const c=document.querySelector('#game'),g=c.getContext('webgl2');if(!g)throw Error('No WebGL 2 context');const e=g.getExtension('WEBGL_debug_renderer_info');return {width:c.width,height:c.height,renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)};})()`);
-  await delay(mode==='overview'?1000:5000);await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
+  await until(()=>client.evaluate(`window.sectorRenderReview?.state().frames>=2`));
   if(mode==='ground'){
-   await client.send('Input.dispatchKeyEvent',{type:'keyDown',key:'t',code:'KeyT',windowsVirtualKeyCode:84});await client.send('Input.dispatchKeyEvent',{type:'keyUp',key:'t',code:'KeyT',windowsVirtualKeyCode:84});
+   const before=await client.evaluate(`window.sectorRenderReview.survey(true).frames`);
+   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
+  await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
+  await client.evaluate(`window.sectorRenderReview.advance(900)`);
+  const before=await client.evaluate(mode==='ground'?`window.sectorRenderReview.survey(false).frames`:`window.sectorRenderReview.state().frames`);
+  await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
+  await client.evaluate(`window.sectorRenderReview.finish()`);
   const log=await until(()=>client.evaluate(`(async()=>{const a=[...document.querySelectorAll('.playtest a')].find(a=>a.download.endsWith('.json')&&!a.download.endsWith('.perf.json'));if(!a)return null;const l=await(await fetch(a.href)).json();return {startedAt:l.startedAt,summary:l.summary,performance:l.performance,presentation:l.presentation,lastSample:l.samples.at(-1),events:l.events.filter(e=>['artilleryImpact','destruction','capture','death'].includes(e.type))};})()`),75000);
   await screenshot(mode==='overview'?'overview-battle':'third-person');
   await writeFile(join(out,mode+'-playtest.json'),JSON.stringify(log,null,2));
-  if(log.summary.ticks<60||log.summary.frames<5)throw Error('Game did not progress through rendered frames');
+  if(log.summary.ticks<900||log.summary.frames<2)throw Error('Game did not progress through rendered frames');
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
