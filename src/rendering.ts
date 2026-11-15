@@ -337,6 +337,12 @@ export class Renderer implements CollisionWorld {
         c,
         true,
       );
+      const modelled = this.map.boxes.some((q) => q.model) && b.kind === "building";
+      if (modelled) {
+        // The box stays as the collider; the loaded model replaces its look.
+        obstacle.render!.enabled = false;
+        if (b.model) this.placeLandmark(b, obstacle);
+      }
       if (b.kind === "wire") {
         obstacle.render!.enabled = false;
         for (let x = -b.w / 2; x <= b.w / 2; x += 2)
@@ -387,7 +393,7 @@ export class Renderer implements CollisionWorld {
             b.d + 0.03,
             "#807252",
           );
-      if (b.kind === "building") {
+      if (b.kind === "building" && !modelled) {
         this.cube(
           "roof",
           b.x,
@@ -1567,6 +1573,30 @@ export class Renderer implements CollisionWorld {
       this.waterMeshes.push(mesh);
       this.groundDecor.push({ root, x: p.x, z: p.z, radius: p.radius });
     }
+  }
+  private landmarkAssets = new Map<string, Promise<pc.Asset>>();
+  // Landmark exteriors load once per model and are instanced per placement.
+  // If a model cannot be loaded, the plain collision box is shown instead.
+  private placeLandmark(b: Box, fallback: pc.Entity) {
+    const model = b.model!, parent = this.mapRoot, group = fallback.parent as pc.Entity | null;
+    let asset = this.landmarkAssets.get(model.name);
+    if (!asset) {
+      asset = new Promise<pc.Asset>((resolve, reject) =>
+        this.app.assets.loadFromUrl(`/models/${model.name}.glb`, "container", (error, loaded) =>
+          error || !loaded ? reject(error) : resolve(loaded)));
+      this.landmarkAssets.set(model.name, asset);
+    }
+    asset.then((loaded) => {
+      if (this.mapRoot !== parent) return;
+      const entity = (loaded.resource as pc.ContainerResource).instantiateRenderEntity({ castShadows: true, receiveShadows: true });
+      entity.setLocalPosition(model.x ?? b.x, b.baseY ?? 0, model.z ?? b.z);
+      entity.setLocalEulerAngles(0, model.yaw ?? 0, 0);
+      parent.addChild(entity);
+    }, () => {
+      if (this.mapRoot !== parent) return;
+      for (const child of group?.children ?? [])
+        if (child instanceof pc.Entity && child.name === "building" && child.render) child.render.enabled = true;
+    });
   }
   private buildOvercastSky() {
     const sky = new pc.Entity("overcast sky");

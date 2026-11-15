@@ -37,13 +37,14 @@ const buildings = [
   building("store", "Chandler's store", 50, 24, 16, 10),
   building("signal", "Signal cottage", 92, 8, 14, 12),
 ];
-// Sealed stand-ins for the modelled landmarks: solid, with no interior.
-const landmarksSolid: (Vec & { id: string; w: number; d: number; h: number })[] = [
-  { id: "lighthouse", x: 96, z: -15, w: 6.5, d: 6.5, h: 21.6 },
-  { id: "church-nave", x: -18, z: -16, w: 9, d: 15, h: 8 },
-  { id: "church-tower", x: -18, z: -26, w: 6, d: 5, h: 15 },
-  { id: "tenement-north", x: 8, z: -36, w: 19, d: 11.5, h: 17.2 },
-  { id: "tenement-east", x: 28, z: -22, w: 11.5, d: 19, h: 17.2 },
+// Sealed landmarks: the contributed exterior models, with box collision.
+// The church model is turned so its tower stands at the north end.
+const landmarksSolid: (Vec & { id: string; w: number; d: number; h: number; model?: Box["model"] })[] = [
+  { id: "lighthouse", x: 96, z: -15, w: 6.2, d: 6.2, h: 21.6, model: { name: "lighthouse" } },
+  { id: "church-nave", x: -18, z: -16.1, w: 8.6, d: 14.2, h: 8, model: { name: "church", yaw: 90, z: -18 } },
+  { id: "church-tower", x: -18, z: -25.15, w: 3.8, d: 3.9, h: 14.5 },
+  { id: "tenement-north", x: 8, z: -36, w: 19.2, d: 11.5, h: 17.2, model: { name: "tenement" } },
+  { id: "tenement-east", x: 28, z: -22, w: 11.5, d: 19.2, h: 17.2, model: { name: "tenement", yaw: 90 } },
 ];
 
 const loop = [at(640,410),at(680,290),at(760,215),at(1000,200),at(1130,215),at(1190,290),at(1195,470),
@@ -93,7 +94,11 @@ const add = (id: string, x: number, z: number, w: number, d: number, h: number, 
   boxes.push(b);
   return b;
 };
-for (const b of landmarksSolid) add(b.id, b.x, b.z, b.w, b.d, b.h, "building").baseY = bankHeight;
+for (const b of landmarksSolid) {
+  const solid = add(b.id, b.x, b.z, b.w, b.d, b.h, "building");
+  solid.baseY = bankHeight;
+  if (b.model) solid.model = b.model;
+}
 
 const roadDistance = (x: number, z: number) => {
   let nearest = Infinity;

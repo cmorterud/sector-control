@@ -26,12 +26,15 @@ it("offers three-flag 50v50 domination between France and Germany with clear spa
 it("keeps every building, flag and spawn on land, clear of roads and each other", () => {
   const solids = headlandMap.boxes.filter((b) => b.kind === "building");
   expect(solids.map((b) => b.id)).toContain("headland-lighthouse");
+  // Each landmark model has a collision box at least as tall as a soldier can see over.
+  expect(solids.filter((b) => b.model).map((b) => b.model!.name).sort()).toEqual(["church", "lighthouse", "tenement", "tenement"]);
+  for (const b of solids) expect(b.h).toBeGreaterThan(7);
   const footprints = [...headlandMap.buildings!, ...solids];
   for (const b of footprints)
     for (const sx of [-1, 1]) for (const sz of [-1, 1])
       expect(coastDistance(b.x + (sx * b.w) / 2, b.z + (sz * b.d) / 2, headlandMap), b.id).toBeGreaterThan(3);
   for (const [i, a] of footprints.entries()) for (const b of footprints.slice(i + 1))
-    expect(Math.abs(a.x - b.x) >= (a.w + b.w) / 2 || Math.abs(a.z - b.z) >= (a.d + b.d) / 2, `${a.id} / ${b.id}`).toBe(true);
+    expect(Math.abs(a.x - b.x) >= (a.w + b.w) / 2 - 1e-6 || Math.abs(a.z - b.z) >= (a.d + b.d) / 2 - 1e-6, `${a.id} / ${b.id}`).toBe(true);
   for (const street of headlandMap.streets!) for (let i = 1; i < street.points.length; i++)
     for (let t = 0; t <= 1; t += 0.02) {
       const x = street.points[i - 1].x + (street.points[i].x - street.points[i - 1].x) * t,

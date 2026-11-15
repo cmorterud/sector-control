@@ -40,6 +40,9 @@ export type Box = Vec & {
     roofPitch?: number;
   };
   walkable?: boolean;
+  // A loaded exterior model drawn in place of the plain box, which remains
+  // the collision shape. Position defaults to the box center.
+  model?: { name: "lighthouse" | "church" | "tenement"; yaw?: number; x?: number; z?: number };
   treeStyle?: "bare" | "snapped" | "sparse" | "pine";
 };
 export const sectors = [

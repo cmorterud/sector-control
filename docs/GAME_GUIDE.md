@@ -115,7 +115,7 @@ Choose **Lighthouse point** in the start menu or open `?map=headland`. This is a
 
 The coastline is an authored outline (`coast` on the map definition). Ground beyond it is sea bed one bank height below the land, under a flat sea plane, and is closed to movement, navigation and deployment about a meter back from the cliff edge. Open-sea terrain patches are not built.
 
-Ten single-story houses come from the Village building kit, so they can be entered and destroyed. The lighthouse, church and two tenements are solid placeholder blocks sized from the supplied models; nothing loads those models yet. Low walls, rocks, crates, sandbags and scattered trees provide cover. `tools/headland-preview.ts` regenerates the menu illustration.
+Ten single-story houses come from the Village building kit, so they can be entered and destroyed. The lighthouse, church and two tenements are the contributed exterior models from `public/models/`, loaded only on this map. They are sealed: each has simple box collision and cannot be entered or destroyed. If a model fails to load, its collision box is drawn instead. Low walls, rocks, crates, sandbags and scattered trees provide cover. `tools/headland-preview.ts` regenerates the menu illustration.
 
 ## Verdun forest trenches
 

@@ -13,7 +13,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
 - **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
-- **No downloaded art or accounts.** Models, textures and most audio are generated in code; there is no backend or networking.
+- **No accounts or backend.** Soldiers, weapons, terrain and most audio are generated in code; a few landmark buildings are contributed models. There is no networking.
 
 ## Maps
 
@@ -95,4 +95,4 @@ This is a prototype. Tests cover the simulation extensively, but rendered perfor
 
 ## License
 
-[GPL-3.0](LICENSE). The synthetic voice clips in `public/audio/voices/` are part of the project and covered by the same license.
+[GPL-3.0](LICENSE). The synthetic voice clips in `public/audio/voices/` and the contributed landmark models in `public/models/` are covered by the same license.
