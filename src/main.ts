@@ -430,7 +430,7 @@ function hud(now: number) {
       : p.mantle
         ? "<small>CLIMBING TRENCH EDGE</small>"
         : ledge && !(game.scoring === "domination" && sector)
-          ? `<small>${keyLabel(settings.bindings.mantle)} · MANTLE TRENCH EDGE</small>`
+          ? `<small>${keyLabel(settings.bindings.mantle)} · MANTLE</small>`
           : sector
             ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
