@@ -153,6 +153,8 @@ try {
     if(i===4){
      press('KeyQ');const map=document.getElementById('tactical-map');
      check(!map.classList.contains('hidden')&&map.textContent.includes('EXERCISE AREA'),'Q did not open the marked training artillery map');
+     const bounds=map.getBoundingClientRect(),cancel=map.querySelector(':scope > button').getBoundingClientRect();
+     check(bounds.top>=0&&bounds.bottom<=innerHeight&&cancel.bottom<=innerHeight,'The artillery map or cancel button is clipped by the viewport');
      window.dispatchEvent(new MouseEvent('mousedown',{button:2,bubbles:true}));
      window.dispatchEvent(new MouseEvent('mouseup',{button:2,bubbles:true}));
      check(map.classList.contains('hidden'),'RMB did not cancel the tactical map');
@@ -165,6 +167,10 @@ try {
   await screenshot('training-menu');
   await client.evaluate(`(()=>{window.sectorRenderReview.training(4);window.sectorRenderReview.advance(2);window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));})()`);
   await screenshot('training-artillery-map');
+  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:600,deviceScaleFactor:1,mobile:false});
+  await client.evaluate(`(()=>{const map=document.getElementById('tactical-map'),r=map.getBoundingClientRect(),c=map.querySelector(':scope > button').getBoundingClientRect();if(r.top<0||r.bottom>innerHeight||c.bottom>innerHeight)throw Error('Artillery panel is clipped at 600px height');})()`);
+  await screenshot('training-artillery-map-600');
+  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
   console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);

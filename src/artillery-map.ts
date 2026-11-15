@@ -54,6 +54,7 @@ export class ArtilleryMap {
       p = g.players[0];
     if (p.hp <= 0) return;
     this.open = true;
+    this.panel.style.setProperty("--tactical-aspect",String(g.map.width/g.map.depth));
     const sectors = artillerySectors(g.map);
     this.grid.replaceChildren();
     this.grid.style.gridTemplateColumns = `repeat(${Math.ceil(g.map.width / 16)}, 1fr)`;

@@ -9,7 +9,7 @@ import type { Game } from "./simulation";
 class Element {
   children: Element[] = [];
   attributes = new Map<string, string>();
-  style = {};
+  style = {setProperty:vi.fn()};
   classList = { add() {}, remove() {} };
   constructor(readonly tagName: string, readonly namespaceURI = "http://www.w3.org/2000/svg") {}
   setAttribute(name: string, value: string) { this.attributes.set(name, value); }
@@ -29,6 +29,7 @@ it.each([headlandMap, villageMap])("draws $id streets as unfilled strokes over t
   const overlay = new ArtilleryMap(() => game, vi.fn());
   vi.spyOn(overlay, "update").mockImplementation(() => {});
   overlay.toggle();
+  expect(ui.children[0].style.setProperty).toHaveBeenCalledWith("--tactical-aspect",String(map.width/map.depth));
   const svg = ui.children[0].children[0].children.find(e => e.tagName === "svg")!;
   const roads = svg.children.filter(e => e.attributes.get("stroke") === "#b1a587");
   expect(roads).toHaveLength(map.streets!.length);
