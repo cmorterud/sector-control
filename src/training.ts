@@ -6,8 +6,8 @@ import {flagContains} from "./domination";
 import {trainingStations, type TrainingStationId} from "./training-map";
 
 export const trainingLessons = [
-  ["walk","sprint","crouch","hop","mantle","view"],
-  ["rifle","reload","scope","machineGun","pistol","flame"],
+  ["walk","sprint","crouch","hop","mantle","view","step"],
+  ["rifle","reload","scope","machineGun","pistol","flame","semi"],
   ["grenade","smoke"], ["thrust","charge"], ["call","impact"],
   ["breach","tree","crater"], ["reaction","defeat"], ["clear","capture"],
 ] as const;
@@ -19,16 +19,18 @@ export const trainingInstructions:Record<TrainingGoal,string>={
   hop:"Use {mantle} in the clear hop lane to jump the low rails.",
   mantle:"Walk up to the low brick wall, face it and press {mantle} to climb over.",
   view:"Press {view} to try both first- and third-person views.",
-  rifle:"Hit a red range target with the service rifle. Hold RMB to aim; click LMB to fire.",
+  step:"Drop into the practice trench ahead. Use {mantle} to climb the raised firing step, then aim with RMB and fire over the bank with LMB.",
+  rifle:"Choose Rifleman in Escape → Training armory, then hit a red target. Hold RMB to aim; click LMB to fire.",
   reload:"Fire, then press {reload}. Firing an empty weapon also reloads from reserve ammo.",
   scope:"In Escape → Training armory, choose Marksman. Aim with RMB and hit a target through the 4× scope.",
   machineGun:"Choose Support in the training armory. Hit a target with the machine gun; hold LMB for automatic fire.",
   pistol:"Press {sidearm} to draw your pistol and hit a target. {primary} returns to your primary.",
   flame:"Collect the flame kit beside the armory table with {interact}. Fire it at close range with LMB.",
+  semi:"Choose Industrial training kit and Rifleman in the armory, then hit a target with the AR-01 semiautomatic rifle.",
   grenade:"Throw with {grenade}. Land an explosion near the red group about 20 m ahead. Look higher for more distance; stay clear of the blast.",
   smoke:"Press {smoke} to throw smoke. Let the cloud bloom and observe the screen it creates.",
-  thrust:"Approach a red target and press {melee} without sprinting for a bayonet thrust.",
-  charge:"Sprint forward with {sprint}, then press {melee}. Keep charging until you strike a target.",
+  thrust:"Choose Britain, France or Germany and Rifleman in the armory. Approach a red target and press {melee} without sprinting for a bayonet thrust.",
+  charge:"Keep your service rifle equipped. Sprint forward with {sprint}, then press {melee}. Keep charging until you strike a target.",
   call:"Open the tactical map with {tactical} and call artillery on the marked target house 30 m ahead. RMB cancels.",
   impact:"Wait for your shells to land. Notice that coordinates drift and individual shells scatter.",
   breach:"Use grenades or artillery to breach the two-story house. Direct hits damage structures most; destroy enough ground-floor supports and the building collapses.",
@@ -74,7 +76,7 @@ export class TrainingSession {
   }
   begin(g:Game){
     this.active.clear();this.shots.clear();this.previous=undefined;
-    const s=this.station,p=g.players[0];p.faction=this.faction;equipLoadout(p,this.loadout);this.place(g,p,s);
+    const s=this.station,p=g.players[0];p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue");this.place(g,p,s);
     const combat=this.lesson>=6;
     for(const q of g.players.slice(1)){q.hp=0;q.respawnAt=Infinity;}
     for(let n=0;n<(this.lesson===0||this.lesson===4||this.lesson===5?0:3);n++){
@@ -128,17 +130,20 @@ export class TrainingSession {
     this.views.add(!!input.firstPerson);if(this.views.size===2)done.add("view");
     for(const e of events){
       if(e.type==="respawn"&&this.active.has(e.actor)){const q=g.players[e.actor];this.place(g,q,this.active.get(e.actor)!,q.team==="red"?Math.PI:0);q.protectedUntil=0;}
-      if(e.type==="respawn"&&e.actor===0){p.faction=this.faction;equipLoadout(p,this.loadout);this.place(g,p,this.station);}
+      if(e.type==="respawn"&&e.actor===0){p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue");this.place(g,p,this.station);}
       if(e.type==="stance"&&e.actor===0&&e.crouched)done.add("crouch");
       if(e.type==="hop"&&e.actor===0&&e.phase==="land")done.add("hop");
       if(e.type==="mantle"&&e.actor===0&&e.phase==="end")done.add("mantle");
       if(e.type==="reload"&&e.actor===0)done.add("reload");
-      if(e.type==="fire"&&e.actor===0)this.shots.set(e.projectile,e.weapon==="machineGun"?"machineGun":e.weapon==="pistol"?"pistol":p.loadout==="marksman"&&input.aim?"scope":"rifle");
+      if(e.type==="fire"&&e.actor===0){
+        this.shots.set(e.projectile,e.weapon==="rifle"?"semi":e.weapon==="machineGun"?"machineGun":e.weapon==="pistol"?"pistol":p.loadout==="marksman"&&input.aim?"scope":"rifle");
+        if(this.lesson===0&&input.aim&&!p.hop&&!p.fall&&p.y>-.7&&p.y<-.3&&Math.abs(p.x+48)<6&&p.z>45&&p.z<47.1&&e.from.y>.2)done.add("step");
+      }
       if(e.type==="impact"&&e.actor===0){if(e.hit&&e.target!==null&&g.players[e.target]?.team==="red"){const goal=this.shots.get(e.projectile);if(goal)done.add(goal);}this.shots.delete(e.projectile);}
       if(e.type==="damage"&&e.source===0&&g.players[e.actor]?.team==="red"&&p.weapon==="flamethrower"&&flaming)done.add("flame");
       if(e.type==="grenadeExplosion"&&e.actor===0&&dist(e.at,this.station.target)<9)done.add("grenade");
       if(e.type==="smokeBloom"&&e.actor===0)done.add("smoke");
-      if(e.type==="melee"&&e.actor===0&&e.phase==="strike"&&e.damage&&e.target!==null)done.add(e.kind==="charge"?"charge":"thrust");
+      if(e.type==="melee"&&e.actor===0&&e.phase==="strike"&&e.damage&&e.target!==null&&e.kind!=="butt")done.add(e.kind==="charge"?"charge":"thrust");
       if(e.type==="artilleryCall"&&e.actor===0&&dist(e.target,this.station.target)<14)done.add("call");
       if(e.type==="artilleryImpact"&&e.actor===0&&dist(e.at,this.station.target)<22)done.add("impact");
       if(e.type==="destruction"&&e.actor===0){

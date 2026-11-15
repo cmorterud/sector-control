@@ -41,6 +41,7 @@ export type Box = Vec & {
     opening?: "window" | "door";
     corner?: -1 | 1;
     sign?: string;
+    signBothSides?: boolean;
     feature?: "bookcase" | "desk" | "table" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
   };
   walkable?: boolean;

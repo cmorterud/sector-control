@@ -29,7 +29,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Industrial | 5v5 | Three sectors among warehouse cover |
 
-On the flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
+On the combat flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
 
 ## Training grounds
 

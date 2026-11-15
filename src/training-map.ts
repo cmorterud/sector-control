@@ -26,7 +26,7 @@ export const trainingMap:MapDefinition={
 };
 for(const [i,s] of trainingStations.entries()){
   const sign=add("board-"+s.id,s.x-7,s.z-1,5,.22,1.7,"wood",.8);
-  sign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",sign:`${i+1}. ${s.name.toUpperCase()}`};
+  sign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",signBothSides:true,sign:`${i+1}. ${s.name.toUpperCase()}`};
   add("post-"+s.id,s.x-7,s.z-1,.16,.3,2.5);
   const table=add("supply-"+s.id,s.x+6,s.z,2.2,1,.85);table.farmProp="worktable";
   if(i<4)for(const side of [-1,1])for(let n=0;n<5;n++)add(`lane-${i}-${side}-${n}`,s.x+side*15,s.z-5-n*6,.35,5.4,.9);
@@ -34,12 +34,20 @@ for(const [i,s] of trainingStations.entries()){
 // A real, low masonry mantle obstacle, a higher cover wall and a hop lane.
 add("mantle-wall",-48,56,8,.5,.9,"masonry");
 add("cover-wall",-40,57,.5,8,1.8,"masonry");
+// A shallow trench and raised firing shelf use the same height field as combat maps.
+const dig=(x:number,z:number,w:number,d:number,h:number)=>{
+  trainingMap.terrain!.rectangles.push({x,z,w,d,h});
+  for(let row=0;row<depth;row++)for(let col=0;col<width;col++)
+    if(Math.abs(col+.5-width/2-x)<w/2&&Math.abs(row+.5-depth/2-z)<d/2)trainingMap.terrain!.heights[row*width+col]=h;
+};
+dig(-48,48,12,6,-1.45);dig(-48,46,12,2,-.5);
+trainingMap.terrain!.ramps.push({x:-39,z:48,w:6,d:3,low:-1.45,high:0,direction:1});
 for(const z of [62,58])add("hop-rail-"+z,-56,z,3,.25,.35);
 const hopSign=add("hop-sign",-59,65,2,.15,1.2);
-hopSign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",sign:"HOP LANE"};
+hopSign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",signBothSides:true,sign:"HOP LANE"};
 for(const [i,z] of [57,47,32].entries()){
   const sign=add("range-distance-"+i,-7,z,2,.18,1.2);
-  sign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",sign:`${[15,25,40][i]} M`};
+  sign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",signBothSides:true,sign:`${[15,25,40][i]} M`};
 }
 for(const [i,x,z] of [[0,0,25],[1,48,37],[2,48,-2]])add("backstop-"+i,x,z,27,.8,4,"masonry");
 for(const s of trainingStations.slice(2,6))for(const side of [-1,1])add("safe-cover-"+s.id+side,s.x+side*5,s.z-5,3,.9,1.1,"sandbag");

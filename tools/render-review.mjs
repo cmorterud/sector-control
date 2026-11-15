@@ -67,6 +67,13 @@ async function screenshot(name,clean=false){
  finally{if(clean)await client.evaluate(`document.querySelector('#render-review-clean')?.remove()`);}
 }
 try {
+ if(process.env.REVIEW_BASE_URL){
+  const response=await fetch(new URL('revision.json',base));
+  if(!response.ok)throw Error('Deployed revision metadata is unavailable');
+  const revision=await response.json();
+  if(!/^[a-f0-9]{40}$/.test(revision.source)||!/^[a-f0-9]{40}$/.test(revision.head)||revision.base!==new URL(base).pathname)throw Error('Invalid deployed revision metadata');
+  report.checkerSource=report.source;report.source=revision.source;report.head=revision.head;report.deployment=base;
+ }
  // Chrome keeps its browser sandbox. Software graphics makes the capture
  // reproducible on hosted runners with no physical display or discrete GPU.
  browser=spawn(chrome,['--headless=new',`--user-data-dir=${profile}`,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--disable-extensions','--disable-sync','--disable-background-networking','--mute-audio','--window-size=1280,720','--use-angle=swiftshader','--enable-unsafe-swiftshader','about:blank'],{stdio:['ignore','ignore','pipe']});
@@ -89,6 +96,8 @@ try {
   await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
   await client.evaluate(`document.querySelector('#primary').click()`);
   await until(()=>client.evaluate(`!!document.querySelector('.playtest')`));
+  // Keep diagnostic chrome clear of the lesson panel in the recorded views.
+  if(map==='training')await client.evaluate(`(()=>{const s=document.createElement('style');s.textContent='.playtest{left:auto!important;right:20px!important}';document.head.append(s);})()`);
   const graphics=await client.evaluate(`(()=>{const c=document.querySelector('#game'),g=c.getContext('webgl2');if(!g)throw Error('No WebGL 2 context');const e=g.getExtension('WEBGL_debug_renderer_info');return {width:c.width,height:c.height,renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)};})()`);
   await until(()=>client.evaluate(`window.sectorRenderReview?.state().frames>=2`));
   if(mode==='ground'){

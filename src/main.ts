@@ -6,7 +6,7 @@ import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
-import { factions, factionFor, scoped, type Loadout, type WeaponSlot } from "./loadouts";
+import { factions, factionFor, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -125,6 +125,7 @@ const map =
       ? trenchMap
       : industrialMap;
 const training=map.id==="training"?new TrainingSession():undefined;
+root.classList.toggle("training-active",!!training);
 let trainingReset=false;
 const trainingOverlay=document.createElement("aside");trainingOverlay.id="training-lesson";trainingOverlay.hidden=true;
 document.querySelector("#ui")!.append(trainingOverlay);
@@ -188,7 +189,7 @@ function menu(
   if(training){
     (el("training-station") as HTMLSelectElement).onchange=e=>{training.select(Number((e.target as HTMLSelectElement).value));trainingReset=true;};
     (el("training-loadout") as HTMLSelectElement).onchange=e=>{training.loadout=(e.target as HTMLSelectElement).value as Loadout;trainingReset=true;};
-    (el("training-faction") as HTMLSelectElement).onchange=e=>{training.faction=(e.target as HTMLSelectElement).value as "british"|"french"|"german";trainingReset=true;};
+    (el("training-faction") as HTMLSelectElement).onchange=e=>{training.faction=(e.target as HTMLSelectElement).value as FactionId;trainingReset=true;};
     (el("training-free") as HTMLInputElement).onchange=e=>{training.free=(e.target as HTMLInputElement).checked;};
     if(started){
       el("training-refill").onclick=()=>{if(trainingReset||game.players[0].hp<=0)start();else{training.resupply(game);resume();}};

@@ -2,10 +2,11 @@ import {describe,it,expect} from "vitest";
 import {Game,TestCollision,idle,type Command} from "./simulation";
 import {trainingMap,trainingStations} from "./training-map";
 import {TrainingSession,trainingLessons} from "./training";
-import {blocked,dist,mantleLanding} from "./map";
+import {blocked,dist,mantleLanding,groundHeight} from "./map";
 import {artilleryExplosionProfile} from "./destruction";
 import {trainingHUD,trainingMenu} from "./training-ui";
 import {freshControls} from "./controls";
+import {architecturePieces} from "./architecture-geometry";
 
 function exercise(index=0,session=new TrainingSession()){
   session.select(index);
@@ -29,6 +30,15 @@ describe("training grounds",()=>{
     }
     expect(mantleLanding({x:-48,z:57,y:0},{x:0,z:-1},trainingMap)).not.toBeNull();
   });
+  it("draws numbered instruction boards and every training letter on both faces",()=>{
+    const board=trainingMap.boxes.find(b=>b.id==="training-board-weapons")!;
+    const pieces=architecturePieces(board,0);
+    expect(pieces.filter(p=>p.name==="painted entrance sign")).toHaveLength(2);
+    for(const letter of "0123456789HJKPQVWXYZ&"){
+      const geometry=architecturePieces({...board,architecture:{...board.architecture!,sign:letter}},0);
+      expect(geometry.filter(p=>p.name==="painted sign lettering").length,letter).toBeGreaterThan(0);
+    }
+  });
   it.each(trainingStations.map((s,i)=>[i,s.name] as const))("exercise %i does not end or pass itself while idle (%s)",(index)=>{
     const {g,session,step}=exercise(index);
     // Combat continues, but passing always requires a player's action or presence.
@@ -45,7 +55,8 @@ describe("training grounds",()=>{
     Object.assign(p,{x:-48,z:57,y:0,yaw:0,hop:null,fall:null,nextMantle:0});
     step({mantle:true});step({},45);
     step({firstPerson:false});
-    expect([...done]).toEqual(expect.arrayContaining(["walk","sprint","crouch","hop","mantle","view"]));
+    Object.assign(p,{x:-48,z:46,y:groundHeight(-48,46,g.map)});step({aim:true,fire:true});
+    expect([...done]).toEqual(expect.arrayContaining(["walk","sprint","crouch","hop","mantle","view","step"]));
     expect(session.passed).toBe(true);expect(p.mantle).toBeNull();expect(g.phase).toBe("playing");
   });
   it("range targets do not fire back, and a moving target actually moves",()=>{
@@ -85,6 +96,12 @@ describe("training grounds",()=>{
     const normal=new Game(new TestCollision(trainingMap),false,1,1,undefined,{map:{...trainingMap,id:"village"}});
     normal.step(idle());expect(normal.phase).toBe("ended");
   });
+  it("also teaches the Industrial map's actual AR-01 semiautomatic rifle",()=>{
+    const session=new TrainingSession();session.faction="trainingBlue";
+    const {p,fireAt,done}=exercise(1,session);
+    expect(p.weapon).toBe("rifle");expect(p.weaponId).toBe("AR-01");expect(p.ammo).toBe(30);
+    fireAt();expect(done.has("semi")).toBe(true);expect(done.has("rifle")).toBe(false);
+  });
   it("teaches actual flame-kit pickup and firing",()=>{
     const {g,p,step,done}=exercise(1);
     Object.assign(p,g.flames.kits[0].at);
@@ -107,6 +124,11 @@ describe("training grounds",()=>{
     Object.assign(p,{x:48,z:27,yaw:0});step({z:-1,sprint:true},10);step({z:-1,sprint:true,melee:true});step({z:-1,sprint:true},100);
     expect(done.has("charge")).toBe(true);expect(g.players[0].kills).toBeGreaterThan(0);
   });
+  it("does not count a machine-gun butt strike as a bayonet thrust",()=>{
+    const session=new TrainingSession();session.loadout="support";
+    const {g,p,step,done}=exercise(3,session);Object.assign(p,{x:48,z:19,yaw:0});
+    step({melee:true});step({},40);expect(g.players[4].hp).toBeLessThan(100);expect(done.has("thrust")).toBe(false);
+  });
   it("calls real artillery and observes its delayed impacts",()=>{
     const {g,step,done}=exercise(4);
     step({artillery:{...trainingStations[4].target,area:true}});expect(done.has("call")).toBe(true);
@@ -128,7 +150,7 @@ describe("training grounds",()=>{
   });
   it("activates real friendly and enemy AI only for combat exercises",()=>{
     const {g,step}=exercise(6);let shots=0,reactions=0;
-    for(let n=0;n<240;n++){step();shots+=g.events.filter(e=>e.type==="fire"&&e.actor!==0).length;reactions+=g.events.filter(e=>e.type==="combatReaction"||e.type==="reactionCover").length;}
+    for(let n=0;n<240&&(!shots||!reactions);n++){step();shots+=g.events.filter(e=>e.type==="fire"&&e.actor!==0).length;reactions+=g.events.filter(e=>e.type==="combatReaction"||e.type==="reactionCover").length;}
     expect(g.players.filter(p=>p.team==="blue"&&p.id!==0&&p.hp>0).length).toBeGreaterThan(0);
     expect(shots).toBeGreaterThan(0);expect(reactions).toBeGreaterThan(0);
   });

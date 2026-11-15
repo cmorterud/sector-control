@@ -20,6 +20,11 @@ export const architecturePalette = (id:string) => ({
   {wall:"#cdc4ae",trim:"#aa9b83",wood:"#625b45",roof:"#807363",roofSurface:"tiles" as const};
 const variant=(id:string)=>[...id].reduce((s,c)=>(Math.imul(s,31)+c.charCodeAt(0))>>>0,17)%4;
 const letters:Record<string,string[]>={
+ "0":["111","101","101","101","111"],"1":["010","110","010","010","111"],"2":["110","001","010","100","111"],"3":["110","001","110","001","110"],
+ "4":["101","101","111","001","001"],"5":["111","100","110","001","110"],"6":["011","100","111","101","111"],"7":["111","001","010","010","010"],
+ "8":["111","101","111","101","111"],"9":["111","101","111","001","110"],".":["000","000","000","000","010"],"&":["010","101","010","101","011"],
+ H:["101","101","111","101","101"],J:["001","001","001","101","010"],K:["101","101","110","101","101"],P:["110","101","110","100","100"],
+ Q:["010","101","101","111","011"],V:["101","101","101","101","010"],W:["101","101","111","111","101"],X:["101","101","010","101","101"],Y:["101","101","010","010","010"],Z:["111","001","010","100","111"],
  A:["010","101","111","101","101"],B:["110","101","110","101","110"],C:["011","100","100","100","011"],D:["110","101","101","101","110"],
  E:["111","100","110","100","111"],F:["111","100","110","100","100"],G:["011","100","101","101","011"],I:["111","010","010","010","111"],
  L:["100","100","100","100","111"],M:["101","111","111","101","101"],N:["101","111","111","111","101"],O:["010","101","101","101","010"],
@@ -82,11 +87,11 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
       face("clock vertical hand",0,h*.6,side,.035,.27,.095,"#394038","iron");
       face("clock horizontal hand",.12,h*.53,side,.28,.035,.095,"#394038","iron");
     }
-    if(a.sign) {
+    if(a.sign)for(const side of a.signBothSides?[-1,1]:[-1]) {
       const length=alongX?w:d,pixel=Math.min(.055,(length-.24)/(a.sign.length*4));
-      face("painted entrance sign",0,h*.57,-1,length-.1,.4,.055,p.wood);
+      face("painted entrance sign",0,h*.57,side,length-.1,.4,.055,p.wood);
       [...a.sign].forEach((letter,index)=>(letters[letter]??[]).forEach((row,iy)=>[...row].forEach((ink,ix)=>{
-        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel,h*.57+(2-iy)*pixel,-1,pixel*.86,pixel*.86,.065,"#e2d7bb","plaster");
+        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(a.signBothSides&&side===-1?-1:1),h*.57+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","plaster");
       })));
     }
   } else if(a.part==="floor"||a.part==="ceiling"||a.part==="stair") {
