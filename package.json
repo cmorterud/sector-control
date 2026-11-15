@@ -2,6 +2,7 @@
   "name": "sector-control",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -12,7 +13,7 @@
   },
   "dependencies": {
     "playcanvas": "^2.0.0",
-    "sync-ammo": "*"
+    "sync-ammo": "^0.1.2"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
