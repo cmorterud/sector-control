@@ -10,7 +10,7 @@ Recorded November 14, 2026. The user approved implementation on November 14. Thi
 - Wants softer, more natural map boundaries and historically coherent artillery/wrecked vehicle landmarks that matter as cover.
 - Wants more distinct equipment roles. Rifleman, Marksman and Support already exist; clarify their jobs before adding more classes.
 - Questions constant damaging ambient artillery, its purpose and performance cost. Explore deliberate fire missions linked to battlefield positions, including physically visiting a gun or fire-control station. Avoid repetitive long travel for every shot and ensure bots can participate.
-- Asked about larger maps, a controlled 20v20 comparison, current source availability, and linear levels from which battle maps could be derived. No documented controlled 20v20 comparison established. Public trial is currently independent single-player matches against bots; repository remains private.
+- Asked about larger maps, a controlled 20v20 comparison, current source availability, and linear levels from which battle maps could be derived. No documented controlled 20v20 comparison established. Public trial is currently independent single-player matches against bots; the source was private at the time and has since been published.
 - Suggested preferences from established shooters; controls are remappable, sprint supports hold/toggle, first person is available/default on a fresh profile, and pause supports map selection.
 
 ## User's Village Front requirements

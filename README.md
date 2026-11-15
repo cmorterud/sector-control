@@ -1,270 +1,97 @@
 # Sector Control
 
-Continuing from another chat? Read [HANDOFF.md](HANDOFF.md) for project decisions, implementation state, validation, and the Chrome control and recorded-playtest status.
+A single-player First World War shooter that runs in the browser. You fight alongside and against bots for control of flags across trench lines, a shelled forest and a destructible village, in first or third person.
 
-Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front is 50v50 domination with four flags; Village front and Verdun sector have five flags. Matches last up to eight minutes.
+![Verdun sector](public/previews/verdun.jpg)
 
-## Public trial
+**[Play it in your browser](https://sector-control-trial-20261108.cody22597.chatgpt.site/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. The hosted build is a snapshot and can lag behind this repository.
 
-Try [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun), [Village front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=village) or [Trench front](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches). Anyone with the link can play without signing in. Use a desktop browser with a keyboard and mouse; click **Begin operation** to start. [Start trenches in first person](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=trenches&view=first), or press T during play. Each visitor plays an independent match against bots.
+## Features
 
-This is a frozen production-build snapshot, updated November 14, 2026 through Sites. The GitHub repository remains private. Later game commits do not update the trial automatically; refresh the separate hosting snapshot and deploy it explicitly. The URL has no configured automatic expiration. Deployment identity and verification details are in HANDOFF.md.
+- **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
+- **Four maps.** Trench front, Verdun sector, Village front and a smaller 5v5 Industrial map.
+- **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
+- **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
+- **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
+- **No downloaded art or accounts.** Models, textures and most audio are generated in code; there is no backend or networking.
 
-Trench and village terrain now use close-up clumped earth, grit and broken soil fissures alongside broad wet/dry/grass variation. Explosions replace excavated grass, paving and wet surface finishes with fresh earth; the detail follows steep banks and crater walls without stretching. Individual worn duckboard planks, split timber grain, small exposed roots and rounded rubble add trench detail. Terrain lighting now shares smooth normals across patch seams, decodes surface colors consistently and uses softer soil highlights to prevent bright bands on trench banks. These are cosmetic changes; movement and cover collision keep their existing shapes.
+## Maps
 
-Artillery destruction reuses unchanged terrain cells and existing mesh buffers. Visual uploads, ragdoll setup and bot navigation rebuilds are spread over time, while damage and collision update immediately. Bots retain unaffected routes and check the next segment against current terrain. Settled corpses keep their visible pose outside the physics solver and reactivate for nearby blasts or supporting-ground/cover loss. Corpse meshes are shared per kit and prepared during deployment. Validation results and current browser-performance verification limits are documented in HANDOFF.md.
+| Map | Size | Objective |
+| --- | --- | --- |
+| Trench front | 50v50 | Four flags in opposing trench lines across no man's land |
+| Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
+| Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
+| Industrial | 5v5 | Three sectors among warehouse cover |
 
-## Player options and equipment
+On the flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
 
-**Controls** in the briefing and pause menu remaps actions, switches hold/toggle sprint (hold Shift by default), and saves camera and keyboard preferences locally. Escape always pauses/resumes. Reset restores defaults. Browser modifier shortcuts and duplicate bindings are rejected; browser-owned shortcuts can still close a tab.
+## Controls
 
-Choose **Rifleman**, **Marksman** or **Support** before deployment. Changes during a match apply on respawn. Press **1** for the primary and **2** for the pistol, or use your remapped keys. Trying to fire an empty weapon starts its normal reload when reserve ammo remains; R still reloads manually. Ammo and bolt cooldown belong to each weapon; switching cancels a reload without adding ammo. Support weapons fire automatically while held and become less accurate while moving. Marksmen have a fixed 4× scope, half-second sight settling and reduced peripheral vision. Pistols deal 25 damage and have a 25 m effective range.
+All keys can be remapped from **Controls** in the briefing or pause menu.
 
-Western Front maps use British and Imperial German uniforms and equipment; **Verdun sector** uses France and Imperial Germany. The procedural models are stylized faction variants with shared role statistics: SMLE / Gewehr 98 / Berthier rifles, Lewis / MG 08/15 / Chauchat support weapons, and Webley / P08 / Ruby sidearms. French marksmen carry a scoped Lebel-inspired rifle. These are gameplay archetypes, not exact museum replicas. Their new models have separate furniture, sights and actions: full-stock SMLE, long-barrel Gewehr, slender Berthier and tubular Lebel; Lewis cooling shroud/pan, MG water jacket/belt and Chauchat crescent magazine; opening-frame Webley, toggle-action P08 and compact Ruby slide.
+| Action | Default |
+| --- | --- |
+| Move | W A S D |
+| Aim / fire | Mouse / left click |
+| Aim down sights | Hold right mouse |
+| Sprint | Shift |
+| Crouch | C |
+| Hop, mantle or vault | Space |
+| Reload | R |
+| Primary / pistol | 1 / 2 |
+| Grenade / smoke | G / F |
+| Melee or bayonet | V |
+| Interact (pick up a flame kit) | E |
+| Tactical map and artillery | Q |
+| Switch first / third person | T |
+| Scoreboard | Hold Tab |
+| Pause | Escape |
 
-The first model upgrade covers French/German soldiers and the Berthier/Gewehr rifles: shaped coats, sleeves, faces, helmets and boots; cloth/leather/metal surface detail; curved stocks and darker machined steel; grip hands with fingers/thumbs; and extra first-person weapon details. The close view has independent detailed buffers. Distant French/German torso/head/equipment meshes simplify beyond42m and return within32m; the human stays detailed. Limb/weapon batches remain, while the torso mesh changes independently. Upgraded surfaces carry into ragdolls. Reload/bolt timings, sights, projectiles and hit volumes are unchanged. Browser/GPU performance acceptance remains unverified; see HANDOFF.md.
+## Run locally
 
-Nearby soldiers now plant their boots against the terrain with stance anchors and leg IK, adapting to slopes and small steps while keeping the original leg lengths. Crouch/stand, acceleration/braking, turns and mantle entry blend more naturally. Curved reload hand paths, palm-attached carried ammunition, bolt-following wrists and eased shoulder contact improve handling. These are presentation changes: movement, collision, hit volumes, camera/sight rays and reload/bolt timing remain unchanged. Distant bots retain a cheaper gait. See HANDOFF.md for the completed checks and interrupted native performance review.
-
-Two rare **flame kits** are placed in forward trenches on each historical map. Press **E** nearby to exchange the primary, retaining the pistol. A kit has eight seconds of fuel, an 8 m jet, 30 damage per second and a brief nonstacking burn. Earth and cover stop the jet; wood can burn through the existing destruction system. Bots react to visible flame danger and seek cover. Death drops remaining fuel; supply replenishes after two minutes with at most two kits in circulation. Bots do not pick up kits in this prototype.
-
-Trench front, Industrial and Verdun have game screenshots in their selection cards. Village uses a labeled layout illustration matching its new nine-building arrangement; a new gameplay screenshot awaits rendered review. The tactical map draws terrain and current cover, updating after destruction. Verdun is a 208 × 128 m, five-flag battlefield inspired by the 1917 fighting, with woodland, crater and communication-trench routes. Its central C flag, Broken Relay, is a shallow shell-torn clearing with four dogleg approaches, a broken signal mast, severed wires, a collapsed dugout and destructible low cover. A/B sit toward the French side; D/E sit toward the German side. It is an authored layout rather than a geographical reconstruction.
-
-Artillery cooldowns, fixed objectives and blast rules remain unchanged. Snapshots and playtest summaries now include repeat calls near flags, blast deaths, capture interruptions and potential damage prevented by cover. `tools/battle-audit.ts` runs three seeded full matches to gather evidence before proposing balance changes. See HANDOFF.md for results and validation limits.
-
-## Run
-
-Requires Node.js 22.12+ (developed with Node 26).
+Requires Node.js 22.12 or newer and a WebGL 2 desktop browser.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open the printed localhost URL, then click **Begin operation** to capture the mouse. WASD moves, mouse aims, Shift sprints, T switches first/third person, holding right mouse aims through the iron sights, each left click fires one round, R reloads, Tab holds the scoreboard, and Escape pauses. Press Escape again to resume, or click Resume. After Escape releases the mouse, the next movement/action key or a click on the game recaptures it automatically; that capture click does not fire a shot. Losing focus pauses the local simulation.
+Open the printed localhost URL. Other scripts:
 
 ```sh
-npm run check
-npm run build
-npm run preview
+npm run check    # type-check and run the tests
+npm run build    # type-check and build to dist/
+npm run preview  # serve the production build
 ```
 
-Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores.
+Useful URL parameters: `?map=trenches`, `?map=verdun` or `?map=village` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots and `?duration=30` shortens the match to thirty seconds.
 
-Use **Select map** in the pause menu to leave the current match and open another battlefield’s start screen. The results screen also offers map choices. Your selected camera view carries over.
+## How it is built
 
-GitHub Actions runs `npm ci`, `npm run check -- --maxWorkers=1` (TypeScript and tests), and `npm run build` on every push to `main`. The [Build and test workflow](.github/workflows/ci.yml) uses Node.js 26 on Ubuntu with npm caching. It can also be started manually from the repository's Actions tab.
+TypeScript, [PlayCanvas](https://playcanvas.com/) for rendering, Ammo for collision queries, Vite and Vitest. There is no UI framework; menus and the HUD are plain HTML and CSS.
 
-Development scenarios: `?bots=0` disables bots; `?duration=30` runs a thirty-second match; `?demo=1` permits observation without pointer lock; `?overview=1&autoplay=1` gives a top-down observer view for reviewing the layout and bot routes. These do not change normal gameplay defaults.
+- `src/simulation.ts` runs the game at a fixed 30 Hz on plain serializable state. It has no dependency on PlayCanvas or the DOM, so whole matches run headless in tests.
+- `src/map.ts` and the per-map files define geometry, objectives and navigation.
+- `src/rendering.ts` adapts simulation state to PlayCanvas and builds the procedural models.
+- `src/main.ts` owns input, menus, audio and the frame loop.
+- `tools/` holds simulation audits and performance diagnostics.
 
-Press **T** to toggle the normal view. First person is the default for a fresh profile; the camera choice is saved locally. `?view=first` or `?view=third` overrides it for that visit. Hold **right mouse** for first-person iron sights from either view, with a narrower field of view and slower mouse sensitivity. Releasing returns to the chosen view. The camera sits at the standing/crouched eye; the local head/body are hidden and separate articulated arms retain the reload/bolt/throw motions. Sights align with the camera ray, and traveling rounds converge from the barrel onto the first surface or soldier under the sight. Nearby cover can still block the barrel. Recoil moves the view and shot aim together; cosmetic blast rotation does not displace first-person sights. Grenade throws keep the selected perspective. In first person, the rifle pulls inward near solid cover (including its bayonet), lowers during actual sprint movement, and smoothly shoulders again when stopping or aiming. Retraction does not let shots bypass cover. Settled sights retain their alignment with the camera ray.
+## Documentation
 
-Walk over a trench edge to drop in naturally; no Space press is needed. Gravity carries you onto the firing step or floor, with a small landing pose. Press **Space** to hop on open ground or mantle upward to climb out. Hopping over an edge continues the arc down to the ground below.
+The `docs/` folder holds the project's working notes. They were written during development, largely as logs for AI coding sessions, and are kept for reference rather than polished for readers.
 
-Trench riflemen, including the player, carry a **bolt-action service rifle** with contoured walnut furniture, rounded steel, faction-specific sights, magazine and bolt geometry. Each uses shared detailed meshes and procedural wood/steel finishes in both views. It carries five rounds and 60 reserve. Click once to fire; the right hand opens, pulls and closes the faction bolt before another shot is possible (0.6 seconds between shots). Press R for a 1.6-second reload. SMLE, Gewehr and Berthier load a clip; the Lebel pose feeds loose cartridges. Service rounds deal 50 damage and have stronger recoil, a deeper report and timed mechanical sounds. Industrial keeps its 30-round semi-auto rifle. Holding the mouse does not repeat fire; a press during reload or cycling must be released before trying again.
+- [GAME_GUIDE.md](docs/GAME_GUIDE.md): detailed mechanics, maps and development scenarios.
+- [SPEC.md](docs/SPEC.md): gameplay rules and constants.
+- [IMPLEMENTATION.md](docs/IMPLEMENTATION.md): implementation notes by feature.
+- [HANDOFF.md](docs/HANDOFF.md): chronological development log and current state.
+- [PLAYTEST_REVIEW.md](docs/PLAYTEST_REVIEW.md) and [PLAYTEST_FEEDBACK.md](docs/PLAYTEST_FEEDBACK.md): playtest evidence and feedback.
+- [VILLAGE_DETAIL_PASS.md](docs/VILLAGE_DETAIL_PASS.md): proposed art pass for the village.
 
-Weapon changes lower the old gun, draw the selected one and raise it over the existing **0.3-second** firing lock. Ordinary sights shoulder over **0.2 seconds**; marksmen retain their **0.5-second** settling. The visible first-person muzzle and firing origin share that shoulder curve. Reload hands follow the actual feed location for pans, belts, curved magazines, pistol magazines and opening revolver frames. Slides/toggles and bolt travel follow the weapon; magazine/bolt/equip sounds follow their animation phases. Reloading during a draw queues a full loading cycle. Shared role capacities, damage, fire rates and reload durations remain unchanged, including the common eight-round sidearm capacity despite the Webley's stylized six-chamber model.
+## Status
 
-Service-rifle, semi-auto rifle and pistol rounds travel at **192 m/s**; machine-gun rounds travel at **48 m/s**. All bullet speeds are 1.5× the previous values. All retain a 60 m range, visible tracers, swept collision and damage on impact; bot lead follows each weapon’s speed.
+This is a prototype. Tests cover the simulation extensively, but rendered performance has not been profiled across browsers or hardware, and balance is still being tuned.
 
-Reloads now take half their previous time: **1 second** for the semi-auto rifle, **1.6 seconds** for the service rifle and **1.5 seconds** for the machine gun. Hand, clip/magazine and bolt animations follow the shorter timings, with mechanical sound cues aligned to them.
+## License
 
-**Machine gunners:** four bots per team in 50v50 (two in 25v25) carry a longer wooden-stock weapon with a pan magazine and folded bipod. They fire four-to-six-round bursts at 600 rounds/minute, then pause for 1.5–3 seconds. They retain recognition delay, imperfect aim, recoil, suppression and sight-loss interruption, with more aim wander than riflemen. Their magazines hold 60 rounds with 240 reserve and a 1.5-second reload. They stay with the covering force rather than joining assault squads. Players can choose Rifleman, Marksman or Support before deployment or for their next respawn. Small 5v5 bot rosters stay rifle-only.
-
-Rifles now kick upward and slightly sideways on every shot. The kick moves the barrel, shoulder and camera and changes subsequent projectile directions for players and bots. Pull down to compensate, or space your shots and let the rifle settle. Right-mouse aiming reduces recoil by 20%; crouching reduces it by another 15%. The support hand stays on the grip.
-
-Soldiers visibly brace and twist their shoulders after close enemy bullet passes, hits and nearby landed explosions. Bots briefly crouch and pause their shooting, then recover; a bounded local search can move an exposed bot a few meters toward reachable cover against the incoming direction. Destroyed shelter and new fire from another direction trigger a recheck. Reaction cooldowns leave time to return fire and keep pursuing flags. These cues do not reveal the shooter's identity or position to the targeting system. Human movement, stance and aim stay under player control, and first-person sights retain their alignment. Playtest logs include `combatReaction` and `reactionCover` events plus cover-arrival counters.
-
-Press **V** for melee. Trench service rifles use a **bayonet thrust**: 65 damage, a short wind-up, 1.8 m reach and recovery between attacks. Build up forward sprint speed, then press V for a **bayonet charge**: 100 damage and limited turning. Keep sprinting forward to hold the bayonet raised and readied until the first body contact, which lowers it and starts a longer recovery. Releasing sprint or forward movement, hitting solid cover, becoming airborne, or dying ends the charge. Allies and protected soldiers can absorb the first contact without damage. Machine guns and industrial rifles use a shorter, weaker weapon-butt strike (45 damage, 1.25 m reach). Holding V does not repeat attacks.
-
-An active charge visibly raises and slightly centers the rifle, with gentle side-to-side and fore/aft movement tied to the running stride in both views. Both hands stay on the weapon; the extra charge motion clears on contact or cancellation.
-
-Melee checks the victim's position at contact, so stepping away can make it miss. Earth and solid cover stop it, and friendly/protected soldiers block the thrust without taking damage. An attack interrupts firing, loading, throwing and climbing until recovery ends. You cannot begin while reloading, throwing, airborne or stunned. A landed blow briefly staggers a surviving soldier and can interrupt their wind-up. Bots use melee only against a nearby recognized enemy, after a close-range reaction delay; artillery evasion and suppression cover still take priority. No spoken callouts are added.
-
-Press **G** to throw a grenade in the direction you're looking. Each soldier gets **three per spawn**. Human throws have a brief **0.2-second wind-up**: a visible hand brings up the grenade, releases it and returns to the rifle. Smoke uses its own visible canister. Inventory is spent and the fuse starts at actual release; death before release cancels the throw. Aiming can still adjust the direction during preparation. Reloading, firing and climbing wait until the throw finishes. The overhand release sits just above eye level so a level throw from the standing firing step clears the lip. Crouched or trench-floor throws still need an upward look to clear solid earth. Release paths sweep the grenade shell through real cover; they cannot start beyond a wall. Human throws follow the look direction with only a 0.1-radian upward bias, then arc under gravity, bounce off terrain/cover, and explode **three seconds after release**, with a flash, expanding blast effect, rising smoke, and sound. The **7 m blast radius** deals up to 140 damage with distance falloff; solid cover blocks damage. Your own grenade can hurt you; teammates and protected spawns take no damage. A level look produces a shallow, visible throw; look upward to lob farther or clear a parapet, or down to drop one nearby. Bot smoke throws retain their existing loft. Throws briefly interrupt rifle fire; a held G does not repeatedly throw. A connected column of thrown-up dirt rises above the trench lip so a burst inside it remains visible. Flash and damage still respect solid earth. Explosive blast smoke is cosmetic. Press **F** for a separate concealing smoke grenade; bots use these during squad advances, while explosive grenade throws remain player-controlled.
-
-## Trench domination
-
-Capture **A and B** in Blue’s front trench and **C and D** in Red’s. All four start neutral. Stand within six meters of a flag in its connected trench space: bank tops and solid walls do not count. A neutral flag takes **15 seconds** to capture; an enemy flag takes 15 seconds to neutralize, then 15 more to claim. Extra soldiers do not speed this up. Both teams present freeze progress and income. Ownership remains after leaving.
-
-World-space objective markers show only a small, dim letter and distance, fading further near the crosshair and while aiming. Contested flags use gold and a small `!`; full names, ownership and capture progress remain in the top HUD, capture readout and tactical map.
-
-Each uncontested flag earns its owner **one point every three seconds**. First to **300** wins; otherwise the higher score after eight minutes wins, with ties drawn. Kills remain personal scoreboard statistics and earn no team points. The HUD shows ownership, contested flags and capture progress; the Q tactical map also marks public flag ownership. Named landmarks help orient the four areas: **A Farmhouse**, **B Shattered Wood**, **C Gun Pit**, and **D Broken Bunker**. Flags remain in their original trench positions; the ruins, shattered trees and abandoned gun stand nearby without closing the existing trench routes.
-
-Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
-
-## Village front prototype
-
-Choose **Village front** in the start menu or open [the village map](http://localhost:5173/?map=village). It keeps the trench map's 50v50 roster, service rifles, machine gunners, grenades, bayonets and artillery, with the same domination rules.
-
-The 180 × 160 m battlefield has nine standing buildings arranged in a 3×3 village. **A Schoolhouse / aid post** and **B Orchard farmhouse** occupy the left corners; **D Village inn** and **E Town hall / post office** occupy the right corners. **C Saint-Martin Manor** is the central fifth flag, captured from its ground-floor entrance hall. The stable, bakery/workshop, smithy/storehouse and groundskeeper's cottage provide simpler intermediate buildings. Cobbled streets, gated stone gardens, rear lanes, carts and orchard trees connect the plots. Each team has three separate sunken approach lanes.
-
-The manor has two playable floors, two stairways, internal rooms and upper window positions. Soldiers stand on explicit floor/stair supports independently of the earth beneath; upstairs cannot capture the ground-floor flag through a ceiling. A limited number of bots reserve upstairs covering posts while others pursue flags. Bots avoid teammates on other stories, select real cover and reroute when entrances, floors or shelter are destroyed. Their smoke-crossing decisions follow the new streets.
-
-Walls consist of separate masonry panels with actual door/window openings. Pitched roof panels, gable ends, upper floor sections, porches and chimneys share the destruction system. Local blasts open breaches and remove floor/roof sections; losing supports causes connected failures, and losing about two-thirds of ground-floor bearing sections collapses the remaining structure. Persistent low rubble replaces destroyed sections with a bounded number of colliders. Terrain and trees remain destructible. Falling floor occupants and physical corpses lose their support; collision, shots and bot routes update with the surviving geometry.
-
-Playtest logs include `botPosition` reasons and destruction events. The November 14 redesign has simulation and native Ammo checks; Chrome's inspection service failed to start, so no new rendered performance result or current-layout gameplay recording is claimed. Earlier Village recordings describe the superseded seven-ruin layout. See HANDOFF.md for final validation and publication status.
-
-The November 14 repair keeps the soldier's height when leaving a destroyed tread or floor, then uses gravity instead of snapping to ground level. Footprint support prevents falling into surviving stairs; hops keep their airborne state. Space can vault low walls and cover with a checked far-side landing and head/body clearance, while retaining terrain mantles. Ground floors now have physical planks or paving with bare foundation soil underneath. Artillery pressure does 20% of its former structural damage to buildings and structural cover unless the burst is in direct contact (within 20 cm); soldier damage, crater rules and grenade damage are unchanged. The next proposed architectural art pass is in [VILLAGE_DETAIL_PASS.md](VILLAGE_DETAIL_PASS.md).
-
-A follow-up shortens both manor stairways to household proportions: 16 treads of 32 cm over a 5.12 m run (about 34°, previously 20 treads over 12.4 m), each ending on its own upper landing. The first-floor slab now covers the rest of the old long stairwell openings. Stair navigation anchors and walk checks use the same 45 cm support footprint as soldiers, so a route cannot rest on a point embedded in the next riser. `villageStairRules` in `src/village-buildings.ts` holds the dimensions.
-
-## Verdun forest trenches
-
-Verdun has irregular woodland belts along both flanks: tall pines and torn broadleaf crowns mixed with bare trunks and snapped trees. Eight denser, asymmetric groves surround Broken Relay and extend into the formerly bare ground on either side. The center has up to112trees, with three broad shooting breaks and clear relay approaches; the whole field has up to236destructible trees,42low brush patches,14fallen logs and12stumps. Trunks provide real cover; foliage affects bot visibility, and the low undergrowth leaves soldier-height sightlines open. Central trees can be stripped and felled by explosions, opening the field as the match progresses.
-
-Three forward sap trenches turn through the woods, joining the existing rear/front network. The southern approaches take different doglegs on each side. Walk-out slopes, objective approaches and worn woodland tracks stay clear of new props. Brown leaf litter, needles and damp soil blend into the same terrain material; fresh artillery and grenade cuts reveal earth. Crowns disappear when trees are badly damaged, and destroyed trunks fall into physical low timber cover using the existing bounded animation/debris system.
-
-The forest presentation uses tapered bark trunks, fine branching limbs, irregular needle sprays and torn broadleaf crowns. Up to 180 small fern, root, branch and curled-leaf details sit on stable ground, add no collision, and disappear where explosions excavate the surface. Shared mesh variants and static batches bound their cost; no foliage animation runs per tree.
-
-The latest forest geometry, floor detail and ambient audio are included in public trial version21. The published JS, CSS and map previews match the tested build byte for byte. See HANDOFF.md for validation and deployment provenance.
-
-Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden steps and fresh craters sound muddy. Quiet wind/rustling, occasional creaks and off-map distant battle sounds add ambience. Wind rustling weakens as nearby crowns are stripped or felled. Tree damage and falling timber produce positional cracks/thuds, including Verdun's tree IDs. All sounds use the existing volume, pause/reset, capture and voice-budget controls; no spoken callouts were added.
-
-France versus Imperial Germany, 50 soldiers per team, five-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
-
-## Farmland trench front
-
-Trench Front now has two rutted supply roads, broken farmyard boundaries, a lower ruined farmhouse with a recognizable chimney, bare orchard trees, supply carts/crates, shelter-bay stores and three shallow flooded pockets. A winding shallow drainage hollow adds ground-level variation in the northern crossing. There are87new destructible cover parts, clustered around supply districts and farm boundaries; existing trench routes, firing stations and four flags remain accessible.
-
-Most added cover sits below standing sightlines. Explosions open timber fences and remove carts/crates; masonry leaves low rubble and felled trees leave trunks/stumps. Undermined farm props lose both their visual and collider. New scenery uses existing shared materials and batched primitives. Trench Front keeps its farmland identity alongside Verdun's woodland setting.
-
-## Soldiers
-
-Soldiers have rounded, tapered limbs and tailored coats, smaller human-shaped heads, curved steel helmets, puttees and oval boots. Muted team-colored uniforms, armbands, webbing, pouches, packs and rolled blankets retain team readability. The models are stylized procedural figures. Stride timing, upper-body sway and idle breathing vary between soldiers. Reloads visibly load a service-rifle clip or exchange the other weapons’ magazines; the right hand works the action while the left stays on its grip. Walking, crouching, mantling, blast reactions and falling bodies retain their articulated poses.
-
-A killed soldier becomes a physical ragdoll immediately: 13 articulated body parts and a loosely held weapon, joined with limited hips, shoulders, elbows, knees, neck and ankles. Bodies inherit movement and react to hit/blast impulses; earth, trench walls and nearby cover stop them. Nearby bodies remain for about 20 seconds, fading at the end; at most 24 are retained. They settle, can be moved by later explosions, and fall again when supporting earth or cover is destroyed. They are cosmetic for gameplay, so they do not block movement, shots or objectives. Physics uses fixed 60 Hz steps and automatic sleeping; one skinned mesh per body keeps rendering bounded. Respawning soldiers are independent of the retained body. Pausing freezes the presentation and a fresh match clears it.
-
-Spoken soldier callouts are removed, including smoke, grenade and incoming-artillery lines. Weapon fire, explosions, incoming-shell whistles, footsteps and other battlefield effects remain audible.
-
-## Battlefield appearance
-
-Trench terrain now has mottled damp soil, fine mud detail and locally darker exposed earth after excavation. Timber lining and duckboards have worn grain. Materials stay attached to the rebuilt terrain, including bank faces and craters. Trench banks have steep scooped sides, rounded shoulders and softened outside corners, with slight fixed variation along the edge. Short timber retainers sit below the earthen shoulders. The two-meter floor lanes, firing steps and rear entry ramps remain; rounded earth still requires a mantle to climb.
-
-Cool overcast light, softer shadows, a clouded sky and light distance haze give the battlefield depth. Explosions throw a brief dirt column and tumbling clods, followed by irregular dust that spreads, drifts and fades. Concealing smoke uses soft textured billows. Its existing visibility rules remain the same; explosion dust remains cosmetic. These effects pause with the game, reset with the match and have bounded overlapping particles.
-
-## Battlefield sound and reactions
-
-Rifles, explosions and incoming shells now have directional sound, distance filtering and cover muffling. Nearby rounds produce sharp spatial cracks using the actual unobstructed near-miss events. Rifle tails soften with distance; artillery has a falling whistle, a sudden broadband crack and an unpitched low rumble. Explosions can take a voice from quieter rifle chatter so their sound is not lost in a crowded mix. Sounds are synthesized locally as a prototype.
-
-Footsteps follow distance actually walked: mud outside the trenches, wood on visible duckboards, and concrete in the industrial district. Sprinting is louder and crouching quieter. Planks disappear where excavation removes their support, and footsteps there return to mud. Nearby soldiers contribute footsteps; airborne or stationary soldiers do not.
-
-Nearby explosions briefly jolt the camera, muffle battlefield sound and add falling-dirt audio. Cover reduces the reaction, hearing recovers over a few seconds, and nearby soldier rigs briefly brace. These are presentation effects and do not alter input, aim, damage or bot decisions. Start/pause menus include a **Battlefield volume** slider (zero mutes) and a **Blast camera motion** toggle. Headphones help with direction.
-
-Recorded playtests now include the game's stereo output, along with presentation counters and a bounded recent-sound log in the JSON. They capture no microphone or desktop audio. Sound voices and audible footsteps are capped for the 100-soldier battle; pausing cancels active/scheduled sounds and restarting clears feedback.
-
-## Destruction prototype
-
-Grenades now excavate persistent craters and damage wooden obstacles, trench lining, and sandbags in both maps. A ground-level grenade can dig roughly 0.5 m at its center across an initial 3.5 m footprint, with a smooth rounded bowl; airbursts dig less. Repeated hits deepen and widen the bowl, with a lowest floor of −0.9 m. Craters affect walking height, cover, bullets, camera collision, and bot routes. Parapet crests can be chipped, and repeated concentrated hits can create a breach. Wooden lining can break away while the earth behind it remains solid. When excavation removes its backing, the remaining lining breaks away too, so a walkable breach cannot retain a standing wooden facade. Sandbags lose height before disappearing. Two light wooden screens behind the trench lines provide additional destructible cover.
-
-Explosions against an exposed trench face now cut rounded chunks sideways into the bank. Repeated grenade hits or a strong artillery strike can make an **open, walkable breach** with matching terrain collision; partial cuts leave earth that still stops shots. Intact solid screens block excavation.
-
-Artillery bowls now vary in size, depth, elliptical orientation, offset and softly irregular rims, deterministically per impact. Low firing-step ends crumble locally into rounded pockets when directly struck; relaxation cannot carve remote intact trench edges. Meshes, rays and movement share the same deformed surface. Artillery also slumps damaged narrow earth remnants into low rubble slopes. Partially eroded bank edges blend consistently between terrain samples, preventing thin upright sheets with collision. Intact distant walls and fixed foundations remain protected.
-
-Scattered grass, shrubs and battle-scarred trees break up the rear banks and flanks while no man’s land stays relatively open. Most trees are bare or snapped, with exposed roots and splintered tops; a few retain small, muted crowns. Bare branches provide no invisible foliage concealment, while trunks remain solid and destructible. Weathered, split timber posts and low abandoned helmets, packs and planks dress the trench edges; this small clutter is cosmetic and clears where explosions excavate its footing. Foliage obscures bot sight but lets soldiers and bullets pass; trunks are solid. Explosions clear brush, strip tree crowns and fell trunks into destructible logs and stumps that become new cover. Rifle impacts can chip and eventually fell trees too. Roots exposed by excavation also fail. Squads can choose newly excavated craters as regrouping cover and crouch in deeper bowls. Flying dirt and fragments remain cosmetic. Trees now tip over with an accelerating fall, a small landing bounce and a timed timber thud before settling into their log and stump. Wood splinters, leaves and dirt tumble, bounce against the terrain and settle briefly before fading. These effects pause with the game and remain cosmetic.
-
-The trench landmarks add sectional destruction: brick farmhouse walls, a concrete bunker and an abandoned gun can take blast damage. Damaged wall sections lose height; destroyed sections disappear and leave low rubble that blocks movement and shots until further blasts clear it. The farmhouse roof patch and bunker slab collapse when too few tall supports remain. Excavated footing can also bring down unsupported sections. Dust, chunky fragments and collapse sounds accompany the change; flying fragments are cosmetic, while settled rubble is real cover. Restart restores everything.
-
-Industrial buildings, bunkers, containers and concrete barriers retain their existing fixed geometry. Terrain remains a height field without enclosed tunnels; landmark roofs are separate supported box geometry. This is a sectional-collapse prototype rather than a general structural physics system. Explosion profiles keep soldier damage, structural damage and excavation settings separate.
-
-Destruction events record the source, world revision, object health/stage, changed terrain samples and rebuilt patches. JSON snapshots include the accumulated world state. The renderer replaces only affected local terrain meshes/colliders and refreshes damaged cover; bots recalculate routes after changes.
-
-## Artillery prototype
-
-Press **Q** to open a quick tactical map, then click a broad **16 m sector** to request fire. Press Q again or right-click to cancel. The battle keeps moving; movement and crouch still work, while aiming/firing/throws are suppressed. The map shows the authored trench layout and your position, without live enemy markers. Mouse capture stays active during normal play, using a visible map cursor.
-
-You can request artillery from the trench floor or behind cover. Calls are approximate: the salvo center may drift up to **6 m with a clear view**, or **10 m when blind**, followed by the existing **14 m shell scatter**. You cannot refine a call into a precise point. Range remains **15–70 m**, evaluated to the sector center; unavailable sectors are dimmed with a reason. Charge/cooldown and human-team ownership still apply. Map-edge impacts stay inside the battlefield.
-
-Each team has one shared charge: first available **10 seconds** into the match, then **30 seconds** after each confirmed call. Death does not replenish it or cancel an ordered barrage. If a team has a human player, only that human can call its artillery, including while waiting to respawn. Teams made entirely of bots coordinate their own calls. In normal play this reserves Blue's charge for you; autoplay has no human-controlled soldiers, so both teams can call automatically.
-
-An ordered barrage takes roughly **four seconds** to reach the battlefield, without an enemy countdown or ground warning ring. Listen for the actual incoming shells. Eight shells scatter within **14 m** of the target and land across the same **four-second first-to-last window**, with irregular gaps of roughly **0.23–0.93 seconds**. Visible shells descend in **0.8 seconds**, whistle, and burst on the first solid surface, including bunker roofs.
-
-Each shell retains **240 maximum damage with a 12 m falloff radius**: an unshielded soldier can still be killed within roughly seven meters. Intact earth fully shields blocked bodies, and partial cover scales artillery damage by how much of the body is exposed. Moving off the firing step or crouching behind the lip offers strong protection; a direct hit inside the trench remains deadly. Craters are smaller: nominal **2.5 m radius / 1.3 m depth**, terrain reach 3.5 m and bank-cut depth 1.6 m. Irregular shape, dust, flying dirt, structural damage and repeated excavation remain. Fixed buildings/bunkers protect their foundations. Self damage applies; teammates and protected spawns retain grenade protection. Artillery dust is cosmetic; dedicated smoke grenades conceal vision.
-
-Bots react to nearby physical shell flight and impacts, then seek earth cover or the screened rear shelter bays; they no longer know about calls before shells arrive. Survivors return to nearby intact stations. **Future request: creeping barrage**, a fire line that advances slowly forward; deliberately deferred.
-
-Typed `artilleryCall`, `artilleryLaunch`, `artilleryImpact`, `artilleryEvade` and `artilleryEnd` events link mission/shell IDs; snapshots include team cooldowns, missions, shells and retreat state. Recorder summaries count calls, impacts and retreats. Runtime terrain cuts remain sparse/serializable with a revision-based numeric lookup cache for movement and rays.
-
-### Stray heavy artillery
-
-On Trench front, a single heavy shell also falls spontaneously every **8–22 seconds**, at irregular intervals. These land at random battlefield positions, independently of either team's calls, with no countdown or ground marker. Their blast radius is **24 m** (twice the guided shell's 12 m), with twice-size flash/dust and a roughly **5 m crater radius**, retaining the existing irregular shapes and cut depth. Peak damage stays 240; the larger radius carries damage farther. Intact earth still blocks blasts and partial exposure reduces damage. Heavy shells threaten both teams, preserve spawn protection, and award no kills or team points. They avoid the spawn assembly areas and never aim at a particular soldier. Team artillery charges and guided barrages are unchanged.
-
-### Ground appearance
-
-Trench front uses a continuous battlefield-sized material: broad irregular wet mud, lighter dry earth and sparse faded-green areas, with two differently rotated/scaled mud layers blended across them. Fine surface normals remain visible nearby without the former three-metre repeating color tile. Worn paths connect spawn approaches to rear entries and faint broken tracks cross the field. Thirty small cosmetic stones/clods sit near the approaches; up to nine shallow, glossy puddles fit inside existing hollows. Explosions remove affected dressing and reveal warmer, darker fresh-cut soil; authored old craters keep their weathered surface. This changes presentation without altering terrain heights, movement, blast rules or navigation.
-
-## Crouching
-
-**Press C** to crouch; press it again to stand. Crouch stays on after releasing the key and across pause/resume. Crouch walking is **2.25 m/s**, half normal walking speed, and holding Shift does not sprint while crouched. The soldier bends their knees, lowers their body/rifle and camera, and keeps their boots planted. There is no persistent stance status line.
-
-Crouching changes the actual hit profile, bot sight/aim height, muzzle, grenade release and explosion cover checks. It hides a soldier below the parapet even on a firing step; rounds at standing head height pass overhead, while lower rounds can still hit. A lowered rifle strikes nearby cover normally, and blind tactical-map artillery requests remain available from cover.
-
-Space stands the soldier to hop or mantle when there is clearance. Crouching waits until an airborne action finishes, then resumes if crouch is still toggled on. A solid overhead obstruction keeps the soldier crouched after toggling crouch off until there is room to stand. Adjacent earth banks are distinguished from ceilings. Death/respawn/restart reset stance. Commands/snapshots and typed `stance` transition events support recorded checks.
-
-## Suppression, smoke and squad prototype
-
-Press **F** to throw a smoke grenade: **two per spawn**, independent of your three G explosives. The canister uses the same swept/bouncing physics, starts releasing smoke after roughly 2.5 seconds once it lands, and creates a growing **6.5 m radius cloud lasting 20 seconds**, including buildup/fade. Smoke causes no damage or excavation. It blocks vision for both bot teams and artillery spotting, while bullets still pass through it. Bots immediately drop obscured targets and must reacquire/react after visibility returns. Close silhouettes can still be seen. Explosive-grenade/artillery dust is a separate cosmetic effect.
-
-Enemy rounds passing within 1.8 m build suppression only along their unobstructed path. Solid cover, teammates and spawn protection are respected; a round can suppress each soldier once. Suppression recovers when incoming fire stops. Suppressed bots lose accuracy and may leave their firing steps for about 1.5 seconds before returning. Human players hear nearby cracks and get a subtle edge effect; their aim/movement stay under direct control. There is no persistent suppression status line.
-
-In trenches, **groups of three or four bots** periodically screen an advance while most soldiers maintain covering fire. Groups wait for a smoke screen, mantle out, sprint to a crater, regroup, lay another screen, and try to reach the opposite front trench. Surviving soldiers who enter the opposing trench hold their forward position until death. Humans are never assigned automatic movement. Nearby physical shells and impacts can interrupt an advance so bots seek earth cover. Waves require enough healthy, armed soldiers at a suitable firing step; starts and outcomes vary with combat. A new launch window opens every 12–18 seconds when enough soldiers are ready. Up to two squads can overlap on different launch areas, with at most eight bots committed, holding forward positions, or still returning from the field. Nearby craters and existing smoke influence route choice. A surviving member takes over if the smoke carrier dies or is reloading. Soldiers wait for thick smoke before the first departure; once committed to a leg they finish the dash even if its screen fades. Survivors already in the field who have exhausted their smoke regroup for three more seconds, then risk an unscreened dash to the next cover. Failed groups do not receive free invulnerability or replacement smoke. Industrial retains its sector behavior.
-
-Trench flags now score through domination. Smoke and covering fire create opportunities to cross and contest enemy flags. Forward respawns, healing and player squad commands remain future work.
-
-Snapshots include smoke, suppression, duck state and squad plans/progress. Typed `smokeThrow`, `smokeBloom`, `smokeEnd`, `nearMiss`, `suppression`, `duck`, `assaultStart`, `assaultProgress` and `assaultEnd` events support log-only checks. Recorder summaries count smoke, pinned bots, assaults and crater/trench arrivals. Tests may set `assaults: false` to isolate the original stationary trench geometry; normal trench play enables assaults.
-
-## Trench front prototype
-
-Choose **Trench front** on the start screen, or open [the 50v50 trench map](http://localhost:5173/?map=trenches). Blue has you plus 49 bots; Red has 50 bots. Industrial remains the default 5v5 map.
-
-The 160 × 128-meter battlefield has **four zigzag trench lines: two per team**. Each team enters its rear line from open-ground spawns, then follows short dogleg communication trenches into its front line. Blue has longer uneven stretches and setbacks; Red has more frequent, independently placed bends. Six alternate connections create short loops around earth islands, and six recessed 4 × 4 m shelter bays have screened, turning access from the rear lines. These are open-topped earth shelters: a direct shell can still kill. The six original communication routes bridge **16–20 m** between paired lines, with offset entrances and earth traverses blocking straight shots. Spawns remain behind the rear lines. **The front parapets are continuous: there are no ramps or walk-through exits into no man's land.** Rear entry ramps remain.
-
-Support and communication trenches retain **2 m floor lanes**, with compact dogleg turns instead of broad junctions. Rounded bank shoulders open outward by roughly 0.65–0.8 m, softening the corners while keeping the floor narrow. Front firing trenches are **4 m across**, including a two-meter floor lane, a one-meter ramp and a one-meter firing step. The six rear shelter bays are smaller, and rear entry ramps are four meters across. Timber, duckboards, abandoned kit and bot routes follow the tighter layout.
-
-The battlefield starts with **rolling ground and broad hollows**, across no man's land and the rear areas, plus six real shell craters and five shallow depressions. The broad landforms dip by up to about 0.95 m; rear rises reach roughly 0.3 m, while central crests stay low enough to preserve firing-step sightlines. Six larger 0.55–0.7 m shell bowls have rotated, uneven outlines, with nine smaller 0.18–0.24 m hollows overlapping their shoulders and the broad depressions. Scattered clods vary in size and angle, replacing identical blocks around circular rims. The six major bowls remain the bots’ starting cover anchors. Slopes blend back to level around trench lips, floors, steps, rear entry ramps, spawns and fixed cover. Movement, bullets and camera collision share the visible surface; foliage roots follow it. Grenades and artillery continue excavating this starting terrain, and restarting restores it.
-
-Fifty distinct firing positions per side are spread along longer steps, with 1.2 m spacing. The short Blue setback keeps four positions. Spawn formations start five metres farther back to keep the larger roster off the entrance ramps.
-
-Trenches are **2.4 m deep**, with **0.85 m firing steps** along the front edges. The floor conceals a standing soldier from the opposing trench. On a step, the head/helmet and raised rifle clear the parapet while the torso stays behind earth. Walk back off the step to shelter. Cover and visibility come from the actual world geometry; shots aimed below the parapet strike the bank.
-
-Most bots hold individual firing positions inside their own front trench and aim at exposed heads. Small groups now use smoke to advance through crater cover and into the opposing front trench. Bots first notice an enemy in their view, build recognition and turn their rifle toward them; close movement or recent nearby gunfire can draw their attention outside that view. Recognition takes roughly 0.9–1.5 seconds, with additional time to turn. They aim from periodically sampled last-seen positions and imperfect movement estimates. Aim wanders, individual shots vary, and movement/suppression make it worse. They fire uneven groups of two or three semi-auto shots with pauses, and lose focus after 2–4 seconds for a 0.8–1.8 second reassessment. They stop firing when sight is lost and briefly search the last known position before reacquiring. Each soldier has different timings. Players use the same recoil system; bot aim drift remains separate. Trench scoring uses the four domination flags described above; kills remain individual statistics. Industrial retains A/B/C territory scoring. No man's land remains sparsely covered with two short sandbag remnants, wire patches, and shell scars.
-
-Walk over a downward edge to fall naturally. Walk near an upward edge and press **Space** to mantle out. The prompt appears when facing a nearby ledge; movement direction takes priority while walking. A climb takes 1.2 seconds: approach, reach with the free right hand, pull up, cross with tucked knees, and stand on the ledge. The left hand stays on the tucked rifle. Foot/torso/head clearance and a stable landing are checked; firing/capturing pauses during the climb. When there is no valid mantle, Space gives a small hop (about 0.45 m high, half a second airborne), with a knee tuck and soft landing. Upward motion stops at ceilings; airborne presses do not trigger another hop. Hops retain normal horizontal collision, so they do not bypass banks or solid cover. Mantling climbs terrain banks rather than buildings or solid cover. Manual mantling still lets you deliberately go over the top, fully exposed; assault squads also mantle terrain edges through the same movement checks. The prototype retains the current assault rifle and visible traveling rounds; historical weapons are a separate design pass.
-
-For a log-only 100-soldier test: `http://localhost:5173/?map=trenches&playtest=1&video=0&autoplay=1&duration=60&clip=120`. Snapshots include map ID, scoring mode, team size, elevation, and active mantle state; `mantle` events record start/end and both endpoints; `hop` events record takeoff/landing, and snapshots include active hop height/velocity. A death can interrupt a climb. `teamSize=1..50` changes the roster for experiments.
-
-## Recorded playtests
-
-Open `http://localhost:5173/?playtest=1&autoplay=1&duration=60` and begin the operation. A bot drives the player through the real rendered game and collision adapter. The game records up to 60 seconds at 1280×720/30 FPS; `clip=120` raises the limit to two minutes. Omit `autoplay=1` to record manual play with normal pointer lock.
-
-When the run finishes, the panel provides **Save events.txt** for a readable simulation-time event list, **Save json** for commands/events/state, and **Save webm** (or MP4 when supported) when video is enabled. Save the artifacts under `playtest-artifacts/` for review. The video includes a diagnostic HUD and the game’s stereo audio; the HTML/CSS overlay itself is not captured. JSON includes every player command, typed events, one state snapshot per simulation second, frame timings, and runtime errors. Wall-time timestamps align samples with the video. This records the WebGL canvas and the game’s own audio mix, without desktop/microphone permissions, external upload, or a backend. Recording overhead affects frame timings; benchmark normal play separately. Unavailable video encoding falls back to diagnostics only.
-
-This enables repeatable autonomous navigation/combat/capture runs. It supplements tests of real keyboard/mouse input, pointer lock, menus, and subjective combat feel. Local browser-control permission is still required for an agent to launch and inspect runs; the recorder does not bypass it.
-
-Chrome direct input, native video export, a full rendered autoplay match, and restart were verified on November 1, 2026. See [PLAYTEST_REVIEW.md](PLAYTEST_REVIEW.md) for recordings, measurements, the capture-cadence correction, and remaining acceptance checks.
-
-For simulation checks without video, open `http://localhost:5173/?playtest=1&video=0&autoplay=1&duration=40`. Begin the operation, then use **Save events.txt** or **Save json** when it finishes. This skips canvas capture and MediaRecorder entirely. Omit `autoplay=1` to collect direct input instead. Events include simulation ticks/times, projectile IDs, fire/impact, damage, death/respawn, reload, capture, score, and results. JSON snapshots include all active projectile positions and velocities. The normal bounded clip limit still applies to log-only runs.
-
-## Performance diagnostics
-
-Battle navigation retains unaffected adjacency rows and walk checks after local destruction, including cosmetic tree hits. The initial graph is prepared during deployment. Movement and walkability queries use a local cover lookup before applying the exact collision rules; insertions, removals and world updates refresh it. Scenery groups regenerate once before rendering when several impacts share a frame; collision updates stay synchronous. Terrain-lighting normals reuse unchanged world points with local invalidation around fresh cuts. These changes preserve game rules, roster size and visual detail.
-
-For a stutter report, open `?map=trenches&playtest=1&video=0&clip=60` on the local server or public trial, begin play, and use **Save perf.json** when the minute finishes. Omit autoplay for direct play; add `autoplay=1` for a repeatable bot-driven player. The small report contains frame p95/p99/max, CPU phase timings, event counts and the worst60 frames with preceding-work attribution. Recording is opt-in and stays local; it adds overhead. Nested phase totals overlap; render submission measures CPU work rather than GPU execution. Deployment/loading stalls are retained and can appear at tick0.
-
-Terrain patch builds reuse exact shared height probes. Explosion-removable scenery uses local32m static batch groups, so destruction rebuilds nearby geometry; terrain and collision updates remain synchronous. `tools/performance-scenery.ts` measures actual PlayCanvas duckboard batching without a GPU. Local batching increases the number of static batches; CPU savings are measured, while the optimized browser frame impact still needs confirmation.
-
-`tools/performance-battle.ts` runs seeded CPU-only Trench/Verdun simulations with event/final-state hashes; `tools/performance-terrain.ts` checks exact terrain/lighting output and real Ammo replacement cost. Bundle these scripts with esbuild for Node. Neither is a substitute for browser/GPU measurements. See HANDOFF.md for the before/after native recordings and remaining blast-related spikes.
-
-## Rules and architecture
-
-All simulation uses 30 Hz ticks, plain serializable state, shared human/bot commands, typed events, and an injected collision boundary. `simulation.ts` runs in Node without PlayCanvas or a DOM. `map.ts` is the shared geometry and objective definition. `rendering.ts` adapts PlayCanvas/Ammo and procedural models. `main.ts` owns browser input, menus, audio, and the frame accumulator.
-
-Industrial starts on flat ground with axis-aligned obstacles. Both maps support runtime grenade excavation. The trench map adds a shared height field, recessed floors, firing steps, and inclined ramps. Movement uses a conservative swept footprint with short substeps and wall sliding; static PlayCanvas/Ammo colliders handle line of sight, bullets, and camera queries. Soldier hit volumes are simulation-owned spheres approximating a capsule. Rendering never determines damage, reload, or capture timing. A future server needs its own trusted collision implementation, command validation, and networking.
-
-Capture requires ten seconds from neutral to ownership; enemy sectors require ten seconds of neutralization followed by ten seconds of capture. Empty progress persists, both teams pause it, and defenders reverse neutralization. There is no capture speed bonus for extra soldiers. Dead soldiers cannot capture. Respawn protection lasts two seconds, permits capturing, and ends upon firing. Rifle rounds visibly travel at 128 m/s, expire after 60 meters, and deal damage on impact. Teammates block rounds without taking damage; protection is checked when the round arrives. Reserve ammo is finite until respawn.
-
-## Local release scope
-
-Primitive art, articulated block soldiers with bending knees/elbows, walking and sprinting motion, synthesized audio, two selectable maps, one rifle and throwable grenades. No backend, runtime CDN assets, deployment, accounts, progression, minimap, or kill feed. Hosting is deferred. Dependencies are locked; the Ammo package includes its own embedded runtime.
-
-Use a WebGL 2 desktop browser. Manual release verification should include Chrome and Firefox, an eight-minute match, restarts, pointer-lock loss, movement against every obstacle, close-cover shooting, and 1080p frame/memory profiling on the target machine. Passing unit tests does not establish a GPU performance guarantee.
+[GPL-3.0](LICENSE). The synthetic voice clips in `public/audio/voices/` are part of the project and covered by the same license.

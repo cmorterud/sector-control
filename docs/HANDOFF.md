@@ -1,6 +1,8 @@
 # Sector Control — continuation handoff
 
-Updated November 14, 2026. Read alongside README.md, SPEC.md, and IMPLEMENTATION.md.
+Updated November 14, 2026. Read alongside the [README](../README.md), [GAME_GUIDE.md](GAME_GUIDE.md), SPEC.md, and IMPLEMENTATION.md.
+
+This is a chronological development log. It moved from the repository root into `docs/` when the source was published; older entries that mention `README.md` refer to what is now GAME_GUIDE.md, and statements that the repository is private are historical.
 
 ## Compact manor stairs — committed, not deployed
 
