@@ -1,0 +1,6 @@
+# Enable required code-owner review in main's protection settings to enforce this.
+/.github/ @cmorterud
+/tools/pages-preview* @cmorterud
+/tools/render-review.mjs @cmorterud
+/package.json @cmorterud
+/package-lock.json @cmorterud
