@@ -68,6 +68,14 @@ npm run preview  # serve the production build
 
 Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=headland` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots and `?duration=30` shortens the match to thirty seconds.
 
+## Continuous integration and publishing
+
+[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pull requests and pushes to `main`. A passing push to `main` uploads `dist/` and deploys it to GitHub Pages. Pull requests never deploy. You can also run the workflow manually from Actions.
+
+One-time repository setup: open [Settings → Pages](https://github.com/cmorterud/sector-control/settings/pages) and select **GitHub Actions** as the build source. The game will publish at **https://cmorterud.github.io/sector-control/** after a successful deployment. No personal token or repository secret is needed in the workflow. If Actions or Pages is disabled for the repository/account, an owner must enable it first.
+
+The workflow builds with `/sector-control/` as Vite's base path (derived from the repository name), including map previews, voice clips and landmark models. Ordinary local builds retain `/` for root hosting such as the existing trial. For a GitHub Pages custom domain, change the workflow base path to `/`.
+
 ## How it is built
 
 TypeScript, [PlayCanvas](https://playcanvas.com/) for rendering, Ammo for collision queries, Vite and Vitest. There is no UI framework; menus and the HUD are plain HTML and CSS.

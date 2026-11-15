@@ -1,4 +1,5 @@
 import {handlingPath,handlingWrist} from "./handling-pose";
+import { publicAsset } from "./public-assets";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
@@ -1582,7 +1583,7 @@ export class Renderer implements CollisionWorld {
     let asset = this.landmarkAssets.get(model.name);
     if (!asset) {
       asset = new Promise<pc.Asset>((resolve, reject) =>
-        this.app.assets.loadFromUrl(`/models/${model.name}.glb`, "container", (error, loaded) =>
+        this.app.assets.loadFromUrl(publicAsset(`models/${model.name}.glb`), "container", (error, loaded) =>
           error || !loaded ? reject(error) : resolve(loaded)));
       this.landmarkAssets.set(model.name, asset);
     }

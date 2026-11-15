@@ -1,4 +1,5 @@
 import { shotVoice, mechanicalVoice } from "./weapon-sound";
+import { publicAsset } from "./public-assets";
 import { voiceLines, type VoiceLine } from "./soldier-chatter";
 import type { SoundCue } from "./battlefield";
 import { treeFallTime } from "./environment-effects";
@@ -57,7 +58,7 @@ export class BattleAudio {
         [0, 1].map(async (variant) => {
           try {
             const response = await fetch(
-              `/audio/voices/${line}-${variant}.wav`,
+              publicAsset(`audio/voices/${line}-${variant}.wav`),
             );
             if (!response.ok) return;
             const buffer = await this.context.decodeAudioData(
