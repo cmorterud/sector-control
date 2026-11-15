@@ -33,11 +33,15 @@ export type Box = Vec & {
   footingY?: number;
   architecture?: {
     building: string;
-    part: "wall" | "floor" | "roof" | "stair" | "detail";
+    part: "wall" | "floor" | "roof" | "stair" | "ceiling" | "detail";
     level: number;
     bearing?: boolean;
     tint?: string;
     roofPitch?: number;
+    opening?: "window" | "door";
+    corner?: -1 | 1;
+    sign?: string;
+    feature?: "bookcase" | "desk" | "table" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
   };
   walkable?: boolean;
   // A loaded exterior model drawn in place of the plain box, which remains

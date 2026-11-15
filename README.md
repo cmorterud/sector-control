@@ -11,6 +11,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Five maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, and an early greybox of Lighthouse point.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
+- **Furnished village interiors.** Framed openings, stone corners, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
 - **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
 - **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
 - **No accounts or backend.** Soldiers, weapons, terrain and most audio are generated in code; a few landmark buildings are contributed models. There is no networking.
@@ -95,7 +96,7 @@ The `docs/` folder holds the project's working notes. They were written during d
 - [IMPLEMENTATION.md](docs/IMPLEMENTATION.md): implementation notes by feature.
 - [HANDOFF.md](docs/HANDOFF.md): chronological development log and current state.
 - [PLAYTEST_REVIEW.md](docs/PLAYTEST_REVIEW.md) and [PLAYTEST_FEEDBACK.md](docs/PLAYTEST_FEEDBACK.md): playtest evidence and feedback.
-- [VILLAGE_DETAIL_PASS.md](docs/VILLAGE_DETAIL_PASS.md): proposed art pass for the village.
+- [VILLAGE_DETAIL_PASS.md](docs/VILLAGE_DETAIL_PASS.md): architectural detail pass and validation notes.
 
 ## Status
 

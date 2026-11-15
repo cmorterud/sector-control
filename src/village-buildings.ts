@@ -48,6 +48,10 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
             run.alongX?width:.44,run.alongX?.44:width,
             row===0?1:row===1?1.25:1.15,level*rise+(row===0?0:row===1?1:2.25),"wall",level);
           b.architecture!.bearing=level===0 && row===0;
+          if(!internal && window && !door && (row===0||row===2))b.architecture!.opening="window";
+          if(door && !internal)b.architecture!.opening="door";
+          if(door && run.side==="north" && level===0)b.architecture!.sign=({manor:"ST MARTIN",school:"ECOLE",inn:"AUBERGE",farm:"FERME",hall:"MAIRIE",stable:"ECURIE",bakery:"BOULANGERIE",smithy:"FORGE",cottage:"MAISON"} as Record<string,string>)[building.id];
+          if(!internal && (col===0||col===count-1))b.architecture!.corner=col===0?-1:1;
           rows[row][col]=b;
         }
       }
@@ -111,6 +115,7 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
       const x=-building.w/2+(i+.5)*w,h=Math.tan(.3)*(building.w/2-Math.abs(x))+.2;
       const gable=add("gable-"+side+"-"+i,x,side*building.d/2,w,.4,h,building.stories*rise,"wall",building.stories);
       gable.supports=supportFor(gable.x,gable.z,roofLevel,5);
+      if(building.id==="hall" && side===-1 && i===Math.floor(count/2))gable.architecture!.feature="clock";
     }
   }
   const nx=Math.ceil(building.w/3.2),nz=Math.ceil(building.d/3.2),w=building.w/nx,d=building.d/nz;
@@ -121,6 +126,13 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     roof.architecture!.roofPitch=pitch;
     roof.supports=supportFor(roof.x,roof.z,roofLevel);
     roof.architecture!.tint=variant%2?"#605c58":"#68534a";
+    if(building.id==="school" && ix===Math.floor(nx/2) && iz===0)roof.architecture!.feature="bell";
+    // One ceiling section per pair of roof panels bounds collision/support
+    // work. It falls when its remaining roof/rafter supports are breached.
+    if(iz%2===0) {
+      const span=Math.min(2,nz-iz),ceiling=add("ceiling-"+ix+"-"+iz,x,z+(span-1)*d/2,w,d*span,.1,building.stories*rise-.18,"ceiling",building.stories-1,"wood");
+      ceiling.supports=Array.from({length:span},(_,i)=>"village-"+building.id+"-roof-"+ix+"-"+(iz+i));
+    }
   }
   if(building.flag) {
     const columns=[-3.4,3.4].map((x,i)=>add("porch-column-"+i,x,-building.d/2-1.3,.65,.65,2.7,0,"detail",0));
@@ -135,7 +147,8 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     chimney.architecture!.tint="#7a6658";
   }
   if(building.stories>1)for(const level of [0,1])for(const side of [-1,1]) {
-    const cabinet=add("library-"+level+"-"+side,side*12,10.8,2.2,1,1.15,level*rise,"detail",level,"wood");
+    const cabinet=add("library-"+level+"-"+side,side*12,10.8,2.2,1,2,level*rise,"detail",level,"wood");
+    cabinet.architecture!.feature="bookcase";
     if(level)cabinet.supports=parts.filter(p=>p.architecture!.part==="floor"&&p.architecture!.level===level&&Math.hypot(p.x-cabinet.x,p.z-cabinet.z)<2).map(p=>p.id!);
     cabinet.architecture!.tint="#564536";
   }
@@ -145,6 +158,27 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     const b=add(furnishing+side,side*(building.w/2-3),building.d/2-3,2.2,1.2,1.05,0,"detail",0,
       furnishing==="oven"||furnishing==="hearth"?"masonry":"wood");
     b.architecture!.tint="#685841";
+    b.architecture!.feature=building.id==="school"?"bed":building.id==="stable"?"stall":building.id==="smithy"?"hearth":building.id==="bakery"?"oven":building.id==="inn"?"counter":building.id==="hall"?"bookcase":"cupboard";
+  }
+  // Distinct room uses, with the center aisle and cross-partition door left clear.
+  const furnishingPlan:Record<string,{feature:NonNullable<Box["architecture"]>["feature"];z:number;w:number;d:number;h:number;x?:number;level?:number}[]>={
+    manor:[{feature:"desk",z:-7,w:1.8,d:.9,h:.85},{feature:"hearth",x:12.2,z:-11,w:1.8,d:.75,h:1.2},
+      {feature:"bed",z:-7,w:1.8,d:2.3,h:.85,level:1},{feature:"desk",z:10,w:1.6,d:.85,h:.9,level:1}],
+    school:[{feature:"desk",z:-5,w:1.65,d:.8,h:.8},{feature:"desk",z:-1,w:1.65,d:.8,h:.8}],
+    farm:[{feature:"table",z:-3,w:1.8,d:1,h:.85},{feature:"hearth",z:-6.5,w:1.6,d:.7,h:1.2}],
+    inn:[{feature:"table",z:-4,w:1.8,d:1,h:.85}],
+    hall:[{feature:"counter",z:-3,w:2.5,d:.8,h:1.05}],
+    stable:[{feature:"stall",z:-3,w:2,d:1,h:1.05}],
+    bakery:[{feature:"workbench",z:-3,w:1.8,d:.85,h:.9}],
+    smithy:[{feature:"workbench",z:-3,w:1.8,d:.85,h:.9}],
+    cottage:[{feature:"table",z:-3,w:1.4,d:.8,h:.8}],
+  };
+  for(const [index,item] of (furnishingPlan[building.id]??[]).entries())for(const side of [-1,1]) {
+    const level=item.level??0,x=side*(item.x??(building.stories>1?8:building.w*.28));
+    const b=add("room-furnishing-"+index+"-"+side,x,item.z,item.w,item.d,item.h,level*rise,"detail",level,"wood");
+    b.architecture!.feature=item.feature;
+    if(item.feature==="hearth")b.kind="masonry";
+    if(level)b.supports=parts.filter(p=>p.architecture?.part==="floor"&&p.architecture.level===level&&Math.abs(p.x-b.x)<=p.w/2&&Math.abs(p.z-b.z)<=p.d/2).map(p=>p.id!);
   }
   for(const run of [[0,-building.d/2-1.8],[0,building.d/2+1.8],[-building.w/2-1.8,0],[building.w/2+1.8,0]])
     map.navigationPoints!.push({x:building.x+run[0],z:building.z+run[1]});

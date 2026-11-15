@@ -1,5 +1,7 @@
 import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
+import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
+import { architecturePixels, architecturalTextures, type ArchitecturalTexture } from "./architecture-surfaces";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
@@ -168,6 +170,7 @@ export class Renderer implements CollisionWorld {
   private fallingTrees: FallingTree[] = [];
   private fragments: { entity: pc.Entity; state: Debris }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
+  private architecturalModels?: Map<string,{surface:ArchitectureSurface;meshKey:string}[]>;
   private textures = new Map<string, pc.Texture>();
   private kitMeshes = new Map<string, pc.Mesh>();
   private overcastSky?: pc.Entity;
@@ -893,26 +896,24 @@ export class Renderer implements CollisionWorld {
     const root = this.joint(object.id, this.mapRoot);
     const h = b.h * (object.stage === 1 && !b.architecture ? 0.6 : 1),
       base = b.baseY ?? 0;
-    if(b.architecture) {
-      const a=b.architecture;
-      const tint=object.stage ? "#736253" : a.tint ?? "#aa9680";
-      const solid=this.cube(a.part,b.x,base+h/2,b.z,b.w,h,b.d,tint,true,root,(a.roofPitch??0)*180/Math.PI);
-      if(b.kind === "wood")solid.render!.material=this.surfaceMaterial(a.part==="floor" ? "floorboards" : "wood",tint);
-      else solid.render!.material=this.surfaceMaterial("plaster",tint);
-      // Shallow mortar courses and stone sills share the panel lifecycle.
-      if(a.part === "wall") {
-        const alongX=b.w>b.d;
-        for(const fraction of [.3,.7])this.cube("lime mortar",b.x,base+h*fraction,b.z,b.w+.008,.014,b.d+.008,"#776c5b",false,root);
-        if(h>1.1)this.cube("stone sill",b.x,base+.04,b.z,b.w+(alongX?.02:.1),.075,b.d+(alongX?.1:.02),"#b7aa91",false,root);
-      }
-      if(a.part === "roof") {
-        // Tile courses lie on the same pitched panel, then disappear with it.
-        for(const dz of [-.8,0,.8]) {
-          if(Math.abs(dz)>b.d/2-.1)continue;
-          const angle=a.roofPitch??0;
-          const seam=this.cube("roof tile course",b.x-Math.sin(angle)*.132,base+h/2+Math.cos(angle)*.132,b.z+dz,b.w,.014,.035,"#4a4540",false,root);
-          seam.setLocalEulerAngles(0,0,angle*180/Math.PI);
+    if(b.architecture || (b.kind==="rubble" && b.id?.startsWith("village-rubble-"))) {
+      const pitch=(b.architecture?.roofPitch??0)*180/Math.PI;
+      const solid=this.cube("architectural collision",b.x,base+h/2,b.z,b.w,h,b.d,"#aa9680",true,root,pitch);
+      solid.render!.enabled=false;
+      const shape={...b,h},key=architectureKey(shape,object.stage);
+      const models=this.architecturalModels??=new Map();
+      if(!models.has(key))models.set(key,architectureGeometry(shape,object.stage).map(data=>{
+        const meshKey="architecture-"+key+"-"+data.surface;
+        this.modelMesh(meshKey,()=>data);return {surface:data.surface,meshKey};
+      }));
+      for(const model of models.get(key)!) {
+        const e=this.cube("architectural "+model.surface,b.x,base+h/2,b.z,1,1,1,"#ffffff",false,root,pitch);
+        const materialKey="architecture-"+model.surface;
+        if(!this.materials.has(materialKey)) {
+          const material=this.surfaceMaterial(model.surface,"#ffffff").clone();
+          material.diffuseVertexColor=true;material.update();this.materials.set(materialKey,material);
         }
+        e.render!.meshInstances=[new pc.MeshInstance(this.kitMeshes.get(model.meshKey)!,this.materials.get(materialKey)!,e)];
       }
       this.objectVisuals.set(object.id,root);this.batchGroup=previousBatch;return true;
     }
@@ -1472,15 +1473,17 @@ export class Renderer implements CollisionWorld {
     }
     return this.textures.get(name)!;
   }
-  private surfaceMaterial(kind: SurfaceKind, tint: string) {
+  private surfaceMaterial(kind: SurfaceKind | ArchitecturalTexture, tint: string) {
     const key = `surface-${kind}-${tint}`;
     if (!this.materials.has(key)) {
       const ground = kind === "mud";
-      const size = ground ? 1024 : 512;
+      const architectural=architecturalTextures.includes(kind as ArchitecturalTexture);
+      // Six shared 1.6 m architectural tiles need no per-house large textures.
+      const size = ground ? 1024 : architectural ? 256 : 512;
       if (!this.textures.has(`${kind}-diffuse`)) {
         const data = ground
           ? groundSurfacePixels(this.map, size)
-          : surfacePixels(kind, size);
+          : architectural ? architecturePixels(kind as ArchitecturalTexture,size) : surfacePixels(kind as SurfaceKind, size);
         for (const channel of ["diffuse", "normal", "gloss"] as const)
           this.texture(
             `${kind}-${channel}`,
@@ -1495,7 +1498,7 @@ export class Renderer implements CollisionWorld {
       m.diffuseMap = this.textures.get(`${kind}-diffuse`)!;
       // Authored color texels are sRGB; decode both terrain layers in hardware.
       // Normal/roughness textures remain linear data.
-      if (ground || kind === "plaster") m.diffuseMap.srgb = true;
+      if (ground || kind === "plaster" || architectural) m.diffuseMap.srgb = true;
       m.normalMap = this.textures.get(`${kind}-normal`)!;
       m.bumpiness = ground ? 0.4 : 0.7;
       m.glossMap = this.textures.get(`${kind}-gloss`)!;
