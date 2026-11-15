@@ -2,6 +2,7 @@ import { exposedEarth } from "./environment-surface";
 import { soilColor } from "./battlefield-look";
 import {
   groundHeight,
+  coastDistance,
   terrainCut,
   authoredTerrainCut,
   type MapDefinition,
@@ -27,7 +28,9 @@ export function terrainPatchKeys(map: MapDefinition) {
       z < map.depth / 2 / terrainPatchSize;
       z++
     )
-      keys.push(`${x},${z}`);
+      // Open sea needs no ground mesh or collider; keep a margin for the cliff.
+      if (!map.coast || coastDistance((x + 0.5) * terrainPatchSize, (z + 0.5) * terrainPatchSize, map) > -terrainPatchSize * 1.5)
+        keys.push(`${x},${z}`);
   return keys;
 }
 function buildTerrainGeometry(

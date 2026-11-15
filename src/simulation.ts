@@ -12,6 +12,7 @@ import {
   planVillageMove,
   villageSpawn,
   villageSteering,
+  usesVillageTactics,
   type VillagePlan,
 } from "./village-tactics";
 import { nearestCandidates } from "./navigation-nearest";
@@ -1008,7 +1009,7 @@ export class Game {
       p.x = deployment.x;
       p.z = deployment.z;
     }
-    if ((this.map.id === "village" || this.map.id === "verdun")) p.villagePlan = null;
+    if (usesVillageTactics(this.map)) p.villagePlan = null;
     p.y = groundHeight(p.x, p.z, this.map);
     p.yaw =
       this.map.id !== "industrial"
@@ -2377,7 +2378,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       ranks.sort((a, b) => a.weight - b.weight);
       const current = ranks.find((rank) => rank.i === p.objective)!;
       if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
-      if ((g.map.id === "village" || g.map.id === "verdun"))
+      if (usesVillageTactics(g.map))
         planVillageMove(g, p, (a, b) => pathfind(a, b, g.map, true));
       else p.path = pathfind(p, g.sectors[p.objective], g.map, true);
     }
@@ -2489,7 +2490,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   if (
     dest &&
     (dist(p, objective) > (p.villagePlan ? 0.8 : station ? 0.15 : 4) ||
-      ((g.map.id === "village" || g.map.id === "verdun") && !flagOccupant(g, p, g.sectors[p.objective])))
+      (usesVillageTactics(g.map) && !flagOccupant(g, p, g.sectors[p.objective])))
   ) {
     const d = dist(p, dest);
     c.x = (dest.x - p.x) / Math.max(0.1, d);
@@ -2646,7 +2647,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   // A few village riflemen screen an exposed road crossing individually. This
   // spends their normal smoke supply; it does not introduce a squad controller.
   if (
-    (g.map.id === "village" || g.map.id === "verdun") &&
+    usesVillageTactics(g.map) &&
     p.weapon === "serviceRifle" &&
     p.id % 8 === 0 &&
     p.smokes > 0 &&
@@ -2663,7 +2664,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     c.yaw = Math.atan2(objective.x - p.x, p.z - objective.z);
     c.pitch = 0.38;
   }
-  if ((g.map.id === "village" || g.map.id === "verdun"))
+  if (usesVillageTactics(g.map))
     villageSteering(g, p, c, target ? dist(p, target) : Infinity);
   return braceCommand(g, p, assaultCommand(g, p, c));
 }

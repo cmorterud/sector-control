@@ -116,7 +116,7 @@ export interface CommunicationRoute {
   points: Vec[];
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "village" | "verdun";
+  id: "industrial" | "trenches" | "village" | "verdun" | "headland";
   name: string;
   width: number;
   depth: number;
@@ -128,6 +128,9 @@ export interface MapDefinition {
     posts: Vec[];
   }[];
   streets?: { points: Vec[]; width: number }[];
+  // Closed outline of the playable land. Ground beyond it is sea: authored
+  // below the land and closed to movement, navigation and deployment.
+  coast?: Vec[];
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
@@ -497,8 +500,40 @@ export function supportHeight(x: number, z: number, map: MapDefinition, maxY = I
   }
   return height;
 }
+const coastFields = new WeakMap<Vec[], { columns: number; rows: number; values: Float32Array }>();
+// Signed distance to the coastline in meters, positive on land. Baked once
+// at half-meter resolution so movement queries stay a single array lookup.
+export function coastDistance(x: number, z: number, map: MapDefinition): number {
+  const coast = map.coast;
+  if (!coast) return Infinity;
+  let field = coastFields.get(coast);
+  if (!field) {
+    const columns = map.width * 2, rows = map.depth * 2, values = new Float32Array(columns * rows);
+    for (let row = 0; row < rows; row++) for (let col = 0; col < columns; col++) {
+      const px = -map.width / 2 + (col + 0.5) / 2, pz = -map.depth / 2 + (row + 0.5) / 2;
+      let inside = false, nearest = Infinity;
+      for (let i = 0, j = coast.length - 1; i < coast.length; j = i++) {
+        const a = coast[i], b = coast[j];
+        if ((a.z > pz) !== (b.z > pz) && px < ((b.x - a.x) * (pz - a.z)) / (b.z - a.z) + a.x) inside = !inside;
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / (dx * dx + dz * dz || 1)));
+        nearest = Math.min(nearest, Math.hypot(px - a.x - dx * t, pz - a.z - dz * t));
+      }
+      values[row * columns + col] = inside ? nearest : -nearest;
+    }
+    coastFields.set(coast, (field = { columns, rows, values }));
+  }
+  const col = Math.floor((x + map.width / 2) * 2), row = Math.floor((z + map.depth / 2) * 2);
+  if (col < 0 || row < 0 || col >= field.columns || row >= field.rows) return -Infinity;
+  return field.values[row * field.columns + col];
+}
+// The rectangular map edge and, where authored, the coastline.
+export function outOfBounds(x: number, z: number, margin: number, map: MapDefinition): boolean {
+  return Math.abs(x) > map.width / 2 - margin || Math.abs(z) > map.depth / 2 - margin ||
+    (!!map.coast && coastDistance(x, z, map) < margin);
+}
 export function bodyBlocked(x: number, z: number, feet: number, r: number, map: MapDefinition, bodyHeight = 1.8): boolean {
-  return Math.abs(x) > map.width / 2 - 1 - r || Math.abs(z) > map.depth / 2 - 1 - r ||
+  return outOfBounds(x, z, 1 + r, map) ||
     nearbyCover(x, z, r, map).some(b => Math.abs(x-b.x) < b.w/2+r && Math.abs(z-b.z) < b.d/2+r &&
       (b.baseY ?? 0) + b.h > feet + (b.walkable ? 0.23 : 0.025) && (b.baseY ?? 0) < feet + bodyHeight - 0.025);
 }
@@ -510,8 +545,7 @@ export function blocked(
 ): boolean {
   if (map.buildings) return bodyBlocked(x, z, groundHeight(x, z, map), r, map);
   return (
-    Math.abs(x) > map.width / 2 - 1 - r ||
-    Math.abs(z) > map.depth / 2 - 1 - r ||
+    outOfBounds(x, z, 1 + r, map) ||
     nearbyCover(x, z, r, map).some(
       (b) =>
         Math.abs(x - b.x) < b.w / 2 + r &&
@@ -532,7 +566,7 @@ function moveAcrossSupports(p:Vec & {fall?:unknown;hop?:unknown;crouched?:boolea
   const advance=(nx:number,nz:number)=>{
     const next=supportHeight(nx,nz,map,feet+(airborne?0:.23),.45);
     const targetFeet=!airborne&&next>=feet-.23?next:feet;
-    if(Math.abs(nx)>map.width/2-1.45||Math.abs(nz)>map.depth/2-1.45)return;
+    if(outOfBounds(nx,nz,1.45,map))return;
     if(map.terrain?.banks&&!airborne&&next>feet+.00001 && groundHeight(x+Math.sign(nx-x)*.15,z+Math.sign(nz-z)*.15,map)-feet>.23)return;
     const collision=nearbyCover(nx,nz,.45,map).some(b=>{
       const overlap=area(b,nx,nz);
@@ -582,8 +616,7 @@ export function moveOnMap(
     if (
       uphill ||
       next - feet > 0.23 ||
-      Math.abs(nx) > map.width / 2 - 1.45 ||
-      Math.abs(nz) > map.depth / 2 - 1.45
+      outOfBounds(nx, nz, 1.45, map)
     )
       return false;
     return !nearbyCover(nx, nz, 0.45, map).some((b) => {

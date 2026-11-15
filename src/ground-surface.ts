@@ -54,7 +54,7 @@ function context(map: MapDefinition) {
 // Paving shares the mud atlas and deformed surface, rather than leaving
 // a separate road mesh floating over an excavated crater.
 export function villageRoad(map: MapDefinition, x: number, z: number) {
-  if (map.id !== "village") return 0;
+  if (map.id !== "village" && !map.streets) return 0;
   if(map.streets) {
     let segments=streetSegments.get(map.streets);
     if(!segments){segments=map.streets.flatMap(s=>s.points.slice(1).map((b,i)=>({a:s.points[i],b,width:s.width})));streetSegments.set(map.streets,segments);}

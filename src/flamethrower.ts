@@ -12,7 +12,8 @@ export function createFlames(map:Game["map"]):FlameState {
  if(map.id==="industrial")return {kits:[]};
  return {kits:(["blue","red"] as const).map((team,id)=>{
   const line=map.terrain?.trenchLines?.find(l=>l.team===team&&l.role==="front");
-  const home=line ? {...line.sections[Math.floor(line.sections.length/2)]} : {...map.spawn[team]};
+  const flag=map.sectors.find(s=>s.home===team);
+  const home=line ? {...line.sections[Math.floor(line.sections.length/2)]} : flag ? {x:flag.x,z:flag.z+3} : {...map.spawn[team]};
   return {id,home,at:{...home},fuel:flameRules.fuel,carrier:null,readyAt:0,droppedAt:null};
  })};
 }

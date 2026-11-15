@@ -109,6 +109,14 @@ The November 14 repair keeps the soldier's height when leaving a destroyed tread
 
 A follow-up shortens both manor stairways to household proportions: 16 treads of 32 cm over a 5.12 m run (about 34°, previously 20 treads over 12.4 m), each ending on its own upper landing. The first-floor slab now covers the rest of the old long stairwell openings. Stair navigation anchors and walk checks use the same 45 cm support footprint as soldiers, so a route cannot rest on a point embedded in the next riser. `villageStairRules` in `src/village-buildings.ts` holds the dimensions.
 
+## Lighthouse point greybox
+
+Choose **Lighthouse point** in the start menu or open `?map=headland`. This is an early greybox of a 300 × 170 m coastal headland, compressed from a friend's roughly 1,100 m layout sketch. France deploys by the mainland road in the west; Imperial Germany deploys on the eastern tip behind the lighthouse. Three flags sit between them: **A Cliff Park**, **B Fountain Square** and **C Walled Green**, joined by a loop road. It uses the 50v50 roster and domination rules.
+
+The coastline is an authored outline (`coast` on the map definition). Ground beyond it is sea bed one bank height below the land, under a flat sea plane, and is closed to movement, navigation and deployment about a meter back from the cliff edge. Open-sea terrain patches are not built.
+
+Ten single-story houses come from the Village building kit, so they can be entered and destroyed. The lighthouse, church and two tenements are solid placeholder blocks sized from the supplied models; nothing loads those models yet. Low walls, rocks, crates, sandbags and scattered trees provide cover. `tools/headland-preview.ts` regenerates the menu illustration.
+
 ## Verdun forest trenches
 
 Verdun has irregular woodland belts along both flanks: tall pines and torn broadleaf crowns mixed with bare trunks and snapped trees. Eight denser, asymmetric groves surround Broken Relay and extend into the formerly bare ground on either side. The center has up to112trees, with three broad shooting breaks and clear relay approaches; the whole field has up to236destructible trees,42low brush patches,14fallen logs and12stumps. Trunks provide real cover; foliage affects bot visibility, and the low undergrowth leaves soldier-height sightlines open. Central trees can be stripped and felled by explosions, opening the field as the match progresses.

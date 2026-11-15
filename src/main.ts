@@ -9,6 +9,7 @@ import { ControlsPanel } from "./controls-panel";
 import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
 import { villageMap } from "./village-map";
+import { headlandMap } from "./headland-map";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
 import { ArtilleryMap } from "./artillery-map";
@@ -108,6 +109,8 @@ const map =
     ? verdunMap
     : params.get("map") === "village"
     ? villageMap
+    : params.get("map") === "headland"
+    ? headlandMap
     : params.get("map") === "trenches"
       ? trenchMap
       : industrialMap;
@@ -119,7 +122,7 @@ updateControlHints();
 tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
-  const choices = [industrialMap, trenchMap, villageMap, verdunMap].map((battlefield) => {
+  const choices = [industrialMap, trenchMap, villageMap, verdunMap, headlandMap].map((battlefield) => {
     if (battlefield.id === map.id)
       return battlefieldCard(battlefield);
     const query = new URLSearchParams();
@@ -675,6 +678,8 @@ try {
     map.id !== "industrial" ? map.name : "Sector Control",
     map.id === "verdun"
       ? `France faces Imperial Germany across a longer forest front. Capture the ruined Broken Relay between the trench systems. ${teamSize} soldiers per team · five-flag domination. Verdun-inspired, 1917.`
+      : map.id === "headland"
+      ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Greybox preview: placeholder buildings. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
       : map.id === "village"
       ? `Fight through the orchard, ruined schoolhouse and market courtyards. Cross the exposed road under smoke; artillery opens walls and leaves rubble. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "trenches"

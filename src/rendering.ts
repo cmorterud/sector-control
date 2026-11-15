@@ -391,7 +391,7 @@ export class Renderer implements CollisionWorld {
         this.cube(
           "roof",
           b.x,
-          b.h + 0.15,
+          base + b.h + 0.15,
           b.z,
           b.w + 0.3,
           0.3,
@@ -402,7 +402,7 @@ export class Renderer implements CollisionWorld {
           this.cube(
             "band",
             b.x,
-            y,
+            base + y,
             b.z,
             b.w + 0.05,
             0.12,
@@ -425,7 +425,9 @@ export class Renderer implements CollisionWorld {
     }
     for (const object of Object.values(map.destruction!.objects))
       this.buildDestructible(object);
-    for (const [x, z, w, d] of [
+    // A flat sea below the cliff edge replaces the perimeter wall.
+    if (map.coast) this.cube("sea", 0, 0.35, 0, map.width + 600, 0.1, map.depth + 600, "#33586a");
+    for (const [x, z, w, d] of map.coast ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
       [-map.width / 2, 0, 1, map.depth],
@@ -3561,6 +3563,8 @@ export class Renderer implements CollisionWorld {
     if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
     if (this.firstPersonRig && overview) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
+    // The sky sphere is smaller than a large map seen from the overview height.
+    if (this.overcastSky) this.overcastSky.enabled = !overview;
     this.overcastSky?.setPosition(this.camera.getPosition());
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);

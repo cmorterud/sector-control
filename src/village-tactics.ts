@@ -28,6 +28,9 @@ const catalogs = new WeakMap<
   Map<string, { until: number; posts: Post[] }>
 >();
 const forward = (p: Soldier) => (p.team === "blue" ? 1 : -1);
+// Maps whose bots pick individual cover posts around a flag.
+export const usesVillageTactics = (map: { id: string }) =>
+  map.id === "village" || map.id === "verdun" || map.id === "headland";
 
 // Probe actual geometry toward the opposing approach, or a recently observed
 // threat. No hidden enemy position or future artillery plan is consulted.
@@ -89,7 +92,7 @@ function posts(g: Game, p: Soldier) {
 // Spread computer-controlled lives behind all three entrances. Human spawn
 // remains unchanged. These are individual routes, not synchronized squads.
 export function villageSpawn(g: Game, p: Soldier): Vec | null {
-  if ((g.map.id !== "village" && g.map.id !== "verdun") || g.humanPlayerIds.includes(p.id)) return null;
+  if (!usesVillageTactics(g.map) || g.humanPlayerIds.includes(p.id)) return null;
   const routes =
     g.map.terrain?.communicationRoutes?.filter((r) => r.team === p.team) ?? [];
   if (!routes.length) return null;

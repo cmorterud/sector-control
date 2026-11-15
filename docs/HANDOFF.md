@@ -4,6 +4,16 @@ Updated November 14, 2026. Read alongside the [README](../README.md), [GAME_GUID
 
 This is a chronological development log. It moved from the repository root into `docs/` when the source was published; older entries that mention `README.md` refer to what is now GAME_GUIDE.md, and statements that the repository is private are historical.
 
+## Lighthouse point greybox — committed, not deployed
+
+November 14. A friend supplied a layout sketch of a lighthouse headland (about 1,100 × 650 m by its scale bar) and five exterior-only models: lighthouse, church, Parisian multifamily block, farmstead and rural house. Decisions agreed with the user: compress to about 300 × 170 m; build enterable buildings with the existing kit rather than reworking the models for interiors; use the models later as solid landmarks and as a source of textures and decoration. The models are not in the repository yet; the friend must agree to publication under the repository license first, and the satellite screenshots and concept images should stay out.
+
+`src/headland-map.ts` (`?map=headland`) is the greybox: coastline traced from the sketch at 0.19 m per pixel, French spawn at (-113, -9), German spawn at (124, -16), flags A (-63, -27), B (5, -9), C (50, -14), a loop road, ten kit houses and solid blocks for the landmarks. Engine additions: `coast` outline with a baked signed-distance field (`coastDistance`, `outOfBounds` in `src/map.ts`), a sea plane, sea terrain patches skipped, `usesVillageTactics` replacing the village/verdun id checks, streets drawn for any map that has them, flame kits placed at home flags when a map has no trench line, and the overview camera hiding the sky sphere.
+
+Validation: strict TypeScript; **488 tests / 87 files pass**; production build passes (`index-B6m68zwi.js`). New `src/headland-map.test.ts` covers spawns, land/road/building clearances, the sea boundary, routes from both spawns to every flag and a 90-second 100-soldier battle. Three seeded eight-minute bot matches finished 243–151 and 229–162 to France and 200–163 to Germany; France reaches B first more often, so balance is not settled. Headless Chromium (software rendering) screenshots of the overview and a ground view are in ignored `playtest-artifacts/headland-greybox-*.png`; no frame-rate result is claimed.
+
+Next: balance the approach to B; real cliffs and coast dressing; generalize the building kit to the model footprints and more than one story; a loader and collision proxies for the landmark models; a rendered performance check.
+
 ## Compact manor stairs — committed, not deployed
 
 November 14 follow-up to the repair below. Both manor stairways are now 16 treads of 32 cm (5.12 m run, about 34°) instead of 20 treads over 12.4 m; `villageStairRules` in `src/village-buildings.ts` holds the dimensions. Each flight ends at z = 4.2 on a dedicated 2 m landing panel that meets the top tread, and the first-floor slab closes the remainder of the old long stairwell openings. Navigation anchors and `walkSegment` sample support with the soldiers' 45 cm footprint, since a point sample left steep-tread anchors embedded in the next riser.
