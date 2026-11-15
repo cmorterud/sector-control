@@ -303,7 +303,7 @@ async function reportPreview() {
   if (url !== process.env.PREVIEW_URL) throw Error('Unexpected preview link');
   if (!cleanup) await status(head, ready ? 'success' : 'failure', ready ? 'Playable preview passed deployed asset and browser checks' : 'Preview not ready; see publication and browser checks');
   const text = cleanup ? (ready ? 'This PR is closed; its playable preview has been removed.' : `Preview cleanup failed. [Publication log](${runURL}).`) :
-    ready ? `**[Play this PR](${url})**\n\nRevision: \`${head}\`. Tests, all map renders, deployed asset hashes and the deployed Village browser check passed.\n\n[Browser screenshots and deployment log](${runURL}). New commits update this link; closing the PR removes the preview.` :
+    ready ? `**[Play this PR](${url})**\n\nRevision: \`${head}\`. Tests, all map renders, deployed asset hashes and the deployed Village/training browser checks passed.\n\n[Browser screenshots and deployment log](${runURL}). New commits update this link; closing the PR removes the preview.` :
       `The preview is **not ready for the latest revision** (\`${head}\`). ${process.env.PREVIEW_REASON || 'Publication or deployed browser verification failed.'}\n\n[Check the publication log](${runURL}). An older version may still be visible at the preview URL.`;
   let comment;
   for (let page = 1; ; page++) {

@@ -26,7 +26,7 @@ The publisher treats artifacts as static bytes, without installing dependencies 
 
 All publication and cleanup runs share a FIFO concurrency group with `queue: max`, so simultaneous updates are serialized without replacing other pending PRs. The complete snapshot is uploaded and deployed through GitHub's official Pages actions. Main updates preserve active previews; PR updates preserve production.
 
-A separate read-only runner verifies the deployed `revision.json`, hashes every asset, and plays the deployed Village map in Chrome. Only then does a reporting job publish `preview-ready` success and the playable link. Cleanup verifies production responds and the closed preview returns 404. CDN propagation is retried. Preview URLs are public and share production's web origin: automatic previews are intentionally limited to trusted same-repository branches.
+A separate read-only runner verifies the deployed `revision.json`, hashes every asset, and plays both the deployed Village and Training grounds maps in Chrome. Training verification also exercises keyboard/mouse controls, the armory and every station. Only then does a reporting job publish `preview-ready` success and the playable link. Cleanup verifies production responds and the closed preview returns 404. CDN propagation is retried. Preview URLs are public and share production's web origin: automatic previews are intentionally limited to trusted same-repository branches.
 
 ## Recovery and maintenance
 
