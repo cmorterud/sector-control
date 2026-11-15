@@ -12,6 +12,10 @@ Damaged plaster shows irregular brick patches; damaged wood/roofs gain splintere
 
 The browser control service is unavailable (`Sky Computer Use service startup request failed`), so rendered appearance, the updated gameplay preview, and a controlled GPU/frame-rate comparison remain unverified. Native mesh/material checks, movement/destruction regressions and the simulation audit provide the available acceptance evidence; no rendered performance claim is made. The selection card remains the labeled layout overview until an actual game screenshot can be captured.
 
+## Outdoor follow-up
+
+The November 15 outdoor pass adds distinct yard surfaces and door-to-street paths, garden planting, orchard trees and low destructible street/workyard cover. See [VILLAGE_OUTDOOR_PASS.md](VILLAGE_OUTDOOR_PASS.md). The pending rendered visual/performance review applies to this pass too.
+
 ## Original design targets
 
 - Manor: lime plaster over stone, stone entrance surround, deeper eaves, cornice bands, contrasting window frames, a recognizable central entrance and two chimneys. Consider a shallow central roof feature once the base building is visually reviewed. Keep upper firing windows and both stairways useful.

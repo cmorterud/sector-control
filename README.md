@@ -12,6 +12,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Five maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, and the coastal Lighthouse point.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Furnished village interiors.** Framed openings, stone corners, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
+- **Village outdoor spaces.** Cobbled courts, gravel workyards, vegetable gardens and an orchard connect the houses. Low destructible furniture and supply positions break up the approaches while roads and doorways stay open.
 - **Coastal headland.** Layered sea cliffs, foreshore rocks, short coastal grass, rippled water and destructible garden furniture surround Lighthouse Point’s three flags.
 - **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
 - **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
@@ -98,6 +99,7 @@ The `docs/` folder holds the project's working notes. They were written during d
 - [HANDOFF.md](docs/HANDOFF.md): chronological development log and current state.
 - [PLAYTEST_REVIEW.md](docs/PLAYTEST_REVIEW.md) and [PLAYTEST_FEEDBACK.md](docs/PLAYTEST_FEEDBACK.md): playtest evidence and feedback.
 - [VILLAGE_DETAIL_PASS.md](docs/VILLAGE_DETAIL_PASS.md): architectural detail pass and validation notes.
+- [VILLAGE_OUTDOOR_PASS.md](docs/VILLAGE_OUTDOOR_PASS.md): outdoor routes, courtyards, planting and destructible cover.
 
 ## Status
 

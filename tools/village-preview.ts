@@ -1,6 +1,7 @@
 // A map illustration from the authored layout, not a captured gameplay frame.
 import {writeFileSync} from 'node:fs';
 import {villageMap as map} from '../src/village-map';
+import {villageYards,yardPaths} from '../src/village-outdoors';
 const w=960,h=540,s=2.95,ox=w/2,oz=h/2;
 const x=(v:number)=>ox+v*s,z=(v:number)=>oz+v*s;
 const shapes:string[]=[];
@@ -8,10 +9,17 @@ for(let i=0;i<150;i++) {
  const px=-88+((i*7919)%1760)/10,pz=-77+((i*3571)%1540)/10;
  shapes.push('<ellipse cx="'+x(px)+'" cy="'+z(pz)+'" rx="'+(2+i%4)+'" ry="'+(1+i%3)+'" fill="#6c7256" opacity=".15"/>');
 }
+for(const yard of villageYards) {
+ const color=yard.surface==='paving'?'#b1a58b':yard.surface==='gravel'?'#9a9076':'#635e3f';
+ shapes.push('<rect x="'+x(yard.x-yard.w/2)+'" y="'+z(yard.z-yard.d/2)+'" width="'+yard.w*s+'" height="'+yard.d*s+'" rx="2" fill="'+color+'"/>');
+ if(yard.surface==='garden')for(let i=1;i<yard.w/2;i++)shapes.push('<path d="M'+x(yard.x-yard.w/2+i*2)+','+z(yard.z-yard.d/2+1)+'v'+((yard.d-2)*s)+'" stroke="#7b8050" stroke-width="2"/>');
+}
+for(const lane of yardPaths(map))shapes.push('<path d="M'+x(lane.a.x)+','+z(lane.a.z)+'L'+x(lane.b.x)+','+z(lane.b.z)+'" stroke="#b4a58a" stroke-width="'+(1.6*s)+'"/>');
 for(const road of map.streets??[])shapes.push('<polyline points="'+road.points.map(p=>x(p.x)+','+z(p.z)).join(' ')+'" fill="none" stroke="#a69a80" stroke-width="'+road.width*s+'"/><polyline points="'+road.points.map(p=>x(p.x)+','+z(p.z)).join(' ')+'" fill="none" stroke="#bfb296" stroke-width="'+Math.max(1,road.width*s-3)+'"/>');
 for(const line of map.terrain!.trenchLines!)for(const q of line.sections)
  shapes.push('<rect x="'+x(q.x-1)+'" y="'+z(q.z-q.length/2)+'" width="'+2*s+'" height="'+q.length*s+'" fill="#4a4439"/>');
 for(const b of map.boxes.filter(b=>!b.architecture&&b.kind==='masonry'))shapes.push('<rect x="'+x(b.x-b.w/2)+'" y="'+z(b.z-b.d/2)+'" width="'+Math.max(1,b.w*s)+'" height="'+Math.max(1,b.d*s)+'" fill="#6e6657"/>');
+for(const b of map.boxes.filter(b=>b.farmProp))shapes.push('<rect x="'+x(b.x-b.w/2)+'" y="'+z(b.z-b.d/2)+'" width="'+Math.max(2,b.w*s)+'" height="'+Math.max(2,b.d*s)+'" rx="1" fill="'+(b.kind==='wood'?'#66513b':'#90917f')+'" stroke="#c0ab7d" stroke-width=".6"/>');
 for(const [i,b] of map.buildings!.entries()) {
  const px=x(b.x-b.w/2),py=z(b.z-b.d/2),bw=b.w*s,bh=b.d*s;
  shapes.push('<rect x="'+(px+4)+'" y="'+(py+6*b.stories)+'" width="'+bw+'" height="'+bh+'" fill="#302f27" opacity=".42"/>');

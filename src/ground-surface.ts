@@ -1,6 +1,7 @@
 import { groundHeight, type MapDefinition, type Vec } from "./map";
 import { lookNoise, surfacePixels } from "./battlefield-look";
 import { woodlandDensity } from "./verdun-forest";
+import { villagePaving,villageYardSurface } from "./village-outdoors";
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const smooth = (a: number, b: number, n: number) => {
@@ -60,7 +61,7 @@ export function villageRoad(map: MapDefinition, x: number, z: number) {
     if(!segments){segments=map.streets.flatMap(s=>s.points.slice(1).map((b,i)=>({a:s.points[i],b,width:s.width})));streetSegments.set(map.streets,segments);}
     let value=0;const p={x,z};
     for(const segment of segments)value=Math.max(value,1-smooth(segment.width!/2-.6,segment.width!/2+.6,distance(p,segment)));
-    return value;
+    return Math.max(value,villagePaving(map,x,z));
   }
   const edge = (lookNoise(x * 0.28 + 53, z * 0.28) - 0.5) * 1.1;
   const main = 1 - smooth(2.6 + edge, 4.1 + edge, Math.abs(x));
@@ -92,7 +93,9 @@ export function groundField(map: MapDefinition, x: number, z: number) {
     (1 - wear) *
     (0.35 + smooth(8, 42, Math.abs(x)) * 0.65) * (1 - litter * .85);
   const indoors=map.buildings?.some(b=>Math.abs(x-b.x)<b.w/2 && Math.abs(z-b.z)<b.d/2);
-  return { wet, dry, grass:indoors?0:grass, wear:indoors?Math.max(.8,wear):wear, litter };
+  const yard=villageYardSurface(map,x,z),gravel=indoors?0:Math.max(yard.gravel,yard.path),garden=indoors?0:yard.garden;
+  return { wet, dry, grass:indoors?0:grass*(1-Math.max(gravel,yard.paving)),
+    wear:indoors?Math.max(.8,wear):Math.max(wear,gravel*.8,yard.paving*.9), litter, gravel,garden };
 }
 
 // One map-sized atlas: two rotated/incommensurate mud samples and a warped,
@@ -107,7 +110,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
   const spacing = 0.5,
     columns = Math.ceil(map.width / spacing) + 1,
     rows = Math.ceil(map.depth / spacing) + 1;
-  const fields = new Float32Array(columns * rows * 5);
+  const channels=map.id==="village"?7:5,fields = new Float32Array(columns * rows * channels);
   for (let row = 0; row < rows; row++)
     for (let col = 0; col < columns; col++) {
       const f = groundField(
@@ -115,7 +118,9 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         -map.width / 2 + col * spacing,
         -map.depth / 2 + row * spacing,
       );
-      fields.set([f.wet, f.dry, f.grass, f.wear, f.litter], (row * columns + col) * 5);
+      const values=[f.wet,f.dry,f.grass,f.wear,f.litter];
+      if(channels===7)values.push(f.gravel,f.garden);
+      fields.set(values, (row * columns + col) * channels);
     }
   const sample = (x: number, y: number) => {
     x = (((x % 1) + 1) % 1) * sourceSize;
@@ -145,8 +150,9 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         fx = gx - ix,
         fz = gz - iz;
       const channel = (k: number) => {
+        if(k>=channels)return 0;
         const at = (dx: number, dz: number) =>
-          fields[((iz + dz) * columns + ix + dx) * 5 + k];
+          fields[((iz + dz) * columns + ix + dx) * channels + k];
         return (
           (at(0, 0) * (1 - fx) + at(1, 0) * fx) * (1 - fz) +
           (at(0, 1) * (1 - fx) + at(1, 1) * fx) * fz
@@ -156,7 +162,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         dry = channel(1),
         grass = channel(2),
         wear = channel(3),
-        litter = channel(4);
+        litter = channel(4),gravel=channel(5),garden=channel(6);
       const warp = (wet - dry) * 0.8;
       const a = sample(
         (x * 0.857 - z * 0.515) / 4.7 + warp,
@@ -189,6 +195,13 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         for (let c = 0; c < 3; c++)
           diffuse[i + c] = diffuse[i + c] * (1 - mix) + leaf[c] * 255 * mix;
       }
+      if(gravel>.01||garden>.01) {
+        const grit=lookNoise(x*8.3+43,z*8.3-11),furrow=Math.sin(x*6.8+Math.sin(z*.3)*.3)*.025;
+        const colors=[.64+grit*.13,.59+grit*.13,.48+grit*.12];
+        for(let c=0;c<3;c++)diffuse[i+c]=diffuse[i+c]*(1-gravel*.82)+colors[c]*255*gravel*.82;
+        const soil=[.43+furrow+grit*.06,.38+furrow+grit*.05,.27+grit*.04];
+        for(let c=0;c<3;c++)diffuse[i+c]=diffuse[i+c]*(1-garden*.78)+soil[c]*255*garden*.78;
+      }
       const road = villageRoad(map, x, z);
       if (road > 0) {
         const pavingRow = Math.floor(z / 0.43),
@@ -200,10 +213,10 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         for (let c = 0; c < 3; c++)
           diffuse[i + c] = diffuse[i + c] * (1 - mix) + stone * 255 * mix;
       }
-      const shine = (18 + wet * 112 + wear * wet * 65) * (1 - litter * .45);
+      const shine = (18 + wet * 112 + wear * wet * 65) * (1 - litter * .45)*(1-gravel*.65)*(1-garden*.6);
       gloss.set([shine, shine, shine, 255], i);
       heights[row * size + col] =
-        detail * (0.7 - wet * 0.35) + wear * (a - b) * 0.18;
+        detail * (0.7 - wet * 0.35) + wear * (a - b) * 0.18 + garden*Math.sin(x*6.8)*.045;
     }
   const h = (x: number, z: number) =>
     heights[

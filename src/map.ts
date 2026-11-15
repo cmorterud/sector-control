@@ -29,7 +29,7 @@ export type Box = Vec & {
   landmark?: string;
   supports?: string[];
   baseY?: number;
-  farmProp?: "crate" | "cart" | "fence" | "relayMast" | "radio" | "bench" | "planter" | "fountain";
+  farmProp?: "crate" | "cart" | "fence" | "relayMast" | "radio" | "bench" | "planter" | "fountain" | "timber" | "worktable" | "trough";
   footingY?: number;
   architecture?: {
     building: string;

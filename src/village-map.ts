@@ -2,6 +2,7 @@ import { groundHeight, type Box, type MapDefinition, type TerrainRect, type Tren
 import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
 import { buildVillageBuilding, type VillageBuilding } from "./village-buildings";
+import { addVillageOutdoors } from "./village-outdoors";
 
 const width=180,depth=160,bankHeight=2.4;
 const heights=new Float32Array(width*depth).fill(bankHeight);
@@ -95,6 +96,7 @@ for(let row=0;row<2;row++)for(let col=0;col<7;col++) {
   const x=-60+col*20,z=(row?-1:1)*(70+(col%2)*2);
   vegetation.push({id:"tree-village-orchard-"+row+"-"+col,x,z,w:.65,d:.65,h:4+(col%3)*.4,kind:"tree",treeStyle:"sparse",baseY:groundHeight(x,z,villageMap)});
 }
+addVillageOutdoors(villageMap);
 for(const line of trenchLines)for(const s of line.sections)for(const side of [-1,1])
   for(let z=s.z-s.length/2+1;z<s.z+s.length/2;z+=2) {
     const x=s.x+side*1.15;

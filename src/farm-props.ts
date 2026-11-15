@@ -9,6 +9,23 @@ export function farmPropParts(b:Box,h:number):FarmPart[]{
   for(const x of [-w*.36,w*.36])box('crate binding',[x,h/2,0],[.055,h+.015,d+.018],'#414b43',false);
   for(const side of [-1,1])for(let i=1;i<=3;i++)box('crate plank seam',[0,h*i/4,side*(d/2+.004)],[w,.012,.01],'#3d342b',false);
   box('crate lid',[0,h+.008,0],[w+.02,.035,d+.02]);
+ }else if(b.farmProp==='timber'){
+  for(let row=0;row<3;row++)for(let col=0;col<3-row;col++) {
+   const z=(col-(2-row)/2)*d*.31,y=h*(.17+row*.29),diameter=h*.31;
+   parts.push({name:'cut timber log',shape:'cylinder',at:[0,y,z],size:[diameter,w,diameter],tint:row%2?'#68533c':'#766248',wood:true,rotation:[0,0,90]});
+   for(const side of [-1,1])parts.push({name:'pale log end',shape:'cylinder',at:[side*(w/2+.005),y,z],size:[diameter*.94,.015,diameter*.94],tint:'#b39a6b',rotation:[0,0,90]});
+  }
+ }else if(b.farmProp==='worktable'){
+  for(const x of [-w*.36,w*.36])for(const z of [-d*.34,d*.34])box('trestle leg',[x,h*.45,z],[.11,h*.9,.11]);
+  for(let i=0;i<4;i++)box('workyard table plank',[0,h*.91,(i-1.5)*d*.24],[w,h*.12,d*.22]);
+  box('trestle stretcher',[0,h*.25,0],[w*.78,.1,.1]);
+  box('wooden tool tray',[-w*.22,h*.99,0],[w*.3,h*.02,d*.5]);
+ }else if(b.farmProp==='trough'){
+  const stone=(name:string,at:FarmPart['at'],size:FarmPart['size'])=>parts.push({name,shape:'box',at,size,tint:'#999b88',stone:true});
+  stone('stone water trough base',[0,h*.18,0],[w,h*.36,d]);
+  for(const z of [-d*.43,d*.43])stone('trough side',[0,h*.65,z],[w,h*.7,d*.14]);
+  for(const x of [-w*.46,w*.46])stone('trough end',[x,h*.65,0],[w*.08,h*.7,d*.75]);
+  box('trough water',[0,h*.68,0],[w*.82,.015,d*.68],'#52685a',false);
  }else if(b.farmProp==='bench'){
   for(const x of [-w*.35,w*.35])for(const z of [-d*.32,d*.32])box('bench iron foot',[x,h*.25,z],[.075,h*.5,.075],'#38463e',false);
   for(let i=0;i<4;i++)box('weathered bench seat',[0,h*.51,-d*.32+i*d*.21],[w,.065,d*.17]);

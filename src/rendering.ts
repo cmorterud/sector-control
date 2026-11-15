@@ -3,6 +3,7 @@ import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
 import { architecturePixels, architecturalTextures, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
+import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
 import {gripHandGeometry} from "./hand-geometry";
@@ -610,7 +611,7 @@ export class Renderer implements CollisionWorld {
         part.render!.castShadows = false;
       }
     }
-    for (const prop of forestFloorProps(this.map)) {
+    for (const prop of [...forestFloorProps(this.map),...villageGardenProps(this.map)]) {
       const root = this.joint("forest floor detail", this.mapRoot, prop.x, prop.y, prop.z);
       root.setLocalEulerAngles(0, prop.yaw, 0);
       const piece = this.forestPart(prop.shape, prop.shape, forestVariant(`${prop.x}:${prop.z}`), 0, 0, 0, ...prop.scale, prop.tint, root);

@@ -196,13 +196,16 @@ it("reacts to suppression by replacing an exposed post with cover against a reme
   p.objective = 1;
   plan(g, p);
   p.x = -12;
-  p.z = 18;
+  // The garden at z=18 now has real cover. Keep this fixture on its open
+  // street-facing edge so it still exercises an exposed-to-sheltered move.
+  p.z = 20.5;
   p.y = groundHeight(p.x, p.z, g.map);
-  p.villagePlan!.goal = { x: -11, z: 18 };
+  p.villagePlan!.goal = { x: -11, z: 20.5 };
   p.villagePlan!.cover = 0;
   p.suppression = 0.5;
-  p.awareness.observed = { x: 20, y: p.y + 1.65, z: 18 };
+  p.awareness.observed = { x: 20, y: p.y + 1.65, z: 20.5 };
   p.awareness.seenAt = g.tick;
+  expect(blocked(p.villagePlan!.goal.x,p.villagePlan!.goal.z,.6,g.map)).toBe(false);
   expect(villageCover(g, p, p.villagePlan!.goal, true)).toBe(0);
   plan(g, p);
   expect(villageCover(g, p, p.villagePlan!.goal, true)).toBeGreaterThan(0);
