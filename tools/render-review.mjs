@@ -81,8 +81,10 @@ try {
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
   const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:'120',duration:'120'});if(mode==='overview')query.set('overview','');
-  await client.send('Page.navigate',{url:base+'?'+query});
-  await until(()=>client.evaluate(`(()=>{if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
+  const destination=base+'?'+query;
+  console.log(JSON.stringify({map,mode,stage:'loading'}));
+  await client.send('Page.navigate',{url:destination});
+  await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
   await client.evaluate(`document.querySelector('#primary').click()`);
   await until(()=>client.evaluate(`!!document.querySelector('.playtest')`));
   const graphics=await client.evaluate(`(()=>{const c=document.querySelector('#game'),g=c.getContext('webgl2');if(!g)throw Error('No WebGL 2 context');const e=g.getExtension('WEBGL_debug_renderer_info');return {width:c.width,height:c.height,renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)};})()`);
@@ -92,7 +94,9 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  await client.evaluate(`window.sectorRenderReview.advance(900)`);
+  console.log(JSON.stringify({map,mode,stage:'intact-rendered'}));
+  const advanced=await client.evaluate(`window.sectorRenderReview.advance(900)`);
+  console.log(JSON.stringify({map,mode,stage:'battle-advanced',...advanced}));
   const before=await client.evaluate(mode==='ground'?`window.sectorRenderReview.survey(false).frames`:`window.sectorRenderReview.state().frames`);
   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   await client.evaluate(`window.sectorRenderReview.finish()`);
@@ -108,5 +112,5 @@ try {
 }catch(error){report.errors.push(String(error));console.error(error);process.exitCode=1;if(client)try{await screenshot('failure');}catch{}}
 finally {
  await writeFile(join(out,'report.json'),JSON.stringify(report,null,2));await writeFile(join(out,'chrome.log'),chromeLog);
- client?.close();browser?.kill('SIGTERM');await new Promise(r=>server.close(r));await delay(500);if(browser?.exitCode===null)browser.kill('SIGKILL');await rm(profile,{recursive:true,force:true,maxRetries:3,retryDelay:200});
+ client?.close();browser?.kill('SIGTERM');await delay(1500);if(browser?.exitCode===null)browser.kill('SIGKILL');server.closeAllConnections();await new Promise(r=>server.close(r));await rm(profile,{recursive:true,force:true,maxRetries:3,retryDelay:200});
 }
