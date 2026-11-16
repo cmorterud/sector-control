@@ -103,9 +103,10 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
     }
     if(a.sign)for(const side of a.signBothSides?[-1,1]:[-1]) {
       const length=alongX?w:d,pixel=Math.min(.055,(length-.24)/(a.sign.length*4));
-      face("painted entrance sign",0,h*.57,side,length-.1,.4,.055,p.wood);
+      const signY=b.landmark?h*.2:h*.57; // Below the capture buildings' porch canopies.
+      face("painted entrance sign",0,signY,side,length-.1,.4,.055,p.wood);
       [...a.sign].forEach((letter,index)=>(letters[letter]??[]).forEach((row,iy)=>[...row].forEach((ink,ix)=>{
-        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(a.signBothSides&&side===-1?-1:1),h*.57+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","limewash");
+        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(a.signBothSides&&side===-1?-1:1),signY+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","limewash");
       })));
     }
     if(a.sign && a.exterior!==undefined) {
@@ -116,9 +117,10 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
         face("aid post cross horizontal",length/2+.33,-.2,side,.33,.095,.065,"#9e4c3c","iron");
       }
       // Unlit lanterns give entrances scale without lights or per-frame work.
-      face("entrance lantern bracket",-length/2-.2,h*.7,side,.08,.07,.28,"#42483c","iron");
-      face("entrance lantern frame",-length/2-.2,h*.45,side,.19,.32,.18,"#42483c","iron");
-      face("entrance lantern glass",-length/2-.2,h*.45,side,.12,.22,.195,"#b7b59a","iron");
+      const lanternY=b.landmark?h*.12:h*.45;
+      face("entrance lantern bracket",-length/2-.2,lanternY+.25,side,.08,.07,.28,"#42483c","iron");
+      face("entrance lantern frame",-length/2-.2,lanternY,side,.19,.32,.18,"#42483c","iron");
+      face("entrance lantern glass",-length/2-.2,lanternY,side,.12,.22,.195,"#b7b59a","iron");
     }
   } else if(a.part==="floor"||a.part==="ceiling"||a.part==="stair") {
     const paved=b.kind==="concrete";

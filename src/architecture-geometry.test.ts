@@ -64,6 +64,19 @@ it("meets adjacent gable faces along a continuous pitched outline inside their c
   }
 });
 
+it("keeps capture-building signs and lanterns visible below their porch canopies",()=>{
+  for(const building of villageMap.buildings!.filter(b=>b.flag)) {
+    const lintel=villageMap.boxes.find(b=>b.architecture?.building===building.id&&b.architecture.sign)!;
+    const porch=villageMap.boxes.find(b=>b.id===`village-${building.id}-porch`)!;
+    for(const name of ["painted entrance sign","entrance lantern frame"]) {
+      const piece=architecturePieces(lintel,0).find(p=>p.name===name)!;
+      expect(piece,building.id).toBeDefined();
+      const top=lintel.baseY!+lintel.h/2+piece.at[1]+piece.size[1]/2;
+      expect(top,building.id).toBeLessThan(porch.baseY!);
+    }
+  }
+});
+
 it("uploads detailed shared meshes and materials, then removes every visible piece with its panel", () => {
   const device=new pc.NullGraphicsDevice(),root=new pc.Entity("architecture test"),made:pc.Entity[]=[];
   const r=Object.create(Renderer.prototype) as any;

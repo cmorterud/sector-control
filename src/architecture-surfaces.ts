@@ -23,7 +23,7 @@ export function architecturePixels(kind: ArchitecturalTexture, size = 256) {
       const trowel=lookNoise(u*22,v*22,22),stain=lookNoise(u*3,v*3,3);
       const crack=Math.max(0,1-Math.abs(Math.sin(u*Math.PI*14+weather*7+Math.sin(v*Math.PI*8)))/.035);
       h=.5+grain*.025+trowel*.035-crack*.045;
-      tone=.86+grain*.055+trowel*.035-stain*.12-crack*.055;
+      tone=.83+grain*.04+trowel*.03-stain*.035-crack*.045;
     }
     const i=(y*size+x)*4;
     diffuse.set([tone*255,tone*(brick?208:kind==="tiles"?224:249),tone*(brick?175:kind==="tiles"?199:240),255],i);

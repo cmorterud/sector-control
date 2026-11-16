@@ -89,7 +89,7 @@ try {
  await client.send('Runtime.enable');await client.send('Page.enable');await client.send('Network.enable');
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
-  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:'120',duration:'120'});if(mode==='overview')query.set('overview','');
+  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'?'600':'120',duration:'120'});if(mode==='overview')query.set('overview','');
   const destination=base+'?'+query;
   console.log(JSON.stringify({map,mode,stage:'loading'}));
   await client.send('Page.navigate',{url:destination});
