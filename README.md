@@ -9,7 +9,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 ## Features
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
-- **Five maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, and the coastal Lighthouse point.
+- **Six maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, the coastal Lighthouse point, and a guided training camp.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Furnished village interiors.** Framed openings, stone corners, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
 - **Village outdoor spaces.** Cobbled courts, gravel workyards, vegetable gardens and an orchard connect the houses. Low destructible furniture and supply positions break up the approaches while roads and doorways stay open.
@@ -22,13 +22,18 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 | Map | Size | Objective |
 | --- | --- | --- |
+| Training grounds | Guided practice | Eight repeatable exercises covering movement, all weapons, artillery, destruction and squad combat |
 | Trench front | 50v50 | Four flags in opposing trench lines across no man's land |
 | Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Industrial | 5v5 | Three sectors among warehouse cover |
 
-On the flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
+On the combat flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
+
+## Training grounds
+
+Choose **Training grounds** in the map selector to practise the game through eight guided exercises. Escape opens the training armory, faction equipment, resupply, exercise selection and free practice. Numbered boards connect the stations; completed tasks remain checked while you experiment. See [TRAINING_GROUNDS.md](docs/TRAINING_GROUNDS.md).
 
 ## Controls
 
@@ -69,13 +74,13 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=headland` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots and `?duration=30` shortens the match to thirty seconds.
+Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=headland` or `?map=training` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots and `?duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 
-[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pushes and pull requests. Five parallel headless Chrome jobs then render that same production build, one per map. Each saves an intact overview, a battle overview, first-person and third-person screenshots, plus browser errors and gameplay diagnostics. Find the `render-<map>` artifacts on each run; screenshots are retained for 14 days. Software rendering provides visual evidence, not a hardware FPS benchmark.
+[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pushes and pull requests. Six parallel headless Chrome jobs then render that same production build, one per map. Each saves an intact overview, a battle overview, first-person and third-person screenshots, plus browser errors and gameplay diagnostics. Find the `render-<map>` artifacts on each run; screenshots are retained for 14 days. Software rendering provides visual evidence, not a hardware FPS benchmark.
 
-A main push deploys to GitHub Pages only after tests, build and all five browser checks pass. Browser errors, missing assets, WebGL initialization failures and failure to progress through gameplay fail the rendered check. Passing same-repository PRs targeting `main` also receive playable previews at `/sector-control/pr-preview/pr-<number>/`. A bot comment links the preview after its deployed files and browser check pass; closing the PR removes it. Ordinary branch pushes and fork PRs validate without publishing. See [RENDER_REVIEW.md](docs/RENDER_REVIEW.md) and [PR_PREVIEWS.md](docs/PR_PREVIEWS.md).
+A main push deploys to GitHub Pages only after tests, build and all six browser checks pass. Browser errors, missing assets, WebGL initialization failures and failure to progress through gameplay fail the rendered check. Passing same-repository PRs targeting `main` also receive playable previews at `/sector-control/pr-preview/pr-<number>/`. A bot comment links the preview after its deployed files and browser check pass; closing the PR removes it. Ordinary branch pushes and fork PRs validate without publishing. See [RENDER_REVIEW.md](docs/RENDER_REVIEW.md) and [PR_PREVIEWS.md](docs/PR_PREVIEWS.md).
 
 Pages is configured to use **GitHub Actions** as the build source. The game publishes at **https://codymorterud.com/sector-control/**; `https://cmorterud.github.io/sector-control/` redirects there through the account's existing custom domain. No personal token or repository secret is needed. The separate publisher executes only automation from `main`, maintains a generated `pages-content` branch containing production and active previews, and deploys the complete site. For a fork, select **GitHub Actions** in **Settings → Pages** and change `PAGES_SITE_URL` in `pages.yml` to that fork's Pages URL.
 

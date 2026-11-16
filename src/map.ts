@@ -41,6 +41,7 @@ export type Box = Vec & {
     opening?: "window" | "door";
     corner?: -1 | 1;
     sign?: string;
+    signBothSides?: boolean;
     feature?: "bookcase" | "desk" | "table" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
   };
   walkable?: boolean;
@@ -123,7 +124,7 @@ export interface CommunicationRoute {
   points: Vec[];
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "village" | "verdun" | "headland";
+  id: "industrial" | "trenches" | "village" | "verdun" | "headland" | "training";
   name: string;
   width: number;
   depth: number;

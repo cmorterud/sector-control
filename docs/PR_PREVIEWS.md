@@ -18,7 +18,7 @@ The checks must run once before they can be selected in protection settings. A `
 
 ## Publication sequence
 
-`ci.yml` runs with read-only repository access: type checking, simulation tests, publisher regressions, a Vite build and all five rendered map checks. It stamps `revision.json` with the tested merge SHA, PR head SHA, CI run/attempt, deployment base and asset hashes. The stable `pr-ready` job fails if any build or render job failed or was skipped.
+`ci.yml` runs with read-only repository access: type checking, simulation tests, publisher regressions, a Vite build and all six rendered map checks. It stamps `revision.json` with the tested merge SHA, PR head SHA, CI run/attempt, deployment base and asset hashes. The stable `pr-ready` job fails if any build or render job failed or was skipped.
 
 `pages.yml` runs only trusted automation from `main`. It validates the originating workflow, source repository, live PR/head or current main revision, and successful CI conclusion before downloading its `production-build` artifact. Ordinary branch pushes and fork PRs never publish automatically. Old CI completions cannot revive a closed preview or overwrite a newer PR revision. Main must publish once before the first preview, so a PR cannot become the production site.
 
@@ -26,7 +26,7 @@ The publisher treats artifacts as static bytes, without installing dependencies 
 
 All publication and cleanup runs share a FIFO concurrency group with `queue: max`, so simultaneous updates are serialized without replacing other pending PRs. The complete snapshot is uploaded and deployed through GitHub's official Pages actions. Main updates preserve active previews; PR updates preserve production.
 
-A separate read-only runner verifies the deployed `revision.json`, hashes every asset, and plays the deployed Village map in Chrome. Only then does a reporting job publish `preview-ready` success and the playable link. Cleanup verifies production responds and the closed preview returns 404. CDN propagation is retried. Preview URLs are public and share production's web origin: automatic previews are intentionally limited to trusted same-repository branches.
+A separate read-only runner verifies the deployed `revision.json`, hashes every asset, and plays both the deployed Village and Training grounds maps in Chrome. Training verification also exercises keyboard/mouse controls, the armory and every station. Only then does a reporting job publish `preview-ready` success and the playable link. Cleanup verifies production responds and the closed preview returns 404. CDN propagation is retried. Preview URLs are public and share production's web origin: automatic previews are intentionally limited to trusted same-repository branches.
 
 ## Recovery and maintenance
 

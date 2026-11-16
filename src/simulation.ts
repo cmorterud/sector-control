@@ -738,7 +738,7 @@ export class TestCollision implements CollisionWorld {
 export const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
 export function resolveTeamSize(map: MapDefinition, requested?: number) {
-  const fallback = map.id === "industrial" ? 5 : 50;
+  const fallback = map.id === "training" ? 4 : map.id === "industrial" ? 5 : 50;
   return clamp(
     Number.isFinite(requested) ? Math.round(requested!) : fallback,
     1,
@@ -791,6 +791,8 @@ export function capture(
   return null;
 }
 export class Game {
+  // Optional scenario director; ordinary matches always use the same bot AI.
+  commandOverride?: (game: Game, soldier: Soldier) => Command;
   artilleryAudit = freshArtilleryAudit();
   flames: FlameState = {kits:[]};
   tick = 0;
@@ -837,7 +839,7 @@ export class Game {
     this.flames = createFlames(this.map);
     this.artillery = createArtilleryState(
       seed,
-      options.ambientArtillery ?? this.map.id !== "industrial",
+      options.ambientArtillery ?? (this.map.id !== "industrial" && this.map.id !== "training"),
     );
     this.assaults.enabled =
       (options.assaults ?? true) && this.map.id === "trenches";
@@ -845,7 +847,7 @@ export class Game {
     this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
     this.scoreLimit =
-      this.scoring === "domination" ? dominationRules.scoreLimit : null;
+      this.scoring === "domination" && this.map.id !== "training" ? dominationRules.scoreLimit : null;
     this.botSettings = {
       ...defaultBotSettings,
       ...(this.map.terrain?.firingPositions
@@ -860,7 +862,7 @@ export class Game {
       owner: null,
       contested: false,
     }));
-    this.duration = duration;
+    this.duration = this.map.id === "training" ? Number.MAX_SAFE_INTEGER : duration;
     this.seed = seed;
     for (let i = 0; i < (bots ? this.teamSize * 2 : 1); i++) {
       const team: Team = i < this.teamSize ? "blue" : "red";
@@ -1110,7 +1112,7 @@ export class Game {
         0,
         p.suppression - suppressionRules.recoveryPerTick,
       );
-      p.command = p.id === 0 ? human : botCommand(this, p);
+      p.command = p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
       const c = p.command;
       if (p.id !== 0) evadeFlame(this,p);
       if (c.interact && !p.commandInteractHeld) pickupFlame(this,p);
@@ -1310,7 +1312,7 @@ export class Game {
       for (const s of this.sectors)
         if (s.owner && !s.contested) {
           this.scores[s.owner] = Math.min(
-            this.scoreLimit!,
+            this.scoreLimit ?? Infinity,
             this.scores[s.owner] + 1,
           );
           held[s.owner]++;

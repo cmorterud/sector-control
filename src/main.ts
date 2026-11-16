@@ -1,9 +1,12 @@
 import { frameSeconds } from "./frame-timing";
+import {trainingMap} from "./training-map";
+import {TrainingSession} from "./training";
+import {trainingHUD,trainingMenu} from "./training-ui";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
-import { factions, factionFor, scoped, type Loadout, type WeaponSlot } from "./loadouts";
+import { factions, factionFor, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -90,6 +93,7 @@ const tacticalMap = new ArtilleryMap(
   (target) => {
     pendingArtillery = target;
   },
+  ()=>training?.station.target,
 );
 let artilleryNotice = "",
   artilleryNoticeUntil = 0;
@@ -106,9 +110,12 @@ const params = new URLSearchParams(location.search),
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
 const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
 let reviewFrames = 0;
+let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
 const map =
-  params.get("map") === "verdun"
+  params.get("map") === "training"
+    ? trainingMap
+    : params.get("map") === "verdun"
     ? verdunMap
     : params.get("map") === "village"
     ? villageMap
@@ -117,6 +124,11 @@ const map =
     : params.get("map") === "trenches"
       ? trenchMap
       : industrialMap;
+const training=map.id==="training"?new TrainingSession():undefined;
+root.classList.toggle("training-active",!!training);
+let trainingReset=false;
+const trainingOverlay=document.createElement("aside");trainingOverlay.id="training-lesson";trainingOverlay.hidden=true;
+document.querySelector("#ui")!.append(trainingOverlay);
 const requestedTeamSize = params.has("teamSize")
   ? Number(params.get("teamSize"))
   : undefined;
@@ -125,7 +137,7 @@ updateControlHints();
 tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
-  const choices = [industrialMap, trenchMap, villageMap, verdunMap, headlandMap].map((battlefield) => {
+  const choices = [trainingMap, industrialMap, trenchMap, villageMap, verdunMap, headlandMap].map((battlefield) => {
     if (battlefield.id === map.id)
       return battlefieldCard(battlefield);
     const query = new URLSearchParams();
@@ -173,13 +185,24 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}${training?trainingMenu(training,started):""}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+  if(training){
+    (el("training-station") as HTMLSelectElement).onchange=e=>{training.select(Number((e.target as HTMLSelectElement).value));trainingReset=true;};
+    (el("training-loadout") as HTMLSelectElement).onchange=e=>{training.loadout=(e.target as HTMLSelectElement).value as Loadout;trainingReset=true;};
+    (el("training-faction") as HTMLSelectElement).onchange=e=>{training.faction=(e.target as HTMLSelectElement).value as FactionId;trainingReset=true;};
+    (el("training-free") as HTMLInputElement).onchange=e=>{training.free=(e.target as HTMLInputElement).checked;};
+    if(started){
+      el("training-refill").onclick=()=>{if(trainingReset||game.players[0].hp<=0)start();else{training.resupply(game);resume();}};
+      el("training-replay").onclick=()=>{training.select(training.lesson,true);start();};
+    }
+  } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
   loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
+  }
   updateBriefControls();
   el("primary").onclick = action;
   el("controls-settings").onclick = () => controlsPanel.show(el("controls-settings"));
@@ -217,6 +240,7 @@ function captureMouse() {
   }
 }
 function resume(fromEscape = false) {
+  if(trainingReset&&started){trainingReset=false;start();return;}
   audio ??= new BattleAudio();
   audio.volume(audioVolume);
   audio.resume();
@@ -229,20 +253,22 @@ function resume(fromEscape = false) {
   captureMouse();
 }
 function start() {
+  trainingReset=false;
   recording?.dispose();
   recording = undefined;
   game = new Game(
     renderer,
-    bots,
+    training?true:bots,
     Math.round(
       (Number.isFinite(duration) && duration > 0 ? duration : 480) * 30,
     ),
     12345,
     undefined,
-    { map, teamSize, humanPlayerIds: autoplay ? [] : [0] },
+    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
-  if (bots) prepareNavigation(game.map);
+  training?.begin(game);
+  if (bots||training) prepareNavigation(game.map);
   renderer.reset(game);
   battlefield.reset(game);
   audio ??= new BattleAudio();
@@ -277,7 +303,7 @@ function pause() {
   if (!started || game.phase !== "playing") return;
   menu(
     "Operation paused",
-    "Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.",
+    training?"Resume your exercise, change gear, resupply or choose another station below.":"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.",
     "Resume operation",
     () => resume(),
     `<div class="pause-actions">
@@ -291,7 +317,7 @@ function pause() {
     </div>`,
   );
   el("redeploy").onclick = () => { pendingRedeploy = true; resume(true); };
-  el("restart").onclick = start;
+  el("restart").onclick = () => {if(training)training.select(training.lesson,true);start();};
   const selectMap = el("select-map");
   selectMap.onclick = () => {
     const expanded = !el("pause-map-picker").classList.toggle("hidden");
@@ -381,6 +407,7 @@ function hud(now: number) {
   el("clock").textContent = `${Math.floor(t / 60)
     .toString()
     .padStart(2, "0")}:${(t % 60).toString().padStart(2, "0")}`;
+  if(training)el("clock").textContent="TRAINING";
   el("sectors").innerHTML =
     game.scoring === "eliminations"
       ? '<span class="sector">TRENCH DUEL · ELIMINATIONS</span>'
@@ -393,6 +420,11 @@ function hud(now: number) {
               `<span class="sector flag-sector ${s.contested ? "contested" : (s.owner ?? "")}" title="${s.id}${s.name ? " · " + s.name : ""} · ${s.contested ? "Contested · scoring paused" : (s.owner ?? "Neutral")}">${s.id}<div class="bar"><i class="${s.control < 0 ? "redbar" : ""}" style="width:${Math.abs(s.control) * 100}%"></i></div></span>`,
           )
           .join("");
+  if(training){
+    el("blue").textContent=String(training.completed);el("red").textContent="8";
+    el("sectors").innerHTML='<span class="mode-tag">FIELD EXERCISES<small>NO TIME LIMIT</small></span>';
+    trainingOverlay.hidden=paused;trainingOverlay.innerHTML=trainingHUD(training,game,settings);
+  }
   el("health").innerHTML =
     `<small>VITALS / ${factions[p.faction ?? factionFor(map,p.team)].name.toUpperCase()}</small><strong>${Math.ceil(p.hp)}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   root.classList.toggle("scoped", !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick));
@@ -448,7 +480,7 @@ function hud(now: number) {
   } else el("scoreboard").classList.add("hidden");
   el("labels").classList.toggle("aiming", aim);
   el("labels").innerHTML =
-    game.scoring === "eliminations"
+    game.scoring === "eliminations" || (training&&training.lesson<6)
       ? ""
       : game.sectors
           .map((s) => {
@@ -514,6 +546,10 @@ window.addEventListener("keydown", (e) => {
   if (Object.values(settings.bindings).includes(e.code))
     e.preventDefault();
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if(training&&isKey("interact",e.code)&&!e.repeat&&!tacticalMap.open){
+    const index=training.interaction(game);
+    if(index!==null){training.select(index);start();return;}
+  }
   if (mouseCaptureNeeded && !e.repeat && Object.values(settings.bindings).includes(e.code)) captureMouse();
   keys.add(e.code);
   if (isKey("sprint", e.code)) sprintInput.press(e.repeat, settings.toggleSprint);
@@ -600,13 +636,14 @@ window.addEventListener("blur", () => {
 function stepSimulation() {
   renderer.remember(game);
   const input =
-    autoplay && game.players[0].hp > 0
+    autoplay && !reviewManual && game.players[0].hp > 0
       ? botCommand(game, game.players[0])
       : command();
   input.firstPerson = preferredFirstPerson;
   input.redeploy = pendingRedeploy; pendingRedeploy = false;
   const simStart = battlePerformance.begin();
   game.step(input);
+  training?.observe(game,input);
   battlePerformance.end("simulation",simStart);
   if (!autoplay && game.players[0].melee) yaw = game.players[0].yaw;
   const eventStart = battlePerformance.begin();
@@ -684,7 +721,9 @@ try {
   // without waiting for a software GPU to display every intermediate frame.
   // Normal play never installs this bridge or changes its frame loop.
   if(renderReview)Object.assign(window,{sectorRenderReview:{
-    state:()=>({frames:reviewFrames,tick:started?game.tick:0}),
+    state:()=>({frames:reviewFrames,tick:started?game.tick:0,paused,...(training&&started?{training:{id:training.id,loadout:game.players[0].loadout,faction:game.players[0].faction,free:training.free},player:{x:game.players[0].x,z:game.players[0].z,crouched:game.players[0].crouched,firstPerson:preferredFirstPerson,ammo:game.players[0].ammo}}:{})}),
+    manual:()=>{reviewManual=true;},
+    training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
     advance:(ticks:number)=>{
       if(!started||paused||!Number.isInteger(ticks)||ticks<0||ticks>900)throw Error("Invalid review advance");
       for(let i=0;i<ticks&&game.phase==="playing";i++){
@@ -693,7 +732,7 @@ try {
       accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
     },
     survey:(firstPerson:boolean)=>{
-      const poses:Record<string,[number,number,number,number]>={industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
+      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
       const [x,z,tx,tz]=poses[map.id],p=game.players[0];
       let at={x,z};
       for(const dx of [0,-2,2,-4,4])for(const dz of [0,-2,2,-4,4])if(!blocked(x+dx,z+dz,.7,game.map)&&blocked(at.x,at.z,.7,game.map))at={x:x+dx,z:z+dz};
@@ -707,7 +746,9 @@ try {
   }});
   menu(
     map.id !== "industrial" ? map.name : "Sector Control",
-    map.id === "verdun"
+    training
+      ? "Learn by doing: eight resettable field exercises teach movement, every weapon, grenades, smoke, bayonets, artillery, destruction and squad combat. No match timer or random shelling. Visit the numbered boards, or use Escape to change exercise, resupply and choose faction equipment."
+      : map.id === "verdun"
       ? `France faces Imperial Germany across a longer forest front. Capture the ruined Broken Relay between the trench systems. ${teamSize} soldiers per team · five-flag domination. Verdun-inspired, 1917.`
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
@@ -718,7 +759,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
+    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

@@ -87,7 +87,7 @@ jobs:
     needs: publish
     if: needs.publish.result == 'success' && needs.publish.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 10
     # Deployed PR JavaScript runs only on this read-only, secret-free runner.
     permissions:
       contents: read
@@ -111,6 +111,11 @@ jobs:
         env:
           REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
         run: node tools/render-review.mjs village dist playtest-artifacts/preview-browser
+      - name: Exercise the deployed training controls and every station
+        if: needs.publish.outputs.cleanup != 'true'
+        env:
+          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
+        run: node tools/render-review.mjs training dist playtest-artifacts/deployed-training-browser
       - name: Verify closed preview is gone and production remains available
         if: needs.publish.outputs.cleanup == 'true'
         env:
@@ -121,7 +126,9 @@ jobs:
         if: always()
         with:
           name: deployed-browser-review
-          path: playtest-artifacts/preview-browser
+          path: |
+            playtest-artifacts/preview-browser
+            playtest-artifacts/deployed-training-browser
           if-no-files-found: ignore
           retention-days: 14
 
