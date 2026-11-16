@@ -1,6 +1,6 @@
 import { lookNoise } from "./battlefield-look";
-export type ArchitecturalTexture = "stone" | "brick" | "slate" | "tiles" | "fabric" | "iron";
-export const architecturalTextures: ArchitecturalTexture[] = ["stone", "brick", "slate", "tiles", "fabric", "iron"];
+export type ArchitecturalTexture = "stone" | "brick" | "slate" | "tiles" | "fabric" | "iron" | "limewash";
+export const architecturalTextures: ArchitecturalTexture[] = ["stone", "brick", "slate", "tiles", "fabric", "iron", "limewash"];
 
 // Shared 1.6 m material tiles, sampled in meters by architectural meshes.
 export function architecturePixels(kind: ArchitecturalTexture, size = 256) {
@@ -19,6 +19,12 @@ export function architecturePixels(kind: ArchitecturalTexture, size = 256) {
     if(kind==="tiles")h+=Math.sin(bx*Math.PI)*.16;
     if(kind==="fabric"){h=.3+(x%4<2?.07:0)+(y%4<2?.07:0)+grain*.12;tone=.76+grain*.12-weather*.04;}
     if(kind==="iron"){h=grain*.12;tone=.56+grain*.15-weather*.1;}
+    if(kind==="limewash") {
+      const trowel=lookNoise(u*22,v*22,22),stain=lookNoise(u*3,v*3,3);
+      const crack=Math.max(0,1-Math.abs(Math.sin(u*Math.PI*14+weather*7+Math.sin(v*Math.PI*8)))/.035);
+      h=.5+grain*.025+trowel*.035-crack*.045;
+      tone=.86+grain*.055+trowel*.035-stain*.12-crack*.055;
+    }
     const i=(y*size+x)*4;
     diffuse.set([tone*255,tone*(brick?208:kind==="tiles"?224:249),tone*(brick?175:kind==="tiles"?199:240),255],i);
     heights[y*size+x]=h;

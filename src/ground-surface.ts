@@ -203,20 +203,23 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         for(let c=0;c<3;c++)diffuse[i+c]=diffuse[i+c]*(1-garden*.78)+soil[c]*255*garden*.78;
       }
       const road = villageRoad(map, x, z);
+      let pavingRelief=0;
       if (road > 0) {
         const pavingRow = Math.floor(z / 0.43),
           px = (((x / 0.6 + (pavingRow % 2) * 0.5) % 1) + 1) % 1,
           pz = (((z / 0.43) % 1) + 1) % 1;
         const joint = Math.min(px, 1 - px, pz, 1 - pz) < 0.075;
-        const stone = (joint ? 0.46 : 0.76) + lookNoise(x * 5, z * 5) * 0.12;
-        const mix = road * (0.65 + lookNoise(x * 0.7, z * 0.7) * 0.35);
+        const block=lookNoise(Math.floor(x/.6+(pavingRow%2)*.5)*3,pavingRow*3);
+        const stone = (joint ? 0.49 : 0.67+block*.17) + lookNoise(x * 12, z * 12) * 0.055;
+        const mix = road * (0.88 + lookNoise(x * 0.7, z * 0.7) * 0.12);
         for (let c = 0; c < 3; c++)
           diffuse[i + c] = diffuse[i + c] * (1 - mix) + stone * 255 * mix;
+        pavingRelief=joint?-.018:.018+Math.sin(px*Math.PI)*Math.sin(pz*Math.PI)*.025;
       }
       const shine = (18 + wet * 112 + wear * wet * 65) * (1 - litter * .45)*(1-gravel*.65)*(1-garden*.6);
       gloss.set([shine, shine, shine, 255], i);
       heights[row * size + col] =
-        detail * (0.7 - wet * 0.35) + wear * (a - b) * 0.18 + garden*Math.sin(x*6.8)*.045;
+        (detail * (0.7 - wet * 0.35) + wear * (a - b) * 0.18 + garden*Math.sin(x*6.8)*.045)*(1-road)+pavingRelief*road;
     }
   const h = (x: number, z: number) =>
     heights[

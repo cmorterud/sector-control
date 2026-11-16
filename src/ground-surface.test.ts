@@ -63,6 +63,16 @@ it("bakes a reproducible map-wide surface without a repeated three-meter color/n
   ).toBeGreaterThan(60);
 });
 
+it("keeps cobble relief independent of the soil footpaths beneath a fully paved surface",()=>{
+  const map={...trenchMap,id:"industrial" as const,width:12,depth:12,buildings:[],streets:[{width:20,points:[{x:-12,z:0},{x:12,z:0}]}],
+    terrain:{...trenchMap.terrain!,communicationRoutes:[]}};
+  const worn={...map,terrain:{...map.terrain,communicationRoutes:[{team:"blue" as const,entrance:{x:0,z:-6},points:[{x:0,z:-6},{x:0,z:6}]}]}};
+  expect(groundField(worn,0,-5).wear).not.toBe(groundField(map,0,-5).wear);
+  const first=groundSurfacePixels(map,96),second=groundSurfacePixels(worn,96);
+  expect(first.normal).toEqual(second.normal);
+  expect(new Set(first.normal).size).toBeGreaterThan(15);
+});
+
 it("places shallow level puddles inside authored hollows and low rubble near worn approaches", () => {
   const puddles = groundPuddles(trenchMap);
   expect(puddles.length).toBeGreaterThanOrEqual(6);

@@ -48,6 +48,22 @@ it("gives every village building a finished ceiling and a recognizable room use"
   expect(architecturePieces(window,1).some(p=>p.name==="chipped plaster exposes brick")).toBe(true);
 });
 
+it("meets adjacent gable faces along a continuous pitched outline inside their collision envelopes",()=>{
+  for(const building of villageMap.buildings!)for(const side of [-1,1]) {
+    const panels=villageMap.boxes.filter(b=>b.architecture?.building===building.id&&b.architecture.gableSlope!==undefined&&b.z===building.z+side*building.d/2).sort((a,b)=>a.x-b.x);
+    expect(panels.length).toBeGreaterThan(8);
+    const edges=panels.map(b=>{
+      const m=architectureGeometry(b,0).find(m=>m.surface==="limewash")!;
+      const top=(x:number)=>Math.max(...m.positions.filter((_,i)=>i%3===1&&Math.abs(m.positions[i-1]-x)<.0001));
+      expect(Math.max(...m.positions.filter((_,i)=>i%3===1))).toBeLessThanOrEqual(b.h/2+.0001);
+      return [top(-b.w/2)+b.h/2+b.baseY!,top(b.w/2)+b.h/2+b.baseY!];
+    });
+    for(let i=1;i<edges.length;i++)expect(edges[i][0],building.id).toBeCloseTo(edges[i-1][1],5);
+    expect(edges[0][0]).toBeCloseTo(edges.at(-1)![1],5);
+    expect(Math.max(...edges.flat())-edges[0][0]).toBeGreaterThan(1.5);
+  }
+});
+
 it("uploads detailed shared meshes and materials, then removes every visible piece with its panel", () => {
   const device=new pc.NullGraphicsDevice(),root=new pc.Entity("architecture test"),made:pc.Entity[]=[];
   const r=Object.create(Renderer.prototype) as any;

@@ -29,7 +29,7 @@ export type Box = Vec & {
   landmark?: string;
   supports?: string[];
   baseY?: number;
-  farmProp?: "crate" | "cart" | "fence" | "relayMast" | "radio" | "bench" | "planter" | "fountain" | "timber" | "worktable" | "trough";
+  farmProp?: "crate" | "cart" | "fence" | "relayMast" | "radio" | "bench" | "planter" | "fountain" | "timber" | "worktable" | "trough" | "barrels";
   footingY?: number;
   architecture?: {
     building: string;
@@ -42,7 +42,12 @@ export type Box = Vec & {
     corner?: -1 | 1;
     sign?: string;
     signBothSides?: boolean;
-    feature?: "bookcase" | "desk" | "table" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
+    exterior?: -1 | 1;
+    wallRow?: number;
+    gableSlope?: number;
+    ridge?: number;
+    eave?: -1 | 1;
+    feature?: "bookcase" | "desk" | "table" | "chair" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
   };
   walkable?: boolean;
   // A loaded exterior model drawn in place of the plain box, which remains

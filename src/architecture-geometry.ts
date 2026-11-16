@@ -4,12 +4,12 @@ import type { ArchitecturalTexture } from "./architecture-surfaces";
 
 export type ArchitectureSurface = Exclude<SurfaceKind,"mud"|"bark"> | ArchitecturalTexture;
 type Point = [number,number,number];
-export type ArchitecturePiece = { name:string; at:Point; size:Point; tint:string; surface:ArchitectureSurface; rotation?:number; chipped?:boolean; shape?:"bell" };
+export type ArchitecturePiece = { name:string; at:Point; size:Point; tint:string; surface:ArchitectureSurface; rotation?:number; chipped?:boolean; shape?:"bell"|"cylinder"; topSlope?:number };
 export type ArchitectureMesh = {surface:ArchitectureSurface;positions:number[];normals:number[];uvs:number[];colors:number[];indices:number[]};
 export const architecturePalette = (id:string) => ({
-  manor:{wall:"#e0d4b9",trim:"#bca783",wood:"#604936",roof:"#747c7b",roofSurface:"slate"},
-  school:{wall:"#d1c6ac",trim:"#b2a28b",wood:"#526257",roof:"#7a6555",roofSurface:"tiles"},
-  inn:{wall:"#d6c1a3",trim:"#8d7860",wood:"#4c392d",roof:"#8c6c55",roofSurface:"tiles"},
+  manor:{wall:"#c6b58f",trim:"#afa28a",wood:"#544b3c",roof:"#647575",roofSurface:"slate"},
+  school:{wall:"#bac0a7",trim:"#a99c83",wood:"#526257",roof:"#8a6954",roofSurface:"tiles"},
+  inn:{wall:"#c7aa83",trim:"#9c8969",wood:"#4c392d",roof:"#906b4e",roofSurface:"tiles"},
   farm:{wall:"#c6c1a7",trim:"#a89a81",wood:"#68705a",roof:"#8e7560",roofSurface:"tiles"},
   hall:{wall:"#d9d3bf",trim:"#b3ada0",wood:"#4c5b59",roof:"#727e80",roofSurface:"slate"},
   stable:{wall:"#b9ae92",trim:"#8d8066",wood:"#6f5840",roof:"#806c58",roofSurface:"tiles"},
@@ -56,26 +56,40 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
     add(name,alongX?u:side*(w/2+depth/2),y,alongX?side*(d/2+depth/2):u,
       alongX?su:depth,sy,alongX?depth:su,tint,surface,0,chipped);
   if(wall) {
-    const surface=a.level===0 && h<=1.01?"stone":"plaster";
-    add("masonry panel",0,h/2,0,w,h,d,surface==="stone"?p.trim:p.wall,surface);
+    add("limewashed masonry panel",0,h/2,0,w,h,d,p.wall,"limewash");
+    pieces[pieces.length-1].topSlope=a.gableSlope;
     for(const side of [-1,1]) {
+      const outside=a.exterior===side,length=alongX?w:d;
+      if(a.wallRow===0) {
+        if(outside)face("weathered stone plinth",0,.16,side,length,.32,.025,p.trim,"stone");
+        else face("interior skirting",0,.065,side,length,.13,.025,p.wood);
+      }
       if(a.opening==="window") {
-        const length=alongX?w:d;
         if(h<=1.01) {
           face("projecting stone sill",0,h-.055,side,length+.08,.11,.09,p.trim,"stone");
           for(const edge of [-1,1])face("painted window jamb",edge*(length/2-.055),h+.625,side,.09,1.25,.055,p.wood);
-          if(["farm","cottage","school"].includes(a.building))for(const edge of [-1,1])
-            face("open timber shutter",edge*(length/2+.18),h+.62,side,.3,1.18,.07,p.wood);
-        } else face("window head moulding",0,.065,side,length+.06,.13,.055,p.trim,"stone");
+          if(outside && ["farm","cottage","school","inn"].includes(a.building))for(const edge of [-1,1]) {
+            const u=edge*(length/2+.2);
+            face("open timber shutter",u,h+.62,side,.34,1.18,.07,p.wood);
+            for(const y of [.15,.35,.55,.75,.95])face("shutter louvre",u,h+y,side,.31,.035,.085,"#929278");
+            for(const y of [.25,.95])face("shutter iron hinge",u,h+y,side,.3,.035,.095,"#434a40","iron");
+          }
+        } else {
+          face("window head moulding",0,.065,side,length+.06,.13,.055,p.trim,"stone");
+          if(outside && ["manor","hall"].includes(a.building))face("window keystone",0,.14,side,.2,.28,.075,"#c9bda2","stone");
+        }
       }
       if(a.opening==="door") {
         const length=alongX?w:d;
         face("entrance lintel",0,.09,side,length+.08,.18,.085,p.trim,"stone");
         for(const edge of [-1,1])face("entrance surround",edge*(length/2-.04),-1.03,side,.13,2.2,.06,p.trim,"stone");
       }
-      if(a.corner)for(let y=.16;y<h;y+=.34)
-        face("dressed corner stone",a.corner*((alongX?w:d)/2-.15),y,side,.3,.29,.04,p.trim,"stone");
-      if(h>1.1)face("cornice and eave shadow",0,h-.055,side,alongX?w:d,.11,.07,p.trim,"stone");
+      if(a.corner && outside) {
+        if(a.building==="inn"||a.building==="stable")face("exterior timber upright",a.corner*(length/2-.08),h/2,side,.16,h,.055,p.wood);
+        else for(let y=.16;y<h;y+=.34)face("dressed corner stone",a.corner*(length/2-.15),y,side,.3,.29,.04,p.trim,"stone");
+      }
+      if(a.wallRow===2 && outside)face("story cornice",0,h-.055,side,length,.11,.07,a.building==="inn"?p.wood:p.trim,a.building==="inn"?"wood":"stone");
+      if(outside && a.wallRow===0 && seed%2===0)face("worn limewash edge",length*.22,.37,side,length*.26,.15,.006,"#a69e84","limewash",true);
       if(stage)for(let i=0;i<2;i++) {
         const length=alongX?w:d,sy=Math.min(h*.65,.55),u=((seed+i)%3-1)*length*.22;
         face("chipped plaster exposes brick",u,h*(.3+i*.4),side,Math.min(length*.46,.85),sy,.018,"#a98267","brick",true);
@@ -91,8 +105,20 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
       const length=alongX?w:d,pixel=Math.min(.055,(length-.24)/(a.sign.length*4));
       face("painted entrance sign",0,h*.57,side,length-.1,.4,.055,p.wood);
       [...a.sign].forEach((letter,index)=>(letters[letter]??[]).forEach((row,iy)=>[...row].forEach((ink,ix)=>{
-        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(a.signBothSides&&side===-1?-1:1),h*.57+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","plaster");
+        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(a.signBothSides&&side===-1?-1:1),h*.57+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","limewash");
       })));
+    }
+    if(a.sign && a.exterior!==undefined) {
+      const side=a.exterior,length=alongX?w:d;
+      if(a.building==="school") {
+        face("aid post enamel plaque",length/2+.33,-.2,side,.48,.5,.055,"#e4ddc8","iron");
+        face("aid post cross vertical",length/2+.33,-.2,side,.095,.35,.065,"#9e4c3c","iron");
+        face("aid post cross horizontal",length/2+.33,-.2,side,.33,.095,.065,"#9e4c3c","iron");
+      }
+      // Unlit lanterns give entrances scale without lights or per-frame work.
+      face("entrance lantern bracket",-length/2-.2,h*.7,side,.08,.07,.28,"#42483c","iron");
+      face("entrance lantern frame",-length/2-.2,h*.45,side,.19,.32,.18,"#42483c","iron");
+      face("entrance lantern glass",-length/2-.2,h*.45,side,.12,.22,.195,"#b7b59a","iron");
     }
   } else if(a.part==="floor"||a.part==="ceiling"||a.part==="stair") {
     const paved=b.kind==="concrete";
@@ -110,6 +136,11 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
     add("roof battens and decking",0,h/2,0,w,h,d,"#72583e");
     add("weathered roof courses",0,h+.018,0,w,.035,d,p.roof,p.roofSurface);
     for(const z of [-d*.3,d*.3])add("exposed roof rafter",0,-.055,z,w,.11,.11,"#645039");
+    if(a.eave) {
+      add("timber fascia",a.eave*(w/2-.02),-.035,0,.09,.2,d,p.wood);
+      add("iron rain gutter",a.eave*(w/2+.045),-.005,0,.09,.075,d,"#525e55","iron");
+    }
+    if(a.ridge!==undefined)add("roof ridge flashing",a.ridge,h+.035,0,.2,.095,d,p.roof,p.roofSurface);
     if(stage)for(let i=0;i<3;i++)add("broken roof tile",(i-1)*w*.22,h+.055,(seed%2?1:-1)*d*.22,w*.17,.04,d*.2,"#807062",p.roofSurface,.08*(i-1),true);
     if(a.feature==="bell") {
       for(const x of [-.4,.4])add("school bell post",x,h+.42,0,.12,.85,.15,p.wood);
@@ -138,11 +169,20 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
       add("folded blanket",0,h*.58,d*.08,w*.93,h*.36,d*.72,"#8a8c76","fabric");
       add("pillow",0,h*.62,-d*.36,w*.75,h*.26,d*.2,"#ddd4bb","fabric");
       for(const z of [-d*.46,d*.46])add("bed end",0,h*.42,z,w,h*.84,.09,p.wood);
+    } else if(f==="chair") {
+      add("chair seat",0,h*.48,0,w,.075,d,p.wood,"floorboards");
+      for(const x of [-w*.39,w*.39])for(const z of [-d*.37,d*.37])add("chair leg",x,h*.23,z,.065,h*.46,.065,p.wood);
+      for(const x of [-w*.39,w*.39])add("chair back upright",x,h*.71,d*.38,.065,h*.58,.065,p.wood);
+      for(const y of [.7,.91])add("chair back slat",0,h*y,d*.38,w,.085,.065,"#a58c65");
     } else if(f==="table"||f==="desk"||f==="workbench") {
       add("plank tabletop",0,h-.055,0,w,.11,d,"#a78a60","floorboards");
       for(const x of [-w*.41,w*.41])for(const z of [-d*.37,d*.37])add("table leg",x,h*.46,z,.11,h*.92,.11,p.wood);
       add("table apron",0,h*.62,d*.38,w*.9,h*.45,.1,p.wood);
-      add(f==="desk"?"school exercise book":f==="workbench"?"iron tools":"earthenware jug",-w*.2,h+.045,0,w*.22,.09,d*.33,f==="workbench"?"#62655c":"#bcb69b",f==="workbench"?"iron":"fabric");
+      if(f==="table") {
+        add("earthenware jug",-w*.2,h+.11,0,.15,.22,.15,"#a98c67","stone");pieces[pieces.length-1].shape="bell";
+        add("jug neck",-w*.2,h+.24,0,.07,.06,.07,"#a98c67","stone");pieces[pieces.length-1].shape="cylinder";
+        add("ceramic plate",w*.21,h+.025,0,.26,.035,.26,"#d3c8a5","stone");pieces[pieces.length-1].shape="cylinder";
+      } else add(f==="desk"?"school exercise book":"iron tools",-w*.2,h+.045,0,w*.22,.09,d*.33,f==="workbench"?"#62655c":"#bcb69b",f==="workbench"?"iron":"fabric");
     } else if(f==="stall") {
       add("stable manger",0,h*.26,0,w,h*.52,d,p.wood);
       add("straw in trough",0,h*.54,0,w*.82,.08,d*.72,"#b7a178","fabric");
@@ -154,7 +194,10 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
         const y=h*(row+.45)/shelves;
         add("recessed cabinet shelf",0,y,-d/2-.008,w*.9,h*.7/shelves,.025,"#3c352d");
         if(f==="bookcase")for(let book=0;book<6;book++)add("individual book spine",w*(book-2.5)*.135,y,-d/2-.026,w*.1,h*.54/shelves,.035,["#866754","#677464","#a08c67"][book%3],"fabric");
-        else for(const side of [-1,1])add("cabinet door",side*w*.235,h*.48,-d/2-.025,w*.44,h*.8,.04,"#8b7150");
+        else for(const side of [-1,1]) {
+          add("cabinet door",side*w*.235,h*.48,-d/2-.025,w*.44,h*.8,.04,"#8b7150");
+          add("cabinet brass pull",side*w*.06,h*.48,-d/2-.055,.035,.09,.035,"#aa9770","iron");
+        }
       }
       add("countertop and crown",0,h-.025,0,w+.06,.08,d+.04,"#b29974","floorboards");
       if(f==="counter")add("inn counter rail",0,h*.23,-d/2-.08,w*.94,.055,.055,"#6b6750","iron");
@@ -172,13 +215,14 @@ export function architectureGeometry(b:Box,stage:number):ArchitectureMesh[] {
     if(!mesh){mesh={surface:piece.surface,positions:[],normals:[],uvs:[],colors:[],indices:[]};groups.set(piece.surface,mesh);}
     const [w,h,d]=piece.size.map(n=>n/2),[x,y,z]=piece.at,angle=piece.rotation??0;
     let corners:Point[]=[[-w,-h,-d],[w,-h,-d],[w,h,-d],[-w,h,-d],[-w,-h,d],[w,-h,d],[w,h,d],[-w,h,d]],faces=boxFaces;
-    if(piece.shape==="bell") {
+    if(piece.shape==="bell"||piece.shape==="cylinder") {
       const sides=12;
-      corners=Array.from({length:sides*2},(_,i)=>{const angle=i%sides/sides*Math.PI*2,radius=i<sides?1:.45;return [Math.cos(angle)*w*radius,i<sides?-h:h,Math.sin(angle)*d*radius];});
+      corners=Array.from({length:sides*2},(_,i)=>{const angle=i%sides/sides*Math.PI*2,radius=i<sides||piece.shape==="cylinder"?1:.45;return [Math.cos(angle)*w*radius,i<sides?-h:h,Math.sin(angle)*d*radius];});
       corners.push([0,h,0],[0,-h,0]);faces=[];
       for(let i=0;i<sides;i++) {const next=(i+1)%sides;faces.push([i+sides,next+sides,next,i],[24,next+sides,i+sides],[25,i,next]);}
     }
     const pts=corners.map(([a,c,e],i)=>{
+      if(c>0 && piece.topSlope!==undefined)c+=a*piece.topSlope-Math.abs(piece.topSlope)*w;
       if(piece.chipped){a*=.82+(i%3)*.075;c*=.8+((i+2)%3)*.085;e*=.86+(i%2)*.1;}
       return [x+a*Math.cos(angle)-c*Math.sin(angle),y+a*Math.sin(angle)+c*Math.cos(angle),z+e] as Point;
     });
