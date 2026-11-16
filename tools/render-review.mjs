@@ -106,6 +106,14 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
+  if(map==='village' && mode==='ground') {
+   for(const detail of ['school','inn','street','manor-room']) {
+    const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
+    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
+    await screenshot('detail-'+detail,true);
+   }
+   await client.evaluate(`window.sectorRenderReview.survey(true)`);
+  }
   console.log(JSON.stringify({map,mode,stage:'intact-rendered'}));
   const advanced=await client.evaluate(`window.sectorRenderReview.advance(900)`);
   console.log(JSON.stringify({map,mode,stage:'battle-advanced',...advanced}));
