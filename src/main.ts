@@ -1,4 +1,5 @@
 import { frameSeconds } from "./frame-timing";
+import type {Entity} from "playcanvas";
 import {trainingMap} from "./training-map";
 import {TrainingSession} from "./training";
 import {trainingHUD,trainingMenu} from "./training-ui";
@@ -742,6 +743,8 @@ try {
       game.respawn(p);Object.assign(p,{...at,y:groundHeight(at.x,at.z,game.map),yaw:Math.atan2(tx-at.x,-(tz-at.z)),pitch:-.04,protectedUntil:Infinity});
       preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
       battlefield.reset(game);renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
+      const weapon=renderer.app.root.findByName("first-person weapon and arms") as Entity|null;
+      for(const component of weapon?.findComponents("render")??[])component.enabled=!detail;
       return {tick:game.tick,frames:reviewFrames};
     },
     finish:()=>recording?.stop(),

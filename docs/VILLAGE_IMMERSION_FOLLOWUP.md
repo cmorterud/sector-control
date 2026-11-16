@@ -8,7 +8,7 @@ Wall rows now carry explicit exterior orientation. Stone plinths sit below limew
 
 Gable rendering follows the roof pitch continuously instead of forming a sawtooth outline. Its sloped mesh remains inside each coarse structural collision envelope. Ridge flashing, timber fascia and gutters belong to their destructible roof panels. Furnished dining spaces gain chairs with real destruction/collision envelopes, rounded ceramic tableware and cabinet pulls. Other small detail stays attached to an existing structural object and disappears with it.
 
-Limewash has shared diffuse, normal and gloss maps with trowel marks, fine cracks and restrained mottling. Paving now has cobble relief instead of inheriting the underlying mud normal map. The same shared architecture and paving improvements also apply where the training camp and Lighthouse map use these kits. Existing blast cuts still expose soil through the fresh-earth mask.
+Limewash has shared diffuse, normal and gloss maps with trowel marks, fine cracks and restrained mottling. Timber and floorboards use quieter grain and normal relief, with the same sRGB color decoding as the other authored materials. Paving now has cobble relief instead of inheriting the underlying mud normal map. Shared material improvements also apply on other maps using those materials. Existing blast cuts still expose soil through the fresh-earth mask.
 
 ## Routes and cover
 

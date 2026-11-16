@@ -37,7 +37,7 @@ export function surfacePixels(kind: SurfaceKind, size = 256) {
       const split = Math.max(0, 1 - Math.abs(Math.sin(u * Math.PI * 2 * 13 + large * 2 + knot * 0.5)) / 0.045);
       const pore = Math.max(0, grain - 0.65) * 0.4;
       const plankSeam=kind==="floorboards" && ((u*8)%1)<.025?1:0;
-      const wood = -.32*plankSeam + 0.57 + large * 0.24 + ridge * 0.09 + grain * 0.08 - split * 0.29 - pore;
+      const wood = -.13*plankSeam + 0.70 + large * 0.10 + ridge * 0.025 + grain * 0.045 - split * 0.12 - pore*.5;
       const mud =
         0.63 +
         large * 0.3 +
@@ -59,7 +59,7 @@ export function surfacePixels(kind: SurfaceKind, size = 256) {
       );
       heights[y * size + x] =
         kind === "plaster" ? grain*.04+large*.03 : kind === "bark" ? grain * .1 + large * .12 - fissure * .5 : isWood
-          ? ridge * 0.12 + grain * 0.08 - split * 0.35 - plankSeam*.4
+          ? ridge * 0.025 + grain * 0.02 - split * 0.06 - plankSeam*.1
           : large * 0.5 + grain * 0.25;
       const shine = kind === "plaster" ? 12 : kind === "bark" ? 9 : isWood ? 20 : 22 + Math.max(0, 0.5 - large) * 210;
       gloss.set([shine, shine, shine, 255], i);
