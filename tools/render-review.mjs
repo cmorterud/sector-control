@@ -127,6 +127,37 @@ try {
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
+ if(map==='industrial'){
+  await client.evaluate(`(()=>{const s=document.createElement('style');s.textContent='.playtest{visibility:hidden!important}';document.head.append(s);})()`);
+  const stage=async(name)=>{await client.evaluate(`window.sectorRenderReview.combat(${JSON.stringify(name)})`);const before=await client.evaluate(`window.sectorRenderReview.state().frames`);await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));};
+  const key=async(code,type='keydown')=>client.evaluate(`window.dispatchEvent(new KeyboardEvent(${JSON.stringify(type)},{code:${JSON.stringify(code)},bubbles:true}))`);
+  await stage('hit');
+  await client.evaluate(`(()=>{if(window.sectorRenderReview.state().player.hp!==75||!document.querySelector('.damage-bearing'))throw Error('A real hit did not show a directional indicator');})()`);
+  await screenshot('combat-hit-direction');
+  await stage('death');
+  await client.evaluate(`(()=>{const s=window.sectorRenderReview.state(),card=document.querySelector('.death-card');if(s.player.hp!==0||!s.combat.view||!card?.textContent.includes('AR-01')||!card.textContent.includes('100 damage'))throw Error('Death view or report did not reflect real shots');})()`);
+  await screenshot('combat-death-card');
+  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:600,deviceScaleFactor:1,mobile:false});
+  await client.evaluate(`(()=>{const r=document.querySelector('.death-card').getBoundingClientRect();if(r.top<0||r.bottom>innerHeight||r.left<0||r.right>innerWidth)throw Error('Death card is clipped at 600px height');})()`);
+  await screenshot('combat-death-card-600');
+  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
+  await client.evaluate(`window.sectorRenderReview.advance(80)`);
+  await client.evaluate(`(()=>{const s=window.sectorRenderReview.state();if(s.player.hp!==0||s.combat.view||s.combat.fov<69)throw Error('The brief death view did not end at a wide field of view');})()`);
+  await stage('respawn');await key('KeyQ');await key('KeyQ','keyup');
+  await client.evaluate(`(()=>{const s=window.sectorRenderReview.state(),m=document.querySelector('.map-death');if(s.player.hp!==100||s.combat.view||!m||m.hidden||!s.combat.marker)throw Error('Respawn did not retain the death marker and restore the camera');})()`);
+  await screenshot('combat-death-map');
+  await client.evaluate(`window.sectorRenderReview.advance(181)`);
+  await client.evaluate(`(()=>{if(!document.querySelector('.map-death').hidden||window.sectorRenderReview.state().combat.marker)throw Error('Death marker did not expire');})()`);
+  await key('KeyQ');await key('KeyQ','keyup');
+  await stage('assist');
+  await client.evaluate(`(()=>{if(window.sectorRenderReview.state().player.assists!==1||!document.querySelector('.assist-notice')?.textContent.includes('25 DAMAGE'))throw Error('Real teammate damage did not award an assist');})()`);
+  await screenshot('combat-assist-notice');await key('Tab');
+  await until(()=>client.evaluate(`!document.getElementById('scoreboard').classList.contains('hidden')`));
+  await client.evaluate(`(()=>{const board=document.getElementById('scoreboard'),row=[...board.querySelectorAll('.row')].find(r=>r.firstElementChild?.textContent==='YOU');if(!board.querySelector('[title="Assists"]')||row?.children[2].textContent!=='1')throw Error('Scoreboard assist column is missing or incorrect');})()`);
+  await screenshot('combat-assist-scoreboard');await key('Tab','keyup');
+  report.combatChecks={damageBearing:true,deathReport:true,deathView:true,deathViewEnds:true,shortViewport:true,respawnMarker:true,markerExpiry:true,assistCredit:true,scoreboard:true};
+  console.log(JSON.stringify({map,combatChecks:report.combatChecks}));
+ }
  if(map==='training'){
   report.trainingControls=await client.evaluate(`(()=>{
    const b=window.sectorRenderReview,check=(ok,text)=>{if(!ok)throw Error(text);};

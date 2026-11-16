@@ -2,15 +2,17 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ArtilleryMap } from "./artillery-map";
 import { headlandMap } from "./headland-map";
 import { villageMap } from "./village-map";
-import type { Game } from "./simulation";
+import {Game,TestCollision} from "./simulation";
+import {industrialMap} from "./map";
+vi.mock("./tactical-terrain",()=>({drawTacticalTerrain:vi.fn()}));
 
 // Only the SVG construction is under test; terrain painting and live game
 // updates are separate from the road paths that caused the black polygons.
 class Element {
   children: Element[] = [];
   attributes = new Map<string, string>();
-  style = {setProperty:vi.fn()};
-  classList = { add() {}, remove() {} };
+  style:Record<string,unknown> = {setProperty:vi.fn()};
+  classList = { add() {}, remove() {},toggle() {} };
   constructor(readonly tagName: string, readonly namespaceURI = "http://www.w3.org/2000/svg") {}
   setAttribute(name: string, value: string) { this.attributes.set(name, value); }
   append(...children: Element[]) { this.children.push(...children); }
@@ -37,4 +39,15 @@ it.each([headlandMap, villageMap])("draws $id streets as unfilled strokes over t
     expect(road.attributes.get("d")).toMatch(/^M.+L/);
     expect(road.attributes.get("fill")).toBe("none");
   }
+});
+
+it("positions the player's death marker in map coordinates and hides it when its callback expires",()=>{
+  const ui=new Element("div");
+  vi.stubGlobal("document",{createElement:(tag:string)=>new Element(tag),createElementNS:(ns:string,tag:string)=>new Element(tag,ns),getElementById:()=>ui});
+  const g=new Game(new TestCollision(industrialMap),false,6000,1,undefined,{map:industrialMap});
+  let location:{x:number;z:number}|undefined={x:10,z:-8};
+  const overlay=new ArtilleryMap(()=>g,vi.fn(),undefined,()=>location);overlay.toggle();
+  const marker=(overlay as any).death;
+  expect(marker.hidden).toBe(false);expect(marker.style.left).toBe(`${(10/g.map.width+.5)*100}%`);expect(marker.style.top).toBe(`${(-8/g.map.depth+.5)*100}%`);
+  location=undefined;overlay.update();expect(marker.hidden).toBe(true);
 });

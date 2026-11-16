@@ -1,6 +1,7 @@
 import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
+import type {DeathView} from "./combat-feedback";
 import { architecturePixels, architecturalTextures, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { villageGardenProps } from "./village-outdoors";
@@ -153,6 +154,7 @@ export class Renderer implements CollisionWorld {
   app: pc.Application;
   camera: pc.Entity;
   cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
+  deathView:DeathView|null=null;
   private boardBatch = -1;
   private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
@@ -3376,6 +3378,7 @@ export class Renderer implements CollisionWorld {
     this.artilleryPreview = null;
     this.blastSequence = 0;
     this.cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
+    this.deathView=null;
     this.previousGrenades.clear();
     for (const blast of this.blasts) {
       blast.root.destroy();
@@ -3590,12 +3593,13 @@ export class Renderer implements CollisionWorld {
     this.objectiveTerrainRevision = objectiveRevision;
     const p = g.players[0],
       firstPerson = firstPersonView(p) && !overview,
-      baseView = weaponAim(p),
+      deathView = p.hp<=0&&!overview?this.deathView:null,
+      baseView = deathView??weaponAim(p),
       view = {
-        yaw: baseView.yaw + (overview || firstPerson ? 0 : this.cameraReaction.yaw),
-        pitch: baseView.pitch + (overview || firstPerson ? 0 : this.cameraReaction.pitch),
+        yaw: baseView.yaw + (overview || firstPerson || deathView ? 0 : this.cameraReaction.yaw),
+        pitch: baseView.pitch + (overview || firstPerson || deathView ? 0 : this.cameraReaction.pitch),
       },
-      d = p.command.aim ? 2.5 : 4,
+      d = p.hp<=0?3.5:p.command.aim ? 2.5 : 4,
       dir = {
         x: Math.sin(view.yaw) * Math.cos(view.pitch),
         y: Math.sin(view.pitch),
@@ -3623,9 +3627,9 @@ export class Renderer implements CollisionWorld {
     );
     // Recoil is authoritative in weaponAim. Cosmetic blast angles cannot move
     // the first-person sight away from the direction used by the simulation.
-    if (!overview && !firstPerson) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
+    if (!overview && !firstPerson && !deathView) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((70+((scoped(p)?scopeFov:50)-70)*aimBlend(p,g.tick-1+alpha)) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((scoped(p)?scopeFov:50)-70)*aimBlend(p,g.tick-1+alpha)) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.

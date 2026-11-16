@@ -12,6 +12,7 @@ export class ArtilleryMap {
   private status = document.createElement("p");
   private marker = document.createElement("i");
   private you = document.createElement("i");
+  private death = document.createElement("i");
   private terrain = document.createElement("canvas");
   private terrainRevision = -1;
   private buttons: HTMLButtonElement[] = [];
@@ -20,6 +21,7 @@ export class ArtilleryMap {
     private game: () => Game,
     private call: (target: Vec & { area: true }) => void,
     private exerciseTarget?: () => Vec | undefined,
+    private deathLocation?: () => Vec | undefined,
   ) {
     this.panel.id = "tactical-map";
     this.panel.className = "hidden";
@@ -29,6 +31,8 @@ export class ArtilleryMap {
     this.marker.className = "map-cursor";
     this.you.className = "map-you";
     this.you.title = "Your position";
+    this.death.className="map-death";this.death.textContent="×";
+    this.death.title="Last death location";this.death.setAttribute("aria-label","Last death location");
     this.panel.append(this.grid, this.status);
     const close = document.createElement("button");
     close.textContent = "Q / RIGHT CLICK · CANCEL";
@@ -170,7 +174,7 @@ export class ArtilleryMap {
       label.setAttribute("text-anchor","middle");label.setAttribute("font-size","2.3");label.setAttribute("fill","#f8e9b2");label.textContent="EXERCISE AREA";
       svg.append(ring,label);
     }
-    this.grid.append(svg, this.you, this.marker);
+    this.grid.append(svg, this.you, this.marker,this.death);
     this.cursor = {
       x: Math.max(
         0,
@@ -250,6 +254,8 @@ export class ArtilleryMap {
     this.marker.style.top = `${this.cursor.z * 100}%`;
     this.you.style.left = `${(p.x / g.map.width + 0.5) * 100}%`;
     this.you.style.top = `${(p.z / g.map.depth + 0.5) * 100}%`;
+    const death=this.deathLocation?.();this.death.hidden=!death;
+    if(death){this.death.style.left=`${(death.x/g.map.width+.5)*100}%`;this.death.style.top=`${(death.z/g.map.depth+.5)*100}%`;}
     for (const marker of this.flagMarkers) {
       const s = g.sectors.find((s) => s.id === marker.id)!;
       marker.dot.setAttribute(

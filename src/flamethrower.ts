@@ -67,7 +67,7 @@ export function fireFlame(g:Game,p:Soldier,damage:(p:Soldier,n:number,source:num
   if(length>flameRules.range || along<0 || Math.hypot(dx-dir.x*along,dy-dir.y*along,dz-dir.z*along)>.3+along*.12 || g.collision.ray(from,target)<.999)continue;
   if(q.team===p.team || g.tick<q.protectedUntil)continue;
   damage(q,flameRules.damagePerTick,p.id,p.team);
-  q.lastFlameHitAt=g.tick; q.burnUntil=g.tick+flameRules.burnTicks;q.burnSource=p.id;q.burnTeam=p.team;
+  q.lastFlameHitAt=g.tick; q.burnUntil=g.tick+flameRules.burnTicks;q.burnSource=p.id;q.burnTeam=p.team;q.burnFrom={...from};
  }
  if(g.tick%10===0 && fraction<1) {
   const surface={x:to.x-dir.x*.04,y:to.y-dir.y*.04,z:to.z-dir.z*.04};

@@ -306,7 +306,7 @@ button span {
 }
 .row {
   display: grid;
-  grid-template-columns: 1fr 35px 35px 35px;
+  grid-template-columns: minmax(90px,1fr) repeat(var(--score-cols,4),35px);
   padding: 8px 0;
   border-bottom: 1px solid #ffffff15;
   font-size: 11px;
@@ -355,6 +355,21 @@ button span {
   transition: opacity 0.1s;
   pointer-events: none;
 }
+#combat-feedback { position:absolute;inset:0;pointer-events:none;z-index:8; }
+.damage-bearing { position:absolute;left:calc(50% - 100px);top:calc(50% - 100px);width:200px;height:200px;overflow:visible; }
+.damage-bearing path { fill:none;stroke:#f27460;stroke-width:5;stroke-linecap:round;filter:drop-shadow(0 1px 2px #260a08); }
+.death-card { position:absolute;left:50%;bottom:108px;transform:translateX(-50%);width:min(430px,calc(100vw - 40px));box-sizing:border-box;background:#142323ed;border-left:3px solid #e39a80;padding:17px 22px;color:#eee8d7;box-shadow:0 5px 24px #0004; }
+.death-card h2 { margin:7px 0;font-size:23px;letter-spacing:.015em; }
+.death-card p { margin:5px 0;font-size:13px; }
+.death-card small { display:block;font-size:9px;letter-spacing:.12em;color:#c2c6b8; }
+.death-damage { font-size:12px;color:#c9cdbf; }
+.death-countdown { margin:13px 0 8px;color:#e2c78a;font-size:13px; }
+.combat-notices { position:absolute;right:24px;top:100px;max-width:330px;text-align:right; }
+.assist-notice { margin:5px 0;padding:8px 11px;background:#142323da;border-right:2px solid #dfcb8e;font-size:11px;letter-spacing:.035em;color:#eee2ba; }
+.dead #reticle,.dead #ammo,.dead .controls,.dead #labels,.dead #hit,.dead #capture { display:none!important; }
+.map-death { position:absolute;transform:translate(-50%,-50%);font:700 24px/1 sans-serif;color:#f4b09b;text-shadow:0 1px 3px #000,-1px -1px 1px #182522;pointer-events:none; }
+.map-death[hidden] { display:none; }
+@media(max-height:600px) { .death-card { bottom:65px;padding:12px 18px; } .death-card h2 { font-size:19px; } .combat-notices { top:80px; } }
 @keyframes blink {
   to {
     opacity: 0.4;
@@ -401,7 +416,7 @@ button span {
   margin: 12px 0;
 }
 .rosters .row {
-  grid-template-columns: 1fr 24px 24px 24px;
+  grid-template-columns: minmax(90px,1fr) repeat(var(--score-cols,4),24px);
   padding: 5px 0;
   font-size: 10px;
 }

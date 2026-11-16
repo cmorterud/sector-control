@@ -148,6 +148,7 @@ export function advanceMelee(
     amount: number,
     source: number,
     team: Soldier["team"],
+    kind?: MeleeAttack["kind"],
   ) => void,
 ) {
   const strikes: { p: Soldier; a: MeleeAttack; target?: Soldier }[] = [];
@@ -212,7 +213,7 @@ export function advanceMelee(
       cancelMelee(g, target);
       target.staggerAt = g.tick;
       target.staggerUntil = g.tick + meleeRules.staggerTicks;
-      damage(target, amount, p.id, p.team);
+      damage(target, amount, p.id, p.team, a.kind);
     }
     g.emit({
       type: "melee",
