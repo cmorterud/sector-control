@@ -88,7 +88,7 @@ export function addVillageOutdoors(map:MapDefinition) {
     add("inn-table-"+side,"worktable",46+side*5.8,-32,1.8,1,.82);
     add("inn-bench-"+side,"bench",46+side*5.8,-30,2.2,.7,.9);
     add("forecourt-planter-"+side,"planter",side*10.5,-18,2.1,.85,.76);
-    add("manor-garden-bench-"+side,"bench",side*8,18,2.2,.7,.92);
+    add("manor-garden-bench-"+side,"bench",side*6,19.4,2.2,.7,.92);
     add("manor-garden-fence-"+side,"fence",side*13,18,.16,3.2,.75);
     add("cottage-bed-"+side,"planter",side*4.5,34,2.3,.9,.65);
     add("hall-bench-"+side,"bench",46+side*6.3,32,2.2,.7,.92);
@@ -107,6 +107,16 @@ export function addVillageOutdoors(map:MapDefinition) {
   add("forge-timber","timber",30,-5.5,2.2,.9,.88);
   add("forge-bench","worktable",30,5.5,1.8,1,.84);
   add("delivery-cart","cart",54,35,2.4,1.3,.95);
+  // Small roadside groups give the long routes intermediate stopping places.
+  // Each cluster remains one destructible envelope, below standing sightlines.
+  for(const side of [-1,1]) {
+    for(const z of [-14.5,14.5])add("rear-cart-"+side+"-"+z,"cart",side*84,z,2.4,1.3,.92);
+    for(const z of [-15,15])add("lane-barrels-"+side+"-"+z,"barrels",side*59,z,1.7,1.3,.94);
+    for(const z of [-17,17])add("manor-corner-"+side+"-"+z,"barrels",side*17.8,z,1.6,1.1,.88);
+    for(const z of [-17,17])add("court-supplies-"+side+"-"+z,"crate",side*37,z,1.5,1,.83);
+  }
+  add("stable-barrels","barrels",9.4,-33.4,1.7,1.3,.94);
+  add("cottage-water-barrels","barrels",9.3,34,1.7,1.3,.94);
   // A small orchard and yard trees define edges while retaining windows into
   // the fighting. Existing tree damage/felling handles their full lifecycle.
   for(const [i,[x,z]] of ([[-55,-30],[-36,-30],[36,-30],[57,-30],[-53,30],[-39,30],[-53,36],[-39,36],[-11,18],[11,18],[36,31],[57,31]] as const).entries()) {

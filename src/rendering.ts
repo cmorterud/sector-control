@@ -1520,7 +1520,7 @@ export class Renderer implements CollisionWorld {
     if (!this.materials.has(key)) {
       const ground = kind === "mud";
       const architectural=architecturalTextures.includes(kind as ArchitecturalTexture);
-      // Six shared 1.6 m architectural tiles need no per-house large textures.
+      // Shared 1.6 m architectural tiles need no per-house large textures.
       const size = ground ? 1024 : architectural ? 256 : 512;
       if (!this.textures.has(`${kind}-diffuse`)) {
         const data = ground
@@ -1540,9 +1540,9 @@ export class Renderer implements CollisionWorld {
       m.diffuseMap = this.textures.get(`${kind}-diffuse`)!;
       // Authored color texels are sRGB; decode both terrain layers in hardware.
       // Normal/roughness textures remain linear data.
-      if (ground || kind === "plaster" || architectural) m.diffuseMap.srgb = true;
+      if (ground || kind === "plaster" || kind === "wood" || kind === "floorboards" || architectural) m.diffuseMap.srgb = true;
       m.normalMap = this.textures.get(`${kind}-normal`)!;
-      m.bumpiness = ground ? 0.4 : 0.7;
+      m.bumpiness = ground ? 0.4 : kind === "wood" || kind === "floorboards" ? .35 : 0.7;
       m.glossMap = this.textures.get(`${kind}-gloss`)!;
       m.glossMapChannel = "r";
       // Broad soil highlights must not bleach an entire bank as its normal

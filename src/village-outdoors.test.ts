@@ -41,7 +41,7 @@ it("bounds the geometry of timber, troughs and trestles and removes all visible 
     const e=new pc.Entity(name);parent.addChild(e);e.setLocalPosition(x,y,z);e.setLocalScale(w,h,d);
     Object.assign(e,{render:{meshInstances:[],enabled:true},testSolid:solid});made.push(e);return e;
   };
-  for(const style of ["timber","worktable","trough"] as const) {
+  for(const style of ["timber","worktable","trough","barrels"] as const) {
     const b=props.find(b=>b.farmProp===style)!;expect(b,style).toBeDefined();
     const parts=farmPropParts(b,b.h);expect(parts.length).toBeGreaterThan(5);expect(parts.length).toBeLessThanOrEqual(20);
     for(const p of parts) {
@@ -73,7 +73,7 @@ it("makes flank and manor crossing cover useful crouched while keeping standing 
 });
 
 it("breaches outdoor cover under a direct blast and removes its movement collision",()=>{
-  for(const style of ["timber","worktable","trough","planter","bench","crate","cart"] as const) {
+  for(const style of ["timber","worktable","trough","planter","bench","crate","cart","barrels"] as const) {
     const g=scene(),b=props.find(b=>b.farmProp===style)!;
     g.explode({x:b.x+b.w/2+.1,z:b.z,y:(b.baseY??0)+b.h*.5},-1,null,{...(style==="trough"?artilleryExplosionProfile:grenadeExplosionProfile),damage:0,craterRadius:0,terrainReach:0});
     expect(g.map.destruction!.objects[b.id!].stage,style).toBe(2);expect(g.map.boxes.some(p=>p.id===b.id)).toBe(false);

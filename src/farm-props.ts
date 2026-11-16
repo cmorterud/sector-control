@@ -9,6 +9,13 @@ export function farmPropParts(b:Box,h:number):FarmPart[]{
   for(const x of [-w*.36,w*.36])box('crate binding',[x,h/2,0],[.055,h+.015,d+.018],'#414b43',false);
   for(const side of [-1,1])for(let i=1;i<=3;i++)box('crate plank seam',[0,h*i/4,side*(d/2+.004)],[w,.012,.01],'#3d342b',false);
   box('crate lid',[0,h+.008,0],[w+.02,.035,d+.02]);
+ }else if(b.farmProp==='barrels'){
+  const diameter=Math.min(w*.4,d*.54,h*.72);
+  for(const [x,z] of [[-w*.23,-d*.18],[w*.23,-d*.18],[0,d*.2]]) {
+   parts.push({name:'coopered oak barrel',shape:'cylinder',at:[x,h*.47,z],size:[diameter,h*.94,diameter],tint:'#8b7250',wood:true});
+   for(const y of [.16,.75])parts.push({name:'barrel iron hoop',shape:'cylinder',at:[x,h*y,z],size:[diameter+.025,.045,diameter+.025],tint:'#434b43'});
+   parts.push({name:'barrel lid',shape:'cylinder',at:[x,h*.95,z],size:[diameter*.91,.025,diameter*.91],tint:'#b29870',wood:true});
+  }
  }else if(b.farmProp==='timber'){
   for(let row=0;row<3;row++)for(let col=0;col<3-row;col++) {
    const z=(col-(2-row)/2)*d*.31,y=h*(.17+row*.29),diameter=h*.31;

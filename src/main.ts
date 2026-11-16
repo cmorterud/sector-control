@@ -1,4 +1,5 @@
 import { frameSeconds } from "./frame-timing";
+import type {Entity} from "playcanvas";
 import {trainingMap} from "./training-map";
 import {TrainingSession} from "./training";
 import {trainingHUD,trainingMenu} from "./training-ui";
@@ -277,7 +278,7 @@ function start() {
   if (params.has("playtest"))
     recording = new PlaytestRecorder(
       renderer.canvas,
-      Math.max(5, Math.min(120, Number(params.get("clip") ?? 60) || 60)),
+      Math.max(5, Math.min(renderReview ? 600 : 120, Number(params.get("clip") ?? 60) || 60)),
       params.get("video") !== "0",
       audio.capture.stream,
     );
@@ -731,15 +732,19 @@ try {
       }
       accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
     },
-    survey:(firstPerson:boolean)=>{
+    survey:(firstPerson:boolean,detail?:string)=>{
       const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
-      const [x,z,tx,tz]=poses[map.id],p=game.players[0];
+      const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-7,-4,-12,-10]};
+      if(detail && (map.id!=="village"||!villageDetails[detail]))throw Error("Unknown review viewpoint");
+      const [x,z,tx,tz]=detail?villageDetails[detail]:poses[map.id],p=game.players[0];
       let at={x,z};
       for(const dx of [0,-2,2,-4,4])for(const dz of [0,-2,2,-4,4])if(!blocked(x+dx,z+dz,.7,game.map)&&blocked(at.x,at.z,.7,game.map))at={x:x+dx,z:z+dz};
       if(blocked(at.x,at.z,.7,game.map))throw Error("Review camera has no clear footing");
       game.respawn(p);Object.assign(p,{...at,y:groundHeight(at.x,at.z,game.map),yaw:Math.atan2(tx-at.x,-(tz-at.z)),pitch:-.04,protectedUntil:Infinity});
       preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
       battlefield.reset(game);renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
+      const weapon=renderer.app.root.findByName("first-person weapon and arms") as Entity|null;
+      for(const component of weapon?.findComponents("render")??[])component.enabled=!detail;
       return {tick:game.tick,frames:reviewFrames};
     },
     finish:()=>recording?.stop(),

@@ -48,6 +48,48 @@ it("gives every village building a finished ceiling and a recognizable room use"
   expect(architecturePieces(window,1).some(p=>p.name==="chipped plaster exposes brick")).toBe(true);
 });
 
+it("meets adjacent gable faces along a continuous pitched outline inside their collision envelopes",()=>{
+  for(const building of villageMap.buildings!)for(const side of [-1,1]) {
+    const panels=villageMap.boxes.filter(b=>b.architecture?.building===building.id&&b.architecture.gableSlope!==undefined&&b.z===building.z+side*building.d/2).sort((a,b)=>a.x-b.x);
+    expect(panels.length).toBeGreaterThan(8);
+    const edges=panels.map(b=>{
+      const m=architectureGeometry(b,0).find(m=>m.surface==="limewash")!;
+      const top=(x:number)=>Math.max(...m.positions.filter((_,i)=>i%3===1&&Math.abs(m.positions[i-1]-x)<.0001));
+      expect(Math.max(...m.positions.filter((_,i)=>i%3===1))).toBeLessThanOrEqual(b.h/2+.0001);
+      return [top(-b.w/2)+b.h/2+b.baseY!,top(b.w/2)+b.h/2+b.baseY!];
+    });
+    for(let i=1;i<edges.length;i++)expect(edges[i][0],building.id).toBeCloseTo(edges[i-1][1],5);
+    expect(edges[0][0]).toBeCloseTo(edges.at(-1)![1],5);
+    expect(Math.max(...edges.flat())-edges[0][0]).toBeGreaterThan(1.5);
+  }
+});
+
+it("keeps capture-building signs and lanterns visible below their porch canopies",()=>{
+  for(const building of villageMap.buildings!.filter(b=>b.flag)) {
+    const lintel=villageMap.boxes.find(b=>b.architecture?.building===building.id&&b.architecture.sign)!;
+    const porch=villageMap.boxes.find(b=>b.id===`village-${building.id}-porch`)!;
+    for(const name of ["painted entrance sign","entrance lantern frame"]) {
+      const piece=architecturePieces(lintel,0).find(p=>p.name===name)!;
+      expect(piece,building.id).toBeDefined();
+      const top=lintel.baseY!+lintel.h/2+piece.at[1]+piece.size[1]/2;
+      expect(top,building.id).toBeLessThan(porch.baseY!);
+    }
+  }
+});
+
+it("reads asymmetric sign glyphs correctly from either exterior axis and both faces",()=>{
+  for(const alongX of [true,false])for(const side of [-1,1] as const)for(const doubleSided of [false,true]) {
+    const b={x:0,z:0,w:alongX?2.5:.44,d:alongX?.44:2.5,h:1.15,kind:"masonry" as const,
+      architecture:{building:"school",part:"wall" as const,level:0,sign:"F",signBothSides:doubleSided,exterior:side}};
+    const ink=architecturePieces(b,0).filter(p=>p.name==="painted sign lettering"&&p.at[alongX?2:0]*side>0);
+    // Project into a camera looking straight at the outward face, Y up.
+    const points=ink.map(p=>({x:alongX?p.at[0]*side:-p.at[2]*side,y:p.at[1]}));
+    const xs=[...new Set(points.map(p=>p.x))].sort((a,b)=>a-b),ys=[...new Set(points.map(p=>p.y))].sort((a,b)=>b-a);
+    const rows=ys.map(y=>xs.map(x=>points.some(p=>p.x===x&&p.y===y)?"1":"0").join(""));
+    expect(rows).toEqual(["111","100","110","100","100"]);
+  }
+});
+
 it("uploads detailed shared meshes and materials, then removes every visible piece with its panel", () => {
   const device=new pc.NullGraphicsDevice(),root=new pc.Entity("architecture test"),made:pc.Entity[]=[];
   const r=Object.create(Renderer.prototype) as any;

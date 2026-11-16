@@ -10,6 +10,7 @@ export const battlefieldInfo = {
 };
 export function battlefieldCard(map: MapDefinition, href?: string) {
   const info = battlefieldInfo[map.id];
-  const content = `<img src="${publicAsset(`previews/${map.id}.${map.buildings ? "svg" : "jpg"}`)}" alt="${map.name} ${map.buildings ? "layout overview" : "battlefield"}" width="320" height="180" loading="lazy"><strong>${map.name}</strong><small>${info.setting} · ${info.factions}</small><p>${info.description}</p>`;
+  const overview=!!map.buildings&&map.id!=="village",extension=map.id==="village"?"png":overview?"svg":"jpg";
+  const content = `<img src="${publicAsset(`previews/${map.id}.${extension}`)}" alt="${map.name} ${overview ? "layout overview" : "battlefield"}" width="320" height="180" loading="lazy"><strong>${map.name}</strong><small>${info.setting} · ${info.factions}</small><p>${info.description}</p>`;
   return href ? `<a href="${href}">${content}</a>` : `<span aria-current="page">${content}</span>`;
 }

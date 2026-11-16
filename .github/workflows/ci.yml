@@ -47,7 +47,7 @@ jobs:
   render:
     needs: build-and-test
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.map == 'training' && 10 || 6 }}
+    timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village') && 10 || 6 }}
     strategy:
       fail-fast: false
       matrix:

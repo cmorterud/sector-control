@@ -48,6 +48,8 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
             run.alongX?width:.44,run.alongX?.44:width,
             row===0?1:row===1?1.25:1.15,level*rise+(row===0?0:row===1?1:2.25),"wall",level);
           b.architecture!.bearing=level===0 && row===0;
+          b.architecture!.wallRow=row;
+          if(!internal)b.architecture!.exterior=run.side==="north"||run.side==="west"?-1:1;
           if(!internal && window && !door && (row===0||row===2))b.architecture!.opening="window";
           if(door && !internal)b.architecture!.opening="door";
           if(door && run.side==="north" && level===0)b.architecture!.sign=({manor:"ST MARTIN",school:"ECOLE",inn:"AUBERGE",farm:"FERME",hall:"MAIRIE",stable:"ECURIE",bakery:"BOULANGERIE",smithy:"FORGE",cottage:"MAISON"} as Record<string,string>)[building.id];
@@ -110,10 +112,12 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
   // Closed gable ends sit beneath the pitched roof, rather than exposing a
   // large triangular opening above every otherwise intact house.
   for(const side of [-1,1]) {
-    const count=Math.ceil(building.w/1.25),w=building.w/count;
+    const count=Math.max(2,Math.round(building.w/2.5)*2),w=building.w/count;
     for(let i=0;i<count;i++) {
-      const x=-building.w/2+(i+.5)*w,h=Math.tan(.3)*(building.w/2-Math.abs(x))+.2;
+      const x=-building.w/2+(i+.5)*w,slope=-Math.sign(x)*Math.tan(.3);
+      const h=Math.tan(.3)*(building.w/2-Math.abs(x))+Math.abs(slope)*w/2+.2;
       const gable=add("gable-"+side+"-"+i,x,side*building.d/2,w,.4,h,building.stories*rise,"wall",building.stories);
+      gable.architecture!.exterior=side as -1|1;gable.architecture!.gableSlope=slope;
       gable.supports=supportFor(gable.x,gable.z,roofLevel,5);
       if(building.id==="hall" && side===-1 && i===Math.floor(count/2))gable.architecture!.feature="clock";
     }
@@ -124,6 +128,8 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     const pitch=Math.abs(x)<.01?0:-Math.sign(x)*.3;
     const roof=add("roof-"+ix+"-"+iz,x,z,w/Math.cos(pitch)+.025,d+.02,.25,building.stories*rise+Math.tan(.3)*(building.w/2-Math.abs(x)),"roof",building.stories,"wood");
     roof.architecture!.roofPitch=pitch;
+    if(ix===0||ix===nx-1)roof.architecture!.eave=ix===0?-1:1;
+    if(ix===Math.floor(nx/2))roof.architecture!.ridge=nx%2===0?-w/2+.09:0;
     roof.supports=supportFor(roof.x,roof.z,roofLevel);
     roof.architecture!.tint=variant%2?"#605c58":"#68534a";
     if(building.id==="school" && ix===Math.floor(nx/2) && iz===0)roof.architecture!.feature="bell";
@@ -179,6 +185,10 @@ export function buildVillageBuilding(map: MapDefinition, building: VillageBuildi
     b.architecture!.feature=item.feature;
     if(item.feature==="hearth")b.kind="masonry";
     if(level)b.supports=parts.filter(p=>p.architecture?.part==="floor"&&p.architecture.level===level&&Math.abs(p.x-b.x)<=p.w/2&&Math.abs(p.z-b.z)<=p.d/2).map(p=>p.id!);
+    if(item.feature==="table") {
+      const chair=add("dining-chair-"+index+"-"+side,x,item.z+item.d/2+.65,.62,.62,.94,level*rise,"detail",level,"wood");
+      chair.architecture!.feature="chair";chair.supports=b.supports;
+    }
   }
   for(const run of [[0,-building.d/2-1.8],[0,building.d/2+1.8],[-building.w/2-1.8,0],[building.w/2+1.8,0]])
     map.navigationPoints!.push({x:building.x+run[0],z:building.z+run[1]});
