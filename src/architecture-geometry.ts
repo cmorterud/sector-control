@@ -101,12 +101,12 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
       face("clock vertical hand",0,h*.6,side,.035,.27,.095,"#394038","iron");
       face("clock horizontal hand",.12,h*.53,side,.28,.035,.095,"#394038","iron");
     }
-    if(a.sign)for(const side of a.signBothSides?[-1,1]:[-1]) {
+    if(a.sign)for(const side of a.signBothSides?[-1,1]:[a.exterior??-1]) {
       const length=alongX?w:d,pixel=Math.min(.055,(length-.24)/(a.sign.length*4));
       const signY=b.landmark?h*.2:h*.57; // Below the capture buildings' porch canopies.
       face("painted entrance sign",0,signY,side,length-.1,.4,.055,p.wood);
       [...a.sign].forEach((letter,index)=>(letters[letter]??[]).forEach((row,iy)=>[...row].forEach((ink,ix)=>{
-        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(a.signBothSides&&side===-1?-1:1),signY+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","limewash");
+        if(ink==="1")face("painted sign lettering",(index*4+ix-a.sign!.length*2+1)*pixel*(alongX?side:-side),signY+(2-iy)*pixel,side,pixel*.86,pixel*.86,.065,"#e2d7bb","limewash");
       })));
     }
     if(a.sign && a.exterior!==undefined) {
