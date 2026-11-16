@@ -1,4 +1,6 @@
 import { frameSeconds } from "./frame-timing";
+import {CombatFeedback} from "./combat-feedback";
+import {scoreboardTable} from "./scoreboard";
 import type {Entity} from "playcanvas";
 import {trainingMap} from "./training-map";
 import {TrainingSession} from "./training";
@@ -39,6 +41,8 @@ import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
+const combatFeedback=new CombatFeedback(),combatOverlay=document.createElement("div");
+combatOverlay.id="combat-feedback";el("hud").append(combatOverlay);
 const escapePause = new EscapePause();
 let mouseCaptureNeeded = false,
   mouseCapturePending = false;
@@ -95,6 +99,7 @@ const tacticalMap = new ArtilleryMap(
     pendingArtillery = target;
   },
   ()=>training?.station.target,
+  ()=>combatFeedback.marker(game),
 );
 let artilleryNotice = "",
   artilleryNoticeUntil = 0;
@@ -272,6 +277,7 @@ function start() {
   if (bots||training) prepareNavigation(game.map);
   renderer.reset(game);
   battlefield.reset(game);
+  combatFeedback.reset();
   audio ??= new BattleAudio();
   audio.reset();
   audio.volume(audioVolume);
@@ -326,6 +332,7 @@ function pause() {
   };
 }
 function handle(e: Event) {
+  combatFeedback.event(game,e);
   if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
@@ -385,22 +392,12 @@ function handle(e: Event) {
   }
 }
 function table() {
-  const capture = game.scoring !== "eliminations";
-  const style = capture ? "" : ' style="grid-template-columns:1fr 35px 35px"';
-  const header = `<div class="row"${style}><span>SOLDIER</span><span>K</span><span>D</span>${capture ? "<span>CAP</span>" : ""}</div>`;
-  const row = (p: Soldier) =>
-    `<div class="row ${p.team}"${style}><span>${p.id === 0 ? "YOU" : `${factions[p.faction ?? factionFor(map,p.team)].name} ${p.teamIndex + 1}`}</span><span>${p.kills}</span><span>${p.deaths}</span>${capture ? `<span>${p.captures}</span>` : ""}</div>`;
-  if (game.teamSize > 8)
-    return `<div class="rosters">${(["blue", "red"] as const)
-      .map((team) => {
-        const players = game.players.filter((p) => p.team === team);
-        return `<div class="table"><b class="${team}">${factions[factionFor(map,team)].name.toUpperCase()} · ${players.length}</b>${header}${players.map(row).join("")}</div>`;
-      })
-      .join("")}</div>`;
-  return `<div class="table">${header}${game.players.map(row).join("")}</div>`;
+  return scoreboardTable(game);
 }
 function hud(now: number) {
   const p = game.players[0];
+  root.classList.toggle("dead",p.hp<=0);
+  combatOverlay.innerHTML=paused||held("scoreboard")?"":combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw);
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
@@ -664,6 +661,42 @@ function stepSimulation() {
   recording?.tick(game, input);
   battlePerformance.end("diagnostics",diagnosticsStart);
 }
+function advanceReview(ticks:number) {
+  if(!renderReview||!started||paused||!Number.isInteger(ticks)||ticks<0||ticks>900)throw Error("Invalid review advance");
+  for(let i=0;i<ticks&&game.phase==="playing";i++) {
+    stepSimulation();
+    renderer.deathView=combatFeedback.camera(game,game.tick,weaponAim(game.players[0]));
+    renderer.draw(game,1,1/30,params.has("overview"));
+  }
+  accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
+}
+function combatReview(stage:string) {
+  if(!renderReview||map.id!=="industrial"||!["hit","death","respawn","assist"].includes(stage))throw Error("Unknown combat review");
+  reviewManual=true;keys.clear();triggerDown=fire=aim=reload=mantle=grenade=smoke=melee=false;
+  pendingEquip=pendingArtillery=undefined;pendingRedeploy=false;preferredFirstPerson=true;chosenLoadout="rifleman";
+  start();game.commandOverride=()=>idle();
+  const player=game.players[0],ally=game.players[1],enemy=game.players[game.teamSize];
+  for(const [p,x,z] of [[player,0,6],[ally,-6,6],[enemy,0,-6]] as const) {
+    game.selectLoadout(p,"rifleman");Object.assign(p,{x,y:0,z,vx:0,vz:0,protectedUntil:0,command:{...idle(),firstPerson:p.id===0}});
+  }
+  if(stage==="death"){game.selectLoadout(player,"marksman");aim=true;}
+  yaw=player.yaw=0;pitch=player.pitch=0;renderer.remember(game);
+  const shoot=(source:Soldier,target:Soldier,count:number)=>{
+    for(let i=0;i<count;i++) {
+      if(game.tick<source.nextShot)advanceReview(source.nextShot-game.tick);
+      const dx=target.x-source.x,dz=target.z-source.z;
+      source.yaw=Math.atan2(dx,-dz)-source.recoilYaw;
+      source.pitch=Math.atan2(target.y+1.1-source.y-eyeHeightOf(source),Math.hypot(dx,dz))-source.recoilPitch;
+      if(source.id===0){yaw=source.yaw;pitch=source.pitch;}
+      const hp=target.hp;game.events=[];game.fire(source);for(const e of game.events)handle(e);advanceReview(2);
+      if(target.hp>=hp)throw Error("Combat review round did not hit its target");
+    }
+  };
+  if(stage==="assist"){shoot(player,enemy,1);shoot(ally,enemy,3);}
+  else {shoot(enemy,player,stage==="hit"?1:4);if(stage!=="hit")advanceReview(stage==="respawn"?150:20);}
+  renderer.remember(game);hud(performance.now());
+  return {hp:player.hp,assists:player.assists,tick:game.tick};
+}
 function frame(now: number) {
   battlePerformance.frame(now, game?.tick ?? 0, !started || paused);
   rawFrameMs = now - last;
@@ -675,8 +708,8 @@ function frame(now: number) {
         view = weaponAim(p);
       audio?.listener(
         { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
-        view.yaw,
-        view.pitch,
+        combatFeedback.camera(game,game.tick,view)?.yaw??view.yaw,
+        combatFeedback.camera(game,game.tick,view)?.pitch??view.pitch,
       );
       audio?.muffle(battlefield.state(game.tick).muffle);
       accumulator += dt;
@@ -693,6 +726,7 @@ function frame(now: number) {
       cameraReactions && !paused,
     );
     const drawStart = battlePerformance.begin();
+    renderer.deathView=combatFeedback.camera(game,game.tick-1+accumulator*30,weaponAim(game.players[0]));
     renderer.draw(
       game,
       accumulator * 30,
@@ -722,16 +756,11 @@ try {
   // without waiting for a software GPU to display every intermediate frame.
   // Normal play never installs this bridge or changes its frame loop.
   if(renderReview)Object.assign(window,{sectorRenderReview:{
-    state:()=>({frames:reviewFrames,tick:started?game.tick:0,paused,...(training&&started?{training:{id:training.id,loadout:game.players[0].loadout,faction:game.players[0].faction,free:training.free},player:{x:game.players[0].x,z:game.players[0].z,crouched:game.players[0].crouched,firstPerson:preferredFirstPerson,ammo:game.players[0].ammo}}:{})}),
+    state:()=>({frames:reviewFrames,tick:started?game.tick:0,paused,...(started?{player:{x:game.players[0].x,z:game.players[0].z,crouched:game.players[0].crouched,firstPerson:preferredFirstPerson,ammo:game.players[0].ammo,hp:game.players[0].hp,assists:game.players[0].assists},combat:{marker:combatFeedback.marker(game),view:renderer.deathView,report:game.players[0].lastDeath,fov:renderer.camera.camera!.fov}}:{}),...(training&&started?{training:{id:training.id,loadout:game.players[0].loadout,faction:game.players[0].faction,free:training.free}}:{})}),
     manual:()=>{reviewManual=true;},
     training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
-    advance:(ticks:number)=>{
-      if(!started||paused||!Number.isInteger(ticks)||ticks<0||ticks>900)throw Error("Invalid review advance");
-      for(let i=0;i<ticks&&game.phase==="playing";i++){
-        stepSimulation();renderer.draw(game,1,1/30,params.has("overview"));
-      }
-      accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
-    },
+    advance:advanceReview,
+    combat:combatReview,
     survey:(firstPerson:boolean,detail?:string)=>{
       const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
       const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-7,-4,-12,-10]};

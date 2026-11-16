@@ -109,7 +109,7 @@ export class TrainingSession {
     const p=g.players[0],profile=weaponProfiles[p.weapon];
     if(p.hp<=0)return false;
     if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfiles[state.kind];state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
-    p.hp=100;p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=2;
+    p.hp=100;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=2;
     p.reloadAt=0;g.artillery.readyAt.blue=g.tick;
     const kit=g.flames.kits.find(k=>k.carrier===0);if(kit)kit.fuel=240;
     return true;

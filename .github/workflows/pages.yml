@@ -87,7 +87,7 @@ jobs:
     needs: publish
     if: needs.publish.result == 'success' && needs.publish.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     # Deployed PR JavaScript runs only on this read-only, secret-free runner.
     permissions:
       contents: read
@@ -111,6 +111,11 @@ jobs:
         env:
           REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
         run: node tools/render-review.mjs village dist playtest-artifacts/preview-browser
+      - name: Check deployed hit directions, death reports and assists
+        if: needs.publish.outputs.cleanup != 'true'
+        env:
+          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
+        run: node tools/render-review.mjs industrial dist playtest-artifacts/deployed-combat-browser
       - name: Exercise the deployed training controls and every station
         if: needs.publish.outputs.cleanup != 'true'
         env:
@@ -128,6 +133,7 @@ jobs:
           name: deployed-browser-review
           path: |
             playtest-artifacts/preview-browser
+            playtest-artifacts/deployed-combat-browser
             playtest-artifacts/deployed-training-browser
           if-no-files-found: ignore
           retention-days: 14

@@ -1,4 +1,5 @@
 import { villageRoad } from "./ground-surface";
+import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
 import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
@@ -176,6 +177,9 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   );
 }
 export interface Projectile extends V3 {
+  origin?: V3;
+  weapon?: WeaponKind;
+  weaponId?: string;
   damage?: number;
   suppressed?: number[];
   id: number;
@@ -315,6 +319,7 @@ export interface Soldier extends Vec {
   burnUntil?: number;
   burnSource?: number;
   burnTeam?: Team | null;
+  burnFrom?: V3;
   lastFlameHitAt?: number;
   flameThreatUntil?: number;
   flameThreatFrom?: V3;
@@ -365,6 +370,9 @@ export interface Soldier extends Vec {
   respawnAt: number;
   protectedUntil: number;
   kills: number;
+  assists: number;
+  recentDamage?: Wound[];
+  lastDeath?: DeathReport;
   deaths: number;
   captures: number;
   command: Command;
@@ -558,8 +566,10 @@ export type Event = { id: number; tick: number } & (
     }
   | { type:"flamePickup"|"flameDrop";actor:number;kit:number;fuel:number }
   | { type:"flame";actor:number;from:V3;to:V3;fuel:number }
-  | { type: "damage"; actor: number; source: number }
-  | { type: "death" | "respawn" | "reload"; actor: number }
+  | { type: "damage"; actor: number; source: number; amount?:number; at?:V3; from?:V3; kind?:DamageDetails["kind"]; weapon?:string }
+  | { type: "death"; actor: number; report?:DeathReport }
+  | { type: "assist"; actor:number; target:number; damage:number }
+  | { type: "respawn" | "reload"; actor: number }
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
   | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
@@ -928,6 +938,7 @@ export class Game {
         respawnAt: 0,
         protectedUntil: 0,
         kills: 0,
+        assists: 0,
         deaths: 0,
         captures: 0,
         command: idle(),
@@ -1020,6 +1031,7 @@ export class Game {
           : -Math.PI / 2
         : 0;
     p.hp = 100;
+    p.recentDamage=[];
     p.melee = null;
     p.nextMelee = this.tick;
     p.meleeHeld = false;
@@ -1075,7 +1087,7 @@ export class Game {
     if(this.phase!=="playing" || !p || p.hp<=0)return false;
     // Intentional self-death follows the same corpse/action/respawn lifecycle,
     // without awarding anyone a kill or changing domination team scores.
-    this.damage(p,p.hp,-1,null);
+    this.damage(p,p.hp,-1,null,{kind:"redeploy",weapon:"Redeploy"});
     return true;
   }
   step(human: Command) {
@@ -1253,8 +1265,8 @@ export class Game {
       }
     }
     for(const p of this.players){const action=reloadCue(p,this.tick);if(action)this.emit({type:"weaponAction",actor:p.id,action,weaponId:p.weaponId});}
-    advanceMelee(this, (target, amount, source, team) =>
-      this.damage(target, amount, source, team),
+    advanceMelee(this, (target, amount, source, team, kind) =>
+      this.damage(target, amount, source, team,{kind:"melee",weapon:kind==="charge"?"Bayonet charge":kind==="bayonet"?"Bayonet":"Rifle butt",from:this.attackOrigin(source)}),
     );
     for (const p of this.players)
       if (
@@ -1269,7 +1281,7 @@ export class Game {
         this.tick >= p.nextShot
       )
         this.fire(p);
-    advanceFlames(this,(p,n,source,team)=>this.damage(p,n,source,team));
+    advanceFlames(this,(p,n,source,team)=>this.damage(p,n,source,team,{kind:"burn",weapon:"Flamethrower burn",from:p.burnFrom}));
     this.advanceProjectiles();
     this.advanceGrenades();
     advanceArtillery(this);
@@ -1481,7 +1493,7 @@ export class Game {
     return true;
   }
   fire(p: Soldier) {
-    if (p.weapon === "flamethrower") { fireFlame(this,p,(q,n,source,team)=>this.damage(q,n,source,team),c=>this.applyDestruction(p.id,c)); return; }
+    if (p.weapon === "flamethrower") { fireFlame(this,p,(q,n,source,team)=>this.damage(q,n,source,team,{kind:"flame",weapon:p.weaponId??"Flamethrower",from:this.attackOrigin(source)}),c=>this.applyDestruction(p.id,c)); return; }
     let { yaw, pitch } = weaponAim(p);
     if (p.weapon === "machineGun" && p.id === 0 && p.loadout === "support") {
       const spread = Math.hypot(p.vx,p.vz) > 1 ? .045 : p.command.aim ? .005 : .018;
@@ -1548,6 +1560,7 @@ export class Game {
     );
     const speed = weaponProfiles[p.weapon].projectileSpeed;
     const shot: Projectile = {
+      origin:{...from},weapon:p.weapon,weaponId:p.weaponId,
       id: ++this.projectileSequence,
       damage: weaponProfiles[p.weapon].damage,
       actor: p.id,
@@ -1689,26 +1702,39 @@ export class Game {
     }
     this.projectiles = active;
   }
+  private attackOrigin(source:number):V3|undefined {
+    const p=this.players.find(p=>p.id===source);
+    return p?{x:p.x,y:p.y+eyeHeightOf(p),z:p.z}:undefined;
+  }
   private damage(
     victim: Soldier,
     amount: number,
     source: number,
     team: Team | null,
+    details?:DamageDetails,
   ) {
-    victim.hp = Math.max(0, victim.hp - amount);
-    this.emit({ type: "damage", actor: victim.id, source });
+    if(victim.hp<=0||!Number.isFinite(amount)||amount<=0)return;
+    const actual=Math.min(victim.hp,amount),shooter=this.players.find(p=>p.id===source);
+    const wound:Wound={...(details??{kind:"bullet",weapon:shooter?.weaponId??(shooter?weaponProfiles[shooter.weapon].label:"Unknown attack"),from:this.attackOrigin(source)}),source,tick:this.tick,damage:actual};
+    victim.hp = Math.max(0, victim.hp - actual);
+    rememberWound(victim,wound);
+    this.emit({ type: "damage", actor: victim.id, source,amount:actual,at:{x:victim.x,y:victim.y,z:victim.z},kind:wound.kind,weapon:wound.weapon,from:wound.from });
     if (!victim.hp) {
       dropFlame(this,victim);
       cancelMelee(this, victim);
       victim.meleeThreat = null;
       victim.deaths++;
-      const shooter = this.players.find((p) => p.id === source);
+      const report=reportDeath(this,victim,wound,team);victim.lastDeath=report;
       if (team !== null && victim.team !== team) {
         if (shooter) shooter.kills++;
         if (this.scoring === "eliminations") {
           this.scores[team]++;
           this.emit({ type: "score" });
         }
+      }
+      for(const credit of report.assists) {
+        this.players.find(p=>p.id===credit.actor)!.assists++;
+        this.emit({type:"assist",actor:credit.actor,target:victim.id,damage:credit.damage});
       }
       victim.respawnAt = this.tick + 150;
       victim.mode = "Respawn";
@@ -1720,7 +1746,7 @@ export class Game {
       victim.combatReaction = victim.combatCover = null;
       victim.hop = null;
       victim.fall = null;
-      this.emit({ type: "death", actor: victim.id });
+      this.emit({ type: "death", actor: victim.id,report });
     }
   }
   private impact(shot: Projectile, at: V3, victim?: Soldier, from = at) {
@@ -1729,7 +1755,7 @@ export class Game {
       victim.team !== shot.team &&
       this.tick >= victim.protectedUntil;
     if (hit && victim) {
-      this.damage(victim, shot.damage ?? 25, shot.actor, shot.team);
+      this.damage(victim, shot.damage ?? 25, shot.actor, shot.team,{kind:"bullet",weapon:shot.weaponId??weaponProfiles[shot.weapon??this.players[shot.actor]?.weapon??"rifle"].label,from:shot.origin??this.attackOrigin(shot.actor)??from});
       reactToThreat(this, victim, from, "hit", .95);
     }
     if (!victim) {
@@ -1989,7 +2015,7 @@ export class Game {
       );
       const capturing = this.scoring === "domination" && this.sectors.some(s=>s.owner!==p.team && flagOccupant(this,p,s));
       hits.push({ target: p.id, damage });
-      this.damage(p, damage, actor, team);
+      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":"Artillery strike"):"Fragmentation grenade",from:{...at}});
       if(artillery) {
         this.artilleryAudit.damagePrevented+=rawDamage-damage;
         if(p.hp<=0) { this.artilleryAudit.deaths++; if(capturing)this.artilleryAudit.captureInterruptions++; }
