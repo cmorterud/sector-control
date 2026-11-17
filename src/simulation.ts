@@ -141,6 +141,24 @@ export const grenadeFuseTicks = 90;
 export const grenadeBlastRadius = grenadeExplosionProfile.radius;
 export const grenadeRadius = 0.12;
 export const collapseDamage = 50;
+export const timberPassDamage = 0.5;
+// A thin timber partition the round has just struck, and where it exits.
+export function timberPassage(map: MapDefinition, at: V3, d: V3): V3 | null {
+  const length = Math.hypot(d.x, d.y, d.z);
+  if (length < 1e-6) return null;
+  const u = { x: d.x / length, y: d.y / length, z: d.z / length };
+  const panel = map.boxes.find(b => b.kind === "wood" && b.architecture?.part === "wall" && !b.architecture.mansard &&
+    Math.min(b.w, b.d) <= 0.2 && Math.abs(at.x - b.x) <= b.w / 2 + 0.03 && Math.abs(at.z - b.z) <= b.d / 2 + 0.03 &&
+    at.y >= (b.baseY ?? 0) - 0.03 && at.y <= (b.baseY ?? 0) + b.h + 0.03);
+  if (!panel) return null;
+  let exit = Infinity;
+  for (const [p, v, low, high] of [[at.x, u.x, panel.x - panel.w / 2, panel.x + panel.w / 2], [at.y, u.y, panel.baseY ?? 0, (panel.baseY ?? 0) + panel.h],
+    [at.z, u.z, panel.z - panel.d / 2, panel.z + panel.d / 2]] as const)
+    if (Math.abs(v) > 1e-9) exit = Math.min(exit, ((v > 0 ? high : low) - p) / v);
+  // A grazing round skims along the panel rather than through it.
+  if (!(exit >= 0) || exit > 0.6) return null;
+  return { x: at.x + u.x * (exit + 0.02), y: at.y + u.y * (exit + 0.02), z: at.z + u.z * (exit + 0.02) };
+}
 export const grenadeSpeed = 20;
 export const grenadeGravity = 10;
 export interface Grenade extends V3 {
@@ -193,6 +211,8 @@ export interface Projectile extends V3 {
   vz: number;
   remaining: number;
   bornAt: number;
+  // Set once a round has passed through a timber partition.
+  penetrated?: boolean;
 }
 export interface Mantle {
   vault?: boolean;
@@ -1700,8 +1720,17 @@ export class Game {
         )
           for (const q of cells.get(`${cx},${cz}`) ?? [])
             suppressNearMiss(this, q, shot, from, shot);
+      const before = shot.remaining;
       shot.remaining = Math.max(0, shot.remaining - travel);
-      if (nearest < 1)
+      const through = nearest < 1 && !victim && !shot.penetrated
+        ? timberPassage(this.map, shot, { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }) : null;
+      if (through) {
+        // Stone stops bullets, wood doesn't: one thin partition, at half damage.
+        this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false });
+        const crossed = travel * nearest + Math.hypot(through.x - shot.x, through.y - shot.y, through.z - shot.z);
+        Object.assign(shot, through, { penetrated: true, damage: (shot.damage ?? 25) * timberPassDamage, remaining: Math.max(0, before - crossed) });
+        if (shot.remaining > 0) active.push(shot);
+      } else if (nearest < 1)
         this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim, from);
       else if (shot.remaining > 0) active.push(shot);
     }
