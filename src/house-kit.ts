@@ -17,7 +17,7 @@ const floorThickness = 0.22;
 
 export type KitSide = "north" | "south" | "west" | "east";
 export type KitRoomType = "shop" | "kitchen" | "hall" | "landing" | "parlour" | "bedroom" | "workroom" |
-  "garret" | "stair" | "void";
+  "garret" | "barn" | "store" | "stair" | "void";
 type Feature = NonNullable<NonNullable<Box["architecture"]>["feature"]>;
 // Cells are named like the plans in docs/HOUSE_KIT.md: column letter from the
 // west, row number from the front (north) facade, e.g. "B3".
@@ -47,11 +47,16 @@ export interface KitPlan {
   bays: { x: number; z: number };
   levels: KitLevel[];
   mansard?: boolean;
+  // Plank sheds and barns: timber facades that grenades breach and rounds pass.
+  exterior?: "stone" | "timber";
   party?: KitSide[];
   paved?: KitRoomType[];
   flights: KitFlight[];
   landings?: KitLanding[];
   chimneys?: { at: KitCell; side: KitSide }[];
+  // Timber posts at bay corners, given as grid points [column line, row line].
+  // Each stands floor to ceiling on its levels and carries what rests on it.
+  posts?: { at: [number, number]; levels?: number[] }[];
   wings: { id: string; from: KitCell; to: KitCell }[];
 }
 export interface KitPlacement {
@@ -150,6 +155,9 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
   const party: KitBuilt["party"] = {};
   const levelEdges: Map<string, EdgePieces>[] = [];
   const floorAt: Map<string, string>[] = [];
+  const postAt: Map<string, string>[] = [];
+  const postsAround = (level: number, col: number, row: number) => [[col, row], [col + 1, row], [col, row + 1], [col + 1, row + 1]]
+    .map(([c, r]) => postAt[level]?.get(c + "," + r)).filter((id): id is string => !!id);
   const roomType = (level: number, col: number, row: number) => {
     const key = plan.levels[level].cells[row]?.[col];
     const room = key === undefined ? undefined : plan.levels[level].rooms[key];
@@ -167,7 +175,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
       const owned = at.borrow?.side === s;
       if (owned) return;
       edges.set(edgeKey(axis, line, index), { key: edgeKey(axis, line, index), axis, line, index, exterior: s, cells: [cell],
-        material: plan.party?.includes(s) ? "party" : mansard ? "mansard" : "stone" });
+        material: plan.party?.includes(s) ? "party" : mansard ? "mansard" : plan.exterior === "timber" ? "timber" : "stone" });
     };
     for (let col = 0; col < plan.bays.x; col++) {
       exterior("x", 0, col, "north", [col, 0]);
@@ -225,6 +233,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
           kitExteriorEdge(String.fromCharCode(65 + col) + (row + 1), "west"),
           kitExteriorEdge(String.fromCharCode(65 + col) + (row + 1), "east")].flatMap((key) => below.get(key)?.top ?? []);
         if (at.borrow) floor.supports.push(...borrowedTop(at.borrow, level - 1, col, row, plan));
+        floor.supports.push(...postsAround(level - 1, col, row));
       }
       if (level > 0) building.posts.push({ ...world(c.u, c.v), y: base + y0 });
     }
@@ -295,6 +304,21 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         const [nu, nv] = side(e.exterior);
         runtime.entrances.push({ ...world(centre.u + nu * 0.7, centre.v + nv * 0.7) });
       }
+    }
+    // Posts stand on the floor (or the post below) and reach the floor above.
+    postAt[level] = new Map();
+    for (const post of plan.posts ?? []) {
+      if (post.levels && !post.levels.includes(level)) continue;
+      const [c, r] = post.at, u = -W / 2 + c * kitBay, v = -D / 2 + r * kitBay;
+      const height = level === levels - 1 ? kitStory : kitStory - floorThickness;
+      const b = add("post-" + level + "-" + c + "-" + r, u, v, 0.3, 0.3, y0, height, "detail", level, "wood", 120);
+      b.architecture!.tint = "#5f4a35";
+      if (level > 0) {
+        const below = postAt[level - 1].get(c + "," + r);
+        const around = [[c - 1, r - 1], [c, r - 1], [c - 1, r], [c, r]].map(([cc, rr]) => floors.get(cc + "," + rr)).filter((id): id is string => !!id);
+        b.supports = [...(below ? [below] : []), ...around];
+      }
+      postAt[level].set(c + "," + r, b.id!);
     }
     // Rows stand on the row below in their own bay or a neighbouring one.
     const neighbours = (e: Edge, row: "bottom" | "middle") => [-1, 0, 1].flatMap((n) => pieces.get(edgeKey(e.axis, e.line, e.index + n))?.[row] ?? []);
@@ -385,7 +409,8 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
   }
   // Roof and gables are laid out in world space: the ridge runs along z.
   const topLevel = levels - 1;
-  const topPieces = [...levelEdges[topLevel].values()].flatMap((s) => s.top).map((id) => parts.find((p) => p.id === id)!);
+  const topPieces = [...[...levelEdges[topLevel].values()].flatMap((s) => s.top), ...(postAt[topLevel]?.values() ?? [])]
+    .map((id) => parts.find((p) => p.id === id)!);
   const overlapping = (x: number, z: number, w: number, d: number, list: Box[]) => list.filter((p) =>
     Math.abs(p.x - x) <= (p.w + w) / 2 + 0.3 && Math.abs(p.z - z) <= (p.d + d) / 2 + 0.3).map((p) => p.id!);
   const nx = Math.round(worldW / kitBay), nz = Math.round(worldD / kitBay), pw = worldW / nx, pd = worldD / nz;

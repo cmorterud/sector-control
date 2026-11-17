@@ -60,7 +60,10 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
   if(wall) {
     // A mansard slope is slate over timber; it keeps only its dormer framing.
     const slate=!!a.mansard;
+    // Timber facades read as planks; interior timber stays lath and plaster.
+    const planks=b.kind==="wood"&&a.exterior!==undefined&&!slate;
     if(slate)add("slate mansard slope",0,h/2,0,w,h,d,p.roof,p.roofSurface);
+    else if(planks)add("weathered plank wall",0,h/2,0,w,h,d,p.wood,"wood");
     else add("limewashed masonry panel",0,h/2,0,w,h,d,p.wall,"limewash");
     pieces[pieces.length-1].topSlope=a.gableSlope;
     for(const side of [-1,1]) {
