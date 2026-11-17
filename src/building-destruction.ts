@@ -1,11 +1,14 @@
 import { groundHeight, type MapDefinition, type Box } from "./map";
 import type { DestructionChange } from "./destruction";
+import { settleKitBuildings } from "./kit-collapse";
 
 // A bounded support graph handles two stories without simulating every brick.
 export function settleBuildings(map:MapDefinition, changes:DestructionChange["objects"],
   apply:(change:DestructionChange["objects"][number])=>void) {
   const state=map.destruction!;
-  const parts=Object.values(state.objects).filter(o=>o.original.architecture);
+  // Kit buildings follow their own staged support rules (kit-collapse.ts).
+  const kit=new Set((map.buildings??[]).filter(b=>b.kit).map(b=>b.id));
+  const parts=Object.values(state.objects).filter(o=>o.original.architecture && !kit.has(o.original.architecture.building));
   const destroy=(id:string)=>{const change={id,hp:0,stage:2};changes.push(change);apply(change);};
   for(let pass=0;pass<10;pass++) {
     let count=0;
@@ -18,6 +21,7 @@ export function settleBuildings(map:MapDefinition, changes:DestructionChange["ob
     if(!count)break;
   }
   for(const building of map.buildings??[]) {
+    if(building.kit)continue;
     const bearing=parts.filter(o=>o.original.architecture!.building===building.id && o.original.architecture!.bearing);
     if(!bearing.length)continue;
     if(bearing.filter(o=>o.stage!==2).length/bearing.length<.34)for(const o of parts)
@@ -27,7 +31,7 @@ export function settleBuildings(map:MapDefinition, changes:DestructionChange["ob
   for(const change of changes.slice()) {
     if(change.stage!==2)continue;
     const o=state.objects[change.id],a=o?.original.architecture;
-    if(!a || a.part==="detail" || a.part==="stair")continue;
+    if(!a || a.part==="detail" || a.part==="stair" || kit.has(a.building))continue;
     const b=o.original,cx=Math.round(b.x/4),cz=Math.round(b.z/4);
     const id="village-rubble-"+a.building+"-"+cx+"-"+cz;
     if(state.objects[id])continue;
@@ -38,4 +42,5 @@ export function settleBuildings(map:MapDefinition, changes:DestructionChange["ob
     state.objects[id]={id,original:rubble,hp:180,maxHp:180,stage:0,lining:false};
     map.boxes.push({...rubble});changes.push({id,hp:180,stage:0});
   }
+  if(kit.size)settleKitBuildings(map,changes,apply);
 }

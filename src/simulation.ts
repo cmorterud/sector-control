@@ -75,12 +75,14 @@ import {
   walkSegment,
   terrainPatchSize,
   type Vec,
+  type Box,
   type MapDefinition,
 } from "./map";
 import {
   runtimeMap,
   deformExplosion,
   damageVegetation,
+  advanceStructuralFailures,
   grenadeExplosionProfile,
   type DestructionChange,
   type ExplosionProfile,
@@ -138,6 +140,7 @@ export const idle = (): Command => ({
 export const grenadeFuseTicks = 90;
 export const grenadeBlastRadius = grenadeExplosionProfile.radius;
 export const grenadeRadius = 0.12;
+export const collapseDamage = 50;
 export const grenadeSpeed = 20;
 export const grenadeGravity = 10;
 export interface Grenade extends V3 {
@@ -1095,6 +1098,8 @@ export class Game {
     if (this.phase !== "playing") return;
     this.tick++;
     if(human.redeploy)this.redeploy(0);
+    const failure = advanceStructuralFailures(this.map, this.tick);
+    if (failure) this.structuralFailure(failure);
     advanceNavigation(this.map, this.players.filter(p => p.hp > 0));
     this.smokeClouds = this.smokeClouds.filter((s) => {
       if (this.tick < s.expiresAt) return true;
@@ -2026,6 +2031,17 @@ export class Game {
     );
     if (change) this.applyDestruction(actor, change);
     return hits;
+  }
+  // Falling kit floors and roofs hurt whoever is still beneath them when the
+  // warning ends; the collapse itself never kills outright.
+  private structuralFailure(change: DestructionChange) {
+    const fallen = change.objects.map(o => this.map.destruction!.objects[o.id]?.original)
+      .filter((b): b is Box => !!b?.architecture && (b.architecture.part === "floor" || b.architecture.part === "roof") && b.architecture.level > 0);
+    const struck = this.players.filter(p => p.hp > 0 && fallen.some(b =>
+      Math.abs(p.x - b.x) <= b.w / 2 + .2 && Math.abs(p.z - b.z) <= b.d / 2 + .2 &&
+      p.y < (b.baseY ?? 0) && p.y > (b.baseY ?? 0) - 4.5));
+    this.applyDestruction(-1, change);
+    for (const p of struck) this.damage(p, collapseDamage, -1, null, { kind: "collapse", weapon: "Falling masonry", from: { ...change.at } });
   }
   private applyDestruction(actor: number, change: DestructionChange) {
     if (change.geometry === false) {

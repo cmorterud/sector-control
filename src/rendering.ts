@@ -4098,8 +4098,15 @@ export class Renderer implements CollisionWorld {
           e.id + i * 41,
         );
       }
+      // Dust and grit warn that unsupported kit pieces are about to give way.
+      for (const [i, id] of (e.change.failing ?? []).slice(0, 4).entries()) {
+        const b = this.map.destruction!.objects[id]?.original;
+        if (b) this.spawnDebris({ x: b.x, y: (b.baseY ?? 0) + b.h * 0.2, z: b.z }, "stone", 3, e.id + i * 53, true);
+      }
       if (e.change.kind === "rifle") {
         this.spawnDebris(e.change.at, "wood", 2, e.id, true);
+      } else if (e.change.kind === "collapse") {
+        this.spawnDebris(e.change.at, "stone", 10, e.id);
       } else {
         this.spawnDebris(e.change.at, "earth", e.change.crater ? 18 : 6, e.id);
         const changed = e.change.objects.map(

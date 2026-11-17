@@ -28,6 +28,11 @@ export type Box = Vec & {
     | "rubble";
   landmark?: string;
   supports?: string[];
+  // Kit floors and roofs can rest on a neighbouring bay along their joists,
+  // but only when that neighbour is carried directly by a wall.
+  spanSupports?: string[];
+  // Overrides the per-kind hit points; kit pieces set these by structural role.
+  maxHp?: number;
   baseY?: number;
   farmProp?: "crate" | "cart" | "fence" | "relayMast" | "radio" | "bench" | "planter" | "fountain" | "timber" | "worktable" | "trough" | "barrels";
   footingY?: number;
@@ -48,6 +53,12 @@ export type Box = Vec & {
     ridge?: number;
     eave?: -1 | 1;
     feature?: "bookcase" | "desk" | "table" | "chair" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
+    // A steep slate mansard slope standing in for the top story's facade.
+    mansard?: boolean;
+    // Palette name when it differs from the building id (kit buildings).
+    style?: string;
+    // Width of a half-bay window or door, for its sill, head and surround.
+    openingWidth?: number;
   };
   walkable?: boolean;
   // A loaded exterior model drawn in place of the plain box, which remains
@@ -128,6 +139,23 @@ export interface CommunicationRoute {
   entrance: Vec;
   points: Vec[];
 }
+// Structural bookkeeping for a building assembled from the house kit.
+export interface KitRuntime {
+  plan: string;
+  parts: string[];
+  wings: { id: string; bearing: string[]; parts: string[] }[];
+  // routes[level]: alternative stairs up to that level from the one below,
+  // each listing the pieces it needs; the level is reachable while one is whole.
+  routes: string[][][];
+  // floors[level]: the floor bays of each upper level (index 0 is empty).
+  floors: string[][];
+  // Corner piers, chimneys and walls another building rests on; wing failure leaves them standing.
+  survivors: string[];
+  // Both sides of every door, in pairs, at that door's floor height.
+  doorways: Vec[];
+  // Fallen upper levels per 4 m rubble cell, which sets the rubble height there.
+  fallen: Record<string, number[]>;
+}
 export interface MapDefinition {
   id: "industrial" | "trenches" | "village" | "verdun" | "headland" | "training";
   name: string;
@@ -139,6 +167,7 @@ export interface MapDefinition {
     id: string; name: string; x: number; z: number; w: number; d: number;
     stories: number; baseY: number; flag?: string;
     posts: Vec[];
+    kit?: KitRuntime;
   }[];
   streets?: { points: Vec[]; width: number }[];
   // Closed outline of the playable land. Ground beyond it is sea: authored

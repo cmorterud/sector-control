@@ -2,7 +2,7 @@ import {factions, factionFor} from "./loadouts";
 import type {Game, Soldier, V3,Team} from "./simulation";
 
 export const combatRules={assistWindow:300,assistDamage:20,indicatorTicks:45,killerViewTicks:75,deathMarkerTicks:180};
-export type DamageKind="bullet"|"melee"|"grenade"|"artillery"|"flame"|"burn"|"redeploy";
+export type DamageKind="bullet"|"melee"|"grenade"|"artillery"|"flame"|"burn"|"redeploy"|"collapse";
 export type DamageDetails={kind:DamageKind;weapon:string;from?:V3};
 export type Wound=DamageDetails&{source:number;tick:number;damage:number};
 export type DeathReport=Wound&{

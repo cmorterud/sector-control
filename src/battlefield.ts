@@ -202,6 +202,10 @@ export class BattlefieldFeedback {
     if (e.type === "destruction") {
       if (e.change.collapses?.length)
         this.cue(g, "debris", e.change.at, 0.32, false, true, e.id);
+      // A creak of timber as unsupported pieces start to fail.
+      const failing = e.change.failing?.map((id) => g.map.destruction?.objects[id]?.original).find((b) => !!b);
+      if (failing)
+        this.cue(g, "timber", { x: failing.x, y: (failing.baseY ?? 0) + 0.5, z: failing.z }, 0.25, false, true, e.id);
       const fallen = e.change.objects
         .filter((o) => g.map.destruction?.objects[o.id]?.original.kind === "tree" && o.stage === 2)
         .map((o) => g.map.destruction!.objects[o.id].original)

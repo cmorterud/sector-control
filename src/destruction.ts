@@ -83,10 +83,15 @@ export interface DestructionState {
   objects: Record<string, Destructible>;
   craters: Crater[];
   patches: Record<string, true>;
+  // Kit pieces that lost their support, with the tick on which each falls.
+  failing?: Record<string, number>;
+  tick?: number;
 }
 export interface DestructionChange {
   geometry?: boolean;
   collapses?: string[];
+  // Kit pieces that started failing in this change; they fall after a warning.
+  failing?: string[];
   wallSamples?: number;
   revision: number;
   kind: string;
@@ -115,7 +120,7 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
   };
   const add = (original: Box, lining = false) => {
     const id = original.id!;
-    const maxHp =
+    const maxHp = original.maxHp ??
       (
         {
           sandbag: 160,
@@ -507,12 +512,14 @@ export function deformExplosion(
     state.terrainRevision = previous + 1;
     updateTerrainCutGrid(map, previous, edits);
   }
+  const failingBefore = new Set(Object.keys(state.failing ?? {}));
   const collapses = applyCoverChanges(
     map,
     objects,
     at,
     edits.size ? bounds : undefined,
   );
+  const failing = Object.keys(state.failing ?? {}).filter((id) => !failingBefore.has(id));
   const crater = edits.size
     ? {
         id: state.craters.length + 1,
@@ -530,6 +537,7 @@ export function deformExplosion(
     kind: profile.kind,
     wallSamples,
     ...(collapses.length ? { collapses } : {}),
+    ...(failing.length ? { failing } : {}),
     geometry: true,
     at: { ...at },
     crater,
@@ -732,7 +740,9 @@ export function damageVegetation(
     stage = hp === 0 ? 2 : hp <= object.maxHp / 2 ? 1 : 0;
   const geometry = stage !== object.stage;
   const objects = [{ id: object.id, hp, stage }];
+  const failingBefore = new Set(Object.keys(state.failing ?? {}));
   applyCoverChanges(map, objects, at);
+  const failing = Object.keys(state.failing ?? {}).filter((id) => !failingBefore.has(id));
   state.revision++;
   return {
     revision: state.revision,
@@ -743,5 +753,50 @@ export function damageVegetation(
     objects,
     patches: [],
     geometry,
+    ...(failing.length ? { failing } : {}),
+  };
+}
+
+// Kit pieces fall a short, visible moment after losing their support, lowest
+// first and a bounded number per tick, so a collapse reads as a building
+// giving way and its settling work is spread over several ticks.
+export const failuresPerTick = 48;
+export function advanceStructuralFailures(map: MapDefinition, tick: number): DestructionChange | null {
+  const state = map.destruction;
+  if (!state) return null;
+  state.tick = tick;
+  const failing = state.failing;
+  if (!failing) return null;
+  const due = Object.keys(failing).filter((id) => failing[id] <= tick);
+  if (!due.length) return null;
+  const height = (id: string) => state.objects[id]?.original.baseY ?? 0;
+  due.sort((a, b) => height(a) - height(b) || (a < b ? -1 : 1));
+  const batch = due.slice(0, failuresPerTick);
+  for (const id of batch) delete failing[id];
+  const objects = batch
+    .filter((id) => state.objects[id] && state.objects[id].stage !== 2)
+    .map((id) => ({ id, hp: 0, stage: 2 }));
+  if (!objects.length) return null;
+  const fallen = objects.map((o) => state.objects[o.id].original);
+  const at = {
+    x: fallen.reduce((n, b) => n + b.x, 0) / fallen.length,
+    y: fallen.reduce((n, b) => n + (b.baseY ?? 0) + b.h / 2, 0) / fallen.length,
+    z: fallen.reduce((n, b) => n + b.z, 0) / fallen.length,
+  };
+  const failingBefore = new Set(Object.keys(failing));
+  const collapses = applyCoverChanges(map, objects, at);
+  const started = Object.keys(failing).filter((id) => !failingBefore.has(id));
+  state.revision++;
+  return {
+    revision: state.revision,
+    kind: "collapse",
+    ...(collapses.length ? { collapses } : {}),
+    ...(started.length ? { failing: started } : {}),
+    geometry: true,
+    at,
+    crater: null,
+    terrain: [],
+    objects,
+    patches: [],
   };
 }
