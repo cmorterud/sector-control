@@ -53,4 +53,4 @@ it("lets real soldiers reach B from both spawns with nearly equal sprint times a
   }
   expect(Math.abs(times[0]-times[1])).toBeLessThan(1.5);
   expect(Math.max(...times)).toBeLessThan(22);
-});
+},15_000); // Includes the one-time navigation graph build for the kit houses.

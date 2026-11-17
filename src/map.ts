@@ -704,6 +704,9 @@ export function walkSegment(
   map: MapDefinition = industrialMap,
 ): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / 0.25));
+  // Each 0.25 m sample may climb or drop at most 0.23 m, so a larger height
+  // difference can never pass (for example, between floors of a building).
+  if (map.buildings && a.y !== undefined && b.y !== undefined && Math.abs(b.y - a.y) >= 0.23 * (n + 2)) return false;
   let height = map.buildings ? a.y ?? groundHeight(a.x, a.z, map) : groundHeight(a.x, a.z, map);
   for (let i = 0; i <= n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
