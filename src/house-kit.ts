@@ -262,7 +262,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         const u = e.axis === "x" ? centre.u + t : centre.u, v = e.axis === "x" ? centre.v : centre.v + t;
         const b = add("wall-" + level + "-" + e.key.replace(/:/g, "-") + "-" + name, u, v,
           e.axis === "x" ? length : thickness, e.axis === "x" ? thickness : length, y0 + ya, yb - ya, "wall", level, kind, hp,
-          { wallRow: row, bearing: row === 0 && (e.material === "stone" || e.material === "party"), ...extra });
+          { wallRow: row, bearing: row === 0 && (e.material === "stone" || e.material === "party" || e.material === "timber" && !!e.exterior), ...extra });
         if (e.material === "mansard") b.architecture!.mansard = true;
         if (e.exterior) {
           const [nu, nv] = side(e.exterior), [nx, nz] = turn(nu, nv);

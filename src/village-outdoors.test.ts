@@ -28,8 +28,10 @@ it("gives nine buildings distinct outdoor rooms and low destructible cover while
   const trees=villageMap.vegetation!.filter(b=>b.id?.startsWith("tree-village-yard-"));
   expect(trees.length).toBeGreaterThanOrEqual(8);expect(trees.length).toBeLessThanOrEqual(12);
   expect(trees.every(b=>b.h<=4.2&&b.treeStyle==="sparse")).toBe(true);
-  // Four sides of each of the eight older buildings, plus the kit manor's three real doors.
-  expect(yardPaths(villageMap)).toHaveLength(35);
+  // Four sides of each older building, plus each kit building's real doors.
+  const kitDoors=villageMap.buildings!.reduce((n,b)=>n+(b.kit?.entrances.length??0),0);
+  expect(kitDoors).toBe(13);
+  expect(yardPaths(villageMap)).toHaveLength(villageMap.buildings!.filter(b=>!b.kit).length*4+kitDoors);
   for(const lane of yardPaths(villageMap)) {
     // This checks the newly added cover, independent of pre-existing garden walls.
     expect(walkSegment(lane.a,lane.b,{...villageMap,boxes:props,vegetation:[]})).toBe(true);

@@ -11,7 +11,7 @@ Approved design, November 16, 2026.
 
 The damage changes below are also live on every map: smooth artillery falloff, the splash floor on building masonry and the stray-shell radius. Rounds pass through one timber kit partition at half damage, and kit furniture loses 10 HP per round (`src/building-damage.test.ts`).
 
-Village front's manor is now the kit manor (`manor` in `src/house-kit-plans.ts`). It is 15 × 12.5 m instead of 30 × 26, so the centre plot gains side yards with low cover. The other eight village buildings still use the older generator.
+Village front's manor is now the kit manor (`manor` in `src/house-kit-plans.ts`). It is 15 × 12.5 m instead of 30 × 26, so the centre plot gains side yards with low cover. The village's cottage and bakery are kit cottages (the bakery swaps the hearth for an oven), and its stable and smithy are kit barns, each turned to face its street. The four flag buildings other than the manor (school, farmhouse, inn, town hall) still use the older generator.
 
 Reusable one-, two- and three-story buildings, assembled from shared pieces, replace custom per-map buildings. The goals: destruction that follows clear, predictable rules, no dead space, and no sprinting across large empty rooms. The current Village manor is not a constraint; it will be replaced by a kit building.
 

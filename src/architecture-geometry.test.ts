@@ -37,7 +37,8 @@ it("gives every village building a finished ceiling and a recognizable room use"
     expect(parts.some(b=>b.architecture!.feature===feature),id).toBe(true);
     expect(parts.some(b=>b.architecture!.sign),id).toBe(true);
     const ceilings=parts.filter(b=>b.architecture!.part==="ceiling");
-    expect(ceilings.length,id).toBeGreaterThan(10);
+    // Kit buildings hang one ceiling from each pair of 2.5 m roof bays.
+    expect(ceilings.length,id).toBeGreaterThan(villageMap.buildings!.find(b=>b.id===id)!.kit?5:10);
     for(const ceiling of ceilings)expect(parts.some(b=>b.id===ceiling.supports?.[0]&&b.architecture!.part==="roof")).toBe(true);
   }
   expect(villageMap.boxes.length).toBeLessThan(3000);
@@ -52,7 +53,7 @@ it("meets adjacent gable faces along a continuous pitched outline inside their c
   for(const building of villageMap.buildings!)for(const side of [-1,1]) {
     const panels=villageMap.boxes.filter(b=>b.architecture?.building===building.id&&b.architecture.gableSlope!==undefined&&b.z===building.z+side*building.d/2).sort((a,b)=>a.x-b.x);
     // Kit buildings use one gable strip per 2.5 m bay; the older generator two.
-    expect(panels.length).toBeGreaterThanOrEqual(building.kit?6:9);
+    expect(panels.length).toBeGreaterThanOrEqual(building.kit?4:9);
     const edges=panels.map(b=>{
       const m=architectureGeometry(b,0).find(m=>m.surface==="limewash")!;
       const top=(x:number)=>Math.max(...m.positions.filter((_,i)=>i%3===1&&Math.abs(m.positions[i-1]-x)<.0001));
