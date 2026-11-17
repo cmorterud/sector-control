@@ -9,7 +9,9 @@ Approved design, November 16, 2026.
 - `src/kit-collapse.ts`: supports, wings, the never-strand rule and rubble.
 - `src/house-kit.test.ts`: regression tests.
 
-Still to do: damage tuning that also affects existing maps (artillery falloff, the splash floor, stray-shell radius), bullets passing through timber, and the kit village.
+The damage changes below are also live on every map: smooth artillery falloff, the splash floor on building masonry and the stray-shell radius. Rounds pass through one timber kit partition at half damage, and kit furniture loses 10 HP per round (`src/building-damage.test.ts`).
+
+Still to do: the kit village.
 
 Reusable one-, two- and three-story buildings, assembled from shared pieces, replace custom per-map buildings. The goals: destruction that follows clear, predictable rules, no dead space, and no sprinting across large empty rooms. The current Village manor is not a constraint; it will be replaced by a kit building.
 
