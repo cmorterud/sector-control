@@ -47,7 +47,7 @@ All keys can be remapped from **Controls** in the briefing or pause menu.
 | Aim down sights | Hold right mouse |
 | Sprint | Shift |
 | Crouch | C |
-| Hop, mantle or vault | Space |
+| Hop, mantle or vault (also through ground-floor windows) | Space |
 | Reload | R |
 | Primary / pistol | 1 / 2 |
 | Grenade / smoke | G / F |

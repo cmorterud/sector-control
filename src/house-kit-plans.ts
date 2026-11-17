@@ -33,7 +33,7 @@ export const narrowTownhouse: KitPlan = {
       ],
       furniture: [
         { at: "B2", feature: "counter", w: 2.6, d: 0.8, h: 1.05, dz: -1.25 },
-        { at: "A1", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: -0.72, dz: 0.3 },
+        { at: "A2", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: -0.72 },
         { at: "B4", feature: "table", w: 1.8, d: 1, h: 0.85, dx: 0.45 },
         // The hearth also breaks the straight line from the spine door to the rear door.
         { at: "C4", feature: "hearth", w: 0.75, d: 1.6, h: 1.2, dx: 0.6 },
@@ -220,14 +220,12 @@ export const manor: KitPlan = {
         { at: "E1", side: "north", kind: "window" }, { at: "F1", side: "north", kind: "window" },
         { at: "A2", side: "west", kind: "window" }, { at: "A4", side: "west", kind: "window" },
         { at: "F2", side: "east", kind: "window" }, { at: "F4", side: "east", kind: "door" },
-        { at: "A5", side: "south", kind: "window" }, { at: "C5", side: "south", kind: "door" },
-        { at: "D5", side: "south", kind: "window" }, { at: "F5", side: "south", kind: "window" },
+        { at: "B5", side: "south", kind: "window" }, { at: "C5", side: "south", kind: "door" },
+        { at: "D5", side: "south", kind: "window" }, { at: "E5", side: "south", kind: "window" },
       ],
       furniture: [
         { at: "B2", feature: "table", w: 1.8, d: 1, h: 0.85, dx: -1.25, dz: -1.25 },
-        { at: "A1", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: -0.72, dz: 0.3 },
         { at: "F2", feature: "table", w: 1.8, d: 1, h: 0.85, dx: -1.25, dz: -1.25 },
-        { at: "F1", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: 0.72, dz: 0.3 },
         { at: "B3", feature: "bookcase", w: 1.8, d: 0.6, h: 2, dz: -0.72 },
         { at: "A5", feature: "bookcase", w: 1.8, d: 0.6, h: 2, dz: 0.72 },
         { at: "B4", feature: "desk", w: 1.6, d: 0.85, h: 0.9, dx: -0.6 },
@@ -303,10 +301,10 @@ export const cottage: KitPlan = {
     doors: [["B2", "C2"], ["A2", "A3"], ["D2", "D3"], ["B4", "C4"]],
     openings: [
       { at: "A1", side: "north", kind: "window" }, { at: "B1", side: "north", kind: "door" },
-      { at: "C1", side: "north", kind: "window" }, { at: "D1", side: "north", kind: "window" },
+      { at: "C1", side: "north", kind: "window" },
       { at: "A2", side: "west", kind: "window" }, { at: "A3", side: "west", kind: "window" },
       { at: "D2", side: "east", kind: "window" },
-      { at: "A4", side: "south", kind: "window" }, { at: "C4", side: "south", kind: "door" },
+      { at: "B4", side: "south", kind: "window" }, { at: "C4", side: "south", kind: "door" },
       { at: "D4", side: "south", kind: "window" },
     ],
     furniture: [
@@ -337,7 +335,7 @@ export const barn: KitPlan = {
     rooms: { B: { type: "barn", name: "Workshop" } },
     openings: [
       { at: "A2", side: "west", kind: "double" }, { at: "F3", side: "east", kind: "double" },
-      { at: "B1", side: "north", kind: "window" }, { at: "C4", side: "south", kind: "door" },
+      { at: "C1", side: "north", kind: "window" }, { at: "C4", side: "south", kind: "door" },
     ],
     furniture: [
       { at: "B1", feature: "stall", w: 2, d: 1, h: 1.05, dz: -0.6 },
