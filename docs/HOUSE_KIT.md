@@ -52,7 +52,7 @@ Layout rules:
 3. Big rooms get cover from their structure: timber posts every two bays (holding up the floor above, so wrecking them drops it), stalls, stacked goods, machinery or a mezzanine.
 4. A room's doors are never in line unless a central piece blocks the line. Moving through a room is a dogleg, which also breaks long sightlines through a house.
 5. Corridors run at most two bays straight before a turn or a side opening.
-6. Every room has at least two exits: doors, ground-floor windows you can vault, or breachable partitions. One deliberate single-entry room per floor is allowed as a strongpoint; its timber partition can be breached to open a second way in.
+6. Every room has at least two exits: doors, ground-floor windows you can vault, or breachable partitions. Soldiers dive through window openings tucked low. Each ground-floor window keeps a clear landing on both sides, and a test vaults through every one. One deliberate single-entry room per floor is allowed as a strongpoint; its timber partition can be breached to open a second way in.
 7. Each house has one stone spine wall that blocks a straight shot from end to end. Other partitions are timber.
 8. Damage must not empty a room. Fallen floor bays land as slabs or rubble in the room below, and furniture is tougher than the partitions around it.
 

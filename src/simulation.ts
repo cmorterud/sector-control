@@ -141,6 +141,8 @@ export const grenadeFuseTicks = 90;
 export const grenadeBlastRadius = grenadeExplosionProfile.radius;
 export const grenadeRadius = 0.12;
 export const collapseDamage = 50;
+// The crossing part of a vault, and the tucked body's height above its root.
+export const vaultTuck = { from: 0.25, to: 0.85, height: 1.3 };
 export const timberPassDamage = 0.5;
 // A thin timber partition the round has just struck, and where it exits.
 export function timberPassage(map: MapDefinition, at: V3, d: V3): V3 | null {
@@ -1490,8 +1492,11 @@ export class Game {
       const next = mantlePosition(m, this.tick + i);
       const lift = mantleFootLift(m, this.tick + i);
       const sideX=Math.cos(m.yaw)*.3,sideZ=Math.sin(m.yaw)*.3;
+      // While crossing, a vaulting body is tucked low enough to dive through
+      // a window opening; it stands fully at the run-up and the landing.
+      const tucked = m.vault && i / 36 > vaultTuck.from && i / 36 < vaultTuck.to;
       for (const [ox,oz] of (m.vault ? [[0,0],[sideX,sideZ],[-sideX,-sideZ]] : [[0,0]]))
-      for (const height of [0.1, 0.8, 1.8])
+      for (const height of tucked ? [0.1, 0.8, vaultTuck.height] : [0.1, 0.8, 1.8])
         if (
           this.collision.ray(
             {
