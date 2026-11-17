@@ -299,9 +299,9 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         parts.find((p) => p.id === set.top[0])!.architecture!.sign = at.entrance.sign;
       if (e.opening === "door" || e.opening === "double") {
         const [nu, nv] = e.axis === "x" ? [0, 1] : [1, 0];
+        // Nodes in the doorway and either side of it.
         for (const n of [-1, 0, 1]) {
-          const p = { ...world(centre.u + nu * n, centre.v + nv * n), ...(level ? { y: base + y0 } : {}) };
-          navigation.push(p);
+          navigation.push({ ...world(centre.u + nu * n, centre.v + nv * n), ...(level ? { y: base + y0 } : {}) });
           if (n) runtime.doorways.push({ ...world(centre.u + nu * n * 1.3, centre.v + nv * n * 1.3), y: base + y0 });
         }
       }
@@ -362,7 +362,9 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
       tread.walkable = true;
       if (!f.solid) tread.supports = [...flanking];
       routeOf(f.level, f.route).push(tread.id!);
-      navigation.push({ ...world(u, v), y: base + height });
+      // A straight walk up the whole flight passes, so the foot, middle and
+      // top treads are enough navigation nodes.
+      if (i === 0 || i === f.steps - 1 || i === f.steps / 2) navigation.push({ ...world(u, v), y: base + height });
     }
   }
   for (const [n, l] of (plan.landings ?? []).entries()) for (const cell of l.cells) {

@@ -1,7 +1,9 @@
 import { coastDistance, groundHeight, type Box, type MapDefinition, type Vec } from "./map";
 import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
-import { buildVillageBuilding, type VillageBuilding } from "./village-buildings";
+import { type VillageBuilding } from "./village-buildings";
+import { buildKitHouse, buildKitTerrace, type KitPlacement, type KitPlan } from "./house-kit";
+import { bakery, barn, cottage, farmhouse, manor, narrowTownhouse, tenement } from "./house-kit-plans";
 
 // A lighthouse headland: a west-to-east peninsula with the French
 // approach from the mainland road and the German position behind the
@@ -24,19 +26,30 @@ const boxes: Box[] = [], vegetation: Box[] = [];
 
 const building = (id: string, name: string, x: number, z: number, w: number, d: number): VillageBuilding =>
   ({ id, name, x, z, w, d, stories: 1, baseY: bankHeight, posts: [] });
-// Enterable, destructible single-story houses from the existing village kit.
+// Enterable, destructible houses from the house kit (docs/HOUSE_KIT.md),
+// each turned so its front faces the nearest street. Sizes are the turned
+// kit footprints.
 const buildings = [
-  building("farm", "Mainland farmhouse", -114, -30, 20, 14),
-  building("customs", "Customs house", -75, -55, 20, 16),
-  building("cottage", "Clifftop cottage", -88, 10, 14, 12),
-  building("bakery", "Square bakery", -20, 6, 14, 10),
-  building("row-west", "South row house", -17, 31, 14, 12),
-  building("row-mid", "South row workshop", 6, 33, 18, 12),
-  building("row-east", "South row house", 27, 31, 14, 12),
-  building("villa", "Keeper's villa", 80, -25, 14, 12),
-  building("store", "Chandler's store", 50, 24, 16, 10),
-  building("signal", "Signal cottage", 92, 8, 14, 12),
+  building("farm", "Mainland farmhouse", -114, -30, 15, 12.5),
+  building("customs", "Customs house", -75, -55, 12.5, 10),
+  building("cottage", "Clifftop cottage", -88, 10, 10, 10),
+  building("bakery", "Square bakery", -20, 6, 10, 10),
+  building("villa", "Keeper's villa", 80, -25, 12.5, 15),
+  building("store", "Chandler's store", 50, 24, 15, 10),
+  building("signal", "Signal cottage", 92, 8, 10, 10),
 ];
+const kitBuildings: Record<string, { plan: KitPlan } & Pick<KitPlacement, "turns" | "style">> = {
+  farm: { plan: farmhouse, turns: 2 },
+  customs: { plan: tenement, turns: 3 },
+  cottage: { plan: cottage },
+  bakery: { plan: bakery, turns: 2 },
+  villa: { plan: manor, turns: 3 },
+  store: { plan: barn, style: "smithy" },
+  signal: { plan: cottage },
+};
+// The south row is a terrace of townhouses facing the street round the square.
+const southRow = { id: "row", name: "South row house", x: 6, z: 31, count: 5 };
+const southRowFootprint = { x: southRow.x, z: southRow.z, w: southRow.count * 7.5, d: 12.5 };
 // Sealed landmarks: the contributed exterior models, with box collision.
 // The church model is turned so its tower stands at the north end.
 const landmarksSolid: (Vec & { id: string; w: number; d: number; h: number; model?: Box["model"] })[] = [
@@ -83,11 +96,15 @@ const terrain = headlandMap.terrain!;
 terrain.banks = buildTrenchBanks(headlandMap);
 // Whole foundations stay level without scanning every wall panel.
 terrain.elevation = buildTrenchElevation({ ...headlandMap, boxes: [
-  ...buildings.map(b => ({ x: b.x, z: b.z, w: b.w + 2, d: b.d + 2, h: 1, kind: "building" as const })),
+  ...[...buildings, southRowFootprint].map(b => ({ x: b.x, z: b.z, w: b.w + 2, d: b.d + 2, h: 1, kind: "building" as const })),
   ...landmarksSolid.map(b => ({ x: b.x, z: b.z, w: b.w + 2, d: b.d + 2, h: 1, kind: "building" as const })),
 ] });
 terrain.relief = buildTrenchRelief(headlandMap, []);
-buildings.forEach((b, i) => buildVillageBuilding(headlandMap, b, i));
+buildings.forEach((b, i) => {
+  const kit = kitBuildings[b.id];
+  buildKitHouse(headlandMap, kit.plan, { id: b.id, name: b.name, x: b.x, z: b.z, baseY: bankHeight, variant: i, turns: kit.turns, style: kit.style });
+});
+buildKitTerrace(headlandMap, narrowTownhouse, { ...southRow, baseY: bankHeight, variant: 1 });
 
 const add = (id: string, x: number, z: number, w: number, d: number, h: number, kind: Box["kind"] = "masonry") => {
   const b: Box = { id: "headland-" + id, x, z, w, d, h, kind, baseY: groundHeight(x, z, headlandMap) - 0.03 };
