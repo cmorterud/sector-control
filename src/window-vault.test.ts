@@ -3,7 +3,7 @@ import { industrialMap, bodyBlocked, type MapDefinition } from "./map";
 import { Game, TestCollision, idle } from "./simulation";
 import { buildKitHouse, kitBay, kitStory, parseCell, type KitPlan } from "./house-kit";
 import { narrowTownhouse, kitPlans } from "./house-kit-plans";
-import { villageMap } from "./village-map";
+import { trainingMap } from "./training-map";
 
 // Flat terrain gives soldiers the support-aware movement used on building maps.
 const built = (plan: KitPlan) => {
@@ -50,11 +50,11 @@ it("refuses solid walls and windows above a drop", () => {
   expect(p.z).toBeGreaterThan(-6.3);
 });
 
-it("also vaults through the older village buildings' windows", () => {
-  const g = new Game(new TestCollision(villageMap), false, 6000, 5, undefined, { map: villageMap, ambientArtillery: false });
-  const sill = g.map.boxes.find((b) => b.id === "village-school-north-0-2-0")!;
+it("also vaults through windows from the older building generator", () => {
+  const g = new Game(new TestCollision(trainingMap), false, 6000, 5, undefined, { map: trainingMap, ambientArtillery: false });
+  const sill = g.map.boxes.find((b) => b.id === "village-demolition-house-north-0-2-0")!;
   const p = g.players[0];
-  const started = vault(g, { x: sill.x, z: sill.z - 0.9, y: 2.4 }, Math.PI);
+  const started = vault(g, { x: sill.x, z: sill.z - 0.9, y: 0 }, Math.PI);
   expect(started?.vault).toBe(true);
   expect(p.z).toBeGreaterThan(sill.z + 0.5);
 });

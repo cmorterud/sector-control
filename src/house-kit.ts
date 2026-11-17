@@ -33,6 +33,8 @@ export interface KitLevel {
   stone?: KitEdge[];
   open?: KitEdge[];
   doors?: KitEdge[];
+  // Full-bay interior openings, for rooms that crowds pass through.
+  wide?: KitEdge[];
   openings?: KitOpening[];
   furniture?: KitFurniture[];
 }
@@ -71,6 +73,9 @@ export interface KitPlacement {
   variant?: number;
   // Palette for architecture-geometry.ts; defaults to the plan id's palette.
   style?: string;
+  // A school bell on the front of the roof, or a clock in the north gable.
+  bell?: boolean;
+  clock?: boolean;
   // A porch canopy and painted name over one ground-floor exterior door.
   entrance?: { at: KitCell; side: KitSide; sign?: string; porch?: boolean };
   // Omit this plan side's party wall and rest on a neighbour's instead.
@@ -186,8 +191,8 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
       exterior("z", plan.bays.x, row, "east", [plan.bays.x - 1, row]);
     }
     const listed = (list: KitEdge[] | undefined) => new Set((list ?? []).map(([a, b]) => kitEdgeBetween(a, b)));
-    const stone = listed(spec.stone), open = listed(spec.open), doors = listed(spec.doors);
-    for (const key of [...stone, ...open, ...doors]) {
+    const stone = listed(spec.stone), open = listed(spec.open), doors = listed(spec.doors), wide = listed(spec.wide);
+    for (const key of [...stone, ...open, ...doors, ...wide]) {
       const [axis, line, index] = key.split(":");
       const p = axis === "z" ? [Number(line) - 1, Number(index), Number(line), Number(index)] : [Number(index), Number(line) - 1, Number(index), Number(line)];
       if (spec.cells[p[1]][p[0]] === spec.cells[p[3]][p[2]] && !open.has(key))
@@ -201,10 +206,11 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         const key = dc ? edgeKey("z", c, row) : edgeKey("x", r, col);
         if (open.has(key)) continue;
         edges.set(key, { key, axis: dc ? "z" : "x", line: dc ? c : r, index: dc ? row : col, cells: [[col, row], [c, r]],
-          material: stone.has(key) ? "stone" : "timber", ...(doors.has(key) ? { opening: "door" as const } : {}) });
+          material: stone.has(key) ? "stone" : "timber",
+          ...(doors.has(key) ? { opening: "door" as const } : wide.has(key) ? { opening: "double" as const } : {}) });
       }
     }
-    for (const key of doors) if (!edges.get(key)) throw new Error(plan.id + " door " + key + " has no wall");
+    for (const key of [...doors, ...wide]) if (!edges.get(key)) throw new Error(plan.id + " door " + key + " has no wall");
     for (const o of spec.openings ?? []) {
       const e = edges.get(kitExteriorEdge(o.at, o.side));
       if (!e || e.material === "party") throw new Error(plan.id + " opening " + o.at + " " + o.side + " is not on a facade");
@@ -426,6 +432,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         kind: mansardTop ? "wood" : "masonry", maxHp: mansardTop ? 60 : 180, landmark: at.flag,
         architecture: { building: at.id, part: "wall", level: levels, tint, style, exterior: s as -1 | 1, gableSlope: slope, ...(mansardTop ? { mansard: true } : {}) } };
       gable.supports = overlapping(gable.x, gable.z, gable.w, gable.d, topPieces);
+      if (at.clock && s === -1 && i === Math.floor(count / 2)) gable.architecture!.feature = "clock";
       parts.push(gable); gables.push(gable);
     }
   }
@@ -437,6 +444,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
       architecture: { building: at.id, part: "roof", level: levels, roofPitch: pitch, style, tint: (at.variant ?? 0) % 2 ? "#605c58" : "#68534a" } };
     if (ix === 0 || ix === nx - 1) roof.architecture!.eave = ix === 0 ? -1 : 1;
     if (ix === Math.floor(nx / 2)) roof.architecture!.ridge = nx % 2 === 0 ? -pw / 2 + 0.09 : 0;
+    if (at.bell && ix === Math.floor(nx / 2) && iz === 0) roof.architecture!.feature = "bell";
     roof.supports = [...overlapping(roof.x, roof.z, roof.w, roof.d, topPieces),
       ...(iz === 0 || iz === nz - 1 ? overlapping(roof.x, roof.z, roof.w, roof.d, gables) : [])];
     parts.push(roof); roofs.set(ix + "," + iz, roof);
@@ -501,7 +509,11 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
       if (!near.some((p) => Math.abs(q.x - p.x) < p.w / 2 + 0.62 && Math.abs(q.z - p.z) < p.d / 2 + 0.62)) clear.push({ u: c.u + du, v: c.v + dv });
     }
     const chosen: { u: number; v: number }[] = [];
-    for (const [tu, tv] of [[0, 0], [-0.8, 0], [0.8, 0], [0, -0.8], [0, 0.8]]) {
+    // One anchor per bay; furnished bays also get the clear points nearest
+    // each edge, so routes can thread past the furniture.
+    const furnished = parts.some((p) => p.architecture?.feature && p.architecture.level === level &&
+      Math.abs(p.x - centre.x) < kitBay / 2 + p.w / 2 && Math.abs(p.z - centre.z) < kitBay / 2 + p.d / 2);
+    for (const [tu, tv] of furnished ? [[0, 0], [-0.8, 0], [0.8, 0], [0, -0.8], [0, 0.8]] : [[0, 0]]) {
       const target = { u: c.u + tu, v: c.v + tv };
       const best = clear.reduce<{ u: number; v: number } | null>((a, q) =>
         !a || Math.hypot(q.u - target.u, q.v - target.v) < Math.hypot(a.u - target.u, a.v - target.v) ? q : a, null);

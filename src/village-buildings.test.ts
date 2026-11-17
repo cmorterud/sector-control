@@ -105,7 +105,12 @@ it("breaks individual wall panels and collapses a building only after enough bea
     const b=o.original,off=b.w>b.d?{x:0,z:-.3}:{x:-.3,z:0};
     for(let n=0;n<2;n++)g.explode({x:b.x+off.x,y:b.baseY!+.2,z:b.z+off.z},-1,null,{...localBlast,structuralRadius:2});
   }
-  expect(g.map.boxes.filter(b=>b.architecture?.building==="school")).toHaveLength(0);
+  // Kit collapses are staged: let the failing pieces fall.
+  for(let i=0;i<90;i++)g.step(idle());
+  const kit=g.map.buildings!.find(b=>b.id==="school")!.kit!;
+  const left=g.map.boxes.filter(b=>b.architecture?.building==="school"&&!kit.survivors.includes(b.id!)&&
+    !(b.architecture.part==="floor"&&!b.supports)&&!b.id!.includes("porch"));
+  expect(left.map(b=>b.id)).toEqual([]);
   expect(g.map.boxes.some(b=>b.id?.startsWith("village-rubble-school"))).toBe(true);
   expect(villageMap.boxes.some(b=>b.id===wall.id)).toBe(true);
   const flag=g.sectors[0];expect(bodyBlocked(flag.x,flag.z,groundHeight(flag.x,flag.z,g.map),.6,g.map)).toBe(false);
@@ -114,7 +119,7 @@ it("breaks individual wall panels and collapses a building only after enough bea
 it("makes real window holes and roof surfaces block only where their geometry exists",()=>{
   const g=scene();
   // The school has north-facing openings at even bays; a sill protects the body.
-  const wall=g.map.boxes.find(b=>b.id==="village-school-north-0-2-0")!;
+  const wall=g.map.boxes.find(b=>b.id==="kit-school-wall-0-x-0-0-sill")!;
   const ray=(y:number)=>g.collision.ray({x:wall.x,y,z:wall.z-2},{x:wall.x,y,z:wall.z+2});
   expect(ray(3.05)).toBeLessThan(1);expect(ray(4)).toBe(1);
   const roof=g.map.boxes.find(b=>b.architecture?.building==="manor"&&b.architecture.part==="roof"&&b.architecture.roofPitch)!;

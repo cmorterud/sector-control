@@ -5,7 +5,7 @@ import { architecturalTextures, architecturePixels } from "./architecture-surfac
 import { villageMap } from "./village-map";
 import { Renderer } from "./rendering";
 import { runtimeMap, artilleryExplosionProfile } from "./destruction";
-import { Game, TestCollision } from "./simulation";
+import { Game, TestCollision, idle } from "./simulation";
 
 it("builds finite lit geometry for each house, material and furnishing without changing collision", () => {
   const examples=new Map<string,(typeof villageMap.boxes)[number]>();
@@ -130,7 +130,7 @@ it("uploads detailed shared meshes and materials, then removes every visible pie
 
 it("destroys a ceiling when its local roof supports are breached without collapsing the whole school", () => {
   const g=new Game(new TestCollision(villageMap),false,6000,1,undefined,{map:villageMap,ambientArtillery:false});
-  const roof=g.map.boxes.find(b=>b.id==="village-school-roof-0-0")!;
+  const roof=g.map.boxes.find(b=>b.id==="kit-school-roof-0-0")!;
   const ceiling=g.map.boxes.find(b=>b.supports?.[0]===roof.id&&b.architecture?.part==="ceiling")!;
   for(const id of ceiling.supports!) {
     const support=g.map.destruction!.objects[id].original,angle=support.architecture!.roofPitch??0;
@@ -138,6 +138,8 @@ it("destroys a ceiling when its local roof supports are breached without collaps
       {...artilleryExplosionProfile,damage:0,structuralRadius:.4,structuralDamage:2000,craterRadius:0,craterDepth:0,terrainReach:0});
   }
   expect(g.map.destruction!.objects[roof.id!].stage).toBe(2);
+  // Kit pieces fall a moment after losing their support.
+  for(let i=0;i<60;i++)g.step(idle());
   expect(g.map.destruction!.objects[ceiling.id!].stage).toBe(2);
   expect(g.map.boxes.some(b=>b.architecture?.building==="school"&&b.architecture.part==="roof")).toBe(true);
 });

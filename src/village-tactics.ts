@@ -8,7 +8,7 @@ import {
   type Vec,
   type MapDefinition,
 } from "./map";
-import { flagContains } from "./domination";
+import { dominationRules, flagContains } from "./domination";
 import type { Command, Game, Soldier } from "./simulation";
 
 export interface VillagePlan {
@@ -81,6 +81,17 @@ function posts(g: Game, p: Soldier) {
         cover: villageCover(g, p, at),
       });
     }
+  // A kit capture room is too small for the coarse grid alone: its clear
+  // navigation anchors give soldiers more distinct spots near the flag.
+  for (const building of g.map.buildings ?? []) {
+    if (!building.kit || Math.abs(building.x - flag.x) > building.w / 2 || Math.abs(building.z - flag.z) > building.d / 2) continue;
+    for (const at of g.map.navigationPoints ?? []) {
+      if (at.y !== undefined || dist(at, flag) > dominationRules.radius || Math.abs(at.x - building.x) > building.w / 2 ||
+        Math.abs(at.z - building.z) > building.d / 2 || found.some((q) => dist(q, at) < 0.9) || blocked(at.x, at.z, 0.7, g.map)) continue;
+      const y = groundHeight(at.x, at.z, g.map);
+      found.push({ x: at.x, z: at.z, capture: flagContains(g, { ...at, y }, flag), cover: villageCover(g, p, at) });
+    }
+  }
   for(const building of g.map.buildings??[])for(const at of building.posts) {
     if(at.y===undefined || bodyBlocked(at.x,at.z,at.y,.6,g.map) || Math.abs(supportHeight(at.x,at.z,g.map,at.y+.02)-at.y)>.1)continue;
     found.push({...at,capture:false,cover:villageCover(g,p,at)});

@@ -53,7 +53,7 @@ it("lays out every plan by the rooms-first rules, within its part budget", () =>
     expect(kitPlanProblems(plan)).toEqual([]);
     const { map } = placed(plan);
     const parts = map.boxes.filter((b) => b.architecture?.building === "house");
-    expect(parts.length).toBeLessThanOrEqual(kitPartBudget(plan.levels.length));
+    expect(parts.length).toBeLessThanOrEqual(kitPartBudget(plan));
     const ids = new Set(parts.map((b) => b.id));
     expect(ids.size).toBe(parts.length);
     for (const b of parts) for (const s of [...b.supports ?? [], ...b.spanSupports ?? []]) expect(ids.has(s), b.id + " → " + s).toBe(true);
@@ -112,10 +112,10 @@ it("reaches every room on every level from the street, through doors kept clear 
     const W = plan.bays.x * kitBay, D = plan.bays.z * kitBay, street = { x: 0, z: -D / 2 - 3, y: 0 };
     for (const [level, spec] of plan.levels.entries()) for (const [key, room] of Object.entries(spec.rooms)) {
       if (room.type === "void" || room.type === "stair") continue;
-      const cells = spec.cells.flatMap((row, r) => [...row].map((k, c) => ({ k, c, r }))).filter((q) => q.k === key);
-      const goals = cells.flatMap(({ c, r }) => [0, -0.6, 0.6].flatMap((du) => [0, -0.6, 0.6].map((dv) =>
-        ({ x: -W / 2 + (c + 0.5) * kitBay + du, z: -D / 2 + (r + 0.5) * kitBay + dv, y: level * kitStory }))))
-        .filter((q) => !bodyBlocked(q.x, q.z, q.y, 0.6, map));
+      // The navigation anchors bots actually use inside this room.
+      const inRoom = (x: number, z: number) => spec.cells[Math.floor((z + D / 2) / kitBay)]?.[Math.floor((x + W / 2) / kitBay)] === key;
+      const goals = map.navigationPoints!.filter((q) => Math.abs((q.y ?? 0) - level * kitStory) < 0.01 && inRoom(q.x, q.z) &&
+        !bodyBlocked(q.x, q.z, level * kitStory + (level ? 0 : 0.02), 0.6, map)).map((q) => ({ ...q, y: level * kitStory }));
       expect(goals.length, plan.id + " " + room.name).toBeGreaterThan(0);
       expect(pathfind(street, goals[0], map).length, plan.id + " level " + level + " " + room.name).toBeGreaterThan(0);
     }
