@@ -16,6 +16,8 @@ export const architecturePalette = (id:string) => ({
   bakery:{wall:"#d4c5a7",trim:"#a9947a",wood:"#6c5340",roof:"#8d6c55",roofSurface:"tiles"},
   smithy:{wall:"#b5b09e",trim:"#898371",wood:"#4e4b3e",roof:"#6e7573",roofSurface:"slate"},
   cottage:{wall:"#d1c8b1",trim:"#a89a83",wood:"#687264",roof:"#8a6e59",roofSurface:"tiles"},
+  townhouse:{wall:"#cbb596",trim:"#a3927a",wood:"#4f4538",roof:"#6a7272",roofSurface:"slate"},
+  tenement:{wall:"#d2c9b2",trim:"#ad9f88",wood:"#4a514c",roof:"#5f6a6c",roofSurface:"slate"},
 } as Record<string,{wall:string;trim:string;wood:string;roof:string;roofSurface:"slate"|"tiles"}>)[id] ??
   {wall:"#cdc4ae",trim:"#aa9b83",wood:"#625b45",roof:"#807363",roofSurface:"tiles" as const};
 const variant=(id:string)=>[...id].reduce((s,c)=>(Math.imul(s,31)+c.charCodeAt(0))>>>0,17)%4;
@@ -34,7 +36,7 @@ const letters:Record<string,string[]>={
 // These pieces merge by material into a handful of meshes per structural
 // object. They add no colliders, per-frame work or independently alive debris.
 export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
-  const pieces:ArchitecturePiece[]=[],{w,h,d}=b,a=b.architecture,p=architecturePalette(a?.building??""),seed=variant(b.id??"");
+  const pieces:ArchitecturePiece[]=[],{w,h,d}=b,a=b.architecture,p=architecturePalette(a?.style??a?.building??""),seed=variant(b.id??"");
   const add=(name:string,x:number,y:number,z:number,sx:number,sy:number,sz:number,tint:string,surface:ArchitectureSurface="wood",rotation=0,chipped=false)=>{
     if(Math.min(sx,sy,sz)<=0)return;
     pieces.push({name,at:[x,y-h/2,z],size:[sx,sy,sz],tint,surface,rotation,chipped});
@@ -56,10 +58,18 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
     add(name,alongX?u:side*(w/2+depth/2),y,alongX?side*(d/2+depth/2):u,
       alongX?su:depth,sy,alongX?depth:su,tint,surface,0,chipped);
   if(wall) {
-    add("limewashed masonry panel",0,h/2,0,w,h,d,p.wall,"limewash");
+    // A mansard slope is slate over timber; it keeps only its dormer framing.
+    const slate=!!a.mansard;
+    if(slate)add("slate mansard slope",0,h/2,0,w,h,d,p.roof,p.roofSurface);
+    else add("limewashed masonry panel",0,h/2,0,w,h,d,p.wall,"limewash");
     pieces[pieces.length-1].topSlope=a.gableSlope;
     for(const side of [-1,1]) {
-      const outside=a.exterior===side,length=alongX?w:d;
+      const outside=a.exterior===side,length=alongX?w:d,span=a.openingWidth??length;
+      if(slate) {
+        if(a.opening==="window" && h<=1.01)for(const edge of [-1,1])face("dormer cheek",edge*(length/2-.055),h+.625,side,.09,1.25,.055,p.wood);
+        if(a.opening==="window" && h>1.01)face("dormer head",0,.065,side,span+.06,.13,.055,p.wood);
+        continue;
+      }
       if(a.wallRow===0) {
         if(outside)face("weathered stone plinth",0,.16,side,length,.32,.025,p.trim,"stone");
         else face("interior skirting",0,.065,side,length,.13,.025,p.wood);
@@ -75,14 +85,13 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
             for(const y of [.25,.95])face("shutter iron hinge",u,h+y,side,.3,.035,.095,"#434a40","iron");
           }
         } else {
-          face("window head moulding",0,.065,side,length+.06,.13,.055,p.trim,"stone");
+          face("window head moulding",0,.065,side,span+.06,.13,.055,p.trim,"stone");
           if(outside && ["manor","hall"].includes(a.building))face("window keystone",0,.14,side,.2,.28,.075,"#c9bda2","stone");
         }
       }
       if(a.opening==="door") {
-        const length=alongX?w:d;
-        face("entrance lintel",0,.09,side,length+.08,.18,.085,p.trim,"stone");
-        for(const edge of [-1,1])face("entrance surround",edge*(length/2-.04),-1.03,side,.13,2.2,.06,p.trim,"stone");
+        face("entrance lintel",0,.09,side,span+.08,.18,.085,p.trim,"stone");
+        for(const edge of [-1,1])face("entrance surround",edge*(span/2-.04),-1.03,side,.13,2.2,.06,p.trim,"stone");
       }
       if(a.corner && outside) {
         if(a.building==="inn"||a.building==="stable")face("exterior timber upright",a.corner*(length/2-.08),h/2,side,.16,h,.055,p.wood);

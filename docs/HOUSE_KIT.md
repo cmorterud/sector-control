@@ -1,6 +1,15 @@
 # House kit
 
-Approved design, November 16, 2026. Not yet implemented.
+Approved design, November 16, 2026.
+
+**Status.** The generator, both plans, the design-rule audits and staged collapse are implemented, but no map uses them yet:
+- `src/house-kit.ts`: builds a house from a room plan.
+- `src/house-kit-plans.ts`: the townhouse and tenement.
+- `src/house-kit-audit.ts`: room, open-run and budget checks.
+- `src/kit-collapse.ts`: supports, wings, the never-strand rule and rubble.
+- `src/house-kit.test.ts`: regression tests.
+
+Still to do: damage tuning that also affects existing maps (artillery falloff, the splash floor, stray-shell radius), bullets passing through timber, and the kit village.
 
 Reusable one-, two- and three-story buildings, assembled from shared pieces, replace custom per-map buildings. The goals: destruction that follows clear, predictable rules, no dead space, and no sprinting across large empty rooms. The current Village manor is not a constraint; it will be replaced by a kit building.
 
@@ -30,7 +39,7 @@ Reusable one-, two- and three-story buildings, assembled from shared pieces, rep
 
 ## Rooms and the open-run rule
 
-Sprint is 7 m/s. Inside any building, the longest straight walkable line that never passes within 1 m of crouch-height cover is at most **5 m**, about 0.7 s of sprinting. Big rooms whose structure supplies cover (barn, mill floor, inn common room, classroom) may reach **7.5 m**.
+Sprint is 7 m/s. Inside any building, the longest straight walkable line that never passes within 1 m of crouch-height cover (0.8 m or taller) is at most **5 m**, about 0.7 s of sprinting. Walls count as cover. Big rooms whose structure supplies cover (shop, workroom, and later barn, mill floor, inn common room, classroom) may reach **7.5 m**, and only these may run beyond three bays.
 
 An audit checks every asset in its intact, damaged and collapsed states, and a test fails any asset that breaks the rule.
 
@@ -79,8 +88,9 @@ The result: roofs fail first, so shelling strips a house from the top down, and 
 - **Bearing walls on every story,** not only the ground floor's bottom row.
 - **Wings.** The existing "under about a third of bearing walls left" rule applies per wing, not per building. A terraced house is its own wing. A party wall falls only when hit directly or when neither neighbour still uses it.
 - **Never strand an upper floor.** If every route up is lost, the floor drops or a rubble ramp is spawned.
-- **Rubble scales with what fell:** one story leaves 0.4–0.7 m (knee cover); two stories leave 1.0–1.3 m with a ramped edge; three stories leave 1.5–2.0 m that can be mantled, with corner stubs above.
-- **Clear pockets.** Keep the 3.2 m no-rubble radius around flags, and keep every doorway's navigation point clear.
+- **Rubble scales with what fell:** one story leaves 0.5 m (knee cover), two stories 1.05 m, and three stories 1.5 m, with corner stubs above. 1.5 m is the cap: cover vaults reach 1.6 m, so every mound stays crossable.
+- **Clear pockets.** Keep the 3.2 m no-rubble radius around flags, and no rubble within 1.6 m of a doorway.
+- **Navigation.** Bots keep 0.6 m of clearance, so a 1.25 m door is passable along its centre line, where the generator puts its navigation points. In each bay the generator also adds the clear points nearest the bay's centre and each edge, so routes thread past furniture.
 
 ## Asset catalogue
 
@@ -130,11 +140,11 @@ Ground floor:
        +#######+#######+###d###+   stone spine
      3 #   ^   :               #
        #   ^   :    KITCHEN    #
-     4 # STAIR :    [table]    #
+     4 # STAIR :    [table] (h)#
        #   ^   :               #
-     5 #       d            (h)#
+     5 #       d               #
        # HALL  :               #
-       +###d###+###w###+#######+   yard
+       +#######+#######+###d###+   yard: rear door under the outside stair's landing
 ```
 
 Upper floor:
@@ -151,14 +161,15 @@ Upper floor:
        #  stair:               #
      4 #  well :   BACK ROOM   #
        #       :    [desk]     #
+       +.......+               +
      5 #                       #
        #                       #
        +###w###+###w###+###d###+   door to an outside stair down to the yard
 ```
 
-- **Routes:** street → shop → kitchen (via the spine door at C) → hall → stair or rear door. Upstairs: landing → front room → back room → outside stair. Every room has two exits, and the front door, spine door and rear door never line up.
+- **Routes:** street → shop → kitchen (via the spine door at C) → hall → stair; the kitchen also has the rear door to the yard. Upstairs: landing → front room → back room → outside stair, a second route up. Every room has two exits. The spine door lines up with the rear door below and the outside-stair door above, so the hearth and desk sit across both lines.
 - **Open runs:** the shop (7.5 × 5 m) is broken by the counter and shelves along the walls; the kitchen (5 × 7.5 m) by its table.
-- **Structure:** joists span between the party walls, with the stone spine carrying mid-span. The hearth (h) stands on a ground-standing chimney pier against the east party wall. The stair treads stand on the ground.
+- **Structure:** joists span between the party walls, with the stone spine carrying mid-span. The hearth (h) stands against the east party wall, beside a ground-standing chimney pier. The stair treads stand on the ground. In a terrace, neighbouring houses share one party wall, which stays up while either house still rests on it.
 - **Damage:** the roof fails first; an upper bay that drops lands in the kitchen or shop as a ramp. Grenades open the timber partition beside the stair, and the outside stair is a timber attachment one grenade removes.
 
 ### Tenement (4 × 5 bays, 10 × 12.5 m, two stone stories plus a mansard)
