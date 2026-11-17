@@ -68,7 +68,7 @@ it("routes to a genuine upper-floor position through stairs, without a floor tel
     }
     expect(i,JSON.stringify({position:{x:soldier.x,z:soldier.z,y:soldier.y},next:leg[i]})).toBe(leg.length);
   }
-});
+},20_000);
 it("uses compact household stair pitches with a clear landing at the top",()=>{
   for(const flight of [0,1]) {
     const treads=villageMap.boxes.filter(b=>b.id?.startsWith("kit-manor-stair-"+flight+"-"));

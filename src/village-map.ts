@@ -3,8 +3,8 @@ import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
 import { buildVillageBuilding, type VillageBuilding } from "./village-buildings";
 import { addVillageOutdoors } from "./village-outdoors";
-import { buildKitHouse } from "./house-kit";
-import { manor } from "./house-kit-plans";
+import { buildKitHouse, type KitPlacement, type KitPlan } from "./house-kit";
+import { bakery, barn, cottage, manor } from "./house-kit-plans";
 
 const width=180,depth=160,bankHeight=2.4;
 const heights=new Float32Array(width*depth).fill(bankHeight);
@@ -38,14 +38,14 @@ const building=(id:string,name:string,x:number,z:number,w:number,d:number,flag?:
   ({id,name,x,z,w,d,flag,stories,baseY:bankHeight,posts:[]});
 const buildings=[
   building("school","Schoolhouse / aid post",-46,-48,20,18,"A"),
-  building("stable","Carriage stable",0,-48,16,14),
+  building("stable","Carriage stable",0,-48,15,10),
   building("inn","Village inn",46,-48,22,18,"D"),
-  building("bakery","Bakery and workshop",-46,0,16,16),
+  building("bakery","Bakery and workshop",-46,0,10,10),
   // Built from the house kit (docs/HOUSE_KIT.md), rather than the old generator.
   building("manor","Saint-Martin Manor",0,0,15,12.5,"C",2),
-  building("smithy","Smithy and storehouse",46,0,18,14),
+  building("smithy","Smithy and storehouse",46,0,10,15),
   building("farm","Orchard farmhouse",-46,48,20,18,"B"),
-  building("cottage","Groundskeeper's cottage",0,48,14,14),
+  building("cottage","Groundskeeper's cottage",0,48,10,10),
   building("hall","Town hall / post office",46,48,22,20,"E"),
 ];
 const streets=[
@@ -73,9 +73,20 @@ export const villageMap:MapDefinition={
 villageMap.terrain!.banks=buildTrenchBanks(villageMap);
 villageMap.terrain!.elevation=buildTrenchElevation({...villageMap,boxes:buildings.map(b=>({x:b.x,z:b.z,w:b.w+2,d:b.d+2,h:1,kind:"building"}))});
 villageMap.terrain!.relief=buildTrenchRelief(villageMap,villageMap.terrain!.shellScars!);
-buildings.forEach((b,i)=>{if(b.id!=="manor")buildVillageBuilding(villageMap,b,i);});
-buildKitHouse(villageMap,manor,{id:"manor",name:"Saint-Martin Manor",x:0,z:0,baseY:bankHeight,flag:"C",variant:4,
-  entrance:{at:"C1",side:"north",sign:"ST MARTIN",porch:true}});
+// Kit buildings (docs/HOUSE_KIT.md), each turned so its front faces its street.
+const kitBuildings:Record<string,{plan:KitPlan}&Pick<KitPlacement,"turns"|"style"|"entrance">>={
+  manor:{plan:manor,entrance:{at:"C1",side:"north",sign:"ST MARTIN",porch:true}},
+  stable:{plan:barn,turns:2,style:"stable",entrance:{at:"A2",side:"west",sign:"ECURIE"}},
+  bakery:{plan:bakery,turns:1,entrance:{at:"B1",side:"north",sign:"BOULANGERIE"}},
+  smithy:{plan:barn,turns:3,style:"smithy",entrance:{at:"A2",side:"west",sign:"FORGE"}},
+  cottage:{plan:cottage,entrance:{at:"B1",side:"north",sign:"MAISON"}},
+};
+buildings.forEach((b,i)=>{
+  const kit=kitBuildings[b.id];
+  if(!kit)buildVillageBuilding(villageMap,b,i);
+  else buildKitHouse(villageMap,kit.plan,{id:b.id,name:b.name,x:b.x,z:b.z,baseY:bankHeight,flag:b.flag,variant:i,
+    turns:kit.turns,style:kit.style,entrance:kit.entrance});
+});
 const add=(id:string,x:number,z:number,w:number,d:number,h:number,kind:Box["kind"]="masonry")=>{
   const b:Box={id:"village-"+id,x,z,w,d,h,kind,baseY:groundHeight(x,z,villageMap)};boxes.push(b);return b;
 };

@@ -320,6 +320,24 @@ export const cottage: KitPlan = {
   wings: [{ id: "house", from: "A1", to: "D4" }],
 };
 
+// Bakery: the cottage's rooms, with the kitchen hearth replaced by an oven
+// and a baker's workbench in the scullery.
+export const bakery: KitPlan = {
+  ...cottage,
+  id: "bakery",
+  name: "Bakery",
+  style: "bakery",
+  levels: [{
+    ...cottage.levels[0],
+    rooms: { ...cottage.levels[0].rooms, K: { type: "kitchen", name: "Bakehouse" }, S: { type: "store", name: "Flour store" } },
+    furniture: [
+      ...cottage.levels[0].furniture!.filter((f) => f.feature !== "hearth" && f.feature !== "cupboard"),
+      { at: "D1", feature: "oven", w: 0.9, d: 1.8, h: 1.3, dx: 0.52 },
+      { at: "C3", feature: "workbench", w: 1.8, d: 0.85, h: 0.9, dz: -0.2 },
+    ],
+  }],
+};
+
 // Barn or workshop: 6 × 4 bays, one story, plank walls. Cart doors at
 // both ends are offset so they never line up; posts and stalls supply the
 // cover that a big working room needs.
@@ -358,4 +376,4 @@ export const barn: KitPlan = {
   wings: [{ id: "barn", from: "A1", to: "F4" }],
 };
 
-export const kitPlans = [narrowTownhouse, tenement, manor, cottage, barn];
+export const kitPlans = [narrowTownhouse, tenement, manor, cottage, bakery, barn];
