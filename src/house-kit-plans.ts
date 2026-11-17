@@ -283,4 +283,81 @@ export const manor: KitPlan = {
   ],
 };
 
-export const kitPlans = [narrowTownhouse, tenement, manor];
+// Cottage: 4 × 4 bays, one story. Four rooms in a ring around a stone
+// spine, with front and back doors and a kitchen hearth.
+export const cottage: KitPlan = {
+  id: "cottage",
+  name: "Cottage",
+  style: "cottage",
+  bays: { x: 4, z: 4 },
+  paved: ["kitchen", "store"],
+  levels: [{
+    cells: ["PPKK", "PPKK", "BBSS", "BBSS"],
+    rooms: {
+      P: { type: "parlour", name: "Parlour" },
+      K: { type: "kitchen", name: "Kitchen" },
+      B: { type: "bedroom", name: "Bedroom" },
+      S: { type: "store", name: "Scullery" },
+    },
+    stone: [["A2", "A3"], ["B2", "B3"], ["C2", "C3"], ["D2", "D3"]],
+    doors: [["B2", "C2"], ["A2", "A3"], ["D2", "D3"], ["B4", "C4"]],
+    openings: [
+      { at: "A1", side: "north", kind: "window" }, { at: "B1", side: "north", kind: "door" },
+      { at: "C1", side: "north", kind: "window" }, { at: "D1", side: "north", kind: "window" },
+      { at: "A2", side: "west", kind: "window" }, { at: "A3", side: "west", kind: "window" },
+      { at: "D2", side: "east", kind: "window" },
+      { at: "A4", side: "south", kind: "window" }, { at: "C4", side: "south", kind: "door" },
+      { at: "D4", side: "south", kind: "window" },
+    ],
+    furniture: [
+      { at: "B2", feature: "table", w: 1.8, d: 1, h: 0.85, dx: -1.25, dz: -1.25 },
+      { at: "D1", feature: "hearth", w: 0.75, d: 1.6, h: 1.2, dx: 0.6 },
+      { at: "C1", feature: "table", w: 1.4, d: 0.8, h: 0.8, dx: 0.4, dz: 0.3 },
+      { at: "A4", feature: "bed", w: 1.8, d: 2.3, h: 0.85, dx: -0.12, dz: -0.15 },
+      { at: "D4", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: 0.72 },
+    ],
+  }],
+  flights: [],
+  chimneys: [{ at: "D1", side: "east" }],
+  wings: [{ id: "house", from: "A1", to: "D4" }],
+};
+
+// Barn or workshop: 6 × 4 bays, one story, plank walls. Cart doors at
+// both ends are offset so they never line up; posts and stalls supply the
+// cover that a big working room needs.
+export const barn: KitPlan = {
+  id: "barn",
+  name: "Barn",
+  style: "stable",
+  bays: { x: 6, z: 4 },
+  exterior: "timber",
+  paved: ["barn"],
+  levels: [{
+    cells: ["BBBBBB", "BBBBBB", "BBBBBB", "BBBBBB"],
+    rooms: { B: { type: "barn", name: "Workshop" } },
+    openings: [
+      { at: "A2", side: "west", kind: "double" }, { at: "F3", side: "east", kind: "double" },
+      { at: "B1", side: "north", kind: "window" }, { at: "C4", side: "south", kind: "door" },
+    ],
+    furniture: [
+      { at: "B1", feature: "stall", w: 2, d: 1, h: 1.05, dz: -0.6 },
+      { at: "D1", feature: "stall", w: 2, d: 1, h: 1.05, dz: -0.6 },
+      { at: "B4", feature: "stall", w: 2, d: 1, h: 1.05, dz: 0.53 },
+      { at: "E4", feature: "stall", w: 2, d: 1, h: 1.05, dz: 0.53 },
+      // Across the line in from each cart door.
+      { at: "B2", feature: "workbench", w: 1.8, d: 0.85, h: 0.9 },
+      { at: "E3", feature: "workbench", w: 1.8, d: 0.85, h: 0.9 },
+      // Working clutter in the middle bays breaks the diagonals between posts.
+      { at: "C2", feature: "workbench", w: 1.6, d: 0.85, h: 0.9, dx: 0.3 },
+      { at: "D3", feature: "workbench", w: 1.6, d: 0.85, h: 0.9, dx: -0.3 },
+      { at: "F1", feature: "stall", w: 1, d: 2, h: 1.05, dx: 0.53 },
+      { at: "A4", feature: "stall", w: 1, d: 2, h: 1.05, dx: -0.53 },
+    ],
+  }],
+  // A staggered grid: no straight run across the floor misses a post.
+  posts: [{ at: [2, 1] }, { at: [4, 1] }, { at: [1, 2] }, { at: [3, 2] }, { at: [5, 2] }, { at: [2, 3] }, { at: [4, 3] }],
+  flights: [],
+  wings: [{ id: "barn", from: "A1", to: "F4" }],
+};
+
+export const kitPlans = [narrowTownhouse, tenement, manor, cottage, barn];

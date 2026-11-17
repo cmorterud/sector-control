@@ -6,7 +6,7 @@ import { kitBay, kitEdgeBetween, kitExteriorEdge, kitStory, type KitPlacement, t
 export const kitOpenRunLimit = 5;
 export const kitLargeRoomRunLimit = 7.5;
 // Rooms allowed beyond three bays a side; their structure must supply cover.
-export const kitLargeRooms: KitRoomType[] = ["shop", "workroom"];
+export const kitLargeRooms: KitRoomType[] = ["shop", "workroom", "barn"];
 export const kitCoverHeight = 0.8;
 export const kitPartBudget = (stories: number) => stories <= 1 ? 150 : stories === 2 ? 420 : 600;
 const passive: KitRoomType[] = ["stair", "void"];
@@ -36,8 +36,10 @@ export function auditKitRooms(plan: KitPlan): KitRoomAudit[] {
         }
         for (const o of spec.openings ?? []) {
           if (o.at !== name(c, r)) continue;
-          // Ground-floor windows can be vaulted; upper doors open onto outside stairs.
-          if (o.kind !== "window" || level === 0) exits.add("outside");
+          // Each outside door is its own way out; ground-floor windows can be
+          // vaulted; upper doors open onto outside stairs.
+          if (o.kind !== "window") exits.add("outside " + o.at + " " + o.side);
+          else if (level === 0) exits.add("window");
         }
       }
       const cols = cells.map(([c]) => c), rows = cells.map(([, r]) => r);

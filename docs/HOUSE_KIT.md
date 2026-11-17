@@ -4,7 +4,7 @@ Approved design, November 16, 2026.
 
 **Status.** The generator, both plans, the design-rule audits and staged collapse are implemented, but no map uses them yet:
 - `src/house-kit.ts`: builds a house from a room plan.
-- `src/house-kit-plans.ts`: the townhouse and tenement.
+- `src/house-kit-plans.ts`: the townhouse, tenement, manor, cottage and barn.
 - `src/house-kit-audit.ts`: room, open-run and budget checks.
 - `src/kit-collapse.ts`: supports, wings, the never-strand rule and rubble.
 - `src/house-kit.test.ts`: regression tests.
@@ -100,8 +100,8 @@ Footprints are in bays (width × depth).
 
 | Asset | Bays | Layout | Destruction character |
 |---|---|---|---|
-| Cottage | 4×4 | Two rooms, front and back doors, hearth | Quick to wreck; chimney stands afterwards |
-| Barn / workshop | 6×4 | Posts and stalls; cart doors at both ends make a route through | Timber walls breach easily |
+| Cottage | 4×4 | Four rooms in a ring around a stone spine; front and back doors; kitchen hearth | Quick to wreck; chimney stands afterwards |
+| Barn / workshop | 6×4 | Plank walls; seven staggered timber posts, stalls and benches; offset cart doors at both ends | Timber walls breach easily and rounds pass through them |
 | Lean-to | 2×3 | Attaches to any wall | Falls without harming the host house |
 | Narrow townhouse | 3×5 | Shop below, rooms above; stair along the party wall | Designed for terraces; collapses one house at a time |
 | Farmhouse | 5×4 | Central stair hall, kitchen and parlour, bedrooms above | Bay drops make ramps into the hall |
@@ -114,6 +114,7 @@ Footprints are in bays (width × depth).
 **Shared pieces:**
 - **Wall bays:** solid, window, door, cart door, shop front, party wall, timber partition, and pre-damaged versions of each.
 - **Floor bays:** timber, paving, stairwell, hatch.
+- **Posts:** timber posts at bay corners, carrying the floor or roof above.
 - **Stairs:** a straight two-bay flight, or a stone stair core with half-flights for three stories.
 - **Roof:** gable panel, eave, ridge, gable end, mansard slope, dormer, chimney pier.
 - **Attachments:** porch, balcony, outside stair, lean-to, yard wall with gate, awning.
