@@ -62,6 +62,15 @@ export const ambientArtilleryExplosionProfile: ExplosionProfile = {
   terrainReach: artilleryExplosionProfile.terrainReach * 2,
 };
 export { terrainResolution, terrainPatchSize } from "./map";
+// Structural artillery damage on buildings: full within a metre of contact,
+// easing to a fifth at three metres, then the ordinary distance taper.
+export const artilleryContact = 1;
+// Kit furniture is timber cover that rifle and machine-gun fire can wear away.
+export const furnitureRoundDamage = 10;
+const kitFurniture = (b: Box) => b.kind === "wood" && !!b.architecture?.feature && b.maxHp !== undefined;
+export const splashFloor = 0.25;
+export const artillerySplash = (distance: number) =>
+  distance <= artilleryContact ? 1 : distance >= 3 ? 0.2 : 1 - 0.8 * (distance - artilleryContact) / 2;
 export interface Destructible {
   id: string;
   original: Box;
@@ -215,7 +224,12 @@ export function deformExplosion(
       nearest.y - at.y,
       nearest.z - at.z,
     );
-    if (distance >= profile.structuralRadius) continue;
+    const architectural = !!box.architecture || isStructure(box);
+    // Stray shells keep their doubled craters, but buildings feel only an
+    // ordinary shell's reach, so whole facades no longer wear down evenly.
+    const structuralReach = profile.kind === "artillery-ambient" && box.architecture
+      ? artilleryExplosionProfile.structuralRadius : profile.structuralRadius;
+    if (distance >= structuralReach) continue;
     // Stop just short of its near surface, so the object doesn't shield itself.
     const f = Math.max(0, 1 - 0.04 / Math.max(distance, 0.04));
     const surface = {
@@ -224,14 +238,19 @@ export function deformExplosion(
       z: at.z + (nearest.z - at.z) * f,
     };
     if (ray(at, surface) < 0.995) continue;
-    const hp = Math.max(
+    const artillery = profile.kind.startsWith("artillery");
+    let hp = Math.max(
       0,
       object.hp -
         Math.ceil(
-          profile.structuralDamage * (1 - distance / profile.structuralRadius) *
-          (profile.kind.startsWith("artillery") && (box.architecture || isStructure(box)) && distance > .2 ? .2 : 1),
+          profile.structuralDamage * (1 - distance / structuralReach) *
+          (artillery && architectural ? artillerySplash(distance) : 1),
         ),
     );
+    // Splash softens building masonry but cannot finish it: a direct hit or
+    // grenades do. Timber is exempt, so shelling still strips roofs.
+    if (artillery && distance > artilleryContact && box.architecture && (box.kind === "masonry" || box.kind === "concrete"))
+      hp = Math.max(hp, Math.min(object.hp, Math.ceil(object.maxHp * splashFloor)));
     const stage = hp === 0 ? 2 : hp <= object.maxHp / 2 ? 1 : 0;
     objects.push({ id: object.id, hp, stage });
   }
@@ -728,7 +747,7 @@ export function damageVegetation(
   if (!state) return null;
   const box = map.boxes.find(
     (b) =>
-      ["tree", "log", "stump"].includes(b.kind) &&
+      (["tree", "log", "stump"].includes(b.kind) || kitFurniture(b)) &&
       Math.abs(at.x - b.x) <= b.w / 2 + 0.06 &&
       Math.abs(at.z - b.z) <= b.d / 2 + 0.06 &&
       at.y >= (b.baseY ?? 0) - 0.06 &&
@@ -736,7 +755,7 @@ export function damageVegetation(
   );
   const object = box && state.objects[box.id!];
   if (!object || object.stage === 2) return null;
-  const hp = Math.max(0, object.hp - damage),
+  const hp = Math.max(0, object.hp - (kitFurniture(box) ? furnitureRoundDamage : damage)),
     stage = hp === 0 ? 2 : hp <= object.maxHp / 2 ? 1 : 0;
   const geometry = stage !== object.stage;
   const objects = [{ id: object.id, hp, stage }];

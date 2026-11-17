@@ -90,8 +90,9 @@ it("breaks individual wall panels and collapses a building only after enough bea
   g.explode({x:wall.x,y:wall.baseY!+.4,z:wall.z-.3},-1,null,localBlast);
   expect(g.map.boxes.some(b=>b.architecture?.building==="school"&&b.architecture.part==="roof")).toBe(true);
   for(const o of walls) {
-    const b=o.original;
-    for(let n=0;n<2;n++)g.explode({x:b.x,y:b.baseY!+.2,z:b.z-.3},-1,null,{...localBlast,structuralRadius:2});
+    // Just outside each wall's face: splash alone cannot finish masonry.
+    const b=o.original,off=b.w>b.d?{x:0,z:-.3}:{x:-.3,z:0};
+    for(let n=0;n<2;n++)g.explode({x:b.x+off.x,y:b.baseY!+.2,z:b.z+off.z},-1,null,{...localBlast,structuralRadius:2});
   }
   expect(g.map.boxes.filter(b=>b.architecture?.building==="school")).toHaveLength(0);
   expect(g.map.boxes.some(b=>b.id?.startsWith("village-rubble-school"))).toBe(true);
