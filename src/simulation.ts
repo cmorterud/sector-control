@@ -2292,6 +2292,26 @@ function graph(map: MapDefinition) {
   return result;
 }
 export function prepareNavigation(map:MapDefinition) { graph(map); }
+// Weakly connected components of a navigation graph, cached per graph
+// object (a rebuilt graph is a new object).
+const componentCache = new WeakMap<object, Int32Array>();
+const closestMemo = new WeakMap<object, { revision: number; found: Map<string, number | undefined> }>();
+function navigationComponents(graph: { nodes: Vec[]; edges: number[][] }) {
+  let component = componentCache.get(graph);
+  if (component) return component;
+  const n = graph.nodes.length, links: number[][] = Array.from({ length: n }, () => []);
+  graph.edges.forEach((out, u) => { for (const v of out) { links[u].push(v); links[v]?.push(u); } });
+  component = new Int32Array(n).fill(-1);
+  for (let i = 0, id = 0; i < n; i++) {
+    if (component[i] >= 0) continue;
+    const stack = [i];
+    component[i] = id;
+    while (stack.length) for (const v of links[stack.pop()!]) if (component[v] < 0) { component[v] = id; stack.push(v); }
+    id++;
+  }
+  componentCache.set(graph, component);
+  return component;
+}
 export function pathfind(
   a: Vec,
   b: Vec,
@@ -2302,12 +2322,25 @@ export function pathfind(
   const available = deferred ? navigation.get(map) ?? ((map.destruction?.revision ?? 0) ? undefined : graph(map)) : graph(map);
   if (!available) return [];
   const { nodes, edges } = available;
-  const closest = (p: Vec) =>
-    nearestCandidates(nodes, p).find(({ i }) => walkSegment(p, nodes[i], map))
-      ?.i;
+  // Planners try several goals from one start, and many soldiers share goals:
+  // remember each point's nearest reachable node for this graph and revision.
+  let memo = closestMemo.get(available);
+  const revision = map.destruction?.revision ?? 0;
+  if (!memo || memo.revision !== revision || memo.found.size > 4096) closestMemo.set(available, memo = { revision, found: new Map() });
+  const closest = (p: Vec) => {
+    const key = p.x.toFixed(2) + "," + p.z.toFixed(2) + "," + (p.y === undefined ? "" : p.y.toFixed(2));
+    if (memo!.found.has(key)) return memo!.found.get(key);
+    const i = nearestCandidates(nodes, p).find(({ i }) => walkSegment(p, nodes[i], map))?.i;
+    memo!.found.set(key, i);
+    return i;
+  };
   const start = closest(a),
     goal = closest(b);
   if (start === undefined || goal === undefined) return [];
+  // Different components can never connect: skip a search that would visit
+  // every node it can reach before failing.
+  const component = navigationComponents(available);
+  if (component[start] !== component[goal]) return [];
   const open = new Set([start]),
     came = new Map<number, number>(),
     cost = new Map([[start, 0]]);

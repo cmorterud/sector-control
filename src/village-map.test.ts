@@ -40,7 +40,7 @@ it("connects both spawn formations through sunken approaches to every flag", () 
 });
 it("turns ruined walls into low rubble cover and persists excavation without editing the source map", () => {
   const g = scene(),
-    wall = g.map.boxes.find((b) => b.id === "village-school-north-0-1-0")!;
+    wall = g.map.boxes.find((b) => b.id === "kit-school-wall-0-x-0-1-0")!;
   expect(wall).toBeDefined();
   const point = { x: wall.x, y: (wall.baseY ?? 0) + 0.7, z: wall.z - 0.5 };
   const before = groundHeight(point.x, point.z, g.map);

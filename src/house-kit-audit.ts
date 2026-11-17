@@ -8,7 +8,9 @@ export const kitLargeRoomRunLimit = 7.5;
 // Rooms allowed beyond three bays a side; their structure must supply cover.
 export const kitLargeRooms: KitRoomType[] = ["shop", "workroom", "barn"];
 export const kitCoverHeight = 0.8;
-export const kitPartBudget = (stories: number) => stories <= 1 ? 150 : stories === 2 ? 420 : 600;
+// About 7.5 pieces per bay per story, plus fixed extras (piers, porch, chimney).
+export const kitPartBudget = (plan: { bays: { x: number; z: number }; levels: unknown[] }) =>
+  Math.ceil(plan.bays.x * plan.bays.z * plan.levels.length * 7.5 + 40);
 const passive: KitRoomType[] = ["stair", "void"];
 
 export interface KitRoomAudit { level: number; key: string; name: string; type: KitRoomType; strongpoint: boolean;
@@ -20,7 +22,7 @@ export function auditKitRooms(plan: KitPlan): KitRoomAudit[] {
     const cellsOf = new Map<string, [number, number][]>();
     spec.cells.forEach((row, r) => [...row].forEach((key, c) => cellsOf.set(key, [...(cellsOf.get(key) ?? []), [c, r]])));
     const name = (c: number, r: number) => String.fromCharCode(65 + c) + (r + 1);
-    const doors = new Set((spec.doors ?? []).map(([a, b]) => kitEdgeBetween(a, b)));
+    const doors = new Set([...(spec.doors ?? []), ...(spec.wide ?? [])].map(([a, b]) => kitEdgeBetween(a, b)));
     const open = new Set((spec.open ?? []).map(([a, b]) => kitEdgeBetween(a, b)));
     for (const [key, cells] of cellsOf) {
       const room = spec.rooms[key];

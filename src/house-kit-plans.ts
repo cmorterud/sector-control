@@ -376,4 +376,80 @@ export const barn: KitPlan = {
   wings: [{ id: "barn", from: "A1", to: "F4" }],
 };
 
-export const kitPlans = [narrowTownhouse, tenement, manor, cottage, bakery, barn];
+// Capture house: 6 × 5 bays, one story, for a flag building. The flag
+// stands in a 5 × 5 m hall (C1–D2) with doors to the front, both side rooms
+// and a lobby (C3–D3) that leads on to the back. The hall's door to the
+// lobby and the lobby's door to the back are offset, so no line runs
+// through. Variants change only the rooms' names and furniture.
+type Furniture = NonNullable<KitPlan["levels"][number]["furniture"]>;
+const captureHouse = (id: string, name: string, rooms: Record<"W" | "H" | "L" | "E" | "S" | "B" | "K", string>, furniture: Furniture): KitPlan => ({
+  id,
+  name,
+  style: id,
+  bays: { x: 6, z: 5 },
+  paved: ["hall", "kitchen", "store"],
+  levels: [{
+    cells: ["WWHHEE", "WWHHEE", "WWLLEE", "SSBBKK", "SSBBKK"],
+    rooms: {
+      W: { type: "parlour", name: rooms.W }, H: { type: "hall", name: rooms.H }, L: { type: "hall", name: rooms.L }, E: { type: "parlour", name: rooms.E },
+      S: { type: "store", name: rooms.S }, B: { type: "parlour", name: rooms.B }, K: { type: "kitchen", name: rooms.K },
+    },
+    stone: [["A3", "A4"], ["B3", "B4"], ["C3", "C4"], ["D3", "D4"], ["E3", "E4"], ["F3", "F4"]],
+    // The hall doorways sit on offset rows, so no line crosses the house.
+    doors: [["B1", "C1"], ["D2", "E2"], ["C2", "C3"], ["D3", "D4"], ["B3", "B4"], ["E3", "E4"], ["B5", "C5"], ["D5", "E5"]],
+    openings: [
+      { at: "A1", side: "north", kind: "window" }, { at: "C1", side: "north", kind: "double" },
+      { at: "F1", side: "north", kind: "window" },
+      // Each team's approach gets a full-bay door straight into a side room
+      // beside the hall, so a 50-strong side doesn't funnel through back rooms.
+      { at: "A1", side: "west", kind: "window" }, { at: "A2", side: "west", kind: "double" },
+      { at: "F1", side: "east", kind: "window" }, { at: "F2", side: "east", kind: "double" },
+      { at: "A5", side: "west", kind: "door" }, { at: "F4", side: "east", kind: "door" },
+      { at: "C5", side: "south", kind: "door" }, { at: "E5", side: "south", kind: "window" },
+    ],
+    // Cupboards mid-wall in the side rooms and beside the front door break
+    // the long lines past the windows and in from the doorway.
+    furniture: [
+      { at: "A3", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: -0.72 },
+      { at: "F3", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: 0.72 },
+      { at: "D1", feature: "cupboard", w: 1.6, d: 0.6, h: 1.6, dz: -0.72 },
+      // A small table between the east room's two doors breaks the run past them.
+      { at: "E2", feature: "table", w: 0.7, d: 0.7, h: 0.85, dx: 1.05 },
+      ...furniture,
+    ],
+  }],
+  flights: [],
+  chimneys: [{ at: "F5", side: "east" }],
+  wings: [{ id: "west", from: "A1", to: "B5" }, { id: "centre", from: "C1", to: "D5" }, { id: "east", from: "E1", to: "F5" }],
+});
+const kitchenHearth: Furniture = [{ at: "F5", feature: "hearth", w: 0.75, d: 1.6, h: 1.2, dx: 0.6, dz: 0.2 }];
+export const schoolhouse = captureHouse("school", "Schoolhouse",
+  { W: "Classroom", H: "Entrance hall", L: "Cloakroom", E: "Aid post", S: "Store", B: "Teacher's room", K: "Kitchen" }, [
+    { at: "B2", feature: "desk", w: 1.6, d: 0.8, h: 0.8, dx: -0.6 },
+    { at: "E1", feature: "bed", w: 0.9, d: 2, h: 0.7, dx: -0.7 },
+    { at: "C4", feature: "desk", w: 1.6, d: 0.8, h: 0.8, dz: -0.3 },
+    ...kitchenHearth,
+  ]);
+export const farmhouse = captureHouse("farm", "Farmhouse",
+  { W: "Parlour", H: "Farm hall", L: "Boot room", E: "Dairy", S: "Feed store", B: "Back kitchen", K: "Kitchen" }, [
+    { at: "B2", feature: "table", w: 1.8, d: 1, h: 0.85, dx: -0.6 },
+    { at: "E1", feature: "workbench", w: 1.8, d: 0.85, h: 0.9, dx: 0.4, dz: 0.5 },
+    { at: "C4", feature: "table", w: 1.6, d: 0.9, h: 0.85, dz: -0.3 },
+    ...kitchenHearth,
+  ]);
+export const villageInn = captureHouse("inn", "Inn",
+  { W: "Bar", H: "Common room", L: "Passage", E: "Dining room", S: "Cellar store", B: "Back room", K: "Kitchen" }, [
+    { at: "B2", feature: "counter", w: 0.8, d: 2.2, h: 1.05, dx: -0.6 },
+    { at: "E1", feature: "table", w: 1.8, d: 1, h: 0.85, dx: 0.4, dz: 0.5 },
+    { at: "C4", feature: "table", w: 1.6, d: 0.9, h: 0.85, dz: -0.3 },
+    ...kitchenHearth,
+  ]);
+export const townHall = captureHouse("hall", "Town hall",
+  { W: "Post office", H: "Public hall", L: "Corridor", E: "Mayor's office", S: "Archive", B: "Clerk's room", K: "Kitchen" }, [
+    { at: "B2", feature: "counter", w: 0.8, d: 2.2, h: 1.05, dx: -0.6 },
+    { at: "E1", feature: "desk", w: 1.6, d: 0.85, h: 0.9, dx: 0.4, dz: 0.5 },
+    { at: "C4", feature: "desk", w: 1.6, d: 0.8, h: 0.8, dz: -0.3 },
+    ...kitchenHearth,
+  ]);
+
+export const kitPlans = [narrowTownhouse, tenement, manor, cottage, bakery, barn, schoolhouse, farmhouse, villageInn, townHall];
