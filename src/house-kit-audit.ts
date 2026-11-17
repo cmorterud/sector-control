@@ -8,7 +8,7 @@ export const kitLargeRoomRunLimit = 7.5;
 // Rooms allowed beyond three bays a side; their structure must supply cover.
 export const kitLargeRooms: KitRoomType[] = ["shop", "workroom"];
 export const kitCoverHeight = 0.8;
-export const kitPartBudget = (stories: number) => stories <= 1 ? 150 : stories === 2 ? 400 : 600;
+export const kitPartBudget = (stories: number) => stories <= 1 ? 150 : stories === 2 ? 420 : 600;
 const passive: KitRoomType[] = ["stair", "void"];
 
 export interface KitRoomAudit { level: number; key: string; name: string; type: KitRoomType; strongpoint: boolean;

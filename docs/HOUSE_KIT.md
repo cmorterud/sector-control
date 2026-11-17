@@ -11,7 +11,7 @@ Approved design, November 16, 2026.
 
 The damage changes below are also live on every map: smooth artillery falloff, the splash floor on building masonry and the stray-shell radius. Rounds pass through one timber kit partition at half damage, and kit furniture loses 10 HP per round (`src/building-damage.test.ts`).
 
-Still to do: the kit village.
+Village front's manor is now the kit manor (`manor` in `src/house-kit-plans.ts`). It is 15 × 12.5 m instead of 30 × 26, so the centre plot gains side yards with low cover. The other eight village buildings still use the older generator.
 
 Reusable one-, two- and three-story buildings, assembled from shared pieces, replace custom per-map buildings. The goals: destruction that follows clear, predictable rules, no dead space, and no sprinting across large empty rooms. The current Village manor is not a constraint; it will be replaced by a kit building.
 
@@ -106,6 +106,7 @@ Footprints are in bays (width × depth).
 | Narrow townhouse | 3×5 | Shop below, rooms above; stair along the party wall | Designed for terraces; collapses one house at a time |
 | Farmhouse | 5×4 | Central stair hall, kitchen and parlour, bedrooms above | Bay drops make ramps into the hall |
 | Corner shop / café | 4×4 | Corner entrance, flat above, outside stair | Two facades, two routes up |
+| Manor | 6×5 | Entrance hall holding flag C; salon, dining room, library, kitchen and a rear hall around a stone stair core; a ring of rooms upstairs | Three wings; corner piers and the chimney outlast them |
 | Tenement | 4×5 | Shop, flat, mansard garrets; stone stair core | Strips top down; the core stands last |
 | Mill / warehouse | 6×4 | Open timber-post floors, stacked hoist doors | Floors drop one on another |
 | Civic building | 6×5 + 2×2 tower | Mairie or hotel with clock tower | The tower is its own wing |
@@ -118,7 +119,7 @@ Footprints are in bays (width × depth).
 - **Attachments:** porch, balcony, outside stair, lean-to, yard wall with gate, awning.
 - **Furniture sets** for kitchen, parlour, bedroom, shop, classroom, workshop, store and office.
 
-**Part budgets:** one-story ≤ 150, two-story ≤ 400, three-story ≤ 600. The manor is about 880. Estimates: townhouse about 230, tenement about 400–450.
+**Part budgets:** one-story ≤ 150, two-story ≤ 420, three-story ≤ 600. Two-story was 400 before finished ceilings were added to the kit. The manor is about 880. Estimates: townhouse about 230, tenement about 400–450.
 
 ## Plans
 

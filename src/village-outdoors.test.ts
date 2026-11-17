@@ -14,8 +14,10 @@ const props=villageMap.boxes.filter(b=>b.id?.startsWith("village-outdoor-"));
 const scene=()=>new Game(new TestCollision(villageMap),false,6000,1,undefined,{map:villageMap,ambientArtillery:false});
 it("gives nine buildings distinct outdoor rooms and low destructible cover while preserving roads and doorway approaches",()=>{
   expect(villageMap.buildings).toHaveLength(9);expect(villageMap.sectors).toHaveLength(5);
-  expect(villageYards).toHaveLength(10);expect(new Set(villageYards.map(y=>y.name)).size).toBe(10);
-  expect(props.length).toBeGreaterThanOrEqual(40);expect(props.length).toBeLessThanOrEqual(65);
+  // Ten yards, plus the two side yards beside the smaller kit manor.
+  expect(villageYards).toHaveLength(12);expect(new Set(villageYards.map(y=>y.name)).size).toBe(12);
+  // Includes the four side-yard props beside the smaller kit manor.
+  expect(props.length).toBeGreaterThanOrEqual(40);expect(props.length).toBeLessThanOrEqual(70);
   expect(villageMap.boxes.length).toBeLessThan(3000);
   expect(new Set(props.map(b=>b.id)).size).toBe(props.length);
   for(const b of props) {
@@ -26,7 +28,8 @@ it("gives nine buildings distinct outdoor rooms and low destructible cover while
   const trees=villageMap.vegetation!.filter(b=>b.id?.startsWith("tree-village-yard-"));
   expect(trees.length).toBeGreaterThanOrEqual(8);expect(trees.length).toBeLessThanOrEqual(12);
   expect(trees.every(b=>b.h<=4.2&&b.treeStyle==="sparse")).toBe(true);
-  expect(yardPaths(villageMap)).toHaveLength(36);
+  // Four sides of each of the eight older buildings, plus the kit manor's three real doors.
+  expect(yardPaths(villageMap)).toHaveLength(35);
   for(const lane of yardPaths(villageMap)) {
     // This checks the newly added cover, independent of pre-existing garden walls.
     expect(walkSegment(lane.a,lane.b,{...villageMap,boxes:props,vegetation:[]})).toBe(true);
@@ -82,13 +85,13 @@ it("breaches outdoor cover under a direct blast and removes its movement collisi
 
 it("bakes distinct yard surfaces, connects them to the real doors and exposes dirt after excavation",()=>{
   expect(villageYardSurface(industrialMap,0,0)).toEqual({paving:0,gravel:0,garden:0,path:0});
-  expect(villageYardSurface(villageMap,0,-18).paving).toBe(1);
+  expect(villageYardSurface(villageMap,4,-11).paving).toBe(1);
   expect(villageYardSurface(villageMap,6,-33).gravel).toBe(1);
-  expect(villageYardSurface(villageMap,-8,18).garden).toBe(1);
+  expect(villageYardSurface(villageMap,-8,10.5).garden).toBe(1);
   expect(groundField(villageMap,6,-33).grass).toBe(0);
-  expect(groundField(villageMap,-8,18).garden).toBe(1);
-  expect(villageRoad(villageMap,0,-18)).toBe(1);expect(footSurface({x:0,z:-18},villageMap)).toBe("concrete");
-  const g=scene(),before=groundSurfacePixels(g.map,64),at={x:0,z:-18,y:groundHeight(0,-18,g.map)+.02};
+  expect(groundField(villageMap,-8,10.5).garden).toBe(1);
+  expect(villageRoad(villageMap,4,-11)).toBe(1);expect(footSurface({x:4,z:-11},villageMap)).toBe("concrete");
+  const g=scene(),before=groundSurfacePixels(g.map,64),at={x:4,z:-11,y:groundHeight(4,-11,g.map)+.02};
   g.explode(at,-1,null,{...artilleryExplosionProfile,damage:0});
   expect(groundHeight(at.x,at.z,g.map)).toBeLessThan(at.y-.3);
   expect(footSurface(at,g.map)).toBe("mud");

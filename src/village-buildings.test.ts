@@ -14,32 +14,40 @@ it("authors nine distinct standing buildings around four accessible corner flags
     const parts=villageMap.boxes.filter(p=>p.architecture?.building===b.id);
     expect(parts.filter(p=>p.architecture!.part==="roof").length).toBeGreaterThan(10);
     expect(parts.filter(p=>p.architecture!.bearing).length).toBeGreaterThan(10);
-    expect(parts.filter(p=>p.supports).every(p=>p.supports!.length>0),parts.filter(p=>p.supports&&!p.supports.length).map(p=>p.id).join(",")).toBe(true);
+    // Kit floors and roofs may rest only on their neighbours along the joists.
+    const loose=parts.filter(p=>p.supports&&!p.supports.length&&!p.spanSupports?.length);
+    expect(loose.length,loose.map(p=>p.id).join(",")).toBe(0);
   }
   for(const s of villageMap.sectors)expect(bodyBlocked(s.x,s.z,groundHeight(s.x,s.z,villageMap),.6,villageMap)).toBe(false);
 });
-it("keeps downstairs and upstairs support separate and lets a soldier walk up both stairways",()=>{
-  for(const side of [-1,1]) {
-    const g=scene(),p=g.players[0];p.x=side*10.5;p.z=-9.3;p.y=2.4;p.protectedUntil=Infinity;
-    for(let i=0;i<120;i++)g.step({...idle(),z:1});
-    expect(p.z).toBeGreaterThan(6);
-    expect(p.y).toBeCloseTo(5.8);
-    expect(p.fall).toBeNull();
-    for(let i=0;i<30;i++)g.step(idle());
-    expect(p.y).toBeCloseTo(5.8);
-    for(let i=0;i<120;i++)g.step({...idle(),z:-1});
-    expect(p.z).toBeLessThan(-8);
-    expect(p.y).toBeCloseTo(2.42);
-    expect(p.fall).toBeNull();
-    expect(bodyBlocked(p.x,p.z,p.y,.45,g.map)).toBe(false);
+// The kit manor's stone core: two half-flights and a mid landing per story.
+const coreClimb=[{x:-1.25,z:5.2,y:2.42},{x:-1.25,z:4.4,y:2.42},{x:-1.25,z:.3,y:4.1},{x:1.25,z:.3,y:4.1},{x:1.25,z:4.6,y:5.8}];
+const drive=(g:Game,leg:{x:number;z:number;y?:number}[])=>{
+  const soldier=g.players[0];let i=0;
+  for(let tick=0;tick<420&&i<leg.length;tick++) {
+    const next=leg[i],dx=next.x-soldier.x,dz=next.z-soldier.z,length=Math.hypot(dx,dz);
+    if(length<.45 && Math.abs(soldier.y-(next.y??2.4))<.24){i++;continue;}
+    g.step({...idle(),x:dx/Math.max(1,length),z:dz/Math.max(1,length)});
   }
-  expect(supportHeight(0,0,villageMap,2.63)).toBeCloseTo(2.42);
-  expect(supportHeight(0,0,villageMap,6)).toBeCloseTo(5.8);
-  expect(walkSegment({x:0,z:0,y:2.4},{x:0,z:0,y:5.8},villageMap)).toBe(false);
+  return i;
+};
+it("keeps downstairs and upstairs support separate and lets a soldier climb the manor's stair core and back",()=>{
+  const g=scene(),p=g.players[0];Object.assign(p,{...coreClimb[0],protectedUntil:Infinity});
+  expect(drive(g,coreClimb)).toBe(coreClimb.length);
+  expect(p.y).toBeCloseTo(5.8,1);expect(p.fall).toBeNull();
+  for(let i=0;i<30;i++)g.step(idle());
+  expect(p.y).toBeCloseTo(5.8,1);
+  expect(drive(g,[...coreClimb].reverse())).toBe(coreClimb.length);
+  expect(p.y).toBeCloseTo(2.42,1);expect(p.fall).toBeNull();
+  expect(bodyBlocked(p.x,p.z,p.y,.45,g.map)).toBe(false);
+  // The entrance hall and the gallery above it are separate floors.
+  expect(supportHeight(0,-3.75,villageMap,2.63)).toBeCloseTo(2.42);
+  expect(supportHeight(0,-3.75,villageMap,6)).toBeCloseTo(5.8);
+  expect(walkSegment({x:0,z:-3.75,y:2.4},{x:0,z:-3.75,y:5.8},villageMap)).toBe(false);
 });
 it("routes to a genuine upper-floor position through stairs, without a floor teleport",()=>{
   const g=scene();const start={x:0,z:-16,y:groundHeight(0,-16,g.map)};
-  const target={x:0,z:6,y:5.8};
+  const target={x:-1.25,z:-2.6,y:5.8};
   const route=pathfind(start,target,g.map);
   expect(route.length).toBeGreaterThan(3);
   expect(route.some(p=>p.y!==undefined&&p.y>2.5&&p.y<5.5)).toBe(true);
@@ -49,10 +57,11 @@ it("routes to a genuine upper-floor position through stairs, without a floor tel
   expect(down.length).toBeGreaterThan(3);p=target;
   for(const next of down){expect(walkSegment(p,next,g.map),JSON.stringify([p,next])).toBe(true);p={...next,y:next.y??groundHeight(next.x,next.z,g.map)};}
   // Drive the actual soldier through those waypoints, not only graph edges.
+  // The manor's ring of rooms makes this a long walk.
   const soldier=g.players[0];Object.assign(soldier,{...start,protectedUntil:Infinity});
   for(const leg of [route,down]) {
     let i=0;
-    for(let tick=0;tick<420&&i<leg.length;tick++) {
+    for(let tick=0;tick<900&&i<leg.length;tick++) {
       const next=leg[i],dx=next.x-soldier.x,dz=next.z-soldier.z,length=Math.hypot(dx,dz);
       if(length<.45 && Math.abs(soldier.y-(next.y??2.4))<.24){i++;continue;}
       g.step({...idle(),x:dx/Math.max(1,length),z:dz/Math.max(1,length)});
@@ -60,25 +69,27 @@ it("routes to a genuine upper-floor position through stairs, without a floor tel
     expect(i,JSON.stringify({position:{x:soldier.x,z:soldier.z,y:soldier.y},next:leg[i]})).toBe(leg.length);
   }
 });
-it("uses compact household stair pitches with a clear top landing on each side",()=>{
-  for(const side of [-1,1]) {
-    const stairs=villageMap.boxes.filter(b=>b.id?.startsWith("village-manor-stair-"+side+"-"));
-    const run=Math.max(...stairs.map(b=>b.z+b.d/2))-Math.min(...stairs.map(b=>b.z-b.d/2));
-    const slope=Math.atan(3.4/run)*180/Math.PI;
+it("uses compact household stair pitches with a clear landing at the top",()=>{
+  for(const flight of [0,1]) {
+    const treads=villageMap.boxes.filter(b=>b.id?.startsWith("kit-manor-stair-"+flight+"-"));
+    expect(treads).toHaveLength(8);
+    const run=Math.max(...treads.map(b=>b.z+b.d/2))-Math.min(...treads.map(b=>b.z-b.d/2));
+    const slope=Math.atan(1.7/run)*180/Math.PI;
     expect(slope).toBeGreaterThan(30);expect(slope).toBeLessThan(38);
-    const top=stairs.reduce((a,b)=>a.h>b.h?a:b);
-    const z=top.z+top.d/2+.2;
-    expect(supportHeight(top.x,z,villageMap,6,.45)).toBeCloseTo(5.8);
-    expect(bodyBlocked(top.x,z,5.8,.45,villageMap)).toBe(false);
   }
+  // The second flight climbs south onto the upper landing.
+  const top=villageMap.boxes.filter(b=>b.id?.startsWith("kit-manor-stair-1-")).reduce((a,b)=>a.h>b.h?a:b);
+  const z=top.z+top.d/2+.3;
+  expect(supportHeight(top.x,z,villageMap,6,.45)).toBeCloseTo(5.8);
+  expect(bodyBlocked(top.x,z,5.8,.45,villageMap)).toBe(false);
 });
 it("blasts a local floor hole, drops its occupant and preserves neighboring support",()=>{
-  const g=scene(),p=g.players[0];p.x=0;p.z=7.1;p.y=5.8;p.protectedUntil=Infinity;
+  const g=scene(),p=g.players[0];p.x=-1.25;p.z=-2.6;p.y=5.8;p.protectedUntil=Infinity;
   const floor=g.map.boxes.find(b=>b.architecture?.part==="floor" && b.architecture.level===1 && Math.abs(b.x-p.x)<b.w/2 && Math.abs(b.z-p.z)<b.d/2)!;
   expect(floor).toBeDefined();
   g.explode({x:floor.x,y:floor.baseY!-.05,z:floor.z},-1,null,localBlast);
   expect(g.map.destruction!.objects[floor.id!].stage).toBe(2);
-  expect(g.map.boxes.some(b=>b.architecture?.part==="floor")).toBe(true);
+  expect(g.map.boxes.some(b=>b.architecture?.part==="floor"&&b.architecture.level===1&&b.architecture.building==="manor")).toBe(true);
   expect(p.fall).not.toBeNull();
   for(let i=0;i<50;i++)g.step(idle());
   expect(p.y).toBeLessThan(3.2);expect(p.fall).toBeNull();

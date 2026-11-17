@@ -51,7 +51,8 @@ it("gives every village building a finished ceiling and a recognizable room use"
 it("meets adjacent gable faces along a continuous pitched outline inside their collision envelopes",()=>{
   for(const building of villageMap.buildings!)for(const side of [-1,1]) {
     const panels=villageMap.boxes.filter(b=>b.architecture?.building===building.id&&b.architecture.gableSlope!==undefined&&b.z===building.z+side*building.d/2).sort((a,b)=>a.x-b.x);
-    expect(panels.length).toBeGreaterThan(8);
+    // Kit buildings use one gable strip per 2.5 m bay; the older generator two.
+    expect(panels.length).toBeGreaterThanOrEqual(building.kit?6:9);
     const edges=panels.map(b=>{
       const m=architectureGeometry(b,0).find(m=>m.surface==="limewash")!;
       const top=(x:number)=>Math.max(...m.positions.filter((_,i)=>i%3===1&&Math.abs(m.positions[i-1]-x)<.0001));
@@ -67,7 +68,7 @@ it("meets adjacent gable faces along a continuous pitched outline inside their c
 it("keeps capture-building signs and lanterns visible below their porch canopies",()=>{
   for(const building of villageMap.buildings!.filter(b=>b.flag)) {
     const lintel=villageMap.boxes.find(b=>b.architecture?.building===building.id&&b.architecture.sign)!;
-    const porch=villageMap.boxes.find(b=>b.id===`village-${building.id}-porch`)!;
+    const porch=villageMap.boxes.find(b=>b.architecture?.building===building.id&&b.architecture.part==="roof"&&b.id!.endsWith("-porch"))!;
     for(const name of ["painted entrance sign","entrance lantern frame"]) {
       const piece=architecturePieces(lintel,0).find(p=>p.name===name)!;
       expect(piece,building.id).toBeDefined();
@@ -126,9 +127,9 @@ it("uploads detailed shared meshes and materials, then removes every visible pie
   for(const t of r.textures.values())t.destroy();root.destroy();device.destroy();
 });
 
-it("destroys a ceiling when its local roof supports are breached without collapsing the whole manor", () => {
+it("destroys a ceiling when its local roof supports are breached without collapsing the whole school", () => {
   const g=new Game(new TestCollision(villageMap),false,6000,1,undefined,{map:villageMap,ambientArtillery:false});
-  const roof=g.map.boxes.find(b=>b.id==="village-manor-roof-0-0")!;
+  const roof=g.map.boxes.find(b=>b.id==="village-school-roof-0-0")!;
   const ceiling=g.map.boxes.find(b=>b.supports?.[0]===roof.id&&b.architecture?.part==="ceiling")!;
   for(const id of ceiling.supports!) {
     const support=g.map.destruction!.objects[id].original,angle=support.architecture!.roofPitch??0;
@@ -137,7 +138,7 @@ it("destroys a ceiling when its local roof supports are breached without collaps
   }
   expect(g.map.destruction!.objects[roof.id!].stage).toBe(2);
   expect(g.map.destruction!.objects[ceiling.id!].stage).toBe(2);
-  expect(g.map.boxes.some(b=>b.architecture?.building==="manor"&&b.architecture.part==="roof")).toBe(true);
+  expect(g.map.boxes.some(b=>b.architecture?.building==="school"&&b.architecture.part==="roof")).toBe(true);
 });
 
 it("authors shared masonry, roof and furnishing maps with real relief and restrained gloss", () => {
