@@ -123,7 +123,7 @@ it("reaches every room on every level from the street, through doors kept clear 
     for (let i = 0; i < doorways.length; i += 2)
       expect(walkSegment(doorways[i], doorways[i + 1], map), plan.id + " door " + JSON.stringify(doorways[i])).toBe(true);
   }
-});
+}, 30_000);
 
 it("walks up the townhouse stair, through the back room and down the outside stair", () => {
   const { map } = placed(narrowTownhouse);

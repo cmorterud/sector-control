@@ -153,6 +153,8 @@ export interface KitRuntime {
   survivors: string[];
   // Both sides of every door, in pairs, at that door's floor height.
   doorways: Vec[];
+  // Just outside each ground-floor exterior door, for paths to the street.
+  entrances: Vec[];
   // Fallen upper levels per 4 m rubble cell, which sets the rubble height there.
   fallen: Record<string, number[]>;
 }

@@ -10,8 +10,10 @@ export const villageYards:VillageYard[]=[
   {id:"stable",name:"Carriage yard",x:0,z:-34,w:20,d:12,surface:"gravel"},
   {id:"inn",name:"Inn courtyard",x:46,z:-33,w:22,d:10,surface:"paving"},
   {id:"bakery",name:"Baker's working yard",x:-32,z:0,w:9,d:16,surface:"gravel"},
-  {id:"manor-front",name:"Manor forecourt",x:0,z:-18,w:29,d:8,surface:"paving"},
-  {id:"manor-rear",name:"Manor kitchen garden",x:0,z:18,w:28,d:8,surface:"garden"},
+  {id:"manor-front",name:"Manor forecourt",x:0,z:-10.25,w:29,d:8,surface:"paving"},
+  {id:"manor-rear",name:"Manor kitchen garden",x:0,z:10.25,w:28,d:8,surface:"garden"},
+  {id:"manor-west",name:"Manor side garden",x:-13.4,z:0,w:9,d:12.5,surface:"garden"},
+  {id:"manor-east",name:"Manor wood yard",x:13.4,z:0,w:9,d:12.5,surface:"gravel"},
   {id:"smithy",name:"Forge yard",x:32,z:0,w:9,d:16,surface:"gravel"},
   {id:"farm",name:"Farm orchard",x:-46,z:33,w:22,d:10,surface:"garden"},
   {id:"cottage",name:"Vegetable garden",x:0,z:34,w:20,d:11,surface:"garden"},
@@ -45,7 +47,18 @@ export function yardPaths(map:MapDefinition) {
   if(map.id!=="village"||!map.buildings)return [];
   let found=paths.get(map.buildings);if(found)return found;
   found=[];
-  for(const building of map.buildings)for(const side of ["north","south","west","east"] as const) {
+  // Kit buildings know their real doors.
+  for(const building of map.buildings)for(const a of building.kit?.entrances??[]) {
+    let closest:Vec|undefined,best=Infinity;
+    for(const street of map.streets??[])for(let i=1;i<street.points.length;i++) {
+      const p=street.points[i-1],q=street.points[i],dx=q.x-p.x,dz=q.z-p.z;
+      const t=Math.max(0,Math.min(1,((a.x-p.x)*dx+(a.z-p.z)*dz)/(dx*dx+dz*dz||1)));
+      const b={x:p.x+dx*t,z:p.z+dz*t},distance=Math.hypot(a.x-b.x,a.z-b.z);
+      if(distance<best){closest=b;best=distance;}
+    }
+    if(closest)found.push({a,b:closest});
+  }
+  for(const building of map.buildings)if(!building.kit)for(const side of ["north","south","west","east"] as const) {
     const alongX=side==="north"||side==="south",length=alongX?building.w:building.d,count=Math.ceil(length/2.5);
     // Match the real omitted doorway panel, including even-panel offsets.
     const offset=-length/2+(Math.floor(count/2)+.5)*length/count;
@@ -87,9 +100,12 @@ export function addVillageOutdoors(map:MapDefinition) {
     add("school-supply-"+side,"crate",-46+side*7.5,-36,1.4,1,.85);
     add("inn-table-"+side,"worktable",46+side*5.8,-32,1.8,1,.82);
     add("inn-bench-"+side,"bench",46+side*5.8,-30,2.2,.7,.9);
-    add("forecourt-planter-"+side,"planter",side*10.5,-18,2.1,.85,.76);
-    add("manor-garden-bench-"+side,"bench",side*6,19.4,2.2,.7,.92);
-    add("manor-garden-fence-"+side,"fence",side*13,18,.16,3.2,.75);
+    add("forecourt-planter-"+side,"planter",side*10.5,-11,2.1,.85,.76);
+    add("manor-garden-bench-"+side,"bench",side*6,11.8,2.2,.7,.92);
+    add("manor-garden-fence-"+side,"fence",side*13,10.5,.16,3.2,.75);
+    // The smaller manor leaves side yards: low cover that stays below standing fire.
+    add("manor-side-"+side+"-north",side<0?"planter":"timber",side*12.5,-3.2,side<0?2.1:2.2,.85,.8);
+    add("manor-side-"+side+"-south",side<0?"bench":"barrels",side*14,3.4,side<0?2.2:1.7,side<0?.7:1.3,.9);
     add("cottage-bed-"+side,"planter",side*4.5,34,2.3,.9,.65);
     add("hall-bench-"+side,"bench",46+side*6.3,32,2.2,.7,.92);
     add("hall-planter-"+side,"planter",46+side*8.2,29.8,1.5,.85,.7);

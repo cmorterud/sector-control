@@ -66,6 +66,8 @@ export interface KitPlacement {
   variant?: number;
   // Palette for architecture-geometry.ts; defaults to the plan id's palette.
   style?: string;
+  // A porch canopy and painted name over one ground-floor exterior door.
+  entrance?: { at: KitCell; side: KitSide; sign?: string; porch?: boolean };
   // Omit this plan side's party wall and rest on a neighbour's instead.
   borrow?: { side: KitSide; edges: KitSharedEdges; owner: string };
 }
@@ -135,7 +137,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
     return b;
   };
   const cellCenter = (col: number, row: number) => ({ u: -W / 2 + (col + 0.5) * kitBay, v: -D / 2 + (row + 0.5) * kitBay });
-  const runtime: KitRuntime = { plan: plan.id, parts: [], wings: [], routes: [[]], floors: [[]], survivors: [], doorways: [], fallen: {} };
+  const runtime: KitRuntime = { plan: plan.id, parts: [], wings: [], routes: [[]], floors: [[]], survivors: [], doorways: [], entrances: [], fallen: {} };
   const routeGroups: Map<string, string[]>[] = [];
   const routeOf = (level: number, name = "main") => {
     const groups = (routeGroups[level + 1] ??= new Map());
@@ -278,6 +280,8 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         if (e.opening === "window") set.bottom.push(piece("sill", -kitOpening / 2, kitOpening / 2, 0, 1, 0, exteriorOpening ? { opening: "window" } : {}));
         set.top.push(piece("2", -kitBay / 2, kitBay / 2, 2.25, kitStory, 2, opening));
       }
+      if (level === 0 && at.entrance?.sign && e.key === kitExteriorEdge(at.entrance.at, at.entrance.side))
+        parts.find((p) => p.id === set.top[0])!.architecture!.sign = at.entrance.sign;
       if (e.opening === "door" || e.opening === "double") {
         const [nu, nv] = e.axis === "x" ? [0, 1] : [1, 0];
         for (const n of [-1, 0, 1]) {
@@ -287,6 +291,10 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         }
       }
       if (e.material === "party" && e.exterior) (party[e.exterior] ??= {})[level + ":" + e.index] = set;
+      if (level === 0 && e.exterior && (e.opening === "door" || e.opening === "double")) {
+        const [nu, nv] = side(e.exterior);
+        runtime.entrances.push({ ...world(centre.u + nu * 0.7, centre.v + nv * 0.7) });
+      }
     }
     // Rows stand on the row below in their own bay or a neighbouring one.
     const neighbours = (e: Edge, row: "bottom" | "middle") => [-1, 0, 1].flatMap((n) => pieces.get(edgeKey(e.axis, e.line, e.index + n))?.[row] ?? []);
@@ -385,7 +393,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
   const mansardTop = !!plan.mansard;
   const gables: Box[] = [];
   for (const s of [-1, 1]) {
-    const count = nx * 2, w = worldW / count;
+    const count = nx, w = worldW / count;
     for (let i = 0; i < count; i++) {
       const x = -worldW / 2 + (i + 0.5) * w, slope = -Math.sign(x) * Math.tan(kitRoofPitch);
       const h = Math.tan(kitRoofPitch) * (worldW / 2 - Math.abs(x)) + Math.abs(slope) * w / 2 + 0.2;
@@ -411,6 +419,26 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
   for (const [key, roof] of roofs) {
     const [ix, iz] = key.split(",").map(Number);
     roof.spanSupports = [roofs.get(ix - 1 + "," + iz), roofs.get(ix + 1 + "," + iz)].filter((r): r is Box => !!r).map((r) => r.id!);
+  }
+  // Finished ceilings close the top rooms; each hangs from the two roof
+  // panels above it and falls once both are gone.
+  for (let ix = 0; ix < nx; ix++) for (let iz = 0; iz < nz; iz += 2) {
+    const span = Math.min(2, nz - iz), x = -worldW / 2 + (ix + 0.5) * pw, z = -worldD / 2 + (iz + span / 2) * pd;
+    const ceiling: Box = { id: pieceId("ceiling-" + ix + "-" + iz), x: at.x + x, z: at.z + z, w: pw, d: pd * span, h: 0.1,
+      baseY: base + top - 0.18, kind: "wood", maxHp: 40, landmark: at.flag,
+      architecture: { building: at.id, part: "ceiling", level: levels - 1, tint, style } };
+    ceiling.supports = Array.from({ length: span }, (_, i) => roofs.get(ix + "," + (iz + i))!.id!);
+    parts.push(ceiling);
+  }
+  // An entrance porch: two stone columns carrying a timber canopy.
+  if (at.entrance?.porch) {
+    const { col, row } = parseCell(at.entrance.at), c = cellCenter(col, row), [du, dv] = side(at.entrance.side);
+    const face = { u: c.u + du * kitBay / 2, v: c.v + dv * kitBay / 2 }, across = du ? [0, 1] : [1, 0];
+    const columns = [-1.9, 1.9].map((t, i) => add("porch-column-" + i, face.u + du * 1.3 + across[0] * t, face.v + dv * 1.3 + across[1] * t,
+      0.65, 0.65, 0, 2.7, "detail", 0, "masonry", 180));
+    const canopy = add("porch", face.u + du * 1.1, face.v + dv * 1.1, du ? 2.6 : 4.6, du ? 4.6 : 2.6, 2.7, 0.2, "roof", 0, "wood", 50);
+    canopy.supports = columns.map((p) => p.id!);
+    canopy.architecture!.tint = "#6b6558";
   }
   // Wings: any piece within or on the edge of a wing's bays.
   for (const wing of plan.wings) {
@@ -459,9 +487,12 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
   runtime.parts = parts.map((p) => p.id!);
   for (const [u, v] of [[-1, 0], [1, 0], [0, -1], [0, 1]])
     navigation.push({ ...world(u * (W / 2 + 1.8), v * (D / 2 + 1.8)) });
-  (map.buildings ??= []).push(building);
+  // A map may already list this building for its flags and landmarks.
+  const existing = map.buildings?.find((b) => b.id === at.id);
+  if (existing) Object.assign(existing, building);
+  else (map.buildings ??= []).push(building);
   map.boxes.push(...parts);
-  return { parts, building, party };
+  return { parts, building: existing ?? building, party };
 }
 
 // A borrowed party wall's top pieces at this cell carry the floor above it.

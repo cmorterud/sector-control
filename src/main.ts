@@ -763,7 +763,7 @@ try {
     combat:combatReview,
     survey:(firstPerson:boolean,detail?:string)=>{
       const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
-      const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-7,-4,-12,-10]};
+      const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-3.3,-2.4,-6.8,-5.6]};
       if(detail && (map.id!=="village"||!villageDetails[detail]))throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=detail?villageDetails[detail]:poses[map.id],p=game.players[0];
       let at={x,z};

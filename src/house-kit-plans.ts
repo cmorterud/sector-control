@@ -185,4 +185,102 @@ export const tenement: KitPlan = {
   ],
 };
 
-export const kitPlans = [narrowTownhouse, tenement];
+// Manor: 6 × 5 bays, two stories, for a capture building. Flag C sits in
+// the entrance hall (C1–D2). A stone stair core behind it (C3–D4) opens onto
+// a rear hall, so the hall has no straight shot through to the back. Upstairs
+// the rooms form a ring around the stairwell.
+const manorSpine: [string, string][] = [["A2", "A3"], ["B2", "B3"], ["C2", "C3"], ["D2", "D3"], ["E2", "E3"], ["F2", "F3"]];
+const manorCore: [string, string][] = [["B3", "C3"], ["B4", "C4"], ["D3", "E3"], ["D4", "E4"]];
+export const manor: KitPlan = {
+  id: "manor",
+  name: "Manor",
+  style: "manor",
+  bays: { x: 6, z: 5 },
+  paved: ["hall"],
+  levels: [
+    {
+      cells: ["PPhhDD", "PPhhDD", "LLmmKK", "LLabKK", "LLrrKK"],
+      rooms: {
+        P: { type: "parlour", name: "Salon" },
+        h: { type: "hall", name: "Entrance hall" },
+        D: { type: "parlour", name: "Dining room" },
+        L: { type: "parlour", name: "Library" },
+        K: { type: "kitchen", name: "Kitchen" },
+        r: { type: "hall", name: "Rear hall" },
+        m: { type: "stair", name: "Mid landing" },
+        a: { type: "stair", name: "Stair" },
+        b: { type: "stair", name: "Stair" },
+      },
+      stone: [...manorSpine, ...manorCore, ["C4", "D4"]],
+      open: [["C3", "C4"], ["D3", "D4"], ["C4", "C5"], ["D4", "D5"]],
+      doors: [["B2", "C2"], ["D1", "E1"], ["A2", "A3"], ["F2", "F3"], ["B5", "C5"], ["D5", "E5"]],
+      openings: [
+        { at: "A1", side: "north", kind: "window" }, { at: "B1", side: "north", kind: "window" },
+        { at: "C1", side: "north", kind: "double" }, { at: "D1", side: "north", kind: "window" },
+        { at: "E1", side: "north", kind: "window" }, { at: "F1", side: "north", kind: "window" },
+        { at: "A2", side: "west", kind: "window" }, { at: "A4", side: "west", kind: "window" },
+        { at: "F2", side: "east", kind: "window" }, { at: "F4", side: "east", kind: "door" },
+        { at: "A5", side: "south", kind: "window" }, { at: "C5", side: "south", kind: "door" },
+        { at: "D5", side: "south", kind: "window" }, { at: "F5", side: "south", kind: "window" },
+      ],
+      furniture: [
+        { at: "B2", feature: "table", w: 1.8, d: 1, h: 0.85, dx: -1.25, dz: -1.25 },
+        { at: "A1", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: -0.72, dz: 0.3 },
+        { at: "F2", feature: "table", w: 1.8, d: 1, h: 0.85, dx: -1.25, dz: -1.25 },
+        { at: "F1", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: 0.72, dz: 0.3 },
+        { at: "B3", feature: "bookcase", w: 1.8, d: 0.6, h: 2, dz: -0.72 },
+        { at: "A5", feature: "bookcase", w: 1.8, d: 0.6, h: 2, dz: 0.72 },
+        { at: "B4", feature: "desk", w: 1.6, d: 0.85, h: 0.9, dx: -0.6 },
+        { at: "E4", feature: "table", w: 1.8, d: 1, h: 0.85 },
+        { at: "F5", feature: "hearth", w: 0.75, d: 1.6, h: 1.2, dx: 0.6, dz: -0.2 },
+      ],
+    },
+    {
+      cells: ["BBGGRR", "BBGGRR", "WWvvEE", "WWvvEE", "WWllEE"],
+      rooms: {
+        B: { type: "bedroom", name: "West bedroom" },
+        G: { type: "parlour", name: "Gallery" },
+        R: { type: "bedroom", name: "East bedroom" },
+        W: { type: "bedroom", name: "West room" },
+        E: { type: "parlour", name: "Study" },
+        v: { type: "void", name: "Stairwell" },
+        l: { type: "landing", name: "Landing" },
+      },
+      stone: [...manorSpine, ...manorCore],
+      open: [["D4", "D5"]],
+      doors: [["B2", "C2"], ["D2", "E2"], ["A2", "A3"], ["F2", "F3"], ["B5", "C5"], ["D5", "E5"]],
+      openings: [
+        { at: "A1", side: "north", kind: "window" }, { at: "B1", side: "north", kind: "window" },
+        { at: "C1", side: "north", kind: "window" }, { at: "D1", side: "north", kind: "window" },
+        { at: "E1", side: "north", kind: "window" }, { at: "F1", side: "north", kind: "window" },
+        { at: "A2", side: "west", kind: "window" }, { at: "A4", side: "west", kind: "window" },
+        { at: "F2", side: "east", kind: "window" }, { at: "F4", side: "east", kind: "window" },
+        { at: "A5", side: "south", kind: "window" }, { at: "C5", side: "south", kind: "window" },
+        { at: "F5", side: "south", kind: "window" },
+      ],
+      furniture: [
+        { at: "A1", feature: "bed", w: 1.8, d: 2.3, h: 0.85, dx: -0.12, dz: 0.6 },
+        { at: "F1", feature: "bed", w: 1.8, d: 2.3, h: 0.85, dx: 0.12, dz: 0.6 },
+        { at: "D1", feature: "desk", w: 1.6, d: 0.85, h: 0.9, dx: -1.25, dz: 0.1 },
+        { at: "B4", feature: "bed", w: 1.8, d: 2.3, h: 0.85, dx: -0.35 },
+        { at: "A4", feature: "cupboard", w: 0.6, d: 1.6, h: 1.6, dx: -0.72 },
+        { at: "F4", feature: "desk", w: 1.6, d: 0.85, h: 0.9, dx: -0.4 },
+        { at: "E3", feature: "bookcase", w: 1.8, d: 0.6, h: 2, dz: -0.72 },
+      ],
+    },
+  ],
+  flights: [
+    { at: "C4", level: 0, climb: "north", steps: 8, from: 0, solid: true },
+    { at: "D4", level: 0, climb: "south", steps: 8, from: 1.7, solid: true },
+  ],
+  landings: [{ cells: ["C3", "D3"], level: 0, height: 1.7, solid: true }],
+  // One stack, in the kitchen's back corner, clear of every door approach.
+  chimneys: [{ at: "F5", side: "east" }],
+  wings: [
+    { id: "west", from: "A1", to: "B5" },
+    { id: "centre", from: "C1", to: "D5" },
+    { id: "east", from: "E1", to: "F5" },
+  ],
+};
+
+export const kitPlans = [narrowTownhouse, tenement, manor];

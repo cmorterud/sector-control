@@ -3,6 +3,8 @@ import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
 import { buildVillageBuilding, type VillageBuilding } from "./village-buildings";
 import { addVillageOutdoors } from "./village-outdoors";
+import { buildKitHouse } from "./house-kit";
+import { manor } from "./house-kit-plans";
 
 const width=180,depth=160,bankHeight=2.4;
 const heights=new Float32Array(width*depth).fill(bankHeight);
@@ -39,7 +41,8 @@ const buildings=[
   building("stable","Carriage stable",0,-48,16,14),
   building("inn","Village inn",46,-48,22,18,"D"),
   building("bakery","Bakery and workshop",-46,0,16,16),
-  building("manor","Saint-Martin Manor",0,0,30,26,"C",2),
+  // Built from the house kit (docs/HOUSE_KIT.md), rather than the old generator.
+  building("manor","Saint-Martin Manor",0,0,15,12.5,"C",2),
   building("smithy","Smithy and storehouse",46,0,18,14),
   building("farm","Orchard farmhouse",-46,48,20,18,"B"),
   building("cottage","Groundskeeper's cottage",0,48,14,14),
@@ -55,7 +58,8 @@ export const villageMap:MapDefinition={
   id:"village",name:"Village front",width,depth,navSpacing:4,navigationPoints:[],buildings,streets,
   scoring:"domination",spawn:{blue:{x:-81,z:0},red:{x:81,z:0}},
   sectors:buildings.filter(b=>b.flag).sort((a,b)=>a.flag!.localeCompare(b.flag!)).map(b=>({
-    id:b.flag!,name:b.name,x:b.x,z:b.z-2,...(b.x===0?{}:{home:b.x<0?"blue" as const:"red" as const})})),
+    // The kit manor's flag stands in the middle of its entrance hall.
+    id:b.flag!,name:b.name,x:b.x,z:b.z-(b.id==="manor"?3.75:2),...(b.x===0?{}:{home:b.x<0?"blue" as const:"red" as const})})),
   landmarks:buildings.map(b=>({id:b.flag??b.id,name:b.name,kind:"farmhouse" as const,x:b.x,z:b.z,radius:Math.max(b.w,b.d)/2})),
   boxes,vegetation,
   terrain:{columns:width,rows:depth,cellSize:1,heights,bankHeight,rectangles,ramps,trenchLines,communicationRoutes,
@@ -69,7 +73,9 @@ export const villageMap:MapDefinition={
 villageMap.terrain!.banks=buildTrenchBanks(villageMap);
 villageMap.terrain!.elevation=buildTrenchElevation({...villageMap,boxes:buildings.map(b=>({x:b.x,z:b.z,w:b.w+2,d:b.d+2,h:1,kind:"building"}))});
 villageMap.terrain!.relief=buildTrenchRelief(villageMap,villageMap.terrain!.shellScars!);
-buildings.forEach((b,i)=>buildVillageBuilding(villageMap,b,i));
+buildings.forEach((b,i)=>{if(b.id!=="manor")buildVillageBuilding(villageMap,b,i);});
+buildKitHouse(villageMap,manor,{id:"manor",name:"Saint-Martin Manor",x:0,z:0,baseY:bankHeight,flag:"C",variant:4,
+  entrance:{at:"C1",side:"north",sign:"ST MARTIN",porch:true}});
 const add=(id:string,x:number,z:number,w:number,d:number,h:number,kind:Box["kind"]="masonry")=>{
   const b:Box={id:"village-"+id,x,z,w,d,h,kind,baseY:groundHeight(x,z,villageMap)};boxes.push(b);return b;
 };

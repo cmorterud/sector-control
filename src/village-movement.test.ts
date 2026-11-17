@@ -1,16 +1,18 @@
 import {expect,it} from "vitest";
 import {Game,TestCollision,idle} from "./simulation";
 import {villageMap} from "./village-map";
+import {trainingMap} from "./training-map";
 import {bodyBlocked,supportHeight} from "./map";
 import {artilleryExplosionProfile} from "./destruction";
-const scene=()=>new Game(new TestCollision(villageMap),false,6000,12345,undefined,{map:villageMap,ambientArtillery:false});
+// The training map's demolition house keeps the older generator's long straight flights.
+const scene=()=>new Game(new TestCollision(trainingMap),false,6000,12345,undefined,{map:trainingMap,ambientArtillery:false});
 it("falls across broken stair treads without snapping to the floor or entering a surviving stair",()=>{
  const g=scene(),p=g.players[0];
- const tread=g.map.boxes.find(b=>b.id==="village-manor-stair-1-9")!;
+ const tread=g.map.boxes.find(b=>b.id==="village-demolition-house-stair-1-9")!;
  g.explode({x:tread.x-tread.w/2-.1,y:tread.baseY!+tread.h-.1,z:tread.z},-1,null,
   {...artilleryExplosionProfile,damage:0,structuralRadius:.4,structuralDamage:2000,craterRadius:0,craterDepth:0,terrainReach:0});
  expect(g.map.boxes.some(b=>b.id===tread.id)).toBe(false);
- const standing=g.map.boxes.find(b=>b.id==="village-manor-stair-1-12")!;
+ const standing=g.map.boxes.find(b=>b.id==="village-demolition-house-stair-1-12")!;
  Object.assign(p,{x:standing.x,z:standing.z,y:supportHeight(standing.x,standing.z,g.map,standing.baseY!+standing.h+.23,.45),vx:0,vz:0,protectedUntil:Infinity});
  let fell=false,maxDrop=0;
  for(let i=0;i<85;i++) {
@@ -18,18 +20,18 @@ it("falls across broken stair treads without snapping to the floor or entering a
   fell ||= !!p.fall;
  }
  expect(fell).toBe(true);expect(maxDrop).toBeLessThan(.36);
- expect(p.y).toBeLessThan(3);expect(bodyBlocked(p.x,p.z,p.y,.4,g.map)).toBe(false);
+ expect(p.y).toBeLessThan(.6);expect(bodyBlocked(p.x,p.z,p.y,.4,g.map)).toBe(false);
  const oldX=p.x;
  for(let i=0;i<20;i++)g.step({...idle(),x:1});
  expect(p.x).toBeGreaterThan(oldX+1);
 });
 it("keeps a hop airborne over a damaged staircase and leaves a traversable landing",()=>{
  const g=scene(),p=g.players[0];
- const tread=g.map.boxes.find(b=>b.id==="village-manor-stair-1-9")!;
+ const tread=g.map.boxes.find(b=>b.id==="village-demolition-house-stair-1-9")!;
  g.explode({x:tread.x-tread.w/2-.1,y:tread.baseY!+tread.h-.1,z:tread.z},-1,null,
   {...artilleryExplosionProfile,damage:0,structuralRadius:.4,structuralDamage:2000,craterRadius:0,craterDepth:0,terrainReach:0});
  expect(g.map.boxes.some(b=>b.id===tread.id)).toBe(false);
- const standing=g.map.boxes.find(b=>b.id==="village-manor-stair-1-6")!;
+ const standing=g.map.boxes.find(b=>b.id==="village-demolition-house-stair-1-6")!;
  Object.assign(p,{x:standing.x,z:standing.z,y:supportHeight(standing.x,standing.z,g.map,standing.baseY!+standing.h+.23,.45),vx:0,vz:0,protectedUntil:Infinity});
  g.step({...idle(),x:1,mantle:true});
  let maxDrop=0;
