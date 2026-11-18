@@ -9,6 +9,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 ## Features
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
+- **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
 - **Six maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, the coastal Lighthouse point, and a guided training camp.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Furnished village interiors.** Limewashed walls, shutters, lanterns, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Dining chairs and tableware add domestic detail. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
@@ -75,7 +76,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=headland` or `?map=training` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots and `?duration=30` shortens the match to thirty seconds.
+Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=headland` or `?map=training` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots, `?difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty and `?duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 
@@ -111,7 +112,7 @@ The `docs/` folder holds the project's working notes. They were written during d
 - [VILLAGE_IMMERSION_FOLLOWUP.md](docs/VILLAGE_IMMERSION_FOLLOWUP.md): facade materials, rooflines, close inspection views and additional roadside cover.
 - [COMBAT_FEEDBACK.md](docs/COMBAT_FEEDBACK.md): hit directions, death reports, the brief killer view, map markers and assist rules.
 - [HOUSE_KIT.md](docs/HOUSE_KIT.md): approved design for reusable one-, two- and three-story destructible buildings, with floor plans.
-- [AI_PROPOSAL.md](docs/AI_PROPOSAL.md): proposal for squad-based, building-aware bot AI, in phases, with how each would be measured.
+- [AI_PROPOSAL.md](docs/AI_PROPOSAL.md): squad-based, building-aware bot AI: the proposal, what was built and the before-and-after audit.
 
 ## Status
 

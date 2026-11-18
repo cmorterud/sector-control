@@ -155,6 +155,9 @@ export interface KitRuntime {
   doorways: Vec[];
   // Just outside each ground-floor exterior door, for paths to the street.
   entrances: Vec[];
+  // A firing post a pace inside each facade window, with the yaw that looks
+  // out through it. Upper-floor posts carry their floor height.
+  windows: (Vec & { yaw: number; level: number })[];
   // Fallen upper levels per 4 m rubble cell, which sets the rubble height there.
   fallen: Record<string, number[]>;
 }

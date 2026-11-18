@@ -13,6 +13,7 @@ import {
   planVillageMove,
   villageSpawn,
   villageSteering,
+  villageCover,
   usesVillageTactics,
   type VillagePlan,
 } from "./village-tactics";
@@ -96,6 +97,11 @@ import {
 } from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
+import {
+  advanceTactics, audible, checkCorners, collapseEscape, createTactics, dangerCost, formUp, grenadeCommand, heard, listen,
+  observeTactics, overwatchHold, reloadCallout, reportContact, squadContact, squadObjective, stackAtDoor,
+  suppressiveFire, squadFeatures, threatScore, type CalloutLine, type Tactics,
+} from "./squads";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
@@ -124,6 +130,8 @@ export interface Command {
   loadout?: Loadout;
   interact?: boolean;
   redeploy?: boolean;
+  // Bots only: launch speed for a planned short or lobbed frag.
+  throwSpeed?: number;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -432,6 +440,45 @@ export interface BotSettings {
   focusMaxTicks: number;
   distractionMinTicks: number;
   distractionMaxTicks: number;
+  difficulty: Difficulty;
+  // Squads, the commander and the other squad tactics; false keeps every
+  // bot deciding alone, as before squads existed.
+  squads: boolean;
+  // Minimum gap between frag throws by one squad.
+  grenadeGapTicks: number;
+  // How long a squad remembers where a member last saw an enemy.
+  squadMemoryTicks: number;
+  overwatch: boolean;
+  hearingRange: number;
+}
+export type Difficulty = "recruit" | "regular" | "veteran";
+// Profiles scale the map's own settings: reaction time and aim error are
+// multiplied, the rest replace the defaults.
+export const difficultyProfiles: Record<Difficulty, {
+  reaction: number; aim: number; grenadeGapTicks: number; squadMemoryTicks: number; overwatch: boolean; hearingRange: number;
+}> = {
+  recruit: { reaction: 1.35, aim: 1.35, grenadeGapTicks: 600, squadMemoryTicks: 75, overwatch: false, hearingRange: 10 },
+  regular: { reaction: 1, aim: 1, grenadeGapTicks: 240, squadMemoryTicks: 150, overwatch: true, hearingRange: 15 },
+  veteran: { reaction: 0.75, aim: 0.8, grenadeGapTicks: 150, squadMemoryTicks: 240, overwatch: true, hearingRange: 20 },
+};
+export const difficulties = Object.keys(difficultyProfiles) as Difficulty[];
+export function botSettingsFor(map: MapDefinition, difficulty: Difficulty = "regular"): BotSettings {
+  const base = {
+    ...defaultBotSettings,
+    ...(map.terrain?.firingPositions ? { engagementRange: 59, aimError: 0.06 } : {}),
+  };
+  const profile = difficultyProfiles[difficulty] ?? difficultyProfiles.regular;
+  return {
+    ...base,
+    difficulty,
+    reactionTicks: Math.round(base.reactionTicks * profile.reaction),
+    reactionJitterTicks: Math.round(base.reactionJitterTicks * profile.reaction),
+    aimError: base.aimError * profile.aim,
+    grenadeGapTicks: profile.grenadeGapTicks,
+    squadMemoryTicks: profile.squadMemoryTicks,
+    overwatch: profile.overwatch,
+    hearingRange: profile.hearingRange,
+  };
 }
 export const defaultBotSettings: BotSettings = {
   awareness: true,
@@ -445,6 +492,12 @@ export const defaultBotSettings: BotSettings = {
   focusMaxTicks: 120,
   distractionMinTicks: 24,
   distractionMaxTicks: 54,
+  difficulty: "regular",
+  squads: true,
+  grenadeGapTicks: 240,
+  squadMemoryTicks: 150,
+  overwatch: true,
+  hearingRange: 15,
 };
 export type Event = { id: number; tick: number } & (
   | {
@@ -608,6 +661,7 @@ export type Event = { id: number; tick: number } & (
       held?: Record<Team, number>;
     }
   | { type: "end"; winner: Team | "draw" }
+  | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
 );
 type EventInput = Event extends infer E
   ? E extends Event
@@ -855,6 +909,9 @@ export class Game {
   events: Event[] = [];
   sequence = 0;
   seed: number;
+  // Squads, the commander, shared contacts and the danger map; absent
+  // without bots or with squads turned off.
+  tactics?: Tactics;
   constructor(
     public collision: CollisionWorld,
     public bots = true,
@@ -884,10 +941,7 @@ export class Game {
     this.scoreLimit =
       this.scoring === "domination" && this.map.id !== "training" ? dominationRules.scoreLimit : null;
     this.botSettings = {
-      ...defaultBotSettings,
-      ...(this.map.terrain?.firingPositions
-        ? { engagementRange: 59, aimError: 0.06 }
-        : {}),
+      ...botSettingsFor(this.map, botSettings?.difficulty),
       ...botSettings,
     };
     this.teamSize = bots ? resolveTeamSize(this.map, options.teamSize) : 1;
@@ -979,6 +1033,7 @@ export class Game {
       });
       this.respawn(this.players[i]);
     }
+    this.tactics = createTactics(this);
   }
   random() {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0;
@@ -1010,6 +1065,7 @@ export class Game {
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
+      tactics: this.tactics,
       world: this.map.destruction,
     });
   }
@@ -1116,6 +1172,7 @@ export class Game {
     return true;
   }
   step(human: Command) {
+    observeTactics(this, this.events);
     this.events = [];
     if (this.phase !== "playing") return;
     this.tick++;
@@ -1129,6 +1186,7 @@ export class Game {
       return false;
     });
     advanceAssaults(this);
+    advanceTactics(this);
     for (const p of this.players) {
       if (p.hp <= 0) {
         if (this.tick >= p.respawnAt) {
@@ -1206,7 +1264,7 @@ export class Game {
           p.throwUntil = this.tick + 21;
           p.nextGrenade = this.tick + 30;
           p.protectedUntil = 0;
-        } else this.throwGrenade(p, !!c.smoke);
+        } else this.throwGrenade(p, !!c.smoke, c.throwSpeed);
       }
       if (
         c.mantle &&
@@ -1839,12 +1897,13 @@ export class Game {
       );
     return fraction;
   }
-  private throwGrenade(p: Soldier, smoke = false) {
-    const speed = smoke ? 13 : grenadeSpeed;
+  private throwGrenade(p: Soldier, smoke = false, botSpeed?: number) {
+    const speed = smoke ? 13 : botSpeed && !this.humanPlayerIds.includes(p.id) ? clamp(botSpeed, 4, grenadeSpeed) : grenadeSpeed;
     const human = this.humanPlayerIds.includes(p.id);
+    // A planned bot frag may skim low through a doorway.
     const elevation = human
       ? clamp(p.pitch + 0.1, -1.1, 1.25)
-      : clamp(p.pitch + 0.65, 0.15, 1.25);
+      : clamp(p.pitch + 0.65, botSpeed && !smoke ? 0.05 : 0.15, 1.25);
     // Timber can extend slightly beyond the height-field bank. Find clearance
     // within the soldier's footprint before releasing; never start inside it.
     const origin = {
@@ -2317,6 +2376,8 @@ export function pathfind(
   b: Vec,
   map: MapDefinition = industrialMap,
   deferred = false,
+  // Optional extra cost per edge, never negative, such as a danger map.
+  extra?: (a: Vec, b: Vec) => number,
 ): Vec[] {
   if (walkSegment(a, b, map)) return [{ ...b }];
   const available = deferred ? navigation.get(map) ?? ((map.destruction?.revision ?? 0) ? undefined : graph(map)) : graph(map);
@@ -2367,7 +2428,7 @@ export function pathfind(
     }
     open.delete(u);
     for (const v of edges[u]) {
-      const next = cost.get(u)! + dist(nodes[u], nodes[v]);
+      const next = cost.get(u)! + dist(nodes[u], nodes[v]) + (extra ? extra(nodes[u], nodes[v]) : 0);
       if (next < (cost.get(v) ?? Infinity)) {
         came.set(v, u);
         cost.set(v, next);
@@ -2459,6 +2520,8 @@ export function botCommand(g: Game, p: Soldier): Command {
 function chooseBotCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
   if (evasion) return evasion;
+  const escape = collapseEscape(g, p);
+  if (escape) return escape;
   const coverReaction = reactionCoverCommand(g, p);
   if (coverReaction) return coverReaction;
   const duck = suppressionCommand(g, p);
@@ -2473,8 +2536,14 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   const station = firingPosition(g, p);
   if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;
+    const ordered = station ? undefined : squadObjective(g, p);
     if (station) p.path = pathfind(p, station, g.map, true);
-    else {
+    else if (ordered !== undefined) {
+      p.objective = ordered;
+      if (usesVillageTactics(g.map))
+        planVillageMove(g, p, (a, b) => pathfind(a, b, g.map, true, dangerCost(g, p.team)));
+      else p.path = pathfind(p, g.sectors[p.objective], g.map, true, dangerCost(g, p.team));
+    } else {
       const ranks = g.sectors.map((s, i) => ({
         i,
         weight:
@@ -2490,8 +2559,8 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       const current = ranks.find((rank) => rank.i === p.objective)!;
       if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
       if (usesVillageTactics(g.map))
-        planVillageMove(g, p, (a, b) => pathfind(a, b, g.map, true));
-      else p.path = pathfind(p, g.sectors[p.objective], g.map, true);
+        planVillageMove(g, p, (a, b) => pathfind(a, b, g.map, true, dangerCost(g, p.team)));
+      else p.path = pathfind(p, g.sectors[p.objective], g.map, true, dangerCost(g, p.team));
     }
   }
   const range = Math.min(projectileRange - 1, g.botSettings.engagementRange);
@@ -2530,7 +2599,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     const visible = (q: Soldier) =>
       q.team !== p.team &&
       q.hp > 0 &&
-      canNotice(g, p, q) &&
+      (canNotice(g, p, q) || (!!g.tactics && audible(g, p, q))) &&
       dist(q, p) < range &&
       !smokeBlocks(
         g,
@@ -2542,18 +2611,18 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
         { x: q.x, y: q.y + exposedAimHeight(g.map, q), z: q.z },
       ) > 0.99;
     const existing = g.players.find((q) => q.id === p.target);
-    const target =
-      existing && visible(existing)
-        ? existing
-        : g.players
-            .filter((q) => q.team !== p.team && q.hp > 0 && dist(q, p) < range)
-            .sort((a, b) => dist(a, p) - dist(b, p))
-            .slice(0, 6)
-            .find(visible);
+    const candidates = g.players.filter((q) => q.team !== p.team && q.hp > 0 && dist(q, p) < range);
+    // With squad tactics, the most dangerous visible enemy among the nearest
+    // few comes first; otherwise the nearest.
+    const near = candidates.sort((a, b) => dist(a, p) - dist(b, p)).slice(0, 6);
+    if (g.tactics) near.sort((a, b) => threatScore(g, p, a) - threatScore(g, p, b));
+    const target = existing && visible(existing) ? existing : near.find(visible);
     if ((target?.id ?? -1) !== p.target)
       changeBotTarget(g, p, target?.id ?? -1);
-    if (target)
+    if (target) {
       observeTarget(g, p, target, target.y + exposedAimHeight(g.map, target));
+      reportContact(g, p, target);
+    } else listen(g, p);
   }
   let target = g.players.find((q) => q.id === p.target && q.hp > 0);
   if (target && p.focusUntil === 0 && g.botSettings.focusMaxTicks > 0)
@@ -2608,6 +2677,8 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     c.z = (dest.z - p.z) / Math.max(0.1, d);
     c.sprint = !target;
     p.mode = "Navigate";
+    if (g.tactics && !formUp(g, p, c) && !stackAtDoor(g, p, c) && !overwatchHold(g, p, c, !!target, (at) => villageCover(g, p, at, true)) && !target)
+      checkCorners(g, p, c);
   } else {
     const flag =
       g.scoring === "domination"
@@ -2741,6 +2812,22 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     );
     p.mode = "Searching";
   }
+  if (!target && g.tactics && !station && g.tick >= p.distractedUntil) {
+    // A heard enemy, or one a squadmate saw, draws the eyes; gunners and
+    // some riflemen fire at a position they can no longer see.
+    const sound = heard(g, p), contact = squadContact(g, p);
+    if (!suppressiveFire(g, p, c) && p.mode !== "Searching") {
+      // Moving soldiers watch their way ahead; a close sound still turns them.
+      const holding = Math.hypot(c.x, c.z) < 0.1;
+      const toward = sound && (holding || dist(p, sound) < 15) ? sound : holding ? contact : null;
+      if (toward && squadFeatures.attention && dist(p, toward) < 60) {
+        c.yaw = turnToward(p.yaw, Math.atan2(toward.x - p.x, p.z - toward.z), 0.05);
+        p.mode = sound ? "Listening" : "Watching contact";
+      }
+    }
+    if (grenadeCommand(g, p, c)) return braceCommand(g, p, c);
+  }
+  if (g.tactics) reloadCallout(g, p, c);
   if (g.tick < p.distractedUntil) p.mode = "Scanning";
   if (
     g.map.terrain &&

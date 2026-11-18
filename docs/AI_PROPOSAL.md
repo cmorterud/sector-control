@@ -1,6 +1,8 @@
 # Bot AI proposal
 
-Proposal, November 17, 2026. Not approved or implemented.
+Proposal, November 17, 2026. **Status: implemented on this branch, not yet merged.** All six phases are in `src/squads.ts`, with window posts in `src/village-tactics.ts`, scenario tests in `src/squads.test.ts` and a before/after audit in `tools/ai-audit.ts`. Callouts are HUD text, not voices, because spoken callouts were removed on November 7.
+
+**Open issue before merging:** with squads, Village front's west side (blue) wins every audited seed by about 25 points, where legacy bots were even. A mirror test (sides swapped, factions kept by colour) gives the same edge to whichever team is on the west, so it comes from the map's layout, not the AI: the east team detours round its side and enters the manor through the kitchen. Verdun shows a similar blue lead. It needs a map fix or a deliberate decision.
 
 The aim is bots that behave like soldiers in a squad: they use buildings, cover each other, throw grenades and react to what they hear. They must stay readable and beatable, and fit the 50-a-side, 30 Hz performance budget.
 
