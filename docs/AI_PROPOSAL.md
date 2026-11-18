@@ -1,12 +1,46 @@
 # Bot AI proposal
 
-Proposal, November 17, 2026. **Status: implemented on this branch, not yet merged.** All six phases are in `src/squads.ts`, with window posts in `src/village-tactics.ts`, scenario tests in `src/squads.test.ts` and a before/after audit in `tools/ai-audit.ts`. Callouts are HUD text, not voices, because spoken callouts were removed on November 7.
+Proposal, November 17, 2026. **Status: implemented.** All six phases are in `src/squads.ts`, with window posts in `src/village-tactics.ts`, scenario tests in `src/squads.test.ts` and a before/after audit in `tools/ai-audit.ts`. Callouts are HUD text, not voices, because spoken callouts were removed on November 7.
 
-**Open issue before merging:** with squads, Village front's west side (blue) wins every audited seed by about 25 points, where legacy bots were even. A mirror test (sides swapped, factions kept by colour) gives the same edge to whichever team is on the west, so it comes from the map's layout, not the AI: the east team detours round its side and enters the manor through the kitchen. Verdun shows a similar blue lead. It needs a map fix or a deliberate decision.
+**Open issue before merging:** with squads, Village front's west side (blue) wins every audited seed by about 25 points, where legacy bots were even. A mirror test (sides swapped, factions kept by colour) gives the same edge to whichever team is on the west, so it comes from the map's layout, not the AI: the east team detours round its side and enters the manor through the kitchen. Verdun shows a similar blue lead. It needs a map fix (see Results).
 
 The aim is bots that behave like soldiers in a squad: they use buildings, cover each other, throw grenades and react to what they hear. They must stay readable and beatable, and fit the 50-a-side, 30 Hz performance budget.
 
-## How bots work today
+## Results
+
+Headless 120 s, 100-soldier battles from `tools/ai-audit.ts`, the same seed with `squads` off (before) and on (after). Village front, seeds 12345, 777 and 4242; ranges across the three.
+
+| | Before | After |
+|---|---|---|
+| Shots | 366–399 | 182–300 |
+| Deaths | 102–121 | 39–63 |
+| Melee deaths | 33–42 | 4–14 |
+| Bullet deaths | 48–59 | 16–28 |
+| Grenades thrown (kills) | 0 | 14–22 (3–10) |
+| Share of soldier time at a window post | 0 | 2.6–4.6% |
+| Squad spacing, mean distance to squad centre | 41–42 m | 26–28 m |
+| Stuck replans | 10 | 4–7 |
+| First capture | 20.8 s | 21.3 s |
+| Bot decision time per tick | 3.1–3.3 ms | 3.4–3.8 ms |
+| Score, blue–red | 65–60, 57–58, 54–68 | 91–66, 96–65, 82–75 |
+
+On Lighthouse point the same pattern holds (melee deaths 27–30 down to 10–12, 14–26 grenades), and the score stays close to legacy. Verdun leans blue with squads (85–59 and 83–58, against 61–79 and 68–61).
+
+What this shows:
+- Battles are fought from cover and at range: melee scrums mostly disappear, and about half as many soldiers die.
+- Squads stay together, and fewer bots get stuck.
+- **Bot decision time rose about 15%**, over the proposal's budget of "at or below today's". Planning work dominates, not the squad logic: the commander runs every 2 s and grenade planning once in three ticks per bot.
+- **Village front favours its west side.** A held stone manor is now hard to retake, so the team that reaches the hall first keeps it, and the west team gets there first. The west route is 8 m shorter and enters the hall by its north door. The east team detours round the smithy and enters through the kitchen. Swapping the teams' sides moves the advantage with them (west 84–90 against east 63–68), so it comes from the layout, not from either team's AI or faction. Counterattacks (below) did not change the outcome. The fix belongs in the map: a matching west door, or a clear east lane. Since the player is always blue, the bias currently helps the player's side.
+
+What differs from the plan:
+- Callouts are short HUD text, not voices, because spoken callouts were removed on November 7.
+- Peeking from door frames reuses the existing low-cover peek; only windows have their own step-back.
+- Bounding squads avoid danger through the danger map; there is no separate exposed-run cost.
+- Added: when a team holds fewer flags, the commander masses half its squads on one enemy flag, and they form up about 25 m out until about ten soldiers have arrived (or 15 s pass).
+
+`BotSettings.squads: false` restores individual bots, and `squadFeatures` in `src/squads.ts` switches single behaviours off for audits (`--without=commander,windows,...`).
+
+## How bots worked before squads
 
 Each bot decides on its own, on a fixed cycle (`chooseBotCommand` in `src/simulation.ts`). In priority order, it:
 
