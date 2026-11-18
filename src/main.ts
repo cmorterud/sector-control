@@ -27,10 +27,14 @@ import {
   idle,
   botCommand,
   resolveTeamSize,
+  botSettingsFor,
+  difficulties,
   type Command,
+  type Difficulty,
   type Event,
   type Soldier,
 } from "./simulation";
+import { calloutText } from "./squads";
 import { BattleAudio } from "./battle-audio";
 import { BattlefieldFeedback } from "./battlefield";
 import { weaponAim } from "./recoil";
@@ -92,6 +96,12 @@ let fire = false,
 let pendingEquip: WeaponSlot | undefined;
 let pendingRedeploy = false;
 let chosenLoadout: Loadout = "rifleman";
+const storedDifficulty = (() => { try { return localStorage.getItem("sector-control-difficulty"); } catch { return null; } })();
+let difficulty: Difficulty = (difficulties as string[]).includes(new URLSearchParams(location.search).get("difficulty") ?? "")
+  ? new URLSearchParams(location.search).get("difficulty") as Difficulty
+  : (difficulties as string[]).includes(storedDifficulty ?? "") ? storedDifficulty as Difficulty : "regular";
+// Short text callouts from nearby friendly soldiers and enemy grenade warnings.
+let callout = "", calloutUntil = 0;
 let pendingArtillery: Command["artillery"];
 const tacticalMap = new ArtilleryMap(
   () => game,
@@ -208,6 +218,17 @@ function menu(
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
+  if (bots) {
+    const skill = document.createElement("div"); skill.className = "loadout-choice";
+    skill.innerHTML = `<label>Bot difficulty <select id="difficulty"><option value="recruit">Recruit · slower, looser, fewer grenades</option><option value="regular">Regular</option><option value="veteran">Veteran · quicker, sharper, more grenades</option></select></label><small>Both teams' soldiers: reaction, aim, grenades and squad coordination</small>`;
+    el("controls-settings").before(skill);
+    const pick = el("difficulty") as HTMLSelectElement; pick.value = difficulty;
+    pick.onchange = () => {
+      difficulty = pick.value as Difficulty;
+      try { localStorage.setItem("sector-control-difficulty", difficulty); } catch { /* per-viewer convenience only */ }
+      if (game) Object.assign(game.botSettings, botSettingsFor(game.map, difficulty));
+    };
+  }
   }
   updateBriefControls();
   el("primary").onclick = action;
@@ -269,7 +290,7 @@ function start() {
       (Number.isFinite(duration) && duration > 0 ? duration : 480) * 30,
     ),
     12345,
-    undefined,
+    training ? undefined : { difficulty },
     { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
@@ -295,6 +316,8 @@ function start() {
   hitUntil = damageUntil = 0;
   artilleryNotice = "";
   artilleryNoticeUntil = 0;
+  callout = "";
+  calloutUntil = 0;
   crouchInput.reset();
   clear();
   resume();
@@ -355,6 +378,22 @@ function handle(e: Event) {
       hitUntil = performance.now() + 200;
   }
   if (e.type === "grenadeThrow" && e.actor === 0) sound(320, 0.12, 0.035);
+  const listener = game.players[0];
+  if (e.type === "callout" && listener.hp > 0 && e.actor !== 0) {
+    const speaker = game.players.find((q) => q.id === e.actor);
+    if (speaker?.team === listener.team && dist(listener, e.at) < 30) {
+      callout = calloutText[e.line].toUpperCase();
+      calloutUntil = performance.now() + 2200;
+    }
+  }
+  // Every bot frag is called out: the thrower shouts within earshot.
+  if (e.type === "grenadeThrow" && e.actor !== 0 && listener.hp > 0) {
+    const thrower = game.players.find((q) => q.id === e.actor);
+    if (thrower && thrower.team !== listener.team && dist(listener, e.from) < 30) {
+      callout = "GRENADE!";
+      calloutUntil = performance.now() + 2500;
+    }
+  }
   if (e.type === "grenadeBounce" && dist(game.players[0], e.at) < 25)
     sound(180, 0.04, 0.025);
   if (e.type === "grenadeExplosion") {
@@ -436,7 +475,7 @@ function hud(now: number) {
     `<small>${keyLabel(settings.bindings.tactical)} · ARTILLERY ${readyIn ? readyIn + "s" : "READY"}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
-    now < artilleryNoticeUntil ? artilleryNotice : "";
+    now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
   const sector =
     game.scoring !== "eliminations"
       ? game.sectors.find((s) =>

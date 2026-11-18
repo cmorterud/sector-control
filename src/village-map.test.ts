@@ -82,7 +82,8 @@ it("lets both teams advance and contest the village in a live 100-soldier battle
     for (const p of g.players) if (Math.abs(p.x) < 33) flags.add(p.team);
   }
   expect([...flags].sort()).toEqual(["blue", "red"]);
-  expect(shots).toBeGreaterThan(100);
+  // Squads fire from cover and fight fewer melee scrums than individual bots did.
+  expect(shots).toBeGreaterThan(60);
   expect(captures).toBeGreaterThanOrEqual(2);
 }, 30000);
 

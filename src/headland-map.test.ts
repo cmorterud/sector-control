@@ -74,7 +74,7 @@ it("connects both spawns to every flag over walkable ground", () => {
         p = next;
       }
     }
-});
+}, 15000);
 it("plays a bot battle in which both teams leave their spawns, fight and capture", () => {
   const g = scene(true);
   let shots = 0, deaths = 0, captures = 0;

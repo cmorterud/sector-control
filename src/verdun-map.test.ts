@@ -139,7 +139,9 @@ test("keeps a full 100-soldier forest battle moving, fighting and capturing afte
  expect(g.phase).toBe("ended");
  expect(g.players).toHaveLength(100);
  expect(g.players.every(p=>Number.isFinite(p.x+p.y+p.z+p.hp))).toBe(true);
- expect(shots).toBeGreaterThan(300);
+ // Squad bots fight from cover with far fewer close scrums than the
+ // individual bots this floor was first set for (docs/AI_PROPOSAL.md).
+ expect(shots).toBeGreaterThan(200);
  expect(lateShots).toBeGreaterThan(50);
  expect(captures).toBeGreaterThan(0);
  expect(impacts).toBeGreaterThan(0);

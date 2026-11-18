@@ -96,6 +96,8 @@ interface Edge {
   opening?: "window" | "door" | "double";
   cells: [number, number][];
 }
+// Window posts stand clear of the wall's inner face and a soldier's radius.
+const windowInset = 1;
 const side = (s: KitSide) => ({ north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] } as const)[s];
 export function parseCell(label: KitCell) {
   const col = label.charCodeAt(0) - 65, row = Number(label.slice(1)) - 1;
@@ -147,7 +149,7 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
     return b;
   };
   const cellCenter = (col: number, row: number) => ({ u: -W / 2 + (col + 0.5) * kitBay, v: -D / 2 + (row + 0.5) * kitBay });
-  const runtime: KitRuntime = { plan: plan.id, parts: [], wings: [], routes: [[]], floors: [[]], survivors: [], doorways: [], entrances: [], fallen: {} };
+  const runtime: KitRuntime = { plan: plan.id, parts: [], wings: [], routes: [[]], floors: [[]], survivors: [], doorways: [], entrances: [], windows: [], fallen: {} };
   const routeGroups: Map<string, string[]>[] = [];
   const routeOf = (level: number, name = "main") => {
     const groups = (routeGroups[level + 1] ??= new Map());
@@ -306,6 +308,11 @@ export function buildKitHouse(map: MapDefinition, plan: KitPlan, at: KitPlacemen
         }
       }
       if (e.material === "party" && e.exterior) (party[e.exterior] ??= {})[level + ":" + e.index] = set;
+      if (e.exterior && e.opening === "window") {
+        const [nu, nv] = side(e.exterior), [ox, oz] = turn(nu, nv);
+        runtime.windows.push({ ...world(centre.u - nu * windowInset, centre.v - nv * windowInset), ...(level ? { y: base + y0 } : {}),
+          yaw: Math.atan2(ox, -oz), level });
+      }
       if (level === 0 && e.exterior && (e.opening === "door" || e.opening === "double")) {
         const [nu, nv] = side(e.exterior);
         runtime.entrances.push({ ...world(centre.u + nu * 0.7, centre.v + nv * 0.7) });
