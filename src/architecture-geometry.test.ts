@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import * as pc from "playcanvas";
-import { architectureGeometry, architectureKey, architecturePieces } from "./architecture-geometry";
+import { architectureGeometry, architectureKey, architecturePieces, floorboardLift } from "./architecture-geometry";
 import { architecturalTextures, architecturePixels } from "./architecture-surfaces";
 import { villageMap } from "./village-map";
 import { Renderer } from "./rendering";
@@ -28,6 +28,26 @@ it("builds finite lit geometry for each house, material and furnishing without c
     }
   }
   expect(JSON.stringify(villageMap.boxes)).toBe(before);
+});
+
+it("draws upper floorboards above the tops of the walls below, so doorways do not flicker", () => {
+  const boxes=villageMap.boxes.filter(b=>b.architecture);
+  const top=(b:(typeof boxes)[number])=>(b.baseY??0)+b.h;
+  const overlaps=(a:(typeof boxes)[number],b:(typeof boxes)[number])=>Math.abs(a.x-b.x)<(a.w+b.w)/2-.01&&Math.abs(a.z-b.z)<(a.d+b.d)/2-.01;
+  const floors=boxes.filter(b=>b.architecture!.part==="floor"&&b.architecture!.level);
+  const walls=boxes.filter(b=>b.architecture!.part==="wall");
+  let shared=0;
+  for(const floor of floors) {
+    const boards=architecturePieces(floor,0).find(p=>p.name==="floor")!;
+    const boardsTop=(floor.baseY??0)+floor.h/2+boards.at[1]+boards.size[1]/2;
+    expect(boardsTop-top(floor)).toBeCloseTo(floorboardLift,6);
+    for(const wall of walls)if(overlaps(floor,wall)&&Math.abs(top(wall)-top(floor))<.001) {
+      shared++;
+      expect(boardsTop-top(wall),floor.id+" over "+wall.id).toBeGreaterThan(.004);
+    }
+  }
+  // Every upstairs doorway sits over the top of a wall below it.
+  expect(shared).toBeGreaterThan(20);
 });
 
 it("gives every village building a finished ceiling and a recognizable room use", () => {

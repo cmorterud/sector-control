@@ -20,6 +20,8 @@ export const architecturePalette = (id:string) => ({
   tenement:{wall:"#d2c9b2",trim:"#ad9f88",wood:"#4a514c",roof:"#5f6a6c",roofSurface:"slate"},
 } as Record<string,{wall:string;trim:string;wood:string;roof:string;roofSurface:"slate"|"tiles"}>)[id] ??
   {wall:"#cdc4ae",trim:"#aa9b83",wood:"#625b45",roof:"#807363",roofSurface:"tiles" as const};
+// Rendered floorboards stand this far above the walkable surface.
+export const floorboardLift=.006;
 const variant=(id:string)=>[...id].reduce((s,c)=>(Math.imul(s,31)+c.charCodeAt(0))>>>0,17)%4;
 const letters:Record<string,string[]>={
  "0":["111","101","101","101","111"],"1":["010","110","010","010","111"],"2":["110","001","010","100","111"],"3":["110","001","110","001","110"],
@@ -137,7 +139,10 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
   } else if(a.part==="floor"||a.part==="ceiling"||a.part==="stair") {
     const paved=b.kind==="concrete";
     const ceiling=a.part==="ceiling";
-    add(a.part,0,h/2,0,w,h,d,paved?"#c2b9a0":ceiling?"#e0d5bc":"#a68a61",paved?"stone":ceiling?"plaster":"floorboards");
+    // The walls below reach the underside of the boards' top face: upper floor
+    // tops share that plane, and flicker in doorways without this small lift.
+    const lift=a.part==="floor"?floorboardLift:0;
+    add(a.part,0,(h+lift)/2,0,w,h+lift,d,paved?"#c2b9a0":ceiling?"#e0d5bc":"#a68a61",paved?"stone":ceiling?"plaster":"floorboards");
     if(a.part!=="stair" && !paved) {
       for(const x of [-w*.28,w*.28])add("exposed floor joist",x,-.07,0,.12,.14,d,"#6e543c");
       if(stage)add("splintered floor edge",w*.38,-.02,d*.38,w*.24,.09,d*.18,"#c2a06f","wood",.08,true);
