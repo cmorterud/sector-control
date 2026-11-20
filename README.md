@@ -113,6 +113,7 @@ The `docs/` folder holds the project's working notes. They were written during d
 - [COMBAT_FEEDBACK.md](docs/COMBAT_FEEDBACK.md): hit directions, death reports, the brief killer view, map markers and assist rules.
 - [HOUSE_KIT.md](docs/HOUSE_KIT.md): approved design for reusable one-, two- and three-story destructible buildings, with floor plans.
 - [AI_PROPOSAL.md](docs/AI_PROPOSAL.md): squad-based, building-aware bot AI: the proposal, what was built and the before-and-after audit.
+- [VISUALS_PROPOSAL.md](docs/VISUALS_PROPOSAL.md): proposed lighting, sky, surface, effects and quality-setting improvements.
 
 ## Status
 
