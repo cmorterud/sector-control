@@ -1,10 +1,10 @@
 {
   "version": 1,
   "repository": "cmorterud/sector-control",
-  "source": "57f9ae436ca0ebe82e2182e5afe94bc8c4f58749",
-  "head": "84ea26799593f8effe181bcd710d5cd080bfd00d",
+  "source": "70b67c5c0afb1f968c3210157af03e6a22307a6c",
+  "head": "2e52ab02c8b9c34caa8230795c5862774ee1b968",
   "pr": 17,
-  "run": 44846044250,
+  "run": 44848201272,
   "attempt": 1,
   "base": "/sector-control/pr-preview/pr-17/",
   "files": {
