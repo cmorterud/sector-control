@@ -47,7 +47,9 @@ jobs:
   render:
     needs: build-and-test
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village') && 10 || 6 }}
+    # Software rendering at High quality (ambient occlusion, shadow cascades)
+    # takes up to about six minutes on the larger maps.
+    timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village') && 13 || 9 }}
     strategy:
       fail-fast: false
       matrix:
