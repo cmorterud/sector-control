@@ -3,14 +3,16 @@ import {Renderer} from "./rendering";
 import type {DestructionChange} from "./destruction";
 import {SceneryBatches} from "./scenery-batches";
 import * as pc from "playcanvas";
-// Several impacts may be processed in one render interval. Mesh/collider work
-// must finish synchronously, while each scenery batch is regenerated once.
-test("updates every impacted patch immediately and coalesces scenery batches before rendering",()=>{
+// Several impacts may be processed in one render interval. Impacted terrain
+// patches are queued for the frame budget and each scenery batch is
+// regenerated once.
+test("queues every impacted patch and coalesces scenery batches before rendering",()=>{
  const rebuilt:string[]=[],build=vi.fn(()=>true),generate=vi.fn();
  const r=Object.create(Renderer.prototype);
- Object.assign(r,{app:{batcher:{generate}},map:{destruction:{objects:{wood:{id:'wood',original:{kind:'wood'}}}}},fallingTrees:[],boardVisuals:[],groundDecor:[],coverBatch:4,boardBatch:5,rebuildTerrainPatch:(key:string)=>rebuilt.push(key),buildDestructible:build});
+ Object.assign(r,{app:{batcher:{generate}},map:{destruction:{objects:{wood:{id:'wood',original:{kind:'wood'}}}}},fallingTrees:[],boardVisuals:[],groundDecor:[],coverBatch:4,boardBatch:5,terrainWork:new Set(),rebuildTerrainPatch:(key:string)=>rebuilt.push(key),buildDestructible:build});
  const impact=(key:string)=>({at:{x:0,y:0,z:0},objects:[{id:'wood',stage:1}],patches:[key],crater:null}) as unknown as DestructionChange;
- r.updateWorld(impact('0,0'));r.updateWorld(impact('0,1'));expect(rebuilt).toEqual(['0,0','0,1']);expect(generate).not.toHaveBeenCalled();
+ r.updateWorld(impact('0,0'));r.updateWorld(impact('0,1'));expect(rebuilt).toEqual([]);expect(generate).not.toHaveBeenCalled();
+ expect(r.flushTerrainWork(1000)).toBe(2);expect(rebuilt).toEqual(['0,0','0,1']);
  r.flushWorldBatches();expect(generate.mock.calls).toEqual([[[4]]]);r.flushWorldBatches();expect(generate).toHaveBeenCalledTimes(1);
 });
 test("real static batch meshes remove local destroyed pieces while retaining distant mesh buffers",()=>{
@@ -52,10 +54,11 @@ test("rebatches only changed scenery regions, including removal and blasts spann
  const r=Object.assign(Object.create(Renderer.prototype),{app:{batcher:{generate}},sceneryBatches:groups,map:{destruction:{objects:{
   a:{original:{kind:'wood',x:31,z:0}},b:{original:{kind:'wood',x:33,z:0}},c:{original:{kind:'wood',x:-60,z:60}},
  }}},fallingTrees:[],boardVisuals:[],groundDecor:[{root:close,x:31,z:0,radius:.8,batched:true},{root:far,x:-60,z:60,radius:.8,batched:true}],coverBatch:4,boardBatch:5,
- rebuildTerrainPatch:(key:string)=>rebuilt.push(key),buildDestructible:vi.fn(()=>true)});
+ terrainWork:new Set(),rebuildTerrainPatch:(key:string)=>rebuilt.push(key),buildDestructible:vi.fn(()=>true)});
  const change={at:{x:31,y:0,z:0},terrain:[],objects:[{id:'a',stage:1},{id:'b',stage:2}],patches:['3,0','4,0'],crater:{radius:2}} as unknown as DestructionChange;
  r.updateWorld(change);r.updateWorld({...change,objects:[{id:'a',stage:2}],patches:['3,0']});
- expect(rebuilt).toEqual(['3,0','4,0','3,0']);
+ // A patch hit twice before the next frame is rebuilt once.
+ r.flushTerrainWork(1000);expect(rebuilt).toEqual(['3,0','4,0']);
  expect(close.enabled).toBe(false);expect(far.enabled).toBe(true);
  expect(generate).not.toHaveBeenCalled();r.flushWorldBatches();
  expect(generate.mock.calls).toEqual([[[near,neighbor,decorGroup]]]);

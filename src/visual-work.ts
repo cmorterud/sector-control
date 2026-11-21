@@ -1,7 +1,7 @@
 type VisualJob = { kind: "terrain" | "casualty"; run: () => void };
 
-// Only presentation belongs here. Simulation damage, rays and collider updates
-// must finish before enqueueing. A job cannot be interrupted, so the time budget
+// Only presentation belongs here. Simulation damage must finish before
+// enqueueing; terrain colliders are queued separately (Renderer.terrainWork). A job cannot be interrupted, so the time budget
 // is checked between jobs; one expensive upload may exceed it on a slow device.
 export class VisualWorkQueue {
   private jobs = new Map<string, VisualJob>();

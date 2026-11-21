@@ -82,6 +82,7 @@ import {
   groundHeight,
   supportHeight,
   moveOnMap,
+  terrainPatchSize,
   type MapDefinition,
   type Vec,
   type Box,
@@ -238,6 +239,8 @@ export class Renderer implements CollisionWorld {
   private terrainPhysics = new TerrainPhysics();
   private terrainGeometryCache?: TerrainGeometryCache;
   private visualWork = new VisualWorkQueue();
+  // Terrain patches reshaped by explosions, rebuilt a few per frame.
+  private terrainWork = new Set<string>();
   private terrainPatches = new Map<
     string,
     { entity: pc.Entity; mesh: pc.Mesh }
@@ -654,6 +657,8 @@ export class Renderer implements CollisionWorld {
     if (!restore) return;
     this.clearEnvironmentEffects();
     this.visualWork.clear();
+    // buildMap below rebuilds every patch.
+    this.terrainWork.clear();
     this.pendingCasualties.clear();
     // Dynamic bodies belong to this terrain world; release them before it.
     for (const c of this.casualties) this.releaseCasualty(c);
@@ -700,6 +705,31 @@ export class Renderer implements CollisionWorld {
     if (deferVisual) {
       this.visualWork.set(`terrain:${key}`, { kind: "terrain", run: () => this.uploadTerrainPatch(key, data) });
     } else this.uploadTerrainPatch(key, data);
+  }
+  // Rebuilds queued terrain patches, nearest the camera first: always one,
+  // then more while the frame's budget lasts. A patch's geometry, collider and
+  // mesh change together, so bullets and sight lines meet the old ground for
+  // the frame or two before a distant patch is rebuilt.
+  private flushTerrainWork(budgetMs = 4, now = () => performance.now()) {
+    if (!this.terrainWork.size) return 0;
+    const start = now(), eye = this.camera?.getPosition();
+    const keys = [...this.terrainWork];
+    if (eye) {
+      const away = (key: string) => {
+        const [x, z] = key.split(",").map(Number);
+        return Math.hypot((x + .5) * terrainPatchSize - eye.x, (z + .5) * terrainPatchSize - eye.z);
+      };
+      const distance = new Map(keys.map(k => [k, away(k)]));
+      keys.sort((a, b) => distance.get(a)! - distance.get(b)!);
+    }
+    let done = 0;
+    for (const key of keys) {
+      if (done && now() - start >= budgetMs) break;
+      this.terrainWork.delete(key);
+      this.rebuildTerrainPatch(key);
+      done++;
+    }
+    return done;
   }
   private uploadTerrainPatch(key: string, data: TerrainGeometry) {
     const start = battlePerformance.begin();
@@ -1414,7 +1444,8 @@ export class Renderer implements CollisionWorld {
     }
     invalidateTerrainNormals(this.map,change);
     this.terrainGeometryCache?.invalidate(change);
-    for (const key of change.patches) this.rebuildTerrainPatch(key, true);
+    // Overlapping blasts share one rebuild per patch; see flushTerrainWork.
+    for (const key of change.patches) this.terrainWork.add(key);
     for (const changed of change.objects) {
       const object = this.map.destruction!.objects[changed.id];
       if (this.buildDestructible(object))
@@ -3529,8 +3560,11 @@ export class Renderer implements CollisionWorld {
   private flamePickups = new Map<number,pc.Entity>();
   private actorKits = new Map<number,string>();
   draw(g: Game, alpha: number, dt: number, overview = false) {
-    // Collision is current already. Coalesce uploads and spread presentation
-    // work over frames instead of flushing every shell's visuals in one burst.
+    // Spread terrain rebuilds and presentation work over frames instead of
+    // doing every shell's work in the frame it lands.
+    const terrainStart = battlePerformance.begin();
+    this.flushTerrainWork();
+    battlePerformance.end("terrainWork", terrainStart);
     const visualStart = battlePerformance.begin();
     battlePerformance.count("visualJobs", this.visualWork.flush());
     battlePerformance.end("visualWork", visualStart);
