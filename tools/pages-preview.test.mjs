@@ -30,6 +30,7 @@ test('static paths reject traversal, credentials, executable hooks and hidden co
   }
   assert.equal(safePath('models/README.md'), 'models/README.md');
   assert.equal(safePath('assets/index-Abc_123.js'), 'assets/index-Abc_123.js');
+  assert.equal(safePath('manifest.webmanifest'), 'manifest.webmanifest');
 });
 
 test('publishing a PR preserves production and sibling previews and deletes obsolete PR assets', () => {
