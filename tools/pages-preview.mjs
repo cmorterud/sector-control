@@ -25,7 +25,7 @@ export function safePath(path) {
   if (!/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(path) || path.split('/').some(p => !p || p.startsWith('.'))) {
     throw Error(`Unsafe static path: ${path}`);
   }
-  if (!/\.(html|js|css|json|wasm|svg|png|jpe?g|webp|avif|gif|glb|wav|ogg|mp3|woff2?|txt|md)$/i.test(path)) {
+  if (!/\.(html|js|css|json|wasm|svg|png|jpe?g|webp|avif|gif|glb|wav|ogg|mp3|woff2?|txt|md|webmanifest)$/i.test(path)) {
     throw Error(`Unsupported static file: ${path}`);
   }
   return path;
