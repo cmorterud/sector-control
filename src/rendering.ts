@@ -1,6 +1,10 @@
 import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
+import { qualityProfiles, type Quality } from "./graphics-quality";
+import { lookFor, type MapLook } from "./map-look";
+import { skyCubemapFaces } from "./sky";
+import { shadeArchitecture } from "./room-light";
 import type {DeathView} from "./combat-feedback";
 import { architecturePixels, architecturalTextures, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
@@ -39,7 +43,6 @@ import {
 import {
   surfacePixels,
   dustPixels,
-  overcastPixels,
   maxBlastClouds,
   type SurfaceKind,
 } from "./battlefield-look";
@@ -178,7 +181,10 @@ export class Renderer implements CollisionWorld {
   private coastalSea?: {water:pc.StandardMaterial;foam:pc.StandardMaterial;time:number;pending:number};
   private textures = new Map<string, pc.Texture>();
   private kitMeshes = new Map<string, pc.Mesh>();
-  private overcastSky?: pc.Entity;
+  private look!: MapLook;
+  private sun!: pc.Entity;
+  private frame?: pc.CameraFrame;
+  quality: Quality = "medium";
   private blastSequence = 0;
   previous: V3[] = [];
   private casualties: {
@@ -249,6 +255,7 @@ export class Renderer implements CollisionWorld {
   constructor(
     public canvas: HTMLCanvasElement,
     public map: MapDefinition = industrialMap,
+    quality: Quality = "medium",
   ) {
     map = this.map = runtimeMap(map);
     this.app = new pc.Application(canvas, {
@@ -279,35 +286,37 @@ export class Renderer implements CollisionWorld {
     const trenches = map.id !== "industrial";
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
-    this.app.scene.ambientLight = color(trenches ? "#98a4af" : "#899294");
+    // Each map's mood (src/map-look.ts): sun, generated sky, fog and grade.
+    const look = this.look = lookFor(map);
+    this.app.scene.ambientLight = color(look.sky.horizon);
+    this.app.scene.exposure = look.exposure;
     this.app.scene.fog.type = "linear";
-    this.app.scene.fog.color = color(trenches ? "#a4b0b7" : "#9ca6a5");
-    this.app.scene.fog.start = trenches ? 48 : 35;
-    this.app.scene.fog.end = trenches ? 175 : 115;
+    this.app.scene.fog.color = color(look.sky.horizon);
+    this.app.scene.fog.start = look.fog.start;
+    this.app.scene.fog.end = look.fog.end;
     this.camera = new pc.Entity("camera");
     this.camera.addComponent("camera", {
-      clearColor: color(trenches ? "#a4b0b7" : "#9ca6a5"),
+      clearColor: color(look.sky.horizon),
       fov: 70,
       nearClip: 0.08,
       farClip: trenches ? 210 : 180,
     });
     this.app.root.addChild(this.camera);
-    const sun = new pc.Entity("sun");
+    const sun = this.sun = new pc.Entity("sun");
     sun.addComponent("light", {
       type: "directional",
-      color: color(trenches ? "#e2e8ed" : "#ffdfa8"),
-      intensity: trenches ? 0.85 : 1.5,
-      shadowIntensity: trenches ? 0.65 : 1,
-      shadowType: trenches ? pc.SHADOW_PCF5 : pc.SHADOW_PCF3,
+      color: color(look.sun.color),
+      intensity: look.sun.intensity,
+      shadowIntensity: look.sun.shadowStrength,
+      shadowType: pc.SHADOW_PCF3,
       castShadows: true,
-      shadowDistance: trenches ? 50 : 65,
-      shadowResolution: 2048,
       shadowBias: 0.25,
       normalOffsetBias: 0.05,
     });
-    sun.setEulerAngles(45, -35, 0);
+    sun.setEulerAngles(90 - look.sun.elevation, look.sun.azimuth, 0);
     this.app.root.addChild(sun);
-    if (trenches) this.buildOvercastSky();
+    this.buildSky();
+    this.setQuality(quality);
     this.buildMap();
     window.addEventListener("resize", () => this.app.resizeCanvas());
     // Simulation calls collision queries synchronously; no automatic physics advancement.
@@ -912,9 +921,11 @@ export class Renderer implements CollisionWorld {
       const pitch=(b.architecture?.roofPitch??0)*180/Math.PI;
       const solid=this.cube("architectural collision",b.x,base+h/2,b.z,b.w,h,b.d,"#aa9680",true,root,pitch);
       solid.render!.enabled=false;
-      const shape={...b,h},key=architectureKey(shape,object.stage);
+      // Kit-building pieces carry their own baked room light, so they don't share meshes.
+      const building=b.architecture&&!b.architecture.roofPitch?this.map.buildings?.find(x=>x.kit&&x.id===b.architecture!.building):undefined;
+      const shape={...b,h},key=architectureKey(shape,object.stage)+(building?"@"+b.id:"");
       const models=this.architecturalModels??=new Map();
-      if(!models.has(key))models.set(key,architectureGeometry(shape,object.stage).map(data=>{
+      if(!models.has(key))models.set(key,(building?shadeArchitecture(architectureGeometry(shape,object.stage),b,h,building):architectureGeometry(shape,object.stage)).map(data=>{
         const meshKey="architecture-"+key+"-"+data.surface;
         this.modelMesh(meshKey,()=>data);return {surface:data.surface,meshKey};
       }));
@@ -1602,7 +1613,8 @@ export class Renderer implements CollisionWorld {
     if (!material) {
       material = new pc.StandardMaterial();
       material.diffuse = color("#41483c");
-      material.specular = color("#afc1c4");
+      // Sky reflections stay muted so shallow water doesn't read as ice.
+      material.specular = color("#5f6c6f");
       material.gloss = 0.92;
       material.emissive = color("#121a1c");
       material.update();
@@ -1646,27 +1658,65 @@ export class Renderer implements CollisionWorld {
         if (child instanceof pc.Entity && child.name === "building" && child.render) child.render.enabled = true;
     });
   }
-  private buildOvercastSky() {
-    const sky = new pc.Entity("overcast sky");
-    const m = new pc.StandardMaterial();
-    m.diffuse = color("#000000");
-    m.emissive = color("#ffffff");
-    m.emissiveMap = this.texture("overcast", 512, 256, () => overcastPixels());
-    m.useLighting = false;
-    m.useFog = false;
-    m.depthWrite = false;
-    m.cull = pc.CULLFACE_FRONT;
-    m.update();
-    this.materials.set("overcast", m);
-    sky.addComponent("render", {
-      type: "sphere",
-      material: m,
-      castShadows: false,
-      receiveShadows: false,
+  // The visible sky and the ambient light come from one generated cubemap,
+  // so shade facing the sky is bluer and surfaces facing the ground warmer.
+  private buildSky() {
+    const up = this.sun.up, sun: [number, number, number] = [up.x, up.y, up.z], device = this.app.graphicsDevice;
+    // Both cubemaps are stored dimmer by skyIntensity, which the scene restores.
+    // The lighting copy is brighter by look.ambient, so shade isn't near black
+    // while the visible sky keeps its colour.
+    const skyIntensity = 1.6;
+    const cubemap = (name: string, size: number, scale: number) => new pc.Texture(device, {
+      name, cubemap: true, width: size, height: size, format: pc.PIXELFORMAT_SRGBA8, mipmaps: true,
+      addressU: pc.ADDRESS_CLAMP_TO_EDGE, addressV: pc.ADDRESS_CLAMP_TO_EDGE,
+      levels: [skyCubemapFaces(this.look, sun, size, scale)],
     });
-    sky.setLocalScale(300, 300, 300);
-    this.app.root.addChild(sky);
-    this.overcastSky = sky;
+    this.app.scene.skybox = cubemap("generated sky", 256, 1 / skyIntensity);
+    this.app.scene.skyboxIntensity = skyIntensity;
+    const lighting = cubemap("generated sky lighting", 64, this.look.ambient / skyIntensity);
+    const source = pc.EnvLighting.generateLightingSource(lighting);
+    this.app.scene.envAtlas = pc.EnvLighting.generateAtlas(source);
+    source.destroy();
+    lighting.destroy();
+  }
+  // Applies a graphics quality level: shadow cascades, and on Medium and High
+  // post-processing (tone mapping, grade, vignette and ambient occlusion).
+  setQuality(quality: Quality) {
+    this.quality = quality;
+    const profile = qualityProfiles[quality], light = this.sun.light!, look = this.look;
+    light.numCascades = profile.cascades;
+    light.cascadeDistribution = 0.6;
+    light.shadowDistance = profile.shadowDistance;
+    light.shadowResolution = profile.shadowResolution;
+    light.shadowType = quality === "high" ? pc.SHADOW_PCF5 : pc.SHADOW_PCF3;
+    if (!profile.postProcessing) {
+      this.frame?.destroy();
+      this.frame = undefined;
+      this.camera.camera!.toneMapping = pc.TONEMAP_NEUTRAL;
+      return;
+    }
+    const frame = this.frame ??= new pc.CameraFrame(this.app, this.camera.camera!);
+    frame.rendering.toneMapping = pc.TONEMAP_NEUTRAL;
+    frame.rendering.samples = profile.samples;
+    frame.grading.enabled = true;
+    frame.grading.brightness = 1 + look.grade.brightness;
+    frame.grading.contrast = look.grade.contrast;
+    frame.grading.saturation = look.grade.saturation;
+    frame.grading.tint = color(look.grade.tint);
+    frame.vignette.intensity = look.vignette;
+    frame.vignette.inner = 0.55;
+    frame.vignette.outer = 1.35;
+    frame.vignette.curvature = 0.6;
+    frame.ssao.type = profile.ssao ? pc.SSAOTYPE_COMBINE : pc.SSAOTYPE_NONE;
+    if (profile.ssao) {
+      frame.ssao.intensity = 0.45;
+      frame.ssao.radius = 1.4;
+      frame.ssao.power = 4;
+      frame.ssao.samples = profile.ssao.samples;
+      frame.ssao.scale = profile.ssao.scale;
+      frame.ssao.blurEnabled = true;
+    }
+    frame.update();
   }
   private dustMaterial(hex: string) {
     const m = new pc.StandardMaterial();
@@ -1866,7 +1916,8 @@ export class Renderer implements CollisionWorld {
       material = new pc.StandardMaterial();
       material.diffuse = color(base);
       material.gloss = tint === "walnut" ? 0.38 : tint === "dark" ? 0.12 : 0.6;
-      material.specular = color(tint === "walnut" ? "#514439" : tint === "dark" ? "#252b2b" : "#8c9897");
+      // Moderate steel specular: the sky's reflection reads as blued metal, not chrome.
+      material.specular = color(tint === "walnut" ? "#514439" : tint === "dark" ? "#1e2323" : "#56605e");
       if (tint === "walnut" || tint === "steel") {
         const kind = tint === "walnut" ? "walnut" : "steel";
         const maps=rifleSurfaceMaps(kind);
@@ -3643,9 +3694,6 @@ export class Renderer implements CollisionWorld {
     if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
     if (this.firstPersonRig && overview) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
-    // The sky sphere is smaller than a large map seen from the overview height.
-    if (this.overcastSky) this.overcastSky.enabled = !overview;
-    this.overcastSky?.setPosition(this.camera.getPosition());
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);
     this.drawArtillery(g, alpha);

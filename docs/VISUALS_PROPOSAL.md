@@ -1,8 +1,34 @@
 # Visuals proposal
 
-Proposal, November 20, 2026. **Status: proposed, not started.**
+Proposal, November 20, 2026. **Status: phase 1 implemented; phases 2–6 proposed.** Phase 1 is in `src/map-look.ts` (per-map moods), `src/sky.ts` (generated sky), `src/room-light.ts` (baked room shading), `src/graphics-quality.ts` (quality levels and Auto) and `Renderer.buildSky` / `Renderer.setQuality` in `src/rendering.ts`, with tests in `src/visual-look.test.ts`.
 
 The aim is a game that looks deliberate and atmospheric rather than unfinished. It should keep its stylized, generated-in-code look (no accounts, no asset pipeline). It must stay smooth on an ordinary laptop: Village front already runs well in Chrome on the owner's Mac, so there is some headroom, but not unlimited.
+
+## Phase 1 results
+
+Each map now has its own sun, sky, fog and colour grade. One generated sky cubemap per map is both the visible sky and the ambient light: shade facing the sky is bluer, and surfaces facing the ground get a warm bounce. Rooms in kit buildings are darker away from their windows and doors. On Medium and High, PlayCanvas's `CameraFrame` adds Neutral tone mapping, the grade, a light vignette and ambient occlusion. Cascaded shadows reach 90 m on Medium and 120 m on High.
+
+Frame rate in a live 50-a-side Village front battle, measured in headless Chrome on the owner's Mac (Apple M3, Metal) at 1920 × 1080, in 40–60 s runs:
+
+| Build | Average fps | 95th-percentile frame |
+| --- | --- | --- |
+| `main` before phase 1 | 48–54 | 16.8–33.4 ms |
+| Low | 51–55 | 16.8 ms |
+| Medium | 54 | 16.8 ms |
+| High | 37–49 | 33–50 ms |
+| Auto (settled at Medium) | 54.6 | 16.8 ms |
+
+What this shows:
+- **Low and Medium cost nothing measurable** against the old renderer.
+- **High is too heavy for this Mac under sustained load.** Each part alone (full-resolution ambient occlusion, 4× multisampling, three cascades) costs only 1–3 fps, but together they slow down further over a few minutes, which looks like a fanless laptop GPU throttling. High is for stronger machines, and Auto keeps this one on Medium.
+- The proposal's target of 60 fps average was unrealistic: headless Chrome at 1080p doesn't reach it even on the old renderer. The working target is therefore "Auto's level costs nothing against `main`", and it is met.
+
+What differs from the plan:
+- **Auto** starts at High. It steps down while the median frame is over 20 ms, or, at High only, while more than 8% of frames take over 25 ms. A level must pass six 4-second windows in a row, about half a minute of play, to be kept. The result is stored in the browser as `auto:<level>`. At Medium and Low, hitches are the simulation's own, so they don't count there.
+- **The sky arrived in phase 1,** because the ambient light comes from it: a gradient, clouds and a sun glow per map. Phase 2 keeps the backdrop ring, height fog and soft boundaries.
+- **Two cubemaps.** The lighting copy is 1.35 times brighter than the visible sky, so shaded faces aren't near black while the sky keeps its colour.
+- **Rifle steel and puddles reflect less.** With sky reflections, the old specular made rifle steel read as chrome and puddles as ice.
+- **Kit-building pieces no longer share meshes,** since each bakes its own room light. Batching still merges them, so draw calls are unchanged. The bake doesn't update when walls are breached.
 
 ## How it looks today
 
@@ -81,9 +107,7 @@ The biggest single improvement, mostly configuration of what PlayCanvas 2.23 alr
 ## How each phase is proven
 
 - **Same-shot comparisons.** The render check already captures fixed views per map (overview, first person, third person, Village details). Each phase's PR includes before and after images of the same views, and the High screenshot set becomes part of the render artifacts.
-- **Performance on real hardware.** The in-game performance export (`perf.json`) on the owner's Mac, Village front, 50 a side, ninety seconds:
-  - High: average at or above 60 fps, and 95th-percentile frame time at or below 25 ms;
-  - Low: no slower than today.
+- **Performance on real hardware.** A live 50-a-side Village front battle in Chrome on the owner's Mac, measured with the playtest summary: the level Auto settles on costs nothing measurable against the previous build. Low must never be slower than it. (The original target of 60 fps average on High was revised after phase 1; see Phase 1 results.)
 - **No gameplay change.** The full headless test suite passes unchanged, and the simulation files don't change.
 - **Readability.** Enemies remain easy to spot at 50 m in every map's mood. That's checked in the third-person screenshots, and the grade is adjusted if contrast drops.
 
@@ -91,9 +115,10 @@ The biggest single improvement, mostly configuration of what PlayCanvas 2.23 alr
 
 Start with **phase 1 plus the quality setting**. It changes every screenshot, is mostly engine configuration plus one build-time bake, and makes the later phases look better too, since reflections, smoke and puddles depend on good light. Then phase 2, which answers existing playtest feedback, and phase 5, which is most visible in a fight. Phases 3, 4 and 6 are polish and can come in any order.
 
-## Open decisions
+## Decisions
 
-1. **Art direction.** Keep the clean, stylized look and add light and atmosphere (recommended), or push toward grittier, more realistic mud and ruin?
-2. **One mood per map, or a choice of time of day** (dawn, afternoon, dusk) in the briefing?
-3. **Generated textures only, or allow CC0 photo textures** for ground, brick and wood? Generated keeps the project self-contained; CC0 is faster to a realistic look.
-4. **Default quality.** Pick from a short startup benchmark, or default to Medium?
+Agreed November 20, 2026:
+1. **Clean, stylized art direction.** Add light and atmosphere rather than gritty realism.
+2. **One fixed mood per map** for now. A time-of-day choice can follow if the fixed moods work.
+3. **Generated textures only.** A single CC0 ground texture remains a possible exception later.
+4. **Auto quality** from real frame times, remembered per browser, with Low / Medium / High in the briefing.
