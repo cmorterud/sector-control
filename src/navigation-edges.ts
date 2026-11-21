@@ -22,9 +22,11 @@ export class NavigationEdges {
     while (!result.done) result = work.next();
     return result.value;
   }
-  // Yield after each new physical walk check. Scheduling order can prioritize
-  // occupied regions without changing adjacency order or route tie-breaking.
-  *slices(nodes:Vec[],keys:string[],step:number,walk:(a:Vec,b:Vec)=>boolean,near:Vec[]=[]): Generator<void,number[][]> {
+  // Yield true after each new physical walk check, and false every 128 rows
+  // so a time-limited caller can pause during the bookkeeping too. Scheduling
+  // order can prioritize occupied regions without changing adjacency order or
+  // route tie-breaking.
+  *slices(nodes:Vec[],keys:string[],step:number,walk:(a:Vec,b:Vec)=>boolean,near:Vec[]=[]): Generator<boolean,number[][]> {
     const current=new Map(nodes.map((p,i)=>[keys[i],p]));
     const oldOrder=new Map([...this.points.keys()].map((key,i)=>[key,i]));
     let lastIndex=-1,reordered=false;
@@ -44,18 +46,23 @@ export class NavigationEdges {
       }
       return buckets;
     };
-    const occupied = new Set(near.map(p => `${Math.floor(p.x / step)},${Math.floor(p.z / step)}`));
+    // Cells within two of an occupied cell, expanded once rather than per node.
+    const close = new Set<string>();
+    for (const p of near) {
+      const cx = Math.floor(p.x / step), cz = Math.floor(p.z / step);
+      for (let x = cx - 2; x <= cx + 2; x++) for (let z = cz - 2; z <= cz + 2; z++) close.add(`${x},${z}`);
+    }
+    yield false;
     const priority: number[] = [], rest: number[] = [];
     for (let i = 0; i < nodes.length; i++) {
-      const cx = Math.floor(nodes[i].x / step), cz = Math.floor(nodes[i].z / step);
-      if (!occupied.size) { rest.push(i); continue; }
-      let close = false;
-      for (let x = cx - 2; x <= cx + 2 && !close; x++)
-        for (let z = cz - 2; z <= cz + 2 && !close; z++) close = occupied.has(`${x},${z}`);
-      (close ? priority : rest).push(i);
+      if (i % 512 === 511) yield false;
+      (close.has(`${Math.floor(nodes[i].x / step)},${Math.floor(nodes[i].z / step)}`) ? priority : rest).push(i);
     }
     const edges: number[][] = new Array(nodes.length);
+    yield false;
+    let rows = 0;
     for (const i of [...priority, ...rest]) {
+      if (++rows % 128 === 0) yield false;
       const a = nodes[i];
       let row=this.rows.get(keys[i]);
       if(!row){row={point:a,checks:new Map()};this.rows.set(keys[i],row);}
@@ -67,7 +74,7 @@ export class NavigationEdges {
         if(!check){
           check={pass:walk(a,b),minX:Math.min(a.x,b.x)-.61,maxX:Math.max(a.x,b.x)+.61,minZ:Math.min(a.z,b.z)-.61,maxZ:Math.max(a.z,b.z)+.61};
           row.checks.set(keys[j],check);
-          yield;
+          yield true;
         }
         if(check.pass)result.push(j);
       }

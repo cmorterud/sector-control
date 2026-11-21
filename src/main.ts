@@ -759,6 +759,9 @@ function combatReview(stage:string) {
   renderer.remember(game);hud(performance.now());
   return {hp:player.hp,assists:player.assists,tick:game.tick};
 }
+// At most this many simulation ticks run in one frame, and navigation
+// rebuilds after explosions get this many milliseconds of each frame.
+const maxCatchUpTicks = 2, navigationFrameMs = 3;
 function frame(now: number) {
   battlePerformance.frame(now, game?.tick ?? 0, !started || paused);
   rawFrameMs = now - last;
@@ -781,22 +784,31 @@ function frame(now: number) {
       audio?.muffle(battlefield.state(game.tick).muffle);
       accumulator += dt;
       let steps = 0;
-      while (accumulator >= 1 / 30 && steps++ < 4) {
+      // All of this frame's ticks share one navigation rebuild budget.
+      game.navigationDeadline = performance.now() + navigationFrameMs;
+      while (accumulator >= 1 / 30 && steps++ < maxCatchUpTicks) {
         stepSimulation();
         accumulator -= 1 / 30;
         if (paused) break;
       }
+      game.navigationDeadline = Infinity;
+      // After a long frame, catch up over the next frames instead of
+      // running a burst of ticks that makes the next frame long too. A
+      // machine that can't keep up runs slower rather than spiralling.
+      accumulator = Math.min(accumulator, maxCatchUpTicks / 30);
     }
     renderer.artilleryPreview = null;
+    // Ticks still owed are drawn at the latest state rather than extrapolated.
+    const alpha = Math.min(1, accumulator * 30);
     renderer.cameraReaction = battlefield.state(
-      game.tick - 1 + accumulator * 30,
+      game.tick - 1 + alpha,
       cameraReactions && !paused,
     );
     const drawStart = battlePerformance.begin();
-    renderer.deathView=combatFeedback.camera(game,game.tick-1+accumulator*30,weaponAim(game.players[0]));
+    renderer.deathView=combatFeedback.camera(game,game.tick-1+alpha,weaponAim(game.players[0]));
     renderer.draw(
       game,
-      accumulator * 30,
+      alpha,
       paused ? 0 : dt,
       params.has("overview"),
     );

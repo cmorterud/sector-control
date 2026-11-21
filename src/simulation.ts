@@ -885,6 +885,10 @@ export class Game {
   artilleryAudit = freshArtilleryAudit();
   flames: FlameState = {kits:[]};
   tick = 0;
+  // A performance.now() time after which this frame's navigation rebuild
+  // work stops. The browser sets it once per frame; headless games leave it
+  // unlimited so their results don't depend on the machine.
+  navigationDeadline = Infinity;
   duration: number;
   phase: "playing" | "ended" = "playing";
   winner: Team | "draw" = "draw";
@@ -1179,7 +1183,7 @@ export class Game {
     if(human.redeploy)this.redeploy(0);
     const failure = advanceStructuralFailures(this.map, this.tick);
     if (failure) this.structuralFailure(failure);
-    advanceNavigation(this.map, this.players.filter(p => p.hp > 0));
+    advanceNavigation(this.map, this.players.filter(p => p.hp > 0), navigationChecksPerTick, this.navigationDeadline);
     this.smokeClouds = this.smokeClouds.filter((s) => {
       if (this.tick < s.expiresAt) return true;
       this.emit({ type: "smokeEnd", cloud: s.id });
@@ -2232,12 +2236,21 @@ function invalidateNavigationSegments(map: MapDefinition, change: DestructionCha
 }
 const navigationWork = new WeakMap<MapDefinition, {
   revision: number;
-  nodes: Vec[];
-  work: Generator<void, number[][]>;
+  work: Generator<boolean, { nodes: Vec[]; edges: number[][] }>;
 }>();
+function* navigationRebuild(map: MapDefinition, near: Vec[]): Generator<boolean, { nodes: Vec[]; edges: number[][] }> {
+  const { nodes, nodeKeys } = yield* navigationNodeWork(map);
+  const edges = yield* navigationMemo(map).slices(nodes, nodeKeys, map.navSpacing,
+    (a,b) => { battlePerformance.count("navigationChecks"); return walkSegment(a,b,map); }, near);
+  return { nodes, edges };
+}
 export const navigationChecksPerTick = 256;
-// A deterministic work limit keeps path scheduling independent of render FPS.
-export function advanceNavigation(map: MapDefinition, near: Vec[] = [], budget = navigationChecksPerTick) {
+// A deterministic limit of walk checks per tick keeps path scheduling
+// independent of render FPS in headless games. The rebuild's bookkeeping
+// (node sampling, cached rows) pauses too but doesn't count toward it.
+// The browser also passes a wall-clock deadline shared by every tick of one
+// frame, so catch-up ticks after a slow frame don't multiply the work.
+export function advanceNavigation(map: MapDefinition, near: Vec[] = [], budget = navigationChecksPerTick, deadline = Infinity) {
   const revision = map.destruction?.revision ?? 0;
   const cached = navigation.get(map);
   if (cached?.revision === revision || (!cached && !revision)) return;
@@ -2245,19 +2258,19 @@ export function advanceNavigation(map: MapDefinition, near: Vec[] = [], budget =
   try {
     let pending = navigationWork.get(map);
     if (!pending || pending.revision !== revision) {
-      const { nodes, nodeKeys } = navigationNodes(map);
-      pending = { revision, nodes, work: navigationMemo(map).slices(nodes, nodeKeys, map.navSpacing,
-        (a,b) => { battlePerformance.count("navigationChecks"); return walkSegment(a,b,map); }, near) };
+      pending = { revision, work: navigationRebuild(map, near) };
       navigationWork.set(map, pending);
     }
-    for (let i = 0; i < budget; i++) {
+    for (let checks = 0; checks < budget;) {
       const result = pending.work.next();
       if (result.done) {
-        navigation.set(map, { nodes: pending.nodes, edges: result.value, revision: pending.revision });
+        navigation.set(map, { ...result.value, revision: pending.revision });
         navigationWork.delete(map);
         battlePerformance.count("navigationPublishes");
         return;
       }
+      if (result.value) checks++;
+      if (deadline !== Infinity && performance.now() >= deadline) return;
     }
   } finally { battlePerformance.end("navigationSlice", start); }
 }
@@ -2270,12 +2283,22 @@ function navigationMemo(map: MapDefinition) {
   }
   return memo.edges;
 }
+// Navigation nodes are sampled in two passes: cheap candidate points first,
+// then the support and clearance tests, which yield so a rebuild can pause.
 function navigationNodes(map: MapDefinition) {
+  const work = navigationNodeWork(map);
+  let result = work.next();
+  while (!result.done) result = work.next();
+  return result.value;
+}
+function* navigationNodeWork(map: MapDefinition): Generator<boolean, { nodes: Vec[]; nodeKeys: string[] }> {
   const step = map.navSpacing,
     nodes: Vec[] = [],
     nodeKeys: string[] = [];
   const unique = new Set<string>();
-  const add = (x: number, z: number, y?: number) => {
+  const candidates: [number, number, number | undefined][] = [];
+  const add = (x: number, z: number, y?: number) => { candidates.push([x, z, y]); };
+  const evaluate = (x: number, z: number, y?: number) => {
     // Match soldiers' support footprint on narrow treads. A point sample can
     // leave an otherwise valid stair anchor embedded in the next riser.
     if(map.buildings) y = supportHeight(x,z,map,(y??groundHeight(x,z,map))+.23,.45);
@@ -2333,6 +2356,10 @@ function navigationNodes(map: MapDefinition) {
       [0, 1],
     ])
       add(crater.x + dx * crater.radius, crater.z + dz * crater.radius);
+  for (let i = 0; i < candidates.length; i++) {
+    evaluate(...candidates[i]);
+    if (i % 64 === 63) yield false;
+  }
   return { nodes, nodeKeys };
 }
 function graph(map: MapDefinition) {

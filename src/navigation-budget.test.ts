@@ -50,3 +50,33 @@ test("artillery evasion uses the available graph without draining a pending rebu
   expect(battlePerformance.summary().counters.navigationChecks??0).toBe(0);
  } finally {battlePerformance.enabled=false;battlePerformance.reset();}
 });
+
+test("a wall-clock deadline pauses a rebuild in small steps, bookkeeping included, and publishes the same graph",()=>{
+ const run=(deadline:boolean)=>{
+  const map=structuredClone(source);
+  const g=new Game(new TestCollision(map),false,10000,12345,undefined,{map,ambientArtillery:false});
+  prepareNavigation(g.map);
+  battlePerformance.enabled=true;battlePerformance.reset();
+  try {
+   g.explode({x:-2,y:.05,z:0},-1,null,{...artilleryExplosionProfile,damage:0});
+   let calls=0,checks=0;
+   while(!battlePerformance.summary().counters.navigationPublishes && calls++<20000) {
+    const before=battlePerformance.summary().counters.navigationChecks??0;
+    // A deadline already passed allows exactly one step per call.
+    advanceNavigation(g.map,g.players,navigationChecksPerTick,deadline?0:Infinity);
+    const done=(battlePerformance.summary().counters.navigationChecks??0)-before;
+    if(deadline)expect(done).toBeLessThanOrEqual(1);
+    checks+=done;
+   }
+   expect(battlePerformance.summary().counters.navigationPublishes).toBe(1);
+   return {calls,checks,route:pathfind({x:-15,z:0},{x:15,z:0},g.map,true)};
+  } finally {battlePerformance.enabled=false;battlePerformance.reset();}
+ };
+ const paced=run(true),unpaced=run(false);
+ // Node sampling and cached rows pause too, so a paced rebuild takes more
+ // steps than it makes walk checks; the checks and the result don't change.
+ expect(paced.calls).toBeGreaterThan(paced.checks);
+ expect(paced.checks).toBe(unpaced.checks);
+ expect(paced.route.length).toBeGreaterThan(0);
+ expect(paced.route).toEqual(unpaced.route);
+});
