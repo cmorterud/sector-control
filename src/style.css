@@ -294,6 +294,16 @@ button span {
   background: #344947;
   color: #ddd;
 }
+/* The Armoury link opens a page, so it is a link styled as a button. */
+a.armoury-link {
+  display: block;
+  padding: 17px 20px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-decoration: none;
+}
+a.armoury-link:hover { background: #3f5856; }
 .fine {
   font-size: 8px;
   color: #8b9f97;
