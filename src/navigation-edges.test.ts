@@ -41,7 +41,9 @@ test("incremental adjacency yields one new check at a time and preserves complet
  const nodes=Array.from({length:100},(_,i)=>({x:i%10,z:Math.floor(i/10)})),keys=nodes.map(p=>`${p.x},${p.z}`);
  const cache=new NavigationEdges();let calls=0;const first:Vec[]=[];
  const work=cache.slices(nodes,keys,2,(a,b)=>{calls++;if(first.length<1)first.push(a);return a.x!==4 || b.x!==5;},[{x:9,z:9}]);
- let result=work.next();expect(calls).toBe(1);expect(first[0].x).toBeGreaterThanOrEqual(4);
- while(!result.done){const before=calls;result=work.next();expect(calls-before).toBeLessThanOrEqual(1);}
+ // Bookkeeping pauses (false) come first and make no checks; each true is one check.
+ let result=work.next();while(!result.done&&!result.value){expect(calls).toBe(0);result=work.next();}
+ expect(calls).toBe(1);expect(first[0].x).toBeGreaterThanOrEqual(4);
+ while(!result.done){const before=calls;result=work.next();expect(calls-before).toBe(result.done||!result.value?0:1);}
  expect(result.value).toEqual(rebuild(nodes,2,(a,b)=>a.x!==4 || b.x!==5));
 });
