@@ -40,6 +40,7 @@ import { BattlefieldFeedback } from "./battlefield";
 import { weaponAim } from "./recoil";
 import { CrouchToggle, eyeHeightOf } from "./crouch";
 import { PlaytestRecorder } from "./playtest";
+import { AutoQuality, parseQuality, qualityStorageKey, type Quality, type QualityChoice } from "./graphics-quality";
 import { mantleLanding, dist, groundHeight, industrialMap, blocked } from "./map";
 import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
@@ -125,6 +126,20 @@ const params = new URLSearchParams(location.search),
   demo = params.has("demo") || autoplay;
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
 const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
+// Graphics quality: ?quality= wins, then the stored choice, then Auto. Auto
+// stores the level it settles on as "auto:<level>" so later visits start there.
+const storedQuality = (() => { try { return localStorage.getItem(qualityStorageKey); } catch { return null; } })();
+let qualityChoice: QualityChoice = parseQuality(params.get("quality")) ?? parseQuality(storedQuality?.split(":")[0]) ?? "auto";
+let autoQuality = new AutoQuality();
+const settledQuality = storedQuality?.startsWith("auto:") ? parseQuality(storedQuality.slice(5)) : undefined;
+if (qualityChoice === "auto" && settledQuality && settledQuality !== "auto") {
+  autoQuality.quality = settledQuality;
+  autoQuality.done = true;
+}
+let autoQualityStored = autoQuality.done;
+const activeQuality = (): Quality => qualityChoice === "auto" ? autoQuality.quality : qualityChoice;
+const qualityLabel = (q: Quality) => q[0].toUpperCase() + q.slice(1);
+const saveQuality = (value: string) => { try { localStorage.setItem(qualityStorageKey, value); } catch { /* per-viewer convenience only */ } };
 let reviewFrames = 0;
 let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
@@ -201,7 +216,7 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}${training?trainingMenu(training,started):""}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p>${extra}${training?trainingMenu(training,started):""}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label><label>Graphics <select id="quality"><option value="auto">Auto · ${qualityLabel(autoQuality.quality)}${autoQuality.done ? "" : ", testing"}</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
   if(training){
     (el("training-station") as HTMLSelectElement).onchange=e=>{training.select(Number((e.target as HTMLSelectElement).value));trainingReset=true;};
     (el("training-loadout") as HTMLSelectElement).onchange=e=>{training.loadout=(e.target as HTMLSelectElement).value as Loadout;trainingReset=true;};
@@ -236,6 +251,14 @@ function menu(
   el("volume").oninput = (e) => {
     audioVolume = Number((e.target as HTMLInputElement).value) / 100;
     audio?.volume(audioVolume);
+  };
+  const quality = el("quality") as HTMLSelectElement;
+  quality.value = qualityChoice;
+  quality.onchange = () => {
+    qualityChoice = quality.value as QualityChoice;
+    if (qualityChoice === "auto") { autoQuality = new AutoQuality(); autoQualityStored = false; }
+    saveQuality(qualityChoice);
+    renderer?.setQuality(activeQuality());
   };
   el("camera-reactions").onchange = (e) =>
     (cameraReactions = (e.target as HTMLInputElement).checked);
@@ -739,6 +762,11 @@ function combatReview(stage:string) {
 function frame(now: number) {
   battlePerformance.frame(now, game?.tick ?? 0, !started || paused);
   rawFrameMs = now - last;
+  if (started && !paused && !renderReview && qualityChoice === "auto" && !autoQualityStored) {
+    const next = autoQuality.frame(rawFrameMs);
+    if (next) renderer.setQuality(next);
+    if (autoQuality.done) { saveQuality("auto:" + autoQuality.quality); autoQualityStored = true; }
+  }
   const dt = frameSeconds(now,last);
   last = Math.max(last,now);
   if (started) {
@@ -783,7 +811,7 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 try {
-  renderer = new Renderer(document.querySelector("#game")!, map);
+  renderer = new Renderer(document.querySelector("#game")!, map, activeQuality());
   let renderStart: number | undefined;
   renderer.app.on("prerender", () => { renderStart = started && !paused ? battlePerformance.begin() : undefined; });
   // Copy the WebGL surface while its drawing buffer is still available.

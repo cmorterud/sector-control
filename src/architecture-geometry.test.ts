@@ -112,7 +112,7 @@ it("reads asymmetric sign glyphs correctly from either exterior axis and both fa
   }
 });
 
-it("uploads detailed shared meshes and materials, then removes every visible piece with its panel", () => {
+it("uploads detailed meshes with shared materials, then removes every visible piece with its panel", () => {
   const device=new pc.NullGraphicsDevice(),root=new pc.Entity("architecture test"),made:pc.Entity[]=[];
   const r=Object.create(Renderer.prototype) as any;
   Object.assign(r,{app:{root,graphicsDevice:device},map:runtimeMap(villageMap),mapRoot:root,materials:new Map(),textures:new Map(),kitMeshes:new Map(),objectVisuals:new Map(),objectStates:new Map(),coverBatch:4,batchGroup:4});
@@ -126,7 +126,9 @@ it("uploads detailed shared meshes and materials, then removes every visible pie
   r.buildDestructible(object);r.buildDestructible(clone);
   const first=r.objectVisuals.get(object.id).findByName("architectural floorboards") as pc.Entity;
   const second=r.objectVisuals.get(clone.id).findByName("architectural floorboards") as pc.Entity;
-  expect(first.render!.meshInstances[0].mesh).toBe(second.render!.meshInstances[0].mesh);
+  // Kit-building pieces bake their own room light (src/room-light.ts), so
+  // identical shapes in different places get their own meshes.
+  expect(first.render!.meshInstances[0].mesh).not.toBe(second.render!.meshInstances[0].mesh);
   expect(first.render!.meshInstances[0].material).toBe(second.render!.meshInstances[0].material);
   expect((first.render!.meshInstances[0].material as pc.StandardMaterial).normalMap).toBeDefined();
   expect(r.objectVisuals.get(object.id).children.length).toBeLessThanOrEqual(5);
