@@ -1,0 +1,87 @@
+// Runs in the real briefing before the existing battle scenarios start.
+export function checkBriefing(map, maps) {
+  const select = document.getElementById(map === 'training' ? 'training-loadout' : 'loadout');
+  if (!select || select.disabled) throw Error(`${map} loadout selector is missing or disabled`);
+  const choices = [...select.options];
+  const expected = ['rifleman', 'marksman', 'support', 'emplacement'];
+  for (const value of expected) {
+    const option = choices.find(choice => choice.value === value);
+    if (!option || option.disabled || !option.textContent.trim()) throw Error(`${map} briefing is missing ${value}`);
+  }
+  const prior = select.value;
+  select.value = 'emplacement';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  if (select.value !== 'emplacement') throw Error(`${map} briefing did not select the emplacement kit`);
+  select.value = prior;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const cards = [...document.querySelectorAll('.map-choice > a')];
+  const destinations = cards.map(card => new URL(card.href).searchParams.get('map') ?? 'industrial').sort();
+  const expectedMaps = maps.filter(id => id !== map).sort();
+  if (document.querySelectorAll('.map-choice [aria-current="page"]').length !== 1 ||
+      JSON.stringify(destinations) !== JSON.stringify(expectedMaps)) throw Error('Battlefield menu is missing a map or links to the wrong destination');
+  return { map, loadouts: expected };
+}
+
+// Compares visible DOM text to the independently bundled game profiles.
+export function checkArmoury({ factions, weapons }) {
+  const check = (condition, message) => { if (!condition) throw Error(message); };
+  const firstNumber = element => Number(element?.textContent.trim().match(/^\d+(?:\.\d+)?/)?.[0]);
+  const seconds = value => value === 0 ? 'instant' : `${Number(value.toFixed(2))} s`;
+  const tab = name => {
+    const button = document.querySelector(`[data-tab="${name}"]`);
+    check(button, `Missing Armoury tab ${name}`);
+    button.click();
+    check(document.querySelector(`[data-tab="${name}"]`)?.getAttribute('aria-selected') === 'true', `Armoury did not open ${name}`);
+  };
+  for (const faction of factions) {
+    tab(faction);
+    const cards = [...document.querySelectorAll('#armoury .card')];
+    const roster = weapons.filter(weapon => weapon.faction === faction);
+    check(cards.length === roster.length, `Unexpected weapon count for ${faction}`);
+    for (const weapon of roster) {
+      const card = cards.find(candidate => candidate.querySelector('h2')?.textContent === weapon.name);
+      check(card, `Armoury card missing for ${weapon.name}`);
+      const stats = new Map([...card.querySelectorAll('.stats dt')].map(label => [label.textContent, label.nextElementSibling]));
+      const rounds = stats.get('Rounds per reload');
+      check(firstNumber(rounds) === weapon.magazine && Number(rounds.querySelector('small')?.textContent.match(/\d+/)?.[0]) === weapon.reserve,
+        `${weapon.name} magazine or reserve differs from the game`);
+      check(stats.get('Reload')?.textContent === seconds(weapon.reload), `${weapon.name} reload differs from the game`);
+      check(firstNumber(stats.get('Rate of fire')) === Number(weapon.rate.toFixed(2)), `${weapon.name} rate of fire differs from the game`);
+      check(firstNumber(stats.get('Muzzle velocity')) === weapon.velocity, `${weapon.name} velocity differs from the game`);
+      const rows = [...card.querySelectorAll('.zones tbody tr')];
+      check(rows.length === weapon.zones.length, `${weapon.name} has missing hit zones`);
+      for (const [index, zone] of weapon.zones.entries()) {
+        const [label, damage, shots, time] = rows[index].cells;
+        check(label?.textContent === zone.label && firstNumber(damage) === zone.damage && firstNumber(shots) === zone.shots && time?.textContent === seconds(zone.seconds),
+          `${weapon.name} ${zone.label} values differ from the game`);
+      }
+    }
+  }
+  tab('compare');
+  const rows = [...document.querySelectorAll('.compare tbody tr')];
+  check(rows.length === weapons.length, 'Armoury comparison is missing weapons');
+  const names = new Set(rows.map(row => row.cells[0].textContent));
+  check(weapons.every(weapon => names.has(weapon.name)), 'Armoury comparison has an incorrect weapon roster');
+  const columns = [...document.querySelectorAll('.compare thead th')].map(th => th.textContent.replace(/ [▲▼]$/, ''));
+  const velocity = columns.indexOf('Velocity in game (m/s)');
+  for (const row of rows) {
+    const weapon = weapons.find(candidate => candidate.name === row.cells[0].textContent);
+    const fields = [
+      ['Rounds per reload', weapon.magazine],
+      ['Rate (rounds/min)', Number(weapon.rate.toFixed(2))],
+      ['Velocity in game (m/s)', weapon.velocity],
+      ...weapon.zones.map(zone => [zone.label, zone.damage]),
+    ];
+    for (const [label, value] of fields) {
+      check(firstNumber(row.cells[columns.indexOf(label)]) === value, `${weapon.name} comparison value for ${label} differs from the game`);
+    }
+    check(row.cells[columns.indexOf('Reload')]?.textContent === seconds(weapon.reload), `${weapon.name} comparison reload differs from the game`);
+    check(row.cells[columns.indexOf('Chest time to kill')]?.textContent === seconds(weapon.zones.find(zone => zone.label === 'Chest').seconds),
+      `${weapon.name} comparison chest time to kill differs from the game`);
+  }
+  document.querySelector(`.compare [data-sort="${velocity}"]`).click();
+  const ordered = [...document.querySelectorAll('.compare tbody tr')].map(row => firstNumber(row.cells[velocity]));
+  check(ordered.every((value, index) => index === 0 || ordered[index - 1] >= value), 'Armoury comparison did not sort by velocity');
+  return { factions, weapons: weapons.length, comparison: true };
+}

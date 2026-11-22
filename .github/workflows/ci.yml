@@ -66,6 +66,16 @@ jobs:
         with:
           name: production-build
           path: dist
+      - name: Install locked tools for the Armoury check
+        if: matrix.map == 'industrial'
+        run: npm ci
+      - name: Prepare gameplay stats for the Armoury check
+        if: matrix.map == 'industrial'
+        run: |
+          mkdir -p playtest-artifacts
+          node_modules/.bin/esbuild tools/armoury-expectations.ts --bundle --platform=node --format=esm --outfile=playtest-artifacts/armoury-expectations.mjs
+          node playtest-artifacts/armoury-expectations.mjs > playtest-artifacts/armoury-expectations.json
+          echo 'REVIEW_ARMOURY_STATS=playtest-artifacts/armoury-expectations.json' >> "$GITHUB_ENV"
       - name: Render map and check browser errors
         run: node tools/render-review.mjs "${{ matrix.map }}"
       - name: Save screenshots and browser diagnostics

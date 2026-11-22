@@ -4,7 +4,7 @@ The build/test/publish workflow renders its tested build in headless Chrome on G
 
 Each `render-<map>` artifact contains four PNGs: `overview-intact.png` (HUD hidden for map inspection), `overview-battle.png`, `first-person.png` and `third-person.png`. `report.json`, the overview and ground playtest logs, and `chrome.log` record the source SHA, WebGL renderer, simulation progress, browser errors and actual battle events. A failure screenshot is retained when possible. The job summary links to its artifact. Screenshot artifacts expire after 14 days; the intermediate build expires after seven days.
 
-Village also saves clean, fixed player-height inspection views: `detail-school.png`, `detail-inn.png`, `detail-street.png` and `detail-manor-room.png`. These hide the HUD and first-person weapon to show facade identity, roadside cover and a furnished interior before the battle advances, rather than relying on an overview to review an art change. Village's render job has a ten-minute limit to accommodate those additional frames on a software GPU.
+Village also saves clean, fixed player-height inspection views: `detail-school.png`, `detail-inn.png`, `detail-street.png` and `detail-manor-room.png`. These hide the HUD and first-person weapon to show facade identity, roadside cover and a furnished interior before the battle advances.
 
 Village's diagnostic recording window is also ten minutes: software rendering the additional inspection views can exceed the ordinary two-minute wall-clock recording window before the 900-step battle advance begins. The simulated match duration and required tick/frame checks are unchanged.
 
@@ -12,10 +12,20 @@ The script uses real browser WebGL and an explicit `renderReview` bridge availab
 
 Industrial additionally fires real controlled rounds to verify hit direction, death reports, the brief death camera and its end after a scoped death, normal respawn, death-map marker expiry and damage-based assists. The check uses the normal tactical/scoreboard key handlers, verifies the assist column and checks death-card bounds at 600px height. Additional `combat-*.png` captures and `combatChecks` in the report preserve the evidence.
 
+Each build's browser jobs check the map links and available loadouts in the briefing, including the emplacement kit. Industrial follows the briefing's **Weapons** URL and checks each faction's Armoury cards against the gameplay profiles. It checks comparison-table visibility and sorting and saves `armoury-comparison.png`. Training drives deployment, mounting, firing, reloading, dismounting and packing through the normal input handlers.
+
+## Before-and-after images
+
+**Map and model visual comparison** builds both the target branch and proposed merge on map, model and rendering PRs. Each map job uses the same browser, graphics preset, opening seed and camera setup for both revisions. Download `visual-comparison-<map>` from the run summary, extract it and open `index.html` to compare overviews and first-person views side by side. Village also includes its four inspection views. These opening scenes are for review and do not gate publishing or merges.
+
+## Nightly and on-demand audits
+
+**Battlefield audits** runs on `main` nightly at 08:23 UTC. Use **Run workflow** in Actions for an on-demand run. The `audit-ai`, `audit-maps` and `audit-performance` artifacts contain JSON reports and any failure logs. They cover squad behavior and reactions, objective routes and structural collapse, and CPU timings for simulated battles, terrain updates and scenery rebuilds. The audit groups are independent of the PR gate, and their reported timings are diagnostic without a timing threshold. Run a group locally after `npm ci` with `node tools/run-battlefield-audits.mjs ai`, `maps` or `performance` as the last argument.
+
+## Local and deployed browser checks
+
 SwiftShader is selected explicitly on the display-less hosted runner. Its FPS is diagnostic only and must not be reported as representative of a player’s GPU. This is also not a complete manual controls, aiming or movement acceptance test. Review screenshots for layout, materials, lighting, models and obvious visual regressions; use the existing simulation/native-physics tests for mechanics.
 
 For a local review after a production build: `node tools/render-review.mjs village dist`. `CHROME_PATH` selects an installed Chrome binary; the default is the Ubuntu runner’s `/usr/bin/google-chrome`. Chrome uses a fresh temporary profile, localhost-only server and debugging connection. The script leaves Chrome’s browser sandbox enabled.
 
 `PAGES_BASE_PATH` selects a PR's nested asset base when serving locally. `REVIEW_BASE_URL` instead points the same browser check at a deployed HTTPS site. The publisher verifies every published asset's SHA-256 and runs Village, Industrial combat-feedback scenarios and Training Grounds controls on a separate read-only runner before reporting `preview-ready` success. These deployed screenshots are saved as `deployed-browser-review`.
-
-The macOS browser host and installed local Chrome/headless shell currently fail before navigating to the game (Mach-port startup errors). The Linux CI path supplies rendering independently of that local failure.
