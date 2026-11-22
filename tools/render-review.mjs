@@ -6,10 +6,14 @@ import {tmpdir} from 'node:os';
 import {resolve,join,extname,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {inflateSync} from 'node:zlib';
+import {checkArmoury,checkBriefing} from './briefing-review.mjs';
 
 const map=process.argv[2]??'village';
-if(!['industrial','trenches','verdun','village','headland','training'].includes(map))throw Error('Unknown map');
+const maps=['industrial','trenches','verdun','village','headland','training'];
+if(!maps.includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
+const visualOnly=process.env.REVIEW_VISUAL_ONLY==='1';
+const armouryStats=process.env.REVIEW_ARMOURY_STATS;
 const sitePath=process.env.PAGES_BASE_PATH??`/${process.env.GITHUB_REPOSITORY?.split('/')[1]??'sector-control'}/`;
 if(!/^\/[a-zA-Z0-9_/-]+\/$/.test(sitePath))throw Error('Invalid deployment base path');
 await mkdir(out,{recursive:true});
@@ -20,8 +24,9 @@ const server=createServer(async(req,res)=>{
  try {
   const url=new URL(req.url,'http://localhost');
   if(!url.pathname.startsWith(sitePath)){res.writeHead(404);res.end();return;}
-  const relative=decodeURIComponent(url.pathname.slice(sitePath.length))||'index.html';
-  const file=resolve(dist,relative);
+  const relative=decodeURIComponent(url.pathname.slice(sitePath.length));
+  const route=!relative||relative.endsWith('/')?relative+'index.html':relative;
+  const file=resolve(dist,route);
   if(!file.startsWith(dist+sep)){res.writeHead(403);res.end();return;}
   const data=await readFile(file);res.writeHead(200,{'Content-Type':mime[extname(file)]??'application/octet-stream','Cache-Control':'no-store'});res.end(data);
  }catch{res.writeHead(404);res.end('Not found');}
@@ -29,8 +34,8 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=process.env.REVIEW_BASE_URL??`http://127.0.0.1:${server.address().port}${sitePath}`;
 if(!base.endsWith('/')||!['https:','http:'].includes(new URL(base).protocol))throw Error('Invalid review URL');
-let browser,client,chromeLog='';
-const report={map,source:process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:'Controlled snapshots advance 900 real simulation/presentation steps; software GPU displays checkpoints. Not a real-time FPS benchmark.'};
+let browser,client,chromeLog='',armouryURL;
+const report={map,source:process.env.REVIEW_SOURCE_SHA??process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:visualOnly?'Fixed viewpoints at the start of the seeded match.':'Controlled snapshots advance 900 real simulation/presentation steps; software GPU displays checkpoints. Not a real-time FPS benchmark.'};
 // Inspect the clean overview itself, so a black/flat canvas cannot pass merely
 // because the HUD and simulation continue running. Chrome emits 8-bit RGB(A).
 function overviewColors(png){
@@ -94,6 +99,10 @@ try {
   console.log(JSON.stringify({map,mode,stage:'loading'}));
   await client.send('Page.navigate',{url:destination});
   await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
+  if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
+   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)})`);
+   if(armouryStats)armouryURL=await client.evaluate(`document.querySelector('.armoury-link')?.href`);
+  }
   await client.evaluate(`document.querySelector('#primary').click()`);
   await until(()=>client.evaluate(`!!document.querySelector('.playtest')`));
   // Keep diagnostic chrome clear of the lesson panel in the recorded views.
@@ -115,6 +124,7 @@ try {
    await client.evaluate(`window.sectorRenderReview.survey(true)`);
   }
   console.log(JSON.stringify({map,mode,stage:'intact-rendered'}));
+  if(visualOnly)continue;
   const advanced=await client.evaluate(`window.sectorRenderReview.advance(900)`);
   console.log(JSON.stringify({map,mode,stage:'battle-advanced',...advanced}));
   const before=await client.evaluate(mode==='ground'?`window.sectorRenderReview.survey(false).frames`:`window.sectorRenderReview.state().frames`);
@@ -127,7 +137,7 @@ try {
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
- if(map==='industrial'){
+ if(!visualOnly&&map==='industrial'){
   await client.evaluate(`(()=>{const s=document.createElement('style');s.textContent='.playtest{visibility:hidden!important}';document.head.append(s);})()`);
   const stage=async(name)=>{await client.evaluate(`window.sectorRenderReview.combat(${JSON.stringify(name)})`);const before=await client.evaluate(`window.sectorRenderReview.state().frames`);await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));};
   const key=async(code,type='keydown')=>client.evaluate(`window.dispatchEvent(new KeyboardEvent(${JSON.stringify(type)},{code:${JSON.stringify(code)},bubbles:true}))`);
@@ -158,7 +168,7 @@ try {
   report.combatChecks={damageBearing:true,deathReport:true,deathView:true,deathViewEnds:true,shortViewport:true,respawnMarker:true,markerExpiry:true,assistCredit:true,scoreboard:true};
   console.log(JSON.stringify({map,combatChecks:report.combatChecks}));
  }
- if(map==='training'){
+ if(!visualOnly&&map==='training'){
   report.trainingControls=await client.evaluate(`(()=>{
    const b=window.sectorRenderReview,check=(ok,text)=>{if(!ok)throw Error(text);};
    const key=(code,type='keydown')=>window.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
@@ -261,6 +271,15 @@ try {
   report.emplacement=await trainGun('pack');
   console.log(JSON.stringify({map,emplacement:report.emplacement}));
   console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
+ }
+ if(!visualOnly&&armouryStats) {
+  if(armouryURL!==new URL('armoury/',base).href)throw Error('Weapons link does not point to the built Armoury');
+  const expected=JSON.parse(await readFile(armouryStats,'utf8'));
+  await client.send('Page.navigate',{url:armouryURL});
+  await until(()=>client.evaluate(`location.href===${JSON.stringify(armouryURL)}&&document.readyState==='complete'&&!!document.querySelector('#armoury .card')`));
+  report.armoury=await client.evaluate(`(${checkArmoury})(${JSON.stringify(expected)})`);
+  await screenshot('armoury-comparison');
+  console.log(JSON.stringify({armoury:report.armoury}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);
  console.log(JSON.stringify({map,source:report.source,scenarios:report.scenarios.map(s=>({mode:s.mode,ticks:s.summary.ticks,frames:s.summary.frames,shots:s.summary.shots,artilleryImpacts:s.summary.artilleryImpacts,errors:s.summary.errors.length})),errors:report.errors}));

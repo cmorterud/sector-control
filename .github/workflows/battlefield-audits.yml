@@ -1,0 +1,51 @@
+name: Battlefield audits
+
+on:
+  schedule:
+    - cron: '23 8 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/battlefield-audits.yml'
+      - 'tools/run-battlefield-audits.mjs'
+      - 'tools/*-audit.ts'
+      - 'tools/performance-*.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [ai, maps, performance]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - name: Run seeded audits
+        env:
+          AUDIT_GROUP: ${{ matrix.group }}
+        run: node tools/run-battlefield-audits.mjs "$AUDIT_GROUP"
+      - name: Save audit reports
+        if: always()
+        id: reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: audit-${{ matrix.group }}
+          path: playtest-artifacts/audit-${{ matrix.group }}/
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Link audit reports
+        if: steps.reports.outputs.artifact-url != ''
+        env:
+          ARTIFACT_URL: ${{ steps.reports.outputs.artifact-url }}
+        run: printf '[Download seeded audit reports](%s)\n\nCPU timings are runner diagnostics and can vary across runs.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"

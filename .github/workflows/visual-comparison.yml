@@ -1,0 +1,122 @@
+name: Map and model visual comparison
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/visual-comparison.yml'
+      - 'tools/render-review.mjs'
+      - 'tools/visual-comparison.mjs'
+      - 'public/models/**'
+      - 'public/previews/**'
+      - 'src/*map.ts'
+      - 'src/*geometry.ts'
+      - 'src/*scenery*.ts'
+      - 'src/*surface*.ts'
+      - 'src/*look.ts'
+      - 'src/*-presentation.ts'
+      - 'src/farm-*.ts'
+      - 'src/house-kit*.ts'
+      - 'src/terrain-*.ts'
+      - 'src/verdun-forest.ts'
+      - 'src/village-*.ts'
+      - 'src/battlefield-dressing.ts'
+      - 'src/graphics-quality.ts'
+      - 'src/main.ts'
+      - 'src/rendering.ts'
+      - 'src/room-light.ts'
+      - 'src/sky.ts'
+      - 'src/style.css'
+      - 'src/vegetation.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-comparison-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PAGES_BASE_PATH: /${{ github.event.repository.name }}/
+
+jobs:
+  builds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: after
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          path: before
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: |
+            before/package-lock.json
+            after/package-lock.json
+      - name: Build target branch
+        working-directory: before
+        run: |
+          npm ci
+          npm run build -- --base "$PAGES_BASE_PATH"
+      - name: Build proposed merge
+        working-directory: after
+        run: |
+          npm ci
+          npm run build -- --base "$PAGES_BASE_PATH"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-build-pair
+          path: |
+            before/dist/
+            after/dist/
+          retention-days: 1
+
+  compare:
+    needs: builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        map: [industrial, trenches, verdun, village, headland, training]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - uses: actions/download-artifact@v8
+        with:
+          name: visual-build-pair
+          path: visual-builds
+      - name: Capture the same opening views on both revisions
+        env:
+          MAP: ${{ matrix.map }}
+          BASE_REVISION: ${{ github.event.pull_request.base.sha }}
+          REVIEW_VISUAL_ONLY: '1'
+        run: |
+          REVIEW_SOURCE_SHA="$BASE_REVISION" node tools/render-review.mjs "$MAP" visual-builds/before/dist playtest-artifacts/visual/before
+          node tools/render-review.mjs "$MAP" visual-builds/after/dist playtest-artifacts/visual/after
+          node tools/visual-comparison.mjs playtest-artifacts/visual
+      - name: Save both revisions and the comparison page
+        if: always()
+        id: screenshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-comparison-${{ matrix.map }}
+          path: playtest-artifacts/visual/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Link the visual comparison
+        if: steps.screenshots.outputs.artifact-url != ''
+        env:
+          ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+        run: printf '[Download the comparison](%s) and open `index.html` from the extracted folder.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
