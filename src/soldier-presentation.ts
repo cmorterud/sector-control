@@ -1,5 +1,5 @@
 import { weaponDesign } from "./weapon-design";
-import { weaponProfiles } from "./weapons";
+import { weaponProfile } from "./weapons";
 import type { Soldier } from "./simulation";
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const ease = (v: number) => {
@@ -43,7 +43,7 @@ export function reloadMotion(
 ) {
   if (!p.reloadAt || tick >= p.reloadAt) return null;
   const progress = clamp(
-    1 - (p.reloadAt - tick) / weaponProfiles[p.weapon].reloadTicks,
+    1 - (p.reloadAt - tick) / weaponProfile(p).reloadTicks,
   );
   const lower = ease(progress / 0.16) * (1 - ease((progress - 0.78) / 0.22));
   const style=weaponDesign(p)?.reload;

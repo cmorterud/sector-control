@@ -1,3 +1,4 @@
+import { damageAt, soldierHealth, type HitZone } from "./weapon-stats";
 import { villageRoad } from "./ground-surface";
 import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
 import { pitchedBoxRay } from "./box-geometry";
@@ -92,6 +93,8 @@ import {
   serviceRifleAction,
   rosterWeapon,
   weaponProfiles,
+  weaponProfile,
+  equippedStats,
   weaponMount,
   type WeaponKind,
 } from "./weapons";
@@ -1115,7 +1118,7 @@ export class Game {
           ? Math.PI / 2
           : -Math.PI / 2
         : 0;
-    p.hp = 100;
+    p.hp = soldierHealth;
     p.recentDamage=[];
     p.melee = null;
     p.nextMelee = this.tick;
@@ -1124,8 +1127,10 @@ export class Game {
     p.staggerAt = -1000;
     p.staggerUntil = 0;
     p.crouched = false;
-    p.ammo = weaponProfiles[p.weapon].magazine;
-    p.reserve = weaponProfiles[p.weapon].reserve;
+    const profile = weaponProfile(p);
+    p.ammo = profile.magazine;
+    p.reserve = profile.reserve;
+    if (p.inventory) Object.assign(p.inventory.primary, { ammo: p.ammo, reserve: p.reserve });
     p.grenades = 3;
     p.smokes = 2;
     p.suppression = 0;
@@ -1326,9 +1331,10 @@ export class Game {
           else p.y = ground;
         }
       }
+      const profile = weaponProfile(p);
       if (p.reloadAt && this.tick >= p.reloadAt) {
         const n = Math.min(
-          weaponProfiles[p.weapon].magazine - p.ammo,
+          profile.magazine - p.ammo,
           p.reserve,
         );
         p.ammo += n;
@@ -1342,10 +1348,10 @@ export class Game {
         this.tick >= p.staggerUntil &&
         !p.mantle &&
         !p.reloadAt &&
-        p.ammo < weaponProfiles[p.weapon].magazine &&
+        p.ammo < profile.magazine &&
         p.reserve > 0
       ) {
-        p.reloadAt = this.tick + weaponProfiles[p.weapon].reloadTicks + (switchPose(p,this.tick).active ? Math.max(0,p.weaponChange!.tick+switchRules.readyTicks-this.tick) : 0);
+        p.reloadAt = this.tick + profile.reloadTicks + (switchPose(p,this.tick).active ? Math.max(0,p.weaponChange!.tick+switchRules.readyTicks-this.tick) : 0);
         this.emit({ type: "reload", actor: p.id });
       }
       if (p.weapon === "serviceRifle" && !p.melee) {
@@ -1592,7 +1598,8 @@ export class Game {
       yaw += (this.random() - .5) * spread; pitch += (this.random() - .5) * spread;
     }
     p.ammo--;
-    p.nextShot = this.tick + weaponProfiles[p.weapon].shotTicks;
+    const profile = weaponProfile(p);
+    p.nextShot = this.tick + profile.shotTicks;
     // Bloom feeds bot aim drift; the shared recoil below applies to every rifle.
     p.aimBloom = Math.min(1, p.aimBloom + 0.25);
     p.protectedUntil = 0;
@@ -1640,7 +1647,7 @@ export class Game {
       y: camera.y + (aim.y - camera.y) * first,
       z: camera.z + (aim.z - camera.z) * first,
     };
-    const muzzle = weaponProfiles[p.weapon].muzzle;
+    const muzzle = profile.muzzle;
     const from = firstPersonView(p) ? viewMuzzle(p, this.tick) : {
       x: p.x + Math.cos(yaw) * weaponMount.x + dir.x * muzzle,
       y: p.y + rifleHeight(this.map, p),
@@ -1650,18 +1657,18 @@ export class Game {
       0.001,
       Math.hypot(aim.x - from.x, aim.y - from.y, aim.z - from.z),
     );
-    const speed = weaponProfiles[p.weapon].projectileSpeed;
+    const speed = profile.projectileSpeed;
     const shot: Projectile = {
       origin:{...from},weapon:p.weapon,weaponId:p.weaponId,
       id: ++this.projectileSequence,
-      damage: weaponProfiles[p.weapon].damage,
+      damage: profile.damage,
       actor: p.id,
       team: p.team,
       ...from,
       vx: ((aim.x - from.x) / length) * speed,
       vy: ((aim.y - from.y) / length) * speed,
       vz: ((aim.z - from.z) / length) * speed,
-      remaining: p.weapon === "pistol" ? 25 : projectileRange,
+      remaining: p.weapon === "pistol" && !equippedStats(p) ? 25 : projectileRange,
       bornAt: this.tick,
     };
     this.emit({
@@ -1850,13 +1857,29 @@ export class Game {
       this.emit({ type: "death", actor: victim.id,report });
     }
   }
+  private projectileDamage(shot: Projectile, at: V3, victim: Soldier) {
+    const stats = shot.weapon ? equippedStats({ weapon: shot.weapon, weaponId: shot.weaponId }) : undefined;
+    if (!stats) return shot.damage ?? 25;
+    // Classify the impact on the stance-aware soldier collision volume, in the
+    // target's frame so left and right distinguish arms from the torso.
+    const height = (at.y - victim.y) * (victim.crouched ? crouchRules.standingTop / crouchRules.crouchingTop : 1);
+    const side = Math.abs((at.x - victim.x) * Math.cos(victim.yaw) + (at.z - victim.z) * Math.sin(victim.yaw));
+    let zone: HitZone = "legs";
+    if (height >= 1.55) zone = "head";
+    else if (height >= 0.91) {
+      if (side > (victim.crouched ? 0.22 : 0.26)) zone = "arms";
+      else zone = height >= 1.16 ? "chest" : "stomach";
+    }
+    const distance = shot.origin ? Math.hypot(at.x - shot.origin.x, at.y - shot.origin.y, at.z - shot.origin.z) : 0;
+    return damageAt(stats, zone, distance) * (shot.penetrated ? timberPassDamage : 1);
+  }
   private impact(shot: Projectile, at: V3, victim?: Soldier, from = at) {
     const hit =
       !!victim &&
       victim.team !== shot.team &&
       this.tick >= victim.protectedUntil;
     if (hit && victim) {
-      this.damage(victim, shot.damage ?? 25, shot.actor, shot.team,{kind:"bullet",weapon:shot.weaponId??weaponProfiles[shot.weapon??this.players[shot.actor]?.weapon??"rifle"].label,from:shot.origin??this.attackOrigin(shot.actor)??from});
+      this.damage(victim, this.projectileDamage(shot, at, victim), shot.actor, shot.team,{kind:"bullet",weapon:shot.weaponId??weaponProfiles[shot.weapon??this.players[shot.actor]?.weapon??"rifle"].label,from:shot.origin??this.attackOrigin(shot.actor)??from});
       reactToThreat(this, victim, from, "hit", .95);
     }
     if (!victim) {
@@ -2761,7 +2784,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     // Aim from delayed observations and estimated movement, not live target velocity.
     const rx = seen.x - p.x,
       rz = seen.z - p.z;
-    const speed = weaponProfiles[p.weapon].projectileSpeed;
+    const speed = weaponProfile(p).projectileSpeed;
     const a = velocity.x ** 2 + velocity.z ** 2 - speed ** 2;
     const b = 2 * (rx * velocity.x + rz * velocity.z);
     const lead = clamp(

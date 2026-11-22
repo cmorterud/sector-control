@@ -1,4 +1,4 @@
-import { weaponProfiles } from "./weapons";
+import { weaponProfile } from "./weapons";
 import { availableCraterCover, craterDepth } from "./crater-cover";
 import {
   groundHeight,
@@ -119,7 +119,7 @@ export function advanceAssaults(g: Game) {
             p.ammo >=
               Math.min(
                 10,
-                Math.ceil(weaponProfiles[p.weapon].magazine * 0.6),
+                Math.ceil(weaponProfile(p).magazine * 0.6),
               ) &&
             !p.mantle &&
             !p.hop &&
@@ -351,7 +351,7 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
   c.aim = false;
   c.fire = false;
   c.reload =
-    p.ammo < Math.min(10, Math.ceil(weaponProfiles[p.weapon].magazine * 0.4)) &&
+    p.ammo < Math.min(10, Math.ceil(weaponProfile(p).magazine * 0.4)) &&
     p.reserve > 0;
   if (!p.mantle && !p.hop && !p.fall && g.tick >= p.nextMantle) {
     const landing = mantleLanding(p, c, g.map);

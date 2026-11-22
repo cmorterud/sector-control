@@ -1,3 +1,5 @@
+import { gameMuzzleVelocity, reloadDuration, shotInterval, weaponStats, type WeaponStats } from "./weapon-stats";
+
 export type WeaponKind = "rifle" | "serviceRifle" | "machineGun" | "pistol" | "flamethrower";
 export const weaponProfiles = {
   pistol: { magazine: 8, reserve: 40, shotTicks: 6, reloadTicks: 36, damage: 25, projectileSpeed: 192, muzzle: 0.7, label: "PISTOL" },
@@ -34,6 +36,36 @@ export const weaponProfiles = {
   },
 };
 
+const factionProfiles = new Map(weaponStats.map(stats => {
+  const kind: WeaponKind = stats.role === "pistol" || stats.role === "machineGun" ? stats.role : "serviceRifle";
+  return [stats.name, {
+    kind,
+    stats,
+    profile: {
+      ...weaponProfiles[kind],
+      magazine: stats.magazine,
+      reserve: stats.reserve,
+      shotTicks: shotInterval(stats),
+      reloadTicks: reloadDuration(stats),
+      damage: stats.damage.chest,
+      projectileSpeed: gameMuzzleVelocity(stats),
+      label: stats.name,
+    },
+  }] as const;
+}));
+
+type EquippedWeapon = { weapon: WeaponKind; weaponId?: string };
+function factionProfile({ weapon, weaponId }: EquippedWeapon) {
+  const faction = weaponId ? factionProfiles.get(weaponId === "P08" ? "P08 Luger" : weaponId) : undefined;
+  return faction?.kind === weapon ? faction : undefined;
+}
+export function weaponProfile(p: EquippedWeapon) {
+  return factionProfile(p)?.profile ?? weaponProfiles[p.weapon];
+}
+export function equippedStats(p: EquippedWeapon): WeaponStats | undefined {
+  return factionProfile(p)?.stats;
+}
+
 export function rosterWeapon(
   index: number,
   teamSize: number,
@@ -51,13 +83,13 @@ export function rosterWeapon(
 export const weaponMount = { x: 0.18, y: 0.36, z: -0.5 };
 export const armLengths = { upper: 0.34, forearm: 0.36 };
 export function boltMotion(
-  p: { weapon: WeaponKind; lastShotAt: number; reloadAt: number; hp: number },
+  p: { weapon: WeaponKind; weaponId?: string; lastShotAt: number; reloadAt: number; hp: number },
   tick: number,
 ) {
   if (p.weapon !== "serviceRifle" || p.reloadAt || p.hp <= 0) return null;
   // Keep the original pose curve, scaled to the current mechanical cycle.
   const age =
-    ((tick - p.lastShotAt) / weaponProfiles.serviceRifle.shotTicks) * 36;
+    ((tick - p.lastShotAt) / weaponProfile(p).shotTicks) * 36;
   if (age < 5 || age >= 33) return null;
   const ease = (a: number, b: number) => {
     const t = Math.max(0, Math.min(1, (age - a) / (b - a)));
@@ -72,11 +104,11 @@ export function boltMotion(
 
 // Mechanical sounds/events follow the same normalized phases as the animations.
 export function serviceRifleAction(
-  p: { weapon: WeaponKind; lastShotAt: number; reloadAt: number; hp: number },
+  p: { weapon: WeaponKind; weaponId?: string; lastShotAt: number; reloadAt: number; hp: number },
   tick: number,
 ) {
   if (p.weapon !== "serviceRifle" || p.hp <= 0) return null;
-  const profile = weaponProfiles.serviceRifle;
+  const profile = weaponProfile(p);
   if (p.reloadAt) {
     const remaining = p.reloadAt - tick;
     return remaining === Math.round((profile.reloadTicks * 90) / 96)

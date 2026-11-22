@@ -1,7 +1,4 @@
-// Weapon statistics by faction: the single source of truth for the Armoury
-// page and, as the body-part damage and machine-gun placement work lands, for
-// the game itself. Historical figures are approximate real-world values; the
-// game figures are what play uses.
+// Live balance shared by the faction loadouts, simulation and Armoury.
 import type { FactionId } from "./loadouts";
 
 export type HitZone = "head" | "chest" | "stomach" | "arms" | "legs";
@@ -24,7 +21,7 @@ export const roleLabels: Record<WeaponRole, string> = {
   rifle: "Bolt-action rifle",
   scoped: "Scoped rifle",
   pistol: "Pistol",
-  machineGun: "Machine gun (placed)",
+  machineGun: "Light machine gun",
 };
 
 export interface WeaponStats {
@@ -37,7 +34,7 @@ export interface WeaponStats {
     // Metres per second.
     muzzleVelocity: number;
     // Rounds per minute, as a range where sources differ.
-    rate: [number, number];
+    rate?: [number, number];
     note: string;
   };
   // Rounds fired per minute in play.
@@ -77,10 +74,10 @@ export const weaponStats: WeaponStats[] = [
     summary: "Heaviest-hitting sidearm, but slow bullets and a slow reload.",
   },
   {
-    id: "vickers", name: "Vickers", faction: "british", role: "machineGun", round: ".303 British",
-    historical: { muzzleVelocity: 744, rate: [450, 500], note: "Water-cooled, fed from 250-round fabric belts." },
+    id: "lewis", name: "Lewis Mk I", faction: "british", role: "machineGun", round: ".303 British",
+    historical: { muzzleVelocity: 744, note: "The game uses the .303 service rifle velocity as its reference and gives Support a 250-round supply before reloading." },
     roundsPerMinute: 450, magazine: 250, reserve: 500, reloadSeconds: 5, damage: machineGunDamage,
-    summary: "Fired only from a placement; a long belt and a slow change.",
+    summary: "High ammunition capacity with a long reload.",
   },
   {
     id: "gewehr98", name: "Gewehr 98", faction: "german", role: "rifle", round: "7.92×57 mm",
@@ -101,10 +98,10 @@ export const weaponStats: WeaponStats[] = [
     summary: "Quick to fire and reload.",
   },
   {
-    id: "mg08", name: "MG 08", faction: "german", role: "machineGun", round: "7.92×57 mm",
-    historical: { muzzleVelocity: 878, rate: [450, 500], note: "Water-cooled Maxim on a sled mount, 250-round belts." },
+    id: "mg08-15", name: "MG 08/15", faction: "german", role: "machineGun", round: "7.92×57 mm",
+    historical: { muzzleVelocity: 878, note: "The game uses the 7.92 mm service rifle velocity as its reference." },
     roundsPerMinute: 450, magazine: 250, reserve: 500, reloadSeconds: 5, damage: machineGunDamage,
-    summary: "Fired only from a placement; the fastest machine-gun bullet.",
+    summary: "High ammunition capacity and the fastest machine-gun projectile.",
   },
   {
     id: "berthier", name: "Berthier Mle 1916", faction: "french", role: "rifle", round: "8 mm Lebel",
@@ -125,10 +122,10 @@ export const weaponStats: WeaponStats[] = [
     summary: "The most rounds of the sidearms, and the lightest hit.",
   },
   {
-    id: "hotchkiss", name: "Hotchkiss M1914", faction: "french", role: "machineGun", round: "8 mm Lebel",
-    historical: { muzzleVelocity: 725, rate: [400, 450], note: "Air-cooled, fed from 24- or 30-round rigid strips." },
+    id: "chauchat", name: "Chauchat", faction: "french", role: "machineGun", round: "8 mm Lebel",
+    historical: { muzzleVelocity: 725, note: "Gameplay velocity uses the 8 mm Hotchkiss reference from the balance design." },
     roundsPerMinute: 450, magazine: 30, reserve: 300, reloadSeconds: 2.5, damage: machineGunDamage,
-    summary: "Fired only from a placement; short strips with quick changes.",
+    summary: "Lower ammunition capacity with a quicker reload.",
   },
 ];
 
@@ -137,10 +134,25 @@ export const armouryFactions: FactionId[] = ["british", "german", "french"];
 export function gameMuzzleVelocity(w: WeaponStats) {
   return Math.round(w.historical.muzzleVelocity * bulletSpeedScale);
 }
-// Hits needed to kill from full health, and the time they take at full rate.
-export function shotsToKill(w: WeaponStats, zone: HitZone) {
-  return Math.ceil(soldierHealth / w.damage[zone]);
+export const weaponTicksPerSecond = 30;
+export const shotInterval = (w: WeaponStats) => Math.round(60 * weaponTicksPerSecond / w.roundsPerMinute);
+export const reloadDuration = (w: WeaponStats) => Math.round(w.reloadSeconds * weaponTicksPerSecond);
+export const gameRateOfFire = (w: WeaponStats) => 60 * weaponTicksPerSecond / shotInterval(w);
+
+export function damageAt(w: WeaponStats, zone: HitZone, distance = 0) {
+  const falloff = w.falloff;
+  if (!falloff || distance <= falloff.start) return w.damage[zone];
+  const progress = Math.min(1, (distance - falloff.start) / (falloff.end - falloff.start));
+  return w.damage[zone] * (1 - progress * (1 - falloff.minimum));
 }
-export function timeToKill(w: WeaponStats, zone: HitZone) {
-  return (shotsToKill(w, zone) - 1) * 60 / w.roundsPerMinute;
+
+// Times begin with the first hit; reloads are included if the magazine runs dry.
+export function shotsToKill(w: WeaponStats, zone: HitZone, distance = 0) {
+  return Math.ceil(soldierHealth / damageAt(w, zone, distance));
+}
+export function timeToKill(w: WeaponStats, zone: HitZone, distance = 0) {
+  const intervals = shotsToKill(w, zone, distance) - 1;
+  const reloads = Math.floor(intervals / w.magazine);
+  const ticks = intervals * shotInterval(w) + reloads * Math.max(0, 1 + reloadDuration(w) - shotInterval(w));
+  return ticks / weaponTicksPerSecond;
 }

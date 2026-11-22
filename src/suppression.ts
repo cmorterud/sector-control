@@ -1,4 +1,4 @@
-import { weaponProfiles } from "./weapons";
+import { weaponProfile } from "./weapons";
 import { reactToThreat } from "./combat-reaction";
 import { stanceDrop } from "./crouch";
 import type { Game, Soldier, Projectile, V3, Command } from "./simulation";
@@ -109,7 +109,7 @@ export function suppressionCommand(g: Game, p: Soldier): Command | null {
   c.sprint = true;
   c.yaw = p.yaw;
   c.reload =
-    p.ammo < Math.min(15, weaponProfiles[p.weapon].magazine) && p.reserve > 0;
+    p.ammo < Math.min(15, weaponProfile(p).magazine) && p.reserve > 0;
   p.mode = "Taking cover";
   return c;
 }

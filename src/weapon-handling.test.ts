@@ -16,15 +16,15 @@ test("switching lowers the old gun, replaces it out of view and raises the new g
 test("queued reload during drawing gets a full loading cycle, with no early ammo or burst and mechanical events at their real phases",()=>{
  const g=scene(),p=g.players[0];p.inventory!.sidearm.ammo=2;
  g.step({...idle(),equip:"sidearm"});g.step({...idle(),reload:true});
- expect(p.reloadAt).toBe(46);const actions:string[]=[];
- for(let i=0;i<43;i++){g.step({...idle(),fire:true});for(const e of g.events)if(e.type==="weaponAction")actions.push(e.action);}
- expect(p.ammo).toBe(2);g.step(idle());expect(p.ammo).toBe(8);expect(actions).toEqual(["draw","cylinderOpen","cartridges","cylinderClose"]);
+ expect(p.reloadAt).toBe(85);const actions:string[]=[];
+ while(g.tick<p.reloadAt-1){g.step({...idle(),fire:true});for(const e of g.events)if(e.type==="weaponAction")actions.push(e.action);}
+ expect(p.ammo).toBe(2);g.step(idle());expect(p.ammo).toBe(6);expect(actions).toEqual(["draw","cylinderOpen","cartridges","cylinderClose"]);
 });
 test("support magazines and sidearm actions have distinct mechanical cues and bounded weapon-specific reports",()=>{
  expect(mechanicalVoice("bolt","cylinderClose","Webley Mk VI").frequency).toBeLessThan(mechanicalVoice("bolt","rack","Ruby").frequency);
  expect(mechanicalVoice("equip","holster").volume).toBeLessThan(mechanicalVoice("magazine","magazineIn").volume);
  expect(shotVoice("Lewis Mk I")).not.toBe(shotVoice("Chauchat"));
  const g=scene(),p=g.players[0];equipLoadout(p,"support");p.ammo=2;g.step({...idle(),reload:true});
- const actions:string[]=[];for(let i=0;i<45;i++){g.step(idle());for(const e of g.events)if(e.type==="weaponAction")actions.push(e.action);}
+ const actions:string[]=[];while(p.reloadAt){g.step(idle());for(const e of g.events)if(e.type==="weaponAction")actions.push(e.action);}
  expect(actions).toEqual(["magazineOut","magazineIn","rack"]);
 });

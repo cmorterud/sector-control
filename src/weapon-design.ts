@@ -174,7 +174,7 @@ const designs = {
 const ids: Record<string, keyof typeof designs> = {
   "SMLE Mk III":"smle", "Scoped SMLE":"smle", "Gewehr 98":"gewehr", "Scoped Gewehr 98":"gewehr",
   "Berthier Mle 1916":"berthier", "Scoped Lebel":"lebel", "Lewis Mk I":"lewis", "MG 08/15":"mg08", "Chauchat":"chauchat",
-  "Webley Mk VI":"webley", "P08":"luger", "Ruby":"ruby",
+  "Webley Mk VI":"webley", "P08":"luger", "P08 Luger":"luger", "Ruby":"ruby",
 };
 export function weaponDesign(p: {weapon: WeaponKind; weaponId?: string}): WeaponDesign | undefined {
   const key = p.weaponId && ids[p.weaponId], design = key ? designs[key] : undefined;
