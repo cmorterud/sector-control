@@ -31,3 +31,13 @@ it("debounces toggle sprint and clears the latch on lifecycle resets", () => {
   sprint.reset(); expect(sprint.active).toBe(false);
   sprint.press(false, true); sprint.press(false, true); expect(sprint.active).toBe(false);
 });
+
+it("adds the emplacement binding without resetting an older custom layout", () => {
+  const original = freshControls();
+  const { emplace: _missing, ...bindings } = original.bindings;
+  const saved = { ...original, bindings: { ...bindings, forward: "KeyB", interact: "KeyH" } };
+  const restored = loadControls({ getItem: () => JSON.stringify(saved) });
+  expect(restored.bindings.forward).toBe("KeyB");
+  expect(restored.bindings.interact).toBe("KeyH");
+  expect(restored.bindings.emplace).not.toBe("KeyB");
+});

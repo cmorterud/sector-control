@@ -213,6 +213,21 @@ em {
 #ammo {
   text-align: right;
 }
+.gun-traverse {
+  position: relative;
+  height: 5px;
+  width: 126px;
+  margin: 7px 0 7px auto;
+  background: linear-gradient(90deg, #8e9b8b 0 2px, #bdc9b666 2px 49%, #d1dbca 49% 51%, #bdc9b666 51% calc(100% - 2px), #8e9b8b calc(100% - 2px));
+}
+.gun-traverse i {
+  position: absolute;
+  top: -2px;
+  width: 5px;
+  height: 9px;
+  transform: translateX(-50%);
+  background: #f3d49a;
+}
 .controls {
   font-size: 9px;
   letter-spacing: 1px;

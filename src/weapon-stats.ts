@@ -16,12 +16,13 @@ export const soldierHealth = 100;
 // the game's current 192 m/s.
 export const bulletSpeedScale = 192 / 744;
 
-export type WeaponRole = "rifle" | "scoped" | "pistol" | "machineGun";
+export type WeaponRole = "rifle" | "scoped" | "pistol" | "machineGun" | "emplaced";
 export const roleLabels: Record<WeaponRole, string> = {
   rifle: "Bolt-action rifle",
   scoped: "Scoped rifle",
   pistol: "Pistol",
   machineGun: "Light machine gun",
+  emplaced: "Emplaced machine gun",
 };
 
 export interface WeaponStats {
@@ -126,6 +127,24 @@ export const weaponStats: WeaponStats[] = [
     historical: { muzzleVelocity: 725, note: "Gameplay velocity uses the 8 mm Hotchkiss reference from the balance design." },
     roundsPerMinute: 450, magazine: 30, reserve: 300, reloadSeconds: 2.5, damage: machineGunDamage,
     summary: "Lower ammunition capacity with a quicker reload.",
+  },
+  {
+    id: "vickers", name: "Vickers", faction: "british", role: "emplaced", round: ".303 British",
+    historical: { muzzleVelocity: 744, note: "Emplacement kit for British Support." },
+    roundsPerMinute: 600, magazine: 250, reserve: 500, reloadSeconds: 6, damage: machineGunDamage,
+    summary: "Long bursts from a fixed mount. A teammate can take over when you dismount.",
+  },
+  {
+    id: "mg08", name: "MG 08", faction: "german", role: "emplaced", round: "7.92×57 mm",
+    historical: { muzzleVelocity: 878, note: "Emplacement kit for Imperial German Support." },
+    roundsPerMinute: 600, magazine: 250, reserve: 500, reloadSeconds: 6, damage: machineGunDamage,
+    summary: "High ammunition capacity with the fastest emplaced projectile.",
+  },
+  {
+    id: "hotchkiss", name: "Hotchkiss M1914", faction: "french", role: "emplaced", round: "8 mm Lebel",
+    historical: { muzzleVelocity: 725, note: "Emplacement kit for French Support." },
+    roundsPerMinute: 600, magazine: 30, reserve: 300, reloadSeconds: 3.5, damage: machineGunDamage,
+    summary: "Shorter bursts and a quicker reload than the other emplacements.",
   },
 ];
 

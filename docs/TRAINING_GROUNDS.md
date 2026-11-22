@@ -5,7 +5,7 @@ Open `?map=training` from the map selector or the published game URL. This is a 
 | Station | Required actions |
 | --- | --- |
 | Movement & cover | Walk, sprint, toggle crouch, hop, mantle the brick wall, switch camera views and fire from a real trench firing step |
-| Weapon range | Rifle hit, reload, scoped hit, machine-gun hit, pistol hit close-range flame damage and an AR-01 hit |
+| Weapon range | Rifle hit, reload, scoped hit, machine-gun hit, pistol hit, close-range flame damage, AR-01 hit, and emplacement setup, firing, reload and packing |
 | Grenades & smoke | Place a grenade explosion near the target group and let smoke bloom |
 | Bayonet lane | Land a normal thrust and a sprinting charge |
 | Fire support | Request artillery on the target house through the tactical map and observe impacts |

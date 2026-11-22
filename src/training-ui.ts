@@ -22,7 +22,7 @@ export function trainingHUD(session:TrainingSession,g:Game,settings:ControlSetti
 export function trainingMenu(session:TrainingSession,started:boolean){
   return `<details class="training-settings" ${started?"open":""}><summary>Training menu · exercises & armory</summary><fieldset class="training-menu"><legend>Training setup</legend>
     <label>Exercise <select id="training-station">${trainingStations.map((s,i)=>`<option value="${i}" ${i===session.lesson?"selected":""}>${i+1}. ${escape(s.name)}</option>`).join("")}</select></label>
-    <label>Armory <select id="training-loadout">${[["rifleman","Rifleman · standard rifle"],["marksman","Marksman · 4× scope"],["support","Support · machine gun"]].map(([id,name])=>`<option value="${id}" ${session.loadout===id?"selected":""}>${name}</option>`).join("")}</select></label>
+    <label>Armory <select id="training-loadout">${[["rifleman","Rifleman · standard rifle"],["marksman","Marksman · 4× scope"],["support","Support · carried machine gun"],["emplacement","Support · Emplacement kit"]].map(([id,name])=>`<option value="${id}" ${session.loadout===id?"selected":""}>${name}</option>`).join("")}</select></label>
     <label>Faction equipment <select id="training-faction">${[["british","Britain"],["french","France"],["german","Imperial Germany"],["trainingBlue","Industrial training kit"]].map(([id,name])=>`<option value="${id}" ${session.faction===id?"selected":""}>${name}</option>`).join("")}</select></label>
     <label><input id="training-free" type="checkbox" ${session.free?"checked":""}> Free practice</label>
     <small>Gear or exercise changes reset the exercise when you deploy or resume. Completed tasks stay checked. Collect the flame kit beside each supply table with your interact key.</small>

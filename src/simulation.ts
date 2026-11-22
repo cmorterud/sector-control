@@ -1,3 +1,4 @@
+import { advanceEmplacements, checkEmplacementSupport, damageEmplacements, dismount, emplacementCommand, emplacementView, mountedGun, operateGun, supportsEmplacements, type Emplacement } from "./emplacements";
 import { damageAt, soldierHealth, type HitZone } from "./weapon-stats";
 import { villageRoad } from "./ground-surface";
 import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
@@ -132,6 +133,8 @@ export interface Command {
   equip?: WeaponSlot;
   loadout?: Loadout;
   interact?: boolean;
+  deployGun?: boolean;
+  packGun?: boolean;
   redeploy?: boolean;
   // Bots only: launch speed for a planned short or lobbed frag.
   throwSpeed?: number;
@@ -344,6 +347,9 @@ export interface Soldier extends Vec {
   weaponId?: string;
   weaponChange?: {tick:number;from:WeaponKind;fromId?:string;fromSlot?:WeaponSlot;startLower?:number};
   faction?: FactionId;
+  mountedGun?: number;
+  emplacementLost?: boolean;
+  packedEmplacement?: { ammo: number; reserve: number; hp: number };
   loadout?: Loadout;
   pendingLoadout?: Loadout;
   equippedSlot?: WeaponSlot;
@@ -664,6 +670,7 @@ export type Event = { id: number; tick: number } & (
       held?: Record<Team, number>;
     }
   | { type: "end"; winner: Team | "draw" }
+  | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
 );
 type EventInput = Event extends infer E
@@ -887,6 +894,7 @@ export class Game {
   commandOverride?: (game: Game, soldier: Soldier) => Command;
   artilleryAudit = freshArtilleryAudit();
   flames: FlameState = {kits:[]};
+  emplacements = new Map<number, Emplacement>();
   tick = 0;
   // A performance.now() time after which this frame's navigation rebuild
   // work stops. The browser sets it once per frame; headless games leave it
@@ -1065,6 +1073,7 @@ export class Game {
       grenadeSequence: this.grenadeSequence,
       artillery: this.artillery,
       flames: this.flames,
+      emplacements: [...this.emplacements.values()],
       artilleryAudit: this.artilleryAudit,
       assaults: this.assaults,
       smokeClouds: this.smokeClouds,
@@ -1080,18 +1089,22 @@ export class Game {
     this.events.push({ ...e, id: ++this.sequence, tick: this.tick } as Event);
   }
   selectLoadout(p: Soldier, loadout: Loadout) {
-    if (!["rifleman", "marksman", "support"].includes(loadout)) return;
+    if (!["rifleman", "marksman", "support", "emplacement"].includes(loadout)) return;
+    if (loadout === "emplacement" && !supportsEmplacements(this.map)) return;
     p.pendingLoadout = loadout;
     if (this.tick === 0) equipLoadout(p, loadout, this.map.id === "industrial");
   }
   respawn(p: Soldier) {
+    dismount(this, p, false);
+    p.emplacementLost = false;
+    p.packedEmplacement = undefined;
     dropFlame(this,p); p.burnUntil=0; p.flameThreatUntil=0;
     const retainedPrimary = p.pendingLoadout === p.loadout ? p.inventory?.primary : undefined;
     const legacyWeapon = p.inventory && p.inventory[p.equippedSlot ?? "primary"].kind !== p.weapon ? p.weapon : undefined;
     p.faction = factionFor(this.map, p.team);
     equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon)), this.map.id === "industrial");
     const retainedKind = legacyWeapon ?? (retainedPrimary?.kind !== "flamethrower" ? retainedPrimary?.kind : undefined);
-    if (retainedKind && p.inventory) {
+    if (retainedKind && p.inventory && p.loadout !== "emplacement") {
       p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;
       p.weaponId = retainedPrimary?.id ?? p.weaponId; p.inventory.primary.id = p.weaponId!;
     }
@@ -1130,7 +1143,7 @@ export class Game {
     const profile = weaponProfile(p);
     p.ammo = profile.magazine;
     p.reserve = profile.reserve;
-    if (p.inventory) Object.assign(p.inventory.primary, { ammo: p.ammo, reserve: p.reserve });
+    if (p.inventory) Object.assign(p.inventory[p.equippedSlot ?? "primary"], { ammo: p.ammo, reserve: p.reserve });
     p.grenades = 3;
     p.smokes = 2;
     p.suppression = 0;
@@ -1188,6 +1201,7 @@ export class Game {
     if(human.redeploy)this.redeploy(0);
     const failure = advanceStructuralFailures(this.map, this.tick);
     if (failure) this.structuralFailure(failure);
+    advanceEmplacements(this);
     advanceNavigation(this.map, this.players.filter(p => p.hp > 0), navigationChecksPerTick, this.navigationDeadline);
     this.smokeClouds = this.smokeClouds.filter((s) => {
       if (this.tick < s.expiresAt) return true;
@@ -1221,8 +1235,15 @@ export class Game {
       p.command = p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
       const c = p.command;
       if (p.id !== 0) evadeFlame(this,p);
-      if (c.interact && !p.commandInteractHeld) pickupFlame(this,p);
+      const interactPressed = !!c.interact && !p.commandInteractHeld;
       p.commandInteractHeld = !!c.interact;
+      const gunAction = emplacementCommand(this, p, c, interactPressed);
+      const gun = mountedGun(this, p);
+      if (gun) {
+        operateGun(this, p, gun, c);
+        continue;
+      }
+      if (interactPressed && !gunAction) pickupFlame(this,p);
       if (c.loadout) this.selectLoadout(p, c.loadout);
       const switched = c.equip ? switchWeapon(p, c.equip, this.tick) : false;
       if(switched)this.emit({type:"weaponAction",actor:p.id,action:"holster",weaponId:p.weaponChange?.fromId});
@@ -1376,6 +1397,12 @@ export class Game {
         this.tick >= p.nextShot
       )
         this.fire(p);
+    for (const gun of this.emplacements.values()) {
+      if (gun.operator === undefined) continue;
+      const p = this.players[gun.operator];
+      if (p.hp > 0 && p.command.fire && gun.ammo > 0 && !gun.reloadAt &&
+          this.tick >= gun.nextShot && this.tick >= p.staggerUntil) this.fire(p, gun);
+    }
     advanceFlames(this,(p,n,source,team)=>this.damage(p,n,source,team,{kind:"burn",weapon:"Flamethrower burn",from:p.burnFrom}));
     this.advanceProjectiles();
     this.advanceGrenades();
@@ -1590,16 +1617,25 @@ export class Game {
     });
     return true;
   }
-  fire(p: Soldier) {
-    if (p.weapon === "flamethrower") { fireFlame(this,p,(q,n,source,team)=>this.damage(q,n,source,team,{kind:"flame",weapon:p.weaponId??"Flamethrower",from:this.attackOrigin(source)}),c=>this.applyDestruction(p.id,c)); return; }
-    let { yaw, pitch } = weaponAim(p);
-    if (p.weapon === "machineGun" && p.id === 0 && p.loadout === "support") {
+  fire(p: Soldier, gun?: Emplacement) {
+    if (!gun && p.weapon === "flamethrower") { fireFlame(this,p,(q,n,source,team)=>this.damage(q,n,source,team,{kind:"flame",weapon:p.weaponId??"Flamethrower",from:this.attackOrigin(source)}),c=>this.applyDestruction(p.id,c)); return; }
+    const weapon = gun ? "machineGun" : p.weapon;
+    const weaponId = gun?.weaponId ?? p.weaponId;
+    const pose = gun ? emplacementView(gun) : undefined;
+    let { yaw, pitch } = gun ?? weaponAim(p);
+    if (gun) {
+      const spread = p.command.aim ? 0.005 : 0.011;
+      yaw += (this.random() - 0.5) * spread;
+      pitch += (this.random() - 0.5) * spread;
+    } else if (weapon === "machineGun" && p.id === 0 && p.loadout === "support") {
       const spread = Math.hypot(p.vx,p.vz) > 1 ? .045 : p.command.aim ? .005 : .018;
       yaw += (this.random() - .5) * spread; pitch += (this.random() - .5) * spread;
     }
-    p.ammo--;
-    const profile = weaponProfile(p);
-    p.nextShot = this.tick + profile.shotTicks;
+    const shooter = gun ?? p;
+    shooter.ammo--;
+    const profile = weaponProfile({ weapon, weaponId });
+    shooter.nextShot = this.tick + profile.shotTicks;
+    if (gun) gun.lastShotAt = this.tick;
     // Bloom feeds bot aim drift; the shared recoil below applies to every rifle.
     p.aimBloom = Math.min(1, p.aimBloom + 0.25);
     p.protectedUntil = 0;
@@ -1608,7 +1644,7 @@ export class Game {
       y: Math.sin(pitch),
       z: -Math.cos(yaw) * Math.cos(pitch),
     };
-    const pivot = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
+    const pivot = pose?.pivot ?? { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
       distance = p.command.aim ? 2.5 : 4;
     const desired = {
       x: p.x - dir.x * distance + Math.cos(yaw) * 0.65,
@@ -1616,14 +1652,14 @@ export class Game {
       z: p.z - dir.z * distance + Math.sin(yaw) * 0.65,
     };
     const f = this.collision.ray(pivot, desired) * 0.95;
-    const camera =
+    const camera = pose?.eye ?? (
       p.id === 0 && !firstPersonView(p)
         ? {
             x: pivot.x + (desired.x - pivot.x) * f,
             y: pivot.y + (desired.y - pivot.y) * f,
             z: pivot.z + (desired.z - pivot.z) * f,
           }
-        : pivot;
+        : pivot);
     let aim = {
       x: camera.x + dir.x * projectileRange,
       y: camera.y + dir.y * projectileRange,
@@ -1648,18 +1684,18 @@ export class Game {
       z: camera.z + (aim.z - camera.z) * first,
     };
     const muzzle = profile.muzzle;
-    const from = firstPersonView(p) ? viewMuzzle(p, this.tick) : {
+    const from = pose?.muzzle ?? (firstPersonView(p) ? viewMuzzle(p, this.tick) : {
       x: p.x + Math.cos(yaw) * weaponMount.x + dir.x * muzzle,
       y: p.y + rifleHeight(this.map, p),
       z: p.z + Math.sin(yaw) * weaponMount.x + dir.z * muzzle,
-    };
+    });
     const length = Math.max(
       0.001,
       Math.hypot(aim.x - from.x, aim.y - from.y, aim.z - from.z),
     );
     const speed = profile.projectileSpeed;
     const shot: Projectile = {
-      origin:{...from},weapon:p.weapon,weaponId:p.weaponId,
+      origin:{...from},weapon,weaponId,
       id: ++this.projectileSequence,
       damage: profile.damage,
       actor: p.id,
@@ -1668,13 +1704,13 @@ export class Game {
       vx: ((aim.x - from.x) / length) * speed,
       vy: ((aim.y - from.y) / length) * speed,
       vz: ((aim.z - from.z) / length) * speed,
-      remaining: p.weapon === "pistol" && !equippedStats(p) ? 25 : projectileRange,
+      remaining: weapon === "pistol" && !equippedStats(p) ? 25 : projectileRange,
       bornAt: this.tick,
     };
     this.emit({
       type: "fire",
-      weapon: p.weapon,
-      weaponId:p.weaponId,
+      weapon,
+      weaponId,
       actor: p.id,
       projectile: shot.id,
       recoil: { pitch: p.recoilPitch, yaw: p.recoilYaw },
@@ -1720,7 +1756,7 @@ export class Game {
         muzzleVictim,
       );
     } else this.projectiles.push(shot);
-    kickRecoil(p, this.tick);
+    if (!gun) kickRecoil(p, this.tick);
   }
   private advanceProjectiles() {
     const active: Projectile[] = [];
@@ -1828,6 +1864,7 @@ export class Game {
     rememberWound(victim,wound);
     this.emit({ type: "damage", actor: victim.id, source,amount:actual,at:{x:victim.x,y:victim.y,z:victim.z},kind:wound.kind,weapon:wound.weapon,from:wound.from });
     if (!victim.hp) {
+      dismount(this, victim);
       dropFlame(this,victim);
       cancelMelee(this, victim);
       victim.meleeThreat = null;
@@ -2146,6 +2183,7 @@ export class Game {
         if(p.hp<=0) { this.artilleryAudit.deaths++; if(capturing)this.artilleryAudit.captureInterruptions++; }
       }
     }
+    damageEmplacements(this, at, profile.radius, profile.damage);
     const change = deformExplosion(this.map, at, profile, (a, b) =>
       this.collision.ray(a, b),
     );
@@ -2183,6 +2221,7 @@ export class Game {
     // Completed local checks survive cancellation by overlapping shell edits.
     if (navigationWork.delete(this.map)) battlePerformance.count("navigationRestarts");
     this.collision.updateWorld?.(change);
+    checkEmplacementSupport(this);
     for (const p of this.players) {
       let previous: Vec = p;
       const affected = !bounds || p.path.some(point => {

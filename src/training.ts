@@ -1,3 +1,4 @@
+import { resupplyEmplacement } from "./emplacements";
 import {Game, idle, botCommand, type Soldier, type Command, type Event} from "./simulation";
 import {dist, groundHeight, blocked, type Vec} from "./map";
 import {equipLoadout, type Loadout, type FactionId} from "./loadouts";
@@ -8,7 +9,7 @@ import {trainingStations, type TrainingStationId} from "./training-map";
 
 export const trainingLessons = [
   ["walk","sprint","crouch","hop","mantle","view","step"],
-  ["rifle","reload","scope","machineGun","pistol","flame","semi"],
+  ["rifle","reload","scope","machineGun","pistol","flame","semi","deployGun","fireGun","reloadGun","packGun"],
   ["grenade","smoke"], ["thrust","charge"], ["call","impact"],
   ["breach","tree","crater"], ["reaction","defeat"], ["clear","capture"],
 ] as const;
@@ -25,6 +26,10 @@ export const trainingInstructions:Record<TrainingGoal,string>={
   reload:"Fire, then press {reload}. Firing an empty weapon also reloads from reserve ammo.",
   scope:"In Escape → Training armory, choose Marksman. Aim with RMB and hit a target through the 4× scope.",
   machineGun:"Choose Support in the training armory. Hit a target with the machine gun; hold LMB for automatic fire.",
+  deployGun:"Choose Support · Emplacement kit in Escape → Training armory. Press {emplace} to preview the gun and click LMB to set it up on level ground.",
+  fireGun:"Once setup finishes, press {interact} to mount. Hold LMB to fire at a red target. RMB brings the sights into view.",
+  reloadGun:"With the mounted gun partly empty, press {reload}. Reload progress stays with the gun when you dismount.",
+  packGun:"Press {interact} to dismount, then {emplace} to pack your gun. It keeps its remaining ammunition.",
   pistol:"Press {sidearm} to draw your pistol and hit a target. {primary} returns to your primary.",
   flame:"Collect the flame kit beside the armory table with {interact}. Fire it at close range with LMB.",
   semi:"Choose Industrial training kit and Rifleman in the armory, then hit a target with the AR-01 semiautomatic rifle.",
@@ -60,7 +65,15 @@ export class TrainingSession {
   get goals(){return trainingLessons[this.lesson];}
   get passed(){return this.goals.every(goal=>this.progress[this.lesson].has(goal));}
   get completed(){return trainingLessons.filter((goals,i)=>goals.every(goal=>this.progress[i].has(goal))).length;}
-  get nextGoal(){return this.goals.find(goal=>!this.progress[this.lesson].has(goal));}
+  get nextGoal(){
+    const completed = this.progress[this.lesson];
+    const emplacementGoals = ["deployGun", "fireGun", "reloadGun", "packGun"] as const;
+    if (this.lesson === 1 && this.loadout === "emplacement") {
+      const next = emplacementGoals.find(goal => !completed.has(goal));
+      if (next) return next;
+    }
+    return this.goals.find(goal => !completed.has(goal));
+  }
   select(index:number, replay=false){
     if(!Number.isInteger(index)||index<0||index>=trainingStations.length)throw Error("Unknown training station");
     this.lesson=index;
@@ -112,6 +125,7 @@ export class TrainingSession {
     if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
     p.hp=soldierHealth;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=2;
     p.reloadAt=0;g.artillery.readyAt.blue=g.tick;
+    resupplyEmplacement(g,p);
     const kit=g.flames.kits.find(k=>k.carrier===0);if(kit)kit.fuel=240;
     return true;
   }
@@ -136,8 +150,13 @@ export class TrainingSession {
       if(e.type==="hop"&&e.actor===0&&e.phase==="land")done.add("hop");
       if(e.type==="mantle"&&e.actor===0&&e.phase==="end")done.add("mantle");
       if(e.type==="reload"&&e.actor===0)done.add("reload");
+      if(e.type==="emplacement"&&e.actor===0){
+        if(e.phase==="deploy")done.add("deployGun");
+        if(e.phase==="reload")done.add("reloadGun");
+        if(e.phase==="pack")done.add("packGun");
+      }
       if(e.type==="fire"&&e.actor===0){
-        this.shots.set(e.projectile,e.weapon==="rifle"?"semi":e.weapon==="machineGun"?"machineGun":e.weapon==="pistol"?"pistol":p.loadout==="marksman"&&input.aim?"scope":"rifle");
+        this.shots.set(e.projectile,e.weapon==="rifle"?"semi":e.weapon==="machineGun"?(p.mountedGun!==undefined?"fireGun":"machineGun"):e.weapon==="pistol"?"pistol":p.loadout==="marksman"&&input.aim?"scope":"rifle");
         if(this.lesson===0&&input.aim&&!p.hop&&!p.fall&&p.y>-.7&&p.y<-.3&&Math.abs(p.x+48)<6&&p.z>45&&p.z<47.1&&e.from.y>.2)done.add("step");
       }
       if(e.type==="impact"&&e.actor===0){if(e.hit&&e.target!==null&&g.players[e.target]?.team==="red"){const goal=this.shots.get(e.projectile);if(goal)done.add(goal);}this.shots.delete(e.projectile);}

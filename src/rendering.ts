@@ -1,3 +1,4 @@
+import { emplacementRules, emplacementView, mountedGun, type Placement } from "./emplacements";
 import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
@@ -3426,6 +3427,11 @@ export class Renderer implements CollisionWorld {
   }
   reset(g: Game) {
     this.visualWork.clear();
+    this.machineGunPreview = undefined;
+    for (const mesh of this.emplacementMeshes.values()) mesh.root.destroy();
+    this.emplacementMeshes.clear();
+    this.gunGhost?.root.destroy();
+    this.gunGhost = undefined;
     this.pendingCasualties.clear();
     this.dirtyWorldBatches?.clear();
     this.clearEnvironmentEffects();
@@ -3556,6 +3562,114 @@ export class Renderer implements CollisionWorld {
       g.grenades.map((p) => [p.id, { x: p.x, y: p.y, z: p.z }]),
     );
   }
+  machineGunPreview?: Placement;
+  private emplacementMeshes = new Map<number, { root: pc.Entity; yaw: pc.Entity; barrel: pc.Entity; name: string }>();
+  private gunGhost?: ReturnType<Renderer["buildEmplacement"]>;
+  private gunGhostValid?: boolean;
+  private previewMaterials = new Map<boolean, pc.StandardMaterial>();
+
+  private buildEmplacement(name: string) {
+    const root = this.joint(name, this.app.root);
+    const steel = "#343d3a", plate = "#51584e";
+    const beam = (label: string, from: pc.Vec3, to: pc.Vec3, width: number) => {
+      const center = new pc.Vec3().add2(from, to).mulScalar(0.5);
+      const leg = this.cube(label, center.x, center.y, center.z, width, width, from.distance(to), steel, false, root);
+      leg.lookAt(root.getWorldTransform().transformPoint(to));
+    };
+    const top = new pc.Vec3(0, emplacementRules.pivotHeight - 0.08, 0);
+    for (const [x, z] of [[-0.43, -0.39], [0.43, -0.39], [0, 0.47]]) {
+      beam("tripod leg", new pc.Vec3(x, 0.08, z), top, 0.068);
+      this.cube("tripod foot", x, 0.038, z, 0.16, 0.075, 0.18, plate, false, root);
+    }
+
+    const yaw = this.joint("traverse", root, 0, emplacementRules.pivotHeight, 0);
+    const barrel = this.joint("elevation", yaw);
+    this.riflePart("receiver", 0, -0.014, 0.07, 0.15, 0.15, 0.4, "steel", barrel, "buttplate");
+    this.riflePart("receiver cover", 0, 0.058, 0.046, 0.16, 0.034, 0.34, "steel", barrel, "buttplate");
+    this.riflePart("hinge", 0, 0.071, -0.093, 0.148, 0.043, 0.038, "edge", barrel, "buttplate");
+    const tube = (label: string, z: number, diameter: number, length: number, color: string) => {
+      const part = this.joint(label, barrel, 0, 0, z);
+      part.addComponent("render", { type: "cylinder", material: this.material(color), castShadows: true, receiveShadows: true });
+      part.setLocalEulerAngles(90, 0, 0);
+      part.setLocalScale(diameter, length, diameter);
+    };
+    const coolingJacket = name !== "Hotchkiss M1914";
+    tube(coolingJacket ? "barrel jacket" : "barrel housing", -0.41, coolingJacket ? 0.145 : 0.098, 0.65, steel);
+    tube("muzzle collar", -0.784, 0.084, 0.13, plate);
+    tube("muzzle opening", -0.866, 0.047, 0.022, "#181e1d");
+    for (const side of [-1, 1]) {
+      this.riflePart("spade grip", side * 0.096, -0.046, 0.29, 0.038, 0.14, 0.043, "walnut", barrel, "knob");
+      this.riflePart("rear notch", side * 0.021, 0.103, 0.17, 0.02, 0.034, 0.02, "steel", barrel, "buttplate");
+      this.riflePart("fastener", side * 0.075, 0.005, 0.09, 0.012, 0.031, 0.031, "edge", barrel, "pin").setLocalEulerAngles(0, 0, 90);
+    }
+    this.cube("sight post", 0, 0.085, -0.73, 0.015, 0.050, 0.027, steel, false, barrel);
+    this.cube("ammunition can", 0.27, 0.145, 0.16, 0.3, 0.28, 0.42, "#505743", false, root);
+    this.cube("ammunition can lid", 0.27, 0.29, 0.16, 0.32, 0.035, 0.43, "#62694f", false, root);
+    this.cube("can handle", 0.27, 0.32, 0.16, 0.125, 0.035, 0.04, steel, false, root);
+    return { root, yaw, barrel, name };
+  }
+
+  private drawEmplacements(g: Game) {
+    for (const [id, mesh] of this.emplacementMeshes) {
+      const gun = g.emplacements.get(id);
+      if (!gun || gun.weaponId !== mesh.name) {
+        mesh.root.destroy();
+        this.emplacementMeshes.delete(id);
+      }
+    }
+    for (const gun of g.emplacements.values()) {
+      let mesh = this.emplacementMeshes.get(gun.owner);
+      if (!mesh) {
+        mesh = this.buildEmplacement(gun.weaponId);
+        this.emplacementMeshes.set(gun.owner, mesh);
+      }
+      mesh.root.setPosition(gun.at.x, gun.at.y, gun.at.z);
+      mesh.root.setEulerAngles(0, -gun.baseYaw * pc.math.RAD_TO_DEG, 0);
+      const setup = Math.max(0, (gun.readyAt - g.tick) / emplacementRules.setupTicks);
+      mesh.root.setLocalScale(1, 1 - 0.25 * setup, 1);
+      mesh.yaw.setLocalEulerAngles(0, (gun.baseYaw - gun.yaw) * pc.math.RAD_TO_DEG, 0);
+      mesh.barrel.setLocalEulerAngles(gun.pitch * pc.math.RAD_TO_DEG, 0, 0);
+    }
+
+    const preview = this.machineGunPreview;
+    if (!preview) {
+      if (this.gunGhost) this.gunGhost.root.enabled = false;
+      return;
+    }
+    if (!this.gunGhost) {
+      this.gunGhost = this.buildEmplacement("Placement preview");
+      const root = this.gunGhost.root;
+      this.cube("operator position", 0, 0.045, emplacementRules.operatorOffset, 0.62, 0.032, 0.6, "#ffffff", false, root);
+      for (const edge of [-1, 1]) {
+        const guide = this.joint("traverse limit", root);
+        guide.setLocalEulerAngles(0, edge * emplacementRules.traverse * pc.math.RAD_TO_DEG, 0);
+        this.cube("traverse guide", 0, 0.045, -1.28, 0.042, 0.025, 1.2, "#ffffff", false, guide);
+      }
+      this.gunGhostValid = undefined;
+    }
+    const ghost = this.gunGhost.root;
+    ghost.enabled = true;
+    ghost.setPosition(preview.at.x, preview.at.y, preview.at.z);
+    ghost.setEulerAngles(0, -preview.baseYaw * pc.math.RAD_TO_DEG, 0);
+    if (this.gunGhostValid === preview.valid) return;
+    this.gunGhostValid = preview.valid;
+    let material = this.previewMaterials.get(preview.valid);
+    if (!material) {
+      material = new pc.StandardMaterial();
+      material.emissive = color(preview.valid ? "#579c8e" : "#bc6152");
+      material.opacity = 0.52;
+      material.blendType = pc.BLEND_NORMAL;
+      material.depthWrite = false;
+      material.useLighting = false;
+      material.update();
+      this.previewMaterials.set(preview.valid, material);
+    }
+    for (const render of ghost.findComponents("render") as pc.RenderComponent[]) {
+      render.material = material;
+      render.castShadows = false;
+    }
+  }
+
   private flameScorches = new Map<string,{entity:pc.Entity;life:number}>();
   private flamePickups = new Map<number,pc.Entity>();
   private actorKits = new Map<number,string>();
@@ -3569,6 +3683,7 @@ export class Renderer implements CollisionWorld {
     battlePerformance.count("visualJobs", this.visualWork.flush());
     battlePerformance.end("visualWork", visualStart);
     this.flushWorldBatches();
+    this.drawEmplacements(g);
     for (const kit of g.flames?.kits ?? []) {
       let marker=this.flamePickups.get(kit.id);
       if(!marker) {
@@ -3615,6 +3730,7 @@ export class Renderer implements CollisionWorld {
         this.visualWork.delete(`casualty:${p.id}`);
         this.pendingCasualties.delete(p.id);
         this.animateSoldier(visible, position.x, position.z, dt, tick);
+        rig.rifle.enabled = p.mountedGun === undefined;
         this.applyModelDetail(p,rig);
       } else {
         if (rig.deathAt === null) {
@@ -3677,9 +3793,10 @@ export class Renderer implements CollisionWorld {
     }
     this.objectiveTerrainRevision = objectiveRevision;
     const p = g.players[0],
-      firstPerson = firstPersonView(p) && !overview,
+      gun = mountedGun(g, p),
+      firstPerson = (firstPersonView(p) || !!gun) && !overview,
       deathView = p.hp<=0&&!overview?this.deathView:null,
-      baseView = deathView??weaponAim(p),
+      baseView = deathView ?? gun ?? weaponAim(p),
       view = {
         yaw: baseView.yaw + (overview || firstPerson || deathView ? 0 : this.cameraReaction.yaw),
         pitch: baseView.pitch + (overview || firstPerson || deathView ? 0 : this.cameraReaction.pitch),
@@ -3692,7 +3809,7 @@ export class Renderer implements CollisionWorld {
       };
     const visual = this.people[0].getPosition();
     const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[0].crouch);
-    const pivot = { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
+    const pivot = gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
       desired = {
         x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
         y: visual.y + 2.5 - cameraDrop - dir.y * d,
@@ -3714,7 +3831,7 @@ export class Renderer implements CollisionWorld {
     // the first-person sight away from the direction used by the simulation.
     if (!overview && !firstPerson && !deathView) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((scoped(p)?scopeFov:50)-70)*aimBlend(p,g.tick-1+alpha)) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
@@ -3726,7 +3843,7 @@ export class Renderer implements CollisionWorld {
     }
     this.drawFirstPerson(visualWeapon(p,g.tick-1+alpha), g.tick - 1 + alpha, dt);
     if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
-    if (this.firstPersonRig && overview) this.firstPersonRig.root.enabled = false;
+    if (this.firstPersonRig && (overview || gun)) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);

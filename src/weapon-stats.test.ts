@@ -5,10 +5,10 @@ import { armouryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
 
-it("gives every Armoury faction a rifle, scoped rifle, pistol and machine gun", () => {
+it("gives every Armoury faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
   for (const f of armouryFactions) {
     expect(factions[f].name).toBeTruthy();
-    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual(["machineGun", "pistol", "rifle", "scoped"]);
+    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual(["emplaced", "machineGun", "pistol", "rifle", "scoped"]);
   }
   expect(new Set(weaponStats.map(w => w.id)).size).toBe(weaponStats.length);
 });
@@ -52,7 +52,7 @@ function weaponRange() {
   return { g, shooter, target };
 }
 
-it.each(weaponStats)("uses the $name Armoury profile when equipping, firing and reloading", w => {
+it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armoury profile when equipping, firing and reloading", w => {
   const { g, shooter } = weaponRange();
   shooter.faction = w.faction;
   equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : "rifleman");
