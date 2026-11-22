@@ -1,4 +1,4 @@
-import { advanceEmplacements, checkEmplacementSupport, damageEmplacements, dismount, emplacementCommand, emplacementView, mountedGun, operateGun, supportsEmplacements, type Emplacement } from "./emplacements";
+import { advanceEmplacements, checkEmplacementSupport, damageEmplacements, dismount, emplacementCommand, emplacementView, mountedGun, operateGun, type Emplacement } from "./emplacements";
 import { damageAt, soldierHealth, type HitZone } from "./weapon-stats";
 import { villageRoad } from "./ground-surface";
 import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
@@ -1090,7 +1090,6 @@ export class Game {
   }
   selectLoadout(p: Soldier, loadout: Loadout) {
     if (!["rifleman", "marksman", "support", "emplacement"].includes(loadout)) return;
-    if (loadout === "emplacement" && !supportsEmplacements(this.map)) return;
     p.pendingLoadout = loadout;
     if (this.tick === 0) equipLoadout(p, loadout, this.map.id === "industrial");
   }

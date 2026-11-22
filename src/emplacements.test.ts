@@ -1,12 +1,12 @@
 import { expect, it } from "vitest";
 import { emplacementRules, emplacementView, mountedGun, placementFor } from "./emplacements";
 import { grenadeExplosionProfile } from "./destruction";
-import { industrialMap } from "./map";
+import { industrialMap, type MapDefinition } from "./map";
 import { Game, TestCollision, idle, type Command } from "./simulation";
 import { gameMuzzleVelocity, reloadDuration, shotInterval, weaponStats } from "./weapon-stats";
 
-function field(blocked = false) {
-  const map = { ...industrialMap, id: "village" as const, boxes: blocked ? [
+function field(blocked = false, id: MapDefinition["id"] = "village") {
+  const map = { ...industrialMap, id, boxes: blocked ? [
     { x: 0, z: 2.65, w: 2, d: 0.35, h: 1.8, kind: "wood" as const },
   ] : [] };
   const game = new Game(new TestCollision(map), true, 3000, 42, undefined, { map, teamSize: 2, ambientArtillery: false });
@@ -26,6 +26,17 @@ function field(blocked = false) {
   };
   return { game, player, teammate, target, step, setup };
 }
+
+it.each(["industrial", "trenches", "verdun", "village", "headland", "training"] as const)(
+  "offers the kit and accepts a clear placement on %s",
+  id => {
+    const { game, player, step } = field(false, id);
+    expect(player.loadout).toBe("emplacement");
+    expect(placementFor(game, player, 0).valid).toBe(true);
+    step({ deployGun: true });
+    expect(game.emplacements.has(player.id)).toBe(true);
+  },
+);
 
 it("rejects a blocked placement and leaves the player carrying the kit", () => {
   const { game, player, step } = field(true);

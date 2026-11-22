@@ -34,7 +34,6 @@ export interface Emplacement extends EmplacementPose, GunSupply {
 }
 export type Placement = EmplacementPose & { valid: boolean; reason?: string };
 
-export const supportsEmplacements = (map: { id: string }) => map.id === "village" || map.id === "training";
 const offset = (origin: V3, yaw: number, forward: number, side = 0, up = 0): V3 => ({
   x: origin.x + Math.sin(yaw) * forward + Math.cos(yaw) * side,
   y: origin.y + up,
@@ -62,7 +61,7 @@ export function placementFor(g: Game, p: Soldier, yaw: number): Placement {
   const seat = offset(at, yaw, -emplacementRules.operatorOffset);
   seat.y = supportHeight(seat.x, seat.z, g.map, at.y + 0.18);
   const placement = { at, seat, baseYaw: yaw };
-  if (!supportsEmplacements(g.map) || p.loadout !== "emplacement" || p.hp <= 0 || p.emplacementLost ||
+  if (p.loadout !== "emplacement" || p.hp <= 0 || p.emplacementLost ||
       p.mantle || p.hop || p.fall || p.melee || p.mountedGun !== undefined || p.flameKit !== undefined ||
       Math.abs(p.y - at.y) > 0.18 || g.tick < p.staggerUntil || g.tick < p.throwUntil)
     return { ...placement, valid: false, reason: "You need a ready kit and level ground" };
