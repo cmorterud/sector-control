@@ -1,4 +1,4 @@
-import { emplacementRules, emplacementWeapon, mountedGun, nearbyGun, placementFor, supportsEmplacements } from "./emplacements";
+import { emplacementRules, emplacementWeapon, mountedGun, nearbyGun, placementFor } from "./emplacements";
 import { frameSeconds } from "./frame-timing";
 import {CombatFeedback} from "./combat-feedback";
 import {scoreboardTable} from "./scoreboard";
@@ -234,7 +234,7 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option>${supportsEmplacements(map)?'<option value="emplacement">Support · Emplacement kit</option>':""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
@@ -654,7 +654,7 @@ window.addEventListener("keydown", (e) => {
   const player = game.players[0];
   if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
   if (isKey("emplace", e.code) && !e.repeat && player.hp > 0 && player.loadout === "emplacement" &&
-      player.mountedGun === undefined && !player.emplacementLost && supportsEmplacements(map)) {
+      player.mountedGun === undefined && !player.emplacementLost) {
     if (game.emplacements.has(player.id)) kitCommand = "pack";
     else placingGun = !placingGun;
   }
