@@ -37,7 +37,8 @@ export const weaponProfiles = {
 };
 
 const factionProfiles = new Map(weaponStats.map(stats => {
-  const kind: WeaponKind = stats.role === "pistol" || stats.role === "machineGun" ? stats.role : "serviceRifle";
+  const kind: WeaponKind = stats.role === "pistol" ? "pistol" :
+    stats.role === "machineGun" || stats.role === "emplaced" ? "machineGun" : "serviceRifle";
   return [stats.name, {
     kind,
     stats,

@@ -2,7 +2,7 @@ export const defaultBindings = {
   forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
   sprint: "ShiftLeft", crouch: "KeyC", reload: "KeyR", melee: "KeyV",
   grenade: "KeyG", smoke: "KeyF", mantle: "Space", tactical: "KeyQ",
-  view: "KeyT", scoreboard: "Tab", primary: "Digit1", sidearm: "Digit2", interact: "KeyE",
+  view: "KeyT", scoreboard: "Tab", primary: "Digit1", sidearm: "Digit2", interact: "KeyE", emplace: "KeyB",
 };
 export type ControlAction = keyof typeof defaultBindings;
 export interface ControlSettings {
@@ -16,7 +16,7 @@ export const controlLabels: Record<ControlAction, string> = {
   forward: "Move forward", backward: "Move backward", left: "Move left", right: "Move right",
   sprint: "Sprint", crouch: "Toggle crouch", reload: "Reload", melee: "Melee",
   grenade: "Grenade", smoke: "Smoke", mantle: "Hop / mantle", tactical: "Tactical map",
-  view: "Change view", scoreboard: "Scoreboard", primary: "Primary weapon", sidearm: "Sidearm", interact: "Pick up equipment",
+  view: "Change view", scoreboard: "Scoreboard", primary: "Primary weapon", sidearm: "Sidearm", interact: "Interact with equipment", emplace: "Set up / pack machine gun",
 };
 export function freshControls(): ControlSettings {
   return { bindings: { ...defaultBindings }, toggleSprint: false, firstPerson: true };
@@ -28,7 +28,12 @@ export function loadControls(storage?: Pick<Storage, "getItem">): ControlSetting
     if (!saved) return settings;
     if (typeof saved.firstPerson === "boolean") settings.firstPerson = saved.firstPerson;
     if (typeof saved.toggleSprint === "boolean") settings.toggleSprint = saved.toggleSprint;
-    const bindings = saved.bindings;
+    const bindings = saved.bindings ? { ...saved.bindings } : undefined;
+    if (bindings && bindings.emplace === undefined) {
+      const used = new Set(Object.values(bindings));
+      bindings.emplace = ["KeyB", "KeyN", "KeyJ", ...Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", c => "Key" + c)]
+        .find(code => !used.has(code));
+    }
     if (bindings && Object.keys(defaultBindings).every(action =>
       typeof bindings[action] === "string" && validBinding(bindings[action])) &&
       new Set(Object.keys(defaultBindings).map(action => canonicalKey(bindings[action]))).size === Object.keys(defaultBindings).length)

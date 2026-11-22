@@ -212,6 +212,54 @@ try {
   await client.evaluate(`(()=>{const map=document.getElementById('tactical-map'),r=map.getBoundingClientRect(),c=map.querySelector(':scope > button').getBoundingClientRect();if(r.top<0||r.bottom>innerHeight||c.bottom>innerHeight)throw Error('Artillery panel is clipped at 600px height');})()`);
   await screenshot('training-artillery-map-600');
   await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
+  const trainGun = async code => client.evaluate(`((code)=>{
+   const b=window.sectorRenderReview;
+   const press=key=>{window.dispatchEvent(new KeyboardEvent('keydown',{code:key,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:key,bubbles:true}));};
+   const click=(button,type='mousedown')=>window.dispatchEvent(new MouseEvent(type,{button,bubbles:true}));
+   const expect=(ok,message)=>{if(!ok)throw Error(message);};
+   const select=(id,value)=>{const el=document.getElementById(id);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
+   if(code==='preview'){
+    press('KeyQ');press('Escape');
+    expect(b.state().paused,'Could not open training armory');
+    select('training-station','1');select('training-loadout','emplacement');select('training-faction','british');
+    const free=document.getElementById('training-free');free.checked=false;free.dispatchEvent(new Event('change',{bubbles:true}));
+    document.getElementById('primary').click();b.advance(2);press('KeyB');
+    expect(b.state().training.loadout==='emplacement','Emplacement kit selection did not apply');
+    return b.state().frames;
+   }
+   if(code==='mount'){
+    expect(b.emplacement().preview===true,'Valid gun preview did not appear');
+    click(0);click(0,'mouseup');b.advance(47);
+    expect(b.emplacement().gun?.weaponId==='Vickers','Click did not deploy the kit');
+    press('KeyE');b.advance(2);
+    expect(b.emplacement().mounted,'Interact did not mount the gun');
+    click(2);b.advance(6);
+    const loaded=b.emplacement().gun.ammo, z=b.state().player.z;
+    window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyW',bubbles:true}));
+    click(0);b.advance(6);click(0,'mouseup');
+    window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyW',bubbles:true}));
+    expect(b.emplacement().gun.ammo<loaded && b.state().player.z===z,'Mounted gun did not fire from a fixed seat');
+    expect(b.emplacement().goals.includes('fireGun'),'Training did not count the hit from the mounted gun');
+    return b.state().frames;
+   }
+   const gun=b.emplacement().gun, total=gun.ammo+gun.reserve;
+   press('KeyR');b.advance(1);expect(b.emplacement().gun.reloadAt>b.state().tick,'Reload did not start');
+   press('KeyE');b.advance(1);expect(!b.emplacement().mounted,'Interact did not dismount the gun');
+   click(2,'mouseup');
+   b.advance(181);
+   expect(!b.emplacement().gun.reloadAt && b.emplacement().gun.ammo+b.emplacement().gun.reserve===total,'Reload did not finish while unmounted');
+   press('KeyB');b.advance(1);
+   expect(b.emplacement().count===0 && b.emplacement().goals.includes('packGun'),'Pack did not return the kit');
+   return { preview:true, mounted:true, firing:true, reload:true, packed:true };
+  })(${JSON.stringify(code)})`);
+  const previewFrame=await trainGun('preview');
+  await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${previewFrame+2}`));
+  await screenshot('training-emplacement-preview');
+  const mountedFrame=await trainGun('mount');
+  await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${mountedFrame+2}`));
+  await screenshot('training-emplacement-sights');
+  report.emplacement=await trainGun('pack');
+  console.log(JSON.stringify({map,emplacement:report.emplacement}));
   console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);

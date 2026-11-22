@@ -418,9 +418,10 @@ const moving = (q: Soldier) => Math.hypot(q.vx, q.vz) > 5.5;
 export function audible(g: Game, p: Soldier, q: Soldier) {
   if (!squadFeatures.hearing) return false;
   const d = Math.hypot(q.x - p.x, q.z - p.z);
+  const lastShot = q.mountedGun === undefined ? q.lastShotAt : g.emplacements.get(q.mountedGun)?.lastShotAt ?? q.lastShotAt;
   return (
     (d < g.botSettings.hearingRange && (moving(q) || q.reloadAt > 0)) ||
-    (g.tick - q.lastShotAt < 20 && d < 40)
+    (g.tick - lastShot < 20 && d < 40)
   );
 }
 export function listen(g: Game, p: Soldier) {
@@ -451,7 +452,7 @@ export function threatScore(g: Game, p: Soldier, q: Soldier) {
     q.command.aim &&
     Math.abs(angleDelta(q.yaw, Math.atan2(p.x - q.x, q.z - p.z))) < 0.12;
   const onFlag = g.sectors.some((s) => s.owner === p.team && flagContains(g, q, s));
-  return d - (aiming ? 15 : 0) - (q.weapon === "machineGun" ? 8 : 0) - (onFlag ? 10 : 0);
+  return d - (aiming ? 15 : 0) - (q.weapon === "machineGun" || q.mountedGun !== undefined ? 8 : 0) - (onFlag ? 10 : 0);
 }
 
 // --- Commands ---------------------------------------------------------------

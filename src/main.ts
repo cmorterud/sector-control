@@ -1,3 +1,4 @@
+import { emplacementRules, emplacementWeapon, mountedGun, nearbyGun, placementFor, supportsEmplacements } from "./emplacements";
 import { frameSeconds } from "./frame-timing";
 import {CombatFeedback} from "./combat-feedback";
 import {scoreboardTable} from "./scoreboard";
@@ -82,7 +83,7 @@ const held = (action: ControlAction) => [...keys].some(code => isKey(action, cod
 function updateControlHints() {
   const hint = (action: ControlAction) => keyLabel(settings.bindings[action]);
   document.querySelector(".controls")!.textContent =
-    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("primary")} / ${hint("sidearm")} WEAPONS　 ${hint("interact")} PICKUP　 ${hint("tactical")} TACTICAL MAP`;
+    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("primary")} / ${hint("sidearm")} WEAPONS　 ${hint("interact")} INTERACT　 ${hint("tactical")} TACTICAL MAP`;
   document.querySelector(".hint")!.innerHTML = `${hint("scoreboard")} · SCOREBOARD<br>ESC · PAUSE`;
 }
 
@@ -95,6 +96,8 @@ let fire = false,
   smoke = false,
   melee = false;
 let pendingEquip: WeaponSlot | undefined;
+let placingGun = false, kitCommand: "deploy" | "pack" | undefined;
+let pendingInteract = false;
 let pendingRedeploy = false;
 let chosenLoadout: Loadout = "rifleman";
 const storedDifficulty = (() => { try { return localStorage.getItem("sector-control-difficulty"); } catch { return null; } })();
@@ -204,6 +207,8 @@ function clear() {
   melee = false;
   pendingArtillery = undefined;
   pendingEquip = undefined;
+  kitCommand = undefined;
+  placingGun = pendingInteract = false;
   pendingRedeploy = false;
   if (renderer) renderer.artilleryPreview = null;
 }
@@ -229,7 +234,7 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option>${supportsEmplacements(map)?'<option value="emplacement">Support · Emplacement kit</option>':""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
@@ -526,9 +531,31 @@ function hud(now: number) {
           : sector
             ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
-  const pickup = p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
+  const gun = mountedGun(game, p);
+  const nearby = p.hp > 0 && !gun && game.emplacements.size ? nearbyGun(game, p) : undefined;
+  const deployKey = keyLabel(settings.bindings.emplace), useKey = keyLabel(settings.bindings.interact);
+  const placement = renderer.machineGunPreview;
+  if (gun) {
+    const loading = gun.reloadAt ? `RELOADING · ${((gun.reloadAt - game.tick) / 30).toFixed(1)}s` : "90° TRAVERSE · HOLD FIRE";
+    const traverse = 50 + (gun.yaw - gun.baseYaw) / emplacementRules.traverse * 50;
+    el("ammo").innerHTML = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small><div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
+  } else if (placement) {
+    el("capture").innerHTML = placement.valid
+      ? `<small>LMB · SET UP ${emplacementWeapon(p).toUpperCase()}　 ${deployKey} · CANCEL</small>`
+      : `<small>${placement.reason}　 ${deployKey} · CANCEL</small>`;
+  } else if (nearby) {
+    const setup = nearby.readyAt - game.tick;
+    const pack = nearby.owner === p.id && p.loadout === "emplacement" ? `　 ${deployKey} · PACK UP` : "";
+    const action = setup > 0 ? `SETTING UP · ${(setup/30).toFixed(1)}s`
+      : nearby.operator !== undefined ? "IN USE" : `${useKey} · MOUNT${pack}`;
+    el("capture").innerHTML = `<small>${nearby.weaponId} · ${action}</small>`;
+  } else if (p.hp > 0 && p.loadout === "emplacement") {
+    el("ammo").innerHTML += `<small>${p.emplacementLost ? "EMPLACEMENT LOST · RESUPPLY ON RESPAWN" :
+      game.emplacements.has(p.id) ? deployKey + " · PACK UP WHEN NEAR YOUR GUN" : deployKey + " · PREVIEW EMPLACEMENT"}</small>`;
+  }
+  const pickup = !gun && !nearby && !placement && p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
   if (pickup) el("capture").innerHTML = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
-  if (p.weapon === "flamethrower") el("ammo").innerHTML = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
+  if (!gun && p.weapon === "flamethrower") el("ammo").innerHTML = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
@@ -565,8 +592,12 @@ function command(): Command {
   c.pitch = pitch;
   c.crouch = crouchInput.active;
   c.sprint = settings.toggleSprint ? sprintInput.active : held("sprint");
-  c.fire = (fire || (triggerDown && (game.players[0].weapon === "machineGun" || game.players[0].weapon === "flamethrower"))) && !tacticalMap.open;
-  c.interact = held("interact");
+  c.fire = !placingGun && (fire || (triggerDown && (game.players[0].mountedGun !== undefined || game.players[0].weapon === "machineGun" || game.players[0].weapon === "flamethrower"))) && !tacticalMap.open;
+  c.interact = !tacticalMap.open && (pendingInteract || held("interact"));
+  pendingInteract = false;
+  c.deployGun = kitCommand === "deploy";
+  c.packGun = kitCommand === "pack";
+  kitCommand = undefined;
   c.equip = pendingEquip; pendingEquip = undefined;
   fire = false;
   c.artillery = pendingArtillery;
@@ -606,7 +637,8 @@ window.addEventListener("keydown", (e) => {
   if (Object.values(settings.bindings).includes(e.code))
     e.preventDefault();
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if(training&&isKey("interact",e.code)&&!e.repeat&&!tacticalMap.open){
+  if(training&&isKey("interact",e.code)&&!e.repeat&&!tacticalMap.open &&
+     !mountedGun(game, game.players[0]) && !nearbyGun(game, game.players[0])){
     const index=training.interaction(game);
     if(index!==null){training.select(index);start();return;}
   }
@@ -614,11 +646,18 @@ window.addEventListener("keydown", (e) => {
   keys.add(e.code);
   if (isKey("sprint", e.code)) sprintInput.press(e.repeat, settings.toggleSprint);
   if (isKey("crouch", e.code) && game.players[0].hp > 0) crouchInput.press(e.repeat);
-  if (isKey("tactical", e.code) && !e.repeat) {
-    fire = aim = grenade = smoke = mantle = melee = false;
+  if (isKey("tactical", e.code) && !e.repeat && game.players[0].mountedGun === undefined) {
+    fire = aim = grenade = smoke = mantle = melee = placingGun = false;
     tacticalMap.toggle();
   }
   if (tacticalMap.open && !isKey("reload", e.code)) return;
+  const player = game.players[0];
+  if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
+  if (isKey("emplace", e.code) && !e.repeat && player.hp > 0 && player.loadout === "emplacement" &&
+      player.mountedGun === undefined && !player.emplacementLost && supportsEmplacements(map)) {
+    if (game.emplacements.has(player.id)) kitCommand = "pack";
+    else placingGun = !placingGun;
+  }
   if (isKey("view", e.code) && !e.repeat) {
     preferredFirstPerson = !preferredFirstPerson;
     settings.firstPerson = preferredFirstPerson;
@@ -659,6 +698,15 @@ window.addEventListener("mousedown", (e) => {
       triggerDown = true;
       if (document.pointerLockElement === renderer.canvas) tacticalMap.select();
     }
+    return;
+  }
+  if (placingGun) {
+    if (e.button === 0 && placementFor(game, game.players[0], yaw).valid) {
+      kitCommand = "deploy";
+      placingGun = false;
+      fire = triggerDown = false;
+    }
+    if (e.button === 2) placingGun = false;
     return;
   }
   if (e.button === 0) {
@@ -705,7 +753,10 @@ function stepSimulation() {
   game.step(input);
   training?.observe(game,input);
   battlePerformance.end("simulation",simStart);
-  if (!autoplay && game.players[0].melee) yaw = game.players[0].yaw;
+  const player = game.players[0];
+  if (player.melee || player.mountedGun !== undefined) yaw = player.yaw;
+  if (player.mountedGun !== undefined) pitch = player.pitch;
+  if (player.hp <= 0) placingGun = false;
   const eventStart = battlePerformance.begin();
   for (const e of game.events) handle(e);
   battlePerformance.end("events",eventStart);
@@ -798,6 +849,8 @@ function frame(now: number) {
       accumulator = Math.min(accumulator, maxCatchUpTicks / 30);
     }
     renderer.artilleryPreview = null;
+    renderer.machineGunPreview = placingGun && !paused && !tacticalMap.open
+      ? placementFor(game, game.players[0], yaw) : undefined;
     // Ticks still owed are drawn at the latest state rather than extrapolated.
     const alpha = Math.min(1, accumulator * 30);
     renderer.cameraReaction = battlefield.state(
@@ -836,6 +889,13 @@ try {
   // Normal play never installs this bridge or changes its frame loop.
   if(renderReview)Object.assign(window,{sectorRenderReview:{
     state:()=>({frames:reviewFrames,tick:started?game.tick:0,paused,...(started?{player:{x:game.players[0].x,z:game.players[0].z,crouched:game.players[0].crouched,firstPerson:preferredFirstPerson,ammo:game.players[0].ammo,hp:game.players[0].hp,assists:game.players[0].assists},combat:{marker:combatFeedback.marker(game),view:renderer.deathView,report:game.players[0].lastDeath,fov:renderer.camera.camera!.fov}}:{}),...(training&&started?{training:{id:training.id,loadout:game.players[0].loadout,faction:game.players[0].faction,free:training.free}}:{})}),
+    emplacement: () => ({
+      count: game.emplacements.size,
+      preview: renderer.machineGunPreview?.valid,
+      gun: game.emplacements.get(0),
+      mounted: game.players[0].mountedGun !== undefined,
+      goals: training ? [...training.progress[training.lesson]] : [],
+    }),
     manual:()=>{reviewManual=true;},
     training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
     advance:advanceReview,
