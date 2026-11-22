@@ -3,7 +3,7 @@
 import "./armoury.css";
 import { factions, type FactionId } from "./loadouts";
 import {
-  armouryFactions, bulletSpeedScale, gameMuzzleVelocity, hitZones, roleLabels, shotsToKill, timeToKill,
+  armouryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, timeToKill,
   weaponStats, type HitZone, type WeaponStats,
 } from "./weapon-stats";
 
@@ -41,7 +41,8 @@ function card(w: WeaponStats) {
     const shots = shotsToKill(w, z.id);
     return `<tr><th scope="row">${z.label}</th><td>${w.damage[z.id]}</td><td>${shots === 1 ? `<span class="kill">1 · kill</span>` : shots}</td><td>${seconds(timeToKill(w, z.id))}</td></tr>`;
   }).join("");
-  const [low, high] = w.historical.rate;
+  const [low, high] = w.historical.rate ?? [];
+  const reference = w.historical.rate ? "historical" : "reference";
   return `<article class="card">
     <header><div class="eyebrow">${roleLabels[w.role].toUpperCase()}</div><h2>${escape(w.name)}</h2><div class="round">${escape(w.round)}</div></header>
     <div class="body">
@@ -50,9 +51,9 @@ function card(w: WeaponStats) {
     </div>
     <dl class="stats">
       <div><dt>Rounds per reload</dt><dd>${w.magazine}<small> + ${w.reserve} spare</small></dd></div>
-      <div><dt>Reload</dt><dd>${seconds(w.reloadSeconds)}</dd></div>
-      <div><dt>Rate of fire</dt><dd>${w.roundsPerMinute}<small> rounds/min in game · ${low === high ? low : `${low}–${high}`} historical</small></dd></div>
-      <div><dt>Muzzle velocity</dt><dd>${gameMuzzleVelocity(w)} m/s<small> in game · ${w.historical.muzzleVelocity} m/s historical</small></dd></div>
+      <div><dt>Reload</dt><dd>${seconds(reloadDuration(w) / weaponTicksPerSecond)}</dd></div>
+      <div><dt>Rate of fire</dt><dd>${Number(gameRateOfFire(w).toFixed(2))}<small> rounds/min in game${low === undefined ? "" : ` · ${low === high ? low : `${low}–${high}`} historical`}</small></dd></div>
+      <div><dt>Muzzle velocity</dt><dd>${gameMuzzleVelocity(w)} m/s<small> in game · ${w.historical.muzzleVelocity} m/s ${reference}</small></dd></div>
     </dl>
     <p class="summary">${escape(w.summary)}</p>
     <p class="note">${escape(w.historical.note)}${w.falloff ? ` Damage falls to ${Math.round(w.falloff.minimum * 100)}% between ${w.falloff.start} and ${w.falloff.end} m.` : ""}</p>
@@ -66,11 +67,11 @@ const columns: Column[] = [
   { label: "Role", value: w => roleLabels[w.role] },
   ...hitZones.map(z => ({ label: z.label, value: (w: WeaponStats) => w.damage[z.id] })),
   { label: "Chest time to kill", value: w => timeToKill(w, "chest"), show: w => seconds(timeToKill(w, "chest")) },
-  { label: "Rate (rounds/min)", value: w => w.roundsPerMinute },
+  { label: "Rate (rounds/min)", value: gameRateOfFire, show: w => gameRateOfFire(w).toFixed(2).replace(/\.?0+$/, "") },
   { label: "Rounds per reload", value: w => w.magazine },
-  { label: "Reload", value: w => w.reloadSeconds, show: w => seconds(w.reloadSeconds) },
+  { label: "Reload", value: w => reloadDuration(w) / weaponTicksPerSecond, show: w => seconds(reloadDuration(w) / weaponTicksPerSecond) },
   { label: "Velocity in game (m/s)", value: w => gameMuzzleVelocity(w) },
-  { label: "Historical velocity (m/s)", value: w => w.historical.muzzleVelocity },
+  { label: "Reference velocity (m/s)", value: w => w.historical.muzzleVelocity },
 ];
 let sort = { column: 0, ascending: true };
 function compare() {
@@ -97,11 +98,11 @@ function render(tab: Tab) {
   root.innerHTML = `<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
       <div class="eyebrow">SECTOR CONTROL</div><h1>Armoury</h1>
-      <p>Damage by body part, rate of fire, muzzle velocity and reloads for every weapon. Soldiers have 100 health. Infantry carry a bolt-action rifle and a pistol; machine guns fire only from placements.</p>
+      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles. Support carries a light machine gun. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${tabs.map(([id, label]) => `<button role="tab" aria-selected="${id === tab}" data-tab="${id}">${escape(label)}</button>`).join("")}</nav>
     <section>${content}</section>
-    <footer><p>Historical figures are approximate. The game's bullets fly at ${Math.round(100 * bulletSpeedScale)}% of real speed so moving targets need leading. Values are being tuned.</p></footer>`;
+    <footer><p>Damage and time to kill assume full health, close range and a clear shot. Pistol damage drops over distance. Time starts with the first hit.</p></footer>`;
   root.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach(b => b.onclick = () => {
     const next = b.dataset.tab as Tab;
     history.replaceState(null, "", "#" + next);

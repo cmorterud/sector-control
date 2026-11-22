@@ -26,9 +26,9 @@ test("100-soldier roster has four supports, two marksmen and 44 riflemen per tea
 });
 test("human machine gun repeats held fire; pistol requires a new press",()=>{
  const g=make(),p=g.players[0]; equipLoadout(p,"support");
- for(let i=0;i<12;i++)g.step({...idle(),fire:true}); expect(p.ammo).toBe(56);
+ for(let i=0;i<12;i++)g.step({...idle(),fire:true}); expect(p.ammo).toBe(247);
  switchWeapon(p,"sidearm",g.tick); for(let i=0;i<10;i++)g.step(idle());
- for(let i=0;i<30;i++)g.step({...idle(),fire:true}); expect(p.ammo).toBe(7);
+ for(let i=0;i<30;i++)g.step({...idle(),fire:true}); expect(p.ammo).toBe(5);
 });
 test("marksman sights take half a second to settle and sidearm clears the scoped state",async()=>{
  const {sighted}=await import("./player-view");const g=make(),p=g.players[0];equipLoadout(p,"marksman");

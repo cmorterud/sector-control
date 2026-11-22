@@ -116,7 +116,7 @@ it("keeps riflemen the majority and trench humans on bolt-action service rifles"
       (p) => p.team === team && p.weapon === "machineGun",
     );
     expect(gunners).toHaveLength(4);
-    expect(gunners.every((p) => p.ammo === 60 && p.reserve === 240)).toBe(true);
+    expect(gunners.every((p) => p.ammo === 250 && p.reserve === 500)).toBe(true);
   }
   expect(g.players[0].weapon).toBe("serviceRifle");
 });

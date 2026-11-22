@@ -1,7 +1,8 @@
 import {Game, idle, botCommand, type Soldier, type Command, type Event} from "./simulation";
 import {dist, groundHeight, blocked, type Vec} from "./map";
 import {equipLoadout, type Loadout, type FactionId} from "./loadouts";
-import {weaponProfiles} from "./weapons";
+import {weaponProfile} from "./weapons";
+import {soldierHealth} from "./weapon-stats";
 import {flagContains} from "./domination";
 import {trainingStations, type TrainingStationId} from "./training-map";
 
@@ -83,10 +84,10 @@ export class TrainingSession {
       const q=g.players[4+n];
       const at=this.lesson===3?{x:s.x+(n===2?5:0),z:s.z-[4,16,23][n]}:
         {x:s.target.x+(n-1)*5,z:this.lesson===1&&n===2?s.z-40:s.target.z+(n===1?4:0)};
-      q.hp=100;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
+      q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
     }
     if(combat)for(const [i,dx] of [[1,-4],[2,4]]){
-      const q=g.players[i];q.hp=100;const at={x:s.x+dx,z:s.z-2};this.place(g,q,at);this.active.set(q.id,at);
+      const q=g.players[i];q.hp=soldierHealth;const at={x:s.x+dx,z:s.z-2};this.place(g,q,at);this.active.set(q.id,at);
     }
     Object.assign(g.sectors[0],{x:s.target.x,z:s.target.z,owner:null,control:0,contested:false});
     // Safe targets never participate in capture; only the two combat exercises do.
@@ -106,10 +107,10 @@ export class TrainingSession {
     return {...idle(),yaw:Math.PI,...(moving?{x:Math.cos(g.tick/100)*.65,z:(home.z-p.z)*.4}: {})};
   }
   resupply(g:Game){
-    const p=g.players[0],profile=weaponProfiles[p.weapon];
+    const p=g.players[0],profile=weaponProfile(p);
     if(p.hp<=0)return false;
-    if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfiles[state.kind];state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
-    p.hp=100;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=2;
+    if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
+    p.hp=soldierHealth;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=2;
     p.reloadAt=0;g.artillery.readyAt.blue=g.tick;
     const kit=g.flames.kits.find(k=>k.carrier===0);if(kit)kit.fuel=240;
     return true;

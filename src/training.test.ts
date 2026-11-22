@@ -76,10 +76,10 @@ describe("training grounds",()=>{
   });
   it("credits real rifle hits and reloads, not merely firing at the backstop",()=>{
     const {g,p,step,fireAt,done}=exercise(1);
-    step({yaw:1.5,fire:true});step({},25);expect(done.has("rifle")).toBe(false);
+    step({yaw:1.5,fire:true});step({},34);expect(done.has("rifle")).toBe(false);
     fireAt();expect(done.has("rifle")).toBe(true);
-    step({reload:true});step({},60);expect(done.has("reload")).toBe(true);expect(p.ammo).toBe(5);
     expect(g.players[4].hp).toBeLessThan(100);
+    step({reload:true});step({},66);expect(done.has("reload")).toBe(true);expect(p.ammo).toBe(10);
   });
   it.each(["marksman","support"] as const)("uses the real %s loadout and credits hits",loadout=>{
     const session=new TrainingSession();session.loadout=loadout;
@@ -166,9 +166,9 @@ describe("training grounds",()=>{
   it("resupplies consumables and artillery, recognizes board interaction and preserves completed tasks across gear changes",()=>{
     const {g,p,session,step}=exercise(1);
     step({reload:true});p.ammo=0;p.reserve=0;p.grenades=0;p.smokes=0;p.hp=20;g.artillery.readyAt.blue=10000;
-    session.resupply(g);expect(p.ammo).toBe(5);expect(p.reserve).toBe(60);expect(p.grenades).toBe(3);expect(p.smokes).toBe(2);expect(p.hp).toBe(100);expect(g.artillery.readyAt.blue).toBe(g.tick);
+    session.resupply(g);expect(p.ammo).toBe(10);expect(p.reserve).toBe(60);expect(p.grenades).toBe(3);expect(p.smokes).toBe(2);expect(p.hp).toBe(100);expect(g.artillery.readyAt.blue).toBe(g.tick);
     p.inventory!.primary.ammo=0;p.inventory!.sidearm.ammo=0;step({equip:"sidearm"});session.resupply(g);
-    expect(p.inventory!.primary.ammo).toBe(5);expect(p.inventory!.sidearm.ammo).toBe(8);
+    expect(p.inventory!.primary.ammo).toBe(10);expect(p.inventory!.sidearm.ammo).toBe(6);
     Object.assign(p,{x:41,z:24});expect(session.interaction(g)).toBe(3);
     expect(()=>session.select(-1)).toThrow();expect(()=>session.select(8)).toThrow();
   });

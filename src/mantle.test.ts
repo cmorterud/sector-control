@@ -19,11 +19,11 @@ function scene() {
 describe("terrain mantle", () => {
   it("climbs out, suppresses firing, lands on the bank, and logs both phases", () => {
     const { game, p } = scene();
-    const events = [];
+    const events = [], startingAmmo = p.ammo;
     game.step({ ...idle(), yaw: Math.PI / 2, mantle: true, fire: true });
     events.push(...game.events);
     expect(p.mantle).not.toBeNull();
-    expect(p.ammo).toBe(5);
+    expect(p.ammo).toBe(startingAmmo);
     expect(p.y).toBe(0);
     const endTick = p.mantle!.endTick;
     while (game.tick < endTick) {

@@ -1,5 +1,5 @@
 import type { Soldier } from "./simulation";
-import { weaponProfiles } from "./weapons";
+import { weaponProfile } from "./weapons";
 import { weaponDesign } from "./weapon-design";
 export const switchRules = { lowerTicks: 4, readyTicks: 9 };
 const smooth=(v:number)=>{const t=Math.max(0,Math.min(1,v));return t*t*(3-2*t);};
@@ -19,7 +19,7 @@ export function beginWeaponChange(p:Soldier,tick:number) {
 }
 export function reloadCue(p:Soldier,tick:number) {
  const design=weaponDesign(p);if(!design || !p.reloadAt || p.hp<=0)return null;
- const duration=weaponProfiles[p.weapon].reloadTicks;
+ const duration=weaponProfile(p).reloadTicks;
  const crossed=(fraction:number)=>p.reloadAt-tick===duration-Math.round(fraction*duration);
  if(design.reload==="clip" || design.reload==="tube")return null;
  if(design.reload==="revolver")return crossed(.14)?"cylinderOpen":crossed(.5)?"cartridges":crossed(.88)?"cylinderClose":null;
