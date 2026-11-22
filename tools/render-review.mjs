@@ -182,11 +182,13 @@ try {
     check(state.training.faction===(i===1?'french':'british'),'Faction equipment did not apply');
     check(state.training.free===(i===7),'Free practice did not apply');stations.push(state.training.id);
     if(i===1){
+     const loaded=b.state().player.ammo;
+     check(loaded>=5,'Marksman loadout starts without its magazine');
      if(!b.state().player.firstPerson)press('KeyT');
      window.dispatchEvent(new MouseEvent('mousedown',{button:2,bubbles:true}));b.advance(25);
      window.dispatchEvent(new MouseEvent('mousedown',{button:0,bubbles:true}));b.advance(12);
-     window.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));check(b.state().player.ammo<5,'LMB did not fire');
-     press('KeyR');b.advance(60);check(b.state().player.ammo===5,'R did not reload');
+     window.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));check(b.state().player.ammo===loaded-1,'LMB did not fire one round');
+     press('KeyR');b.advance(120);check(b.state().player.ammo===loaded,'R did not reload');
      window.dispatchEvent(new MouseEvent('mouseup',{button:2,bubbles:true}));
     }
     if(i===4){
