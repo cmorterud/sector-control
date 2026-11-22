@@ -2,9 +2,10 @@
 import {writeFileSync,readFileSync} from 'node:fs';
 import {Game,TestCollision,botCommand,idle,pathfind} from '../src/simulation';
 import {villageMap} from '../src/village-map';
-import {groundHeight} from '../src/map';
+import {bodyBlocked,groundHeight,supportHeight} from '../src/map';
 import {artilleryExplosionProfile} from '../src/destruction';
 import {kitWarningMaxTicks} from '../src/kit-collapse';
+import {dominationRules,flagContains} from '../src/domination';
 const destructionOnly=process.argv.includes('--destruction-only');
 const g=new Game(new TestCollision(villageMap),true,120*30,12345,undefined,{map:villageMap,humanPlayerIds:[]});
 let shots=0,deaths=0,captures=0,impacts=0;const upstairs=new Set<number>(),visits=new Set<string>(),began=performance.now();
@@ -51,9 +52,19 @@ for(let n=0;n<80 && disallowedRemainders().length;n++) {
 }
 const standing=disallowedRemainders();
 if(standing.length)throw Error(`Manor retained ${standing.length} structural parts after bearing support bombardment: ${standing.slice(0,4).map(b=>b.id).join(', ')}`);
-let accessible=0;
-for(const flag of d.sectors)if(pathfind(d.map.spawn.blue,flag,d.map).length)accessible++;
-if(accessible!==5)throw Error('Collapse blocked an objective');
-const report={battle,destruction:{initialManorParts:initial,finalManorParts:d.map.boxes.filter(b=>b.architecture?.building==='manor').length,finalBoxes:d.map.boxes.length,rubble:d.map.boxes.filter(b=>b.id?.startsWith('village-rubble-manor')).length,reachableFlags:accessible,strikes},initialBoxes:villageMap.boxes.length};
+// Reach a clear position that can actually capture the flag. Its exact center
+// may be a crater after the test without blocking the rest of the zone.
+const approaches=[{dx:0,dz:0},...[1.5,3,4.5].flatMap(radius=>Array.from({length:8},(_,i)=>({
+  dx:radius*Math.cos(i*Math.PI/4),dz:radius*Math.sin(i*Math.PI/4),
+})))];
+const reachable=d.sectors.filter(flag=>approaches.some(({dx,dz})=>{
+  const x=flag.x+dx,z=flag.z+dz;
+  const y=supportHeight(x,z,d.map,groundHeight(flag.x,flag.z,d.map)+dominationRules.heightTolerance);
+  const post={x,y,z};
+  return flagContains(d,post,flag)&&!bodyBlocked(x,z,y,.4,d.map)&&pathfind(d.map.spawn.blue,post,d.map).length>0;
+})).map(flag=>flag.id);
+const report={battle,destruction:{initialManorParts:initial,finalManorParts:d.map.boxes.filter(b=>b.architecture?.building==='manor').length,finalBoxes:d.map.boxes.length,rubble:d.map.boxes.filter(b=>b.id?.startsWith('village-rubble-manor')).length,reachableFlags:reachable.length,reachable,strikes},initialBoxes:villageMap.boxes.length};
 writeFileSync('playtest-artifacts/village-redesign-audit.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify(report));
+const inaccessible=d.sectors.filter(flag=>!reachable.includes(flag.id)).map(flag=>flag.id);
+if(inaccessible.length)throw Error(`Collapse left no path to a clear capture position at ${inaccessible.join(', ')}`);
