@@ -1,4 +1,4 @@
-import{f as x,r as k,g as $,h as y,t as p,a as g,w as f,b as R,c as b,d as S,s as T}from"./loadouts-QbOYl-tI.js";const h=document.getElementById("armoury"),i=e=>e.replace(/[&<>"]/g,l=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[l]),m=e=>e===0?"instant":`${e.toFixed(2).replace(/\.?0+$/,"")} s`;function F(e){if(e>=100)return{fill:"#efd07b",text:"#1c302e"};const l=Math.max(0,Math.min(1,e/100)),o=(a,t)=>Math.round(a+(t-a)*l);return{fill:`rgb(${o(52,243)},${o(73,142)},${o(71,123)})`,text:l>.55?"#1c302e":"#edf0e7"}}function C(e){const l=(o,a,t)=>{const s=F(e.damage[o]);return`<g class="zone" data-zone="${o}">${a.replace("/>",` fill="${s.fill}"/>`)}${t?`<text x="${t[0]}" y="${t[1]}" fill="${s.text}">${e.damage[o]}</text>`:""}</g>`};return`<svg class="figure" viewBox="0 0 120 250" role="img" aria-label="Damage by body part for the ${i(e.name)}">
+import{f as x,r as k,g as $,h as y,t as p,a as g,w as f,b as R,c as b,d as S,s as T}from"./loadouts-QbOYl-tI.js";const h=document.getElementById("armoury"),i=e=>e.replace(/[&<>"]/g,l=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[l]),m=e=>e===0?"instant":`${e.toFixed(2).replace(/\.?0+$/,"")} s`;function C(e){if(e>=100)return{fill:"#efd07b",text:"#1c302e"};const l=Math.max(0,Math.min(1,e/100)),o=(a,t)=>Math.round(a+(t-a)*l);return{fill:`rgb(${o(52,243)},${o(73,142)},${o(71,123)})`,text:l>.55?"#1c302e":"#edf0e7"}}function F(e){const l=(o,a,t)=>{const s=C(e.damage[o]);return`<g class="zone" data-zone="${o}">${a.replace("/>",` fill="${s.fill}"/>`)}${t?`<text x="${t[0]}" y="${t[1]}" fill="${s.text}">${e.damage[o]}</text>`:""}</g>`};return`<svg class="figure" viewBox="0 0 120 250" role="img" aria-label="Damage by body part for the ${i(e.name)}">
     ${l("legs",'<rect x="37" y="146" width="21" height="98" rx="6"/>',[47.5,200])}
     ${l("legs",'<rect x="62" y="146" width="21" height="98" rx="6"/>')}
     ${l("arms",'<rect x="11" y="56" width="20" height="88" rx="8"/>',[21,104])}
@@ -9,7 +9,7 @@ import{f as x,r as k,g as $,h as y,t as p,a as g,w as f,b as R,c as b,d as S,s a
   </svg>`}function M(e){const l=y.map(s=>{const n=T(e,s.id);return`<tr><th scope="row">${s.label}</th><td>${e.damage[s.id]}</td><td>${n===1?'<span class="kill">1 · kill</span>':n}</td><td>${m(p(e,s.id))}</td></tr>`}).join(""),[o,a]=e.historical.rate??[],t=e.historical.rate?"historical":"reference";return`<article class="card">
     <header><div class="eyebrow">${k[e.role].toUpperCase()}</div><h2>${i(e.name)}</h2><div class="round">${i(e.round)}</div></header>
     <div class="body">
-      ${C(e)}
+      ${F(e)}
       <table class="zones"><thead><tr><th></th><th>Damage</th><th>Hits to kill</th><th>Time to kill</th></tr></thead><tbody>${l}</tbody></table>
     </div>
     <dl class="stats">
@@ -24,7 +24,7 @@ import{f as x,r as k,g as $,h as y,t as p,a as g,w as f,b as R,c as b,d as S,s a
     <div class="table-wrap"><table class="compare"><thead><tr>${l}</tr></thead><tbody>${o}</tbody></table></div>`}function v(e){const l=[...b.map(a=>[a,x[a].name]),["compare","Compare"]],o=e==="compare"?j():`<div class="cards">${S.filter(a=>a.faction===e).map(M).join("")}</div>`;h.innerHTML=`<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
       <div class="eyebrow">SECTOR CONTROL</div><h1>Armoury</h1>
-      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles. Support can carry a light machine gun or take an emplacement kit on Village Front and Training Grounds. Each role has a pistol.</p>
+      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles. Support can carry a light machine gun or take an emplacement kit on any map. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${l.map(([a,t])=>`<button role="tab" aria-selected="${a===e}" data-tab="${a}">${i(t)}</button>`).join("")}</nav>
     <section>${o}</section>
