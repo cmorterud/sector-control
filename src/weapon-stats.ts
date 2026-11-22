@@ -132,7 +132,7 @@ export const weaponStats: WeaponStats[] = [
     id: "vickers", name: "Vickers", faction: "british", role: "emplaced", round: ".303 British",
     historical: { muzzleVelocity: 744, note: "Emplacement kit for British Support." },
     roundsPerMinute: 600, magazine: 250, reserve: 500, reloadSeconds: 6, damage: machineGunDamage,
-    summary: "Long bursts from a fixed mount. A teammate can take over when you dismount.",
+    summary: "Long bursts from a fixed mount. The gun keeps its ammunition when you dismount.",
   },
   {
     id: "mg08", name: "MG 08", faction: "german", role: "emplaced", round: "7.92×57 mm",
