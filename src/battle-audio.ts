@@ -132,7 +132,7 @@ export class BattleAudio {
   play(cue: SoundCue) {
     if (!this.running) return;
     const speech = cue.kind === "voice";
-    const background = ["forestWind","forestCreak","distantBattle"].includes(cue.kind);
+    const background = ["forestWind","forestCreak","distantBattle","wireWind","distantGun","crow"].includes(cue.kind);
     const forest = forestVoice(cue.kind);
     if (speech && (!this.voicesEnabled || this.speech)) return;
     const spoken = speech
@@ -220,7 +220,7 @@ export class BattleAudio {
     const end = start + length;
     const filter = c.createBiquadFilter();
     filter.type = forest ? forest.band ? "bandpass" : "lowpass" : crack || whistle || mechanism ? "bandpass" : "lowpass";
-    filter.Q.value = whistle ? 7 : crack ? 0.8 : 0.5;
+    filter.Q.value = whistle ? 7 : cue.kind === "wireWind" ? 9 : cue.kind === "crow" ? 5 : crack ? 0.8 : 0.5;
     filter.frequency.value = forest?.frequency ?? (mechanical ? mechanical.frequency : cue.kind === "flame" ? 1500 : melee
       ? cue.kind === "meleeSwing"
         ? 2400
@@ -323,6 +323,15 @@ export class BattleAudio {
       envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.65),start+.9);
       filter.frequency.exponentialRampToValueAtTime(cue.occluded?160:240,end);
     }
+    if(cue.kind === "wireWind") envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.4),start+3.2);
+    if(cue.kind === "distantGun")
+      for(let k=0;k<8;k++) {
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume),start+.01+k*.12);
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.06),start+.07+k*.12);
+      }
+    if(cue.kind === "crow")
+      for(const [offset,level] of [[.2,.08],[.34,1],[.6,.05]])
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);
     if(cue.kind === "distantBattle") {
       for(const [offset,level] of [[.12,.12],[.24,.6],[.4,.08],[.64,.3],[1,.035]])
         envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);

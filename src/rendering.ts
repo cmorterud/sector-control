@@ -11,6 +11,7 @@ import type {DeathView} from "./combat-feedback";
 import { architecturePixels, architecturalTextures, cisternWaterNormals, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
+import { brazierSites, clothScraps, mistBanks, type MistBank } from "./atmosphere";
 import { backdropBalloons, backdropBoxMesh, backdropGround, backdropScenery, backdropSmoke, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
@@ -82,6 +83,7 @@ import { battlefieldProps, trenchRoots } from "./battlefield-dressing";
 import { forestFloorProps } from "./forest-floor";
 import { forestGeometry, forestVariant, type ForestShape } from "./forest-geometry";
 import {
+  playArea,
   industrialMap,
   invalidateCoverLookup,
   groundHeight,
@@ -185,6 +187,14 @@ export class Renderer implements CollisionWorld {
   materials = new Map<string, pc.StandardMaterial>();
   private architecturalModels?: Map<string,{surface:ArchitectureSurface;meshKey:string}[]>;
   private coastalSea?: {water:pc.StandardMaterial;foam:pc.StandardMaterial;time:number;pending:number};
+  // Ground mist, brazier and crater smoke, and cloth on the wire.
+  private atmosphere?: {
+    root: pc.Entity;
+    mists: { entity: pc.Entity; bank: MistBank }[];
+    braziers: pc.Entity[][];
+    smoulders: { puffs: pc.Entity[]; material: pc.StandardMaterial; at: V3 | null; bornAt: number }[];
+    cloth: pc.Entity[];
+  };
   // Balloons, smoke columns, distant bursts and flares beyond the terrain edge.
   private backdrop?: {
     life: pc.Entity;
@@ -475,6 +485,7 @@ export class Renderer implements CollisionWorld {
     if (map.coast) this.buildCoast();
     if (map.boundary) this.buildBoundaryWire();
     if (map.backdrop) this.buildBackdrop();
+    if (this.look.atmosphere) this.buildAtmosphere();
     for (const [x, z, w, d] of map.coast || map.backdrop ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
@@ -1873,6 +1884,94 @@ export class Renderer implements CollisionWorld {
     this.backdrop = { life, balloons, smoke, flashes, flares };
     life.enabled = this.quality !== "low";
   }
+  private buildAtmosphere() {
+    const atmosphere = this.look.atmosphere!, root = this.joint("atmosphere", this.mapRoot);
+    const puff = (parent: pc.Entity, material: pc.Material) => {
+      const e = this.joint("smoke wisp", parent);
+      e.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
+      return e;
+    };
+    const fieldMist = this.dustMaterial("#bcc1c3"), trenchMist = this.dustMaterial("#b4b9bb");
+    fieldMist.opacity = atmosphere.fieldMist;
+    trenchMist.opacity = atmosphere.trenchMist;
+    fieldMist.update();
+    trenchMist.update();
+    const mists = mistBanks(this.map).map((bank) => ({ entity: puff(root, bank.trench ? trenchMist : fieldMist), bank }));
+    const brazierSmoke = this.dustMaterial("#9c9d99");
+    brazierSmoke.opacity = 0.22;
+    brazierSmoke.update();
+    const braziers = brazierSites(this.map).map((site) => {
+      const column = this.joint("brazier smoke", root, site.x, groundHeight(site.x, site.z, this.map) + 0.6, site.z);
+      return Array.from({ length: 6 }, () => puff(column, brazierSmoke));
+    });
+    const smoulders = Array.from({ length: 6 }, () => {
+      const material = this.dustMaterial("#5e5a55"), column = this.joint("smouldering crater", root);
+      return { puffs: Array.from({ length: 5 }, () => puff(column, material)), material, at: null, bornAt: -1e9 };
+    });
+    const cloth = clothScraps(this.map).map((scrap) => {
+      const key = `cloth ${scrap.color}`;
+      let material = this.materials.get(key);
+      if (!material) {
+        material = new pc.StandardMaterial();
+        material.diffuse = color(scrap.color);
+        material.gloss = 0.05;
+        material.cull = pc.CULLFACE_NONE;
+        material.update();
+        this.materials.set(key, material);
+      }
+      const e = this.joint("cloth on wire", root, scrap.x, scrap.y, scrap.z);
+      e.addComponent("render", { type: "plane", material, castShadows: false });
+      e.setLocalScale(0.32, 1, 0.5);
+      e.setEulerAngles(90, (scrap.yaw * 180) / Math.PI, 0);
+      return e;
+    });
+    this.atmosphere = { root, mists, braziers, smoulders, cloth };
+    root.enabled = this.quality !== "low";
+  }
+  private drawAtmosphere(g: Game, alpha: number) {
+    const a = this.atmosphere;
+    if (!a?.root.enabled) return;
+    const tick = g.tick + alpha, t = tick / 30;
+    // Field banks drift along the front and wrap; trench banks only sway.
+    // A bank closer than 7 m is hidden rather than filling the screen.
+    const eye = this.camera.getPosition(), span = playArea(this.map).depth + 30;
+    a.mists.forEach(({ entity, bank }, i) => {
+      const z = bank.trench
+        ? bank.z + Math.sin(t * 0.2 + i) * 1.2
+        : ((((bank.z + span / 2 + t * bank.drift) % span) + span) % span) - span / 2;
+      entity.enabled = Math.hypot(bank.x - eye.x, bank.y - eye.y, z - eye.z) > 7;
+      if (!entity.enabled) return;
+      entity.setPosition(bank.x, bank.y, z);
+      this.faceCamera(entity, (i * 23) % 9 - 4);
+      entity.setLocalScale(bank.w, 1, bank.h);
+    });
+    a.braziers.forEach((puffs, n) =>
+      puffs.forEach((puff, i) => {
+        const rise = (t * 0.09 + i / puffs.length + n * 0.37) % 1, size = 0.5 + rise * 1.9;
+        puff.setLocalPosition(rise * 1.6 + Math.sin(t * 0.7 + i) * 0.15, rise * 6.5, Math.sin(i * 2.3 + n) * 0.2);
+        this.faceCamera(puff, i * 41 + n * 17);
+        puff.setLocalScale(size, 1, size * 1.2);
+      }),
+    );
+    for (const slot of a.smoulders) {
+      const age = (tick - slot.bornAt) / 30, life = Math.max(0, 1 - age / 25);
+      slot.puffs[0].parent!.enabled = !!slot.at && life > 0;
+      if (!slot.at || life <= 0) continue;
+      slot.puffs[0].parent!.setPosition(slot.at.x, slot.at.y + 0.3, slot.at.z);
+      slot.material.opacity = 0.34 * life;
+      slot.material.update();
+      slot.puffs.forEach((puff, i) => {
+        const rise = (t * 0.07 + i / slot.puffs.length) % 1, size = 0.9 + rise * 3.4;
+        puff.setLocalPosition(rise * 2.4, rise * 7, Math.sin(i * 1.9) * 0.4);
+        this.faceCamera(puff, i * 53);
+        puff.setLocalScale(size, 1, size * 1.15);
+      });
+    }
+    a.cloth.forEach((scrap, i) => {
+      const angles = scrap.getEulerAngles();
+      scrap.setEulerAngles(90 + Math.sin(t * 1.9 + i * 1.3) * 18 + Math.sin(t * 4.3 + i) * 5, angles.y, 0);
+    });
+  }
   private drawBackdrop(g: Game, alpha: number) {
     const b = this.backdrop;
     if (!b?.life.enabled) return;
@@ -2163,6 +2262,7 @@ export class Renderer implements CollisionWorld {
   setQuality(quality: Quality) {
     this.quality = quality;
     if (this.backdrop) this.backdrop.life.enabled = quality !== "low";
+    if (this.atmosphere) this.atmosphere.root.enabled = quality !== "low";
     const profile = qualityProfiles[quality], light = this.sun.light!, look = this.look;
     light.numCascades = profile.cascades;
     light.cascadeDistribution = 0.6;
@@ -4307,6 +4407,7 @@ export class Renderer implements CollisionWorld {
     this.drawBlasts(dt);
     this.drawEnvironmentEffects(dt);
     this.drawBackdrop(g, alpha);
+    this.drawAtmosphere(g, alpha);
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {
       fx.life -= dt;
@@ -4805,6 +4906,9 @@ export class Renderer implements CollisionWorld {
       return;
     }
     if (e.type === "artilleryImpact") {
+      // A fresh crater smoulders for a while; the oldest wisp is reused.
+      const smoulder = this.atmosphere?.smoulders.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b));
+      if (smoulder) Object.assign(smoulder, { at: { ...e.at }, bornAt: e.tick });
       const scale = e.ambient ? 2 : 1;
       this.blastEffect(e.at, e.radius / scale, 1.7, scale);
       return;
