@@ -93,6 +93,8 @@ Each uncontested flag earns its owner **one point every three seconds**. First t
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
+A barbed-wire belt surrounds the sector, just outside the playable area. Inside the wire you can only walk: no sprinting, hopping or mantling. Once you cross it, a banner counts down five seconds. Stay out and a three-shell salvo walks along the wire onto you, repeating until you return; it credits no one. Stepping back in for a full second clears the warning, but popping in and out does not reset the countdown. Each trench line continues past the north and south wire behind a sandbag block. Bots never leave the playable area.
+
 ## Village front prototype
 
 Choose **Village front** in the start menu or open [the village map](http://localhost:5173/?map=village). It keeps the trench map's 50v50 roster, service rifles, machine gunners, grenades, bayonets and artillery, with the same domination rules.

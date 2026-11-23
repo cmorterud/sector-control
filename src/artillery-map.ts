@@ -1,7 +1,7 @@
 import { artillerySector, artillerySectors } from "./artillery-sectors";
 import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import type { Game } from "./simulation";
-import type { Vec } from "./map";
+import { playArea, type Vec } from "./map";
 import { createTacticalRoutes, drawTacticalTerrain } from "./tactical-terrain";
 
 export class ArtilleryMap {
@@ -66,11 +66,11 @@ export class ArtilleryMap {
     this.status.hidden = !artillery;
     this.setShortcut(this.shortcut);
     this.open = true;
-    this.panel.style.setProperty("--tactical-aspect",String(g.map.width/g.map.depth));
+    this.panel.style.setProperty("--tactical-aspect",String(playArea(g.map).width/playArea(g.map).depth));
     const sectors = artillery ? artillerySectors(g.map) : [];
     this.grid.replaceChildren();
-    this.grid.style.gridTemplateColumns = `repeat(${Math.ceil(g.map.width / 16)}, 1fr)`;
-    this.grid.style.aspectRatio = `${g.map.width} / ${g.map.depth}`;
+    this.grid.style.gridTemplateColumns = `repeat(${Math.ceil(playArea(g.map).width / 16)}, 1fr)`;
+    this.grid.style.aspectRatio = `${playArea(g.map).width} / ${playArea(g.map).depth}`;
     this.terrain.className = "tactical-terrain";
     this.terrainRevision = -1;
     this.grid.append(this.terrain);
@@ -87,14 +87,14 @@ export class ArtilleryMap {
     if (g.scoring === "domination")
       for (const s of g.sectors) {
         const dot = document.createElementNS(svg.namespaceURI, "circle");
-        dot.setAttribute("cx", String(s.x + g.map.width / 2));
-        dot.setAttribute("cy", String(s.z + g.map.depth / 2));
+        dot.setAttribute("cx", String(s.x + playArea(g.map).width / 2));
+        dot.setAttribute("cy", String(s.z + playArea(g.map).depth / 2));
         dot.setAttribute("r", "2.2");
         dot.setAttribute("stroke", "#172324");
         dot.setAttribute("stroke-width", "0.4");
         const label = document.createElementNS(svg.namespaceURI, "text");
-        label.setAttribute("x", String(s.x + g.map.width / 2));
-        label.setAttribute("y", String(s.z + g.map.depth / 2 + 1));
+        label.setAttribute("x", String(s.x + playArea(g.map).width / 2));
+        label.setAttribute("y", String(s.z + playArea(g.map).depth / 2 + 1));
         label.setAttribute("text-anchor", "middle");
         label.setAttribute("font-size", "3");
         label.setAttribute("fill", "#172324");
@@ -102,8 +102,8 @@ export class ArtilleryMap {
         svg.append(dot, label);
         if (s.name) {
           const name = document.createElementNS(svg.namespaceURI, "text");
-          name.setAttribute("x", String(s.x + g.map.width / 2));
-          name.setAttribute("y", String(s.z + g.map.depth / 2 + 4.3));
+          name.setAttribute("x", String(s.x + playArea(g.map).width / 2));
+          name.setAttribute("y", String(s.z + playArea(g.map).depth / 2 + 4.3));
           name.setAttribute("text-anchor", "middle");
           name.setAttribute("font-size", "1.65");
           name.setAttribute("fill", "#172324");
@@ -115,10 +115,10 @@ export class ArtilleryMap {
     const exercise=this.exerciseTarget?.();
     if(exercise){
       const ring=document.createElementNS(svg.namespaceURI,"circle");
-      ring.setAttribute("cx",String(exercise.x+g.map.width/2));ring.setAttribute("cy",String(exercise.z+g.map.depth/2));
+      ring.setAttribute("cx",String(exercise.x+playArea(g.map).width/2));ring.setAttribute("cy",String(exercise.z+playArea(g.map).depth/2));
       ring.setAttribute("r","7");ring.setAttribute("fill","none");ring.setAttribute("stroke","#f3d16a");ring.setAttribute("stroke-width",".8");
       const label=document.createElementNS(svg.namespaceURI,"text");
-      label.setAttribute("x",String(exercise.x+g.map.width/2));label.setAttribute("y",String(exercise.z+g.map.depth/2-9));
+      label.setAttribute("x",String(exercise.x+playArea(g.map).width/2));label.setAttribute("y",String(exercise.z+playArea(g.map).depth/2-9));
       label.setAttribute("text-anchor","middle");label.setAttribute("font-size","2.3");label.setAttribute("fill","#f8e9b2");label.textContent="EXERCISE AREA";
       svg.append(ring,label);
     }
@@ -128,11 +128,11 @@ export class ArtilleryMap {
     this.cursor = {
       x: Math.max(
         0,
-        Math.min(0.999, (p.x + Math.sin(p.yaw) * 45) / g.map.width + 0.5),
+        Math.min(0.999, (p.x + Math.sin(p.yaw) * 45) / playArea(g.map).width + 0.5),
       ),
       z: Math.max(
         0,
-        Math.min(0.999, (p.z - Math.cos(p.yaw) * 45) / g.map.depth + 0.5),
+        Math.min(0.999, (p.z - Math.cos(p.yaw) * 45) / playArea(g.map).depth + 0.5),
       ),
     };
     this.panel.classList.remove("hidden");
@@ -168,8 +168,8 @@ export class ArtilleryMap {
   private selected() {
     const g = this.game();
     return artillerySector(g.map, {
-      x: (this.cursor.x - 0.5) * g.map.width,
-      z: (this.cursor.z - 0.5) * g.map.depth,
+      x: (this.cursor.x - 0.5) * playArea(g.map).width,
+      z: (this.cursor.z - 0.5) * playArea(g.map).depth,
     });
   }
   update() {
@@ -206,10 +206,12 @@ export class ArtilleryMap {
       this.marker.style.left = `${this.cursor.x * 100}%`;
       this.marker.style.top = `${this.cursor.z * 100}%`;
     }
-    this.you.style.left = `${(p.x / g.map.width + 0.5) * 100}%`;
-    this.you.style.top = `${(p.z / g.map.depth + 0.5) * 100}%`;
+    // Positions in the dead zone stay pinned to the panel's edge.
+    const edge = (v: number) => Math.max(0, Math.min(100, (v + 0.5) * 100));
+    this.you.style.left = `${edge(p.x / playArea(g.map).width)}%`;
+    this.you.style.top = `${edge(p.z / playArea(g.map).depth)}%`;
     const death=this.deathLocation?.();this.death.hidden=!death;
-    if(death){this.death.style.left=`${(death.x/g.map.width+.5)*100}%`;this.death.style.top=`${(death.z/g.map.depth+.5)*100}%`;}
+    if(death){this.death.style.left=`${edge(death.x/playArea(g.map).width)}%`;this.death.style.top=`${edge(death.z/playArea(g.map).depth)}%`;}
     for (const marker of this.flagMarkers) {
       const s = g.sectors.find((s) => s.id === marker.id)!;
       marker.dot.setAttribute(

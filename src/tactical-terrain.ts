@@ -1,12 +1,12 @@
-import { groundHeight, type MapDefinition } from "./map";
+import { groundHeight, playArea, type MapDefinition } from "./map";
 import type { FortRect } from "./fort-vaux-map";
 
 // Sample real, excavated terrain only when its revision changes. No actor data.
 export function tacticalRelief(map: MapDefinition, size = 256) {
-  const width = size, height = Math.round(size * map.depth / map.width);
+  const width = size, height = Math.round(size * playArea(map).depth / playArea(map).width);
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (let z = 0; z < height; z++) for (let x = 0; x < width; x++) {
-    const wx = (x / width - 0.5) * map.width, wz = (z / height - 0.5) * map.depth;
+    const wx = (x / width - 0.5) * playArea(map).width, wz = (z / height - 0.5) * playArea(map).depth;
     const h = groundHeight(wx, wz, map);
     const slope = groundHeight(wx + 0.5, wz - 0.5, map) - h;
     const shade = Math.max(-40, Math.min(35, h * 8 + slope * 22));
@@ -18,12 +18,12 @@ export function tacticalRelief(map: MapDefinition, size = 256) {
 export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition, size = map.fort ? 720 : 256) {
   if (map.fort) {
     canvas.width = size;
-    canvas.height = Math.round(canvas.width * map.depth / map.width);
+    canvas.height = Math.round(canvas.width * playArea(map).depth / playArea(map).width);
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#222d2b";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(canvas.width / map.width, canvas.height / map.depth);
-    ctx.translate(map.width / 2, map.depth / 2);
+    ctx.scale(canvas.width / playArea(map).width, canvas.height / playArea(map).depth);
+    ctx.translate(playArea(map).width / 2, playArea(map).depth / 2);
     const rect = ({ x0, x1, z0, z1 }: FortRect, color: string) => {
       ctx.fillStyle = color;
       ctx.fillRect(x0, z0, x1 - x0, z1 - z0);
@@ -42,22 +42,22 @@ export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinitio
   canvas.width = raster.width; canvas.height = raster.height;
   const ctx = canvas.getContext("2d")!;
   ctx.putImageData(new ImageData(raster.pixels, raster.width, raster.height), 0, 0);
-  const sx = canvas.width / map.width, sz = canvas.height / map.depth;
+  const sx = canvas.width / playArea(map).width, sz = canvas.height / playArea(map).depth;
   for (const b of map.boxes) {
     ctx.fillStyle = ["building", "container", "masonry", "concrete", "bunker"].includes(b.kind)
       ? "#3c4142" : b.kind === "tree" || b.kind === "brush" ? "#52614a" : "#85765c";
-    ctx.fillRect((b.x - b.w / 2 + map.width / 2) * sx,
-      (b.z - b.d / 2 + map.depth / 2) * sz, Math.max(1, b.w * sx), Math.max(1, b.d * sz));
+    ctx.fillRect((b.x - b.w / 2 + playArea(map).width / 2) * sx,
+      (b.z - b.d / 2 + playArea(map).depth / 2) * sz, Math.max(1, b.w * sx), Math.max(1, b.d * sz));
   }
 }
 
 // Roads and trench markings are shared by the full tactical map and minimap.
 export function createTacticalRoutes(map: MapDefinition) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", `0 0 ${map.width} ${map.depth}`);
+  svg.setAttribute("viewBox", `0 0 ${playArea(map).width} ${playArea(map).depth}`);
   svg.setAttribute("preserveAspectRatio", "none");
   for (const street of map.streets ?? []) {
-    const d=street.points.map((p,i)=>(i ? "L" : "M")+(p.x+map.width/2)+","+(p.z+map.depth/2)).join(" ");
+    const d=street.points.map((p,i)=>(i ? "L" : "M")+(p.x+playArea(map).width/2)+","+(p.z+playArea(map).depth/2)).join(" ");
     const road = document.createElementNS(svg.namespaceURI, "path");
     road.setAttribute("d", d);
     road.setAttribute("stroke", "#b1a587");
@@ -70,7 +70,7 @@ export function createTacticalRoutes(map: MapDefinition) {
       const path = document.createElementNS(svg.namespaceURI, "path");
       path.setAttribute(
         "d",
-        `M${s.x + map.width / 2},${s.z - s.length / 2 + map.depth / 2} v${s.length}`,
+        `M${s.x + playArea(map).width / 2},${s.z - s.length / 2 + playArea(map).depth / 2} v${s.length}`,
       );
       path.setAttribute(
         "stroke",
@@ -89,7 +89,7 @@ export function createTacticalRoutes(map: MapDefinition) {
       route.points
         .map(
           (p, i) =>
-            `${i ? "L" : "M"}${p.x + map.width / 2},${p.z + map.depth / 2}`,
+            `${i ? "L" : "M"}${p.x + playArea(map).width / 2},${p.z + playArea(map).depth / 2}`,
         )
         .join(" "),
     );
@@ -103,8 +103,8 @@ export function createTacticalRoutes(map: MapDefinition) {
   }
   for (const bay of map.terrain?.shelterBays ?? []) {
     const room = document.createElementNS(svg.namespaceURI, "rect");
-    room.setAttribute("x", String(bay.x + map.width / 2 - 2));
-    room.setAttribute("y", String(bay.z + map.depth / 2 - 2));
+    room.setAttribute("x", String(bay.x + playArea(map).width / 2 - 2));
+    room.setAttribute("y", String(bay.z + playArea(map).depth / 2 - 2));
     room.setAttribute("width", "4");
     room.setAttribute("height", "4");
     room.setAttribute("fill", bay.team === "blue" ? "#64bdd6" : "#e38e77");

@@ -53,6 +53,11 @@ export const artilleryExplosionProfile: ExplosionProfile = {
   craterVariation: 0.18,
 };
 // Heavy stray shells double the footprint, retaining trench-friendly cut depth.
+// Shells for soldiers who leave the play area: an ordinary strike, credited to no one.
+export const boundaryArtilleryExplosionProfile: ExplosionProfile = {
+  ...artilleryExplosionProfile,
+  kind: "artillery-boundary",
+};
 export const ambientArtilleryExplosionProfile: ExplosionProfile = {
   ...artilleryExplosionProfile,
   kind: "artillery-ambient",

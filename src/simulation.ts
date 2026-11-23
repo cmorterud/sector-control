@@ -4,6 +4,7 @@ import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport
 import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
+import { advanceBoundary, boundaryRules, type BoundaryWarning } from "./boundary";
 import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction, type CombatCover } from "./combat-reaction";
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
@@ -77,6 +78,8 @@ import {
   mantleRoute,
   walkSegment,
   terrainPatchSize,
+  playArea,
+  inBoundaryWire,
   type Vec,
   type Box,
   type MapDefinition,
@@ -412,6 +415,8 @@ export interface Soldier extends Vec {
   lastShotAt: number;
   respawnAt: number;
   protectedUntil: number;
+  // Set while outside the play area; see boundary.ts.
+  boundaryWarning?: BoundaryWarning | null;
   kills: number;
   assists: number;
   recentDamage?: Wound[];
@@ -659,6 +664,7 @@ export type Event = { id: number; tick: number } & (
   | { type: "assist"; actor:number; target:number; damage:number }
   | { type: "respawn" | "reload"; actor: number }
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
+  | { type: "boundary"; actor: number; phase: "warning" | "clear" | "salvo"; deadline?: number }
   | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
   | { type: "neutralized"; sector: string; previous: Team; team: Team }
@@ -1165,6 +1171,7 @@ export class Game {
     p.mantle = null;
     p.hop = null;
     p.fall = null;
+    p.boundaryWarning = null;
     p.nextHop = this.tick;
     p.landedAt = -1000;
     p.nextMantle = this.tick;
@@ -1309,7 +1316,8 @@ export class Game {
         !p.hop &&
         !p.fall &&
         this.tick >= p.nextMantle &&
-        this.tick >= p.nextHop
+        this.tick >= p.nextHop &&
+        !inBoundaryWire(p.x, p.z, this.map)
       ) {
         if (!this.startMantle(p, c)) this.startHop(p);
       }
@@ -1332,7 +1340,7 @@ export class Game {
         }
       } else {
         const len = Math.max(1, Math.hypot(c.x, c.z)),
-          speed =
+          stride =
             this.tick < p.staggerUntil
               ? 1.2
               : (meleeSpeed ??
@@ -1340,7 +1348,8 @@ export class Game {
                   ? crouchRules.speed
                   : c.sprint && !c.aim
                     ? 7
-                    : 4.5));
+                    : 4.5)),
+          speed = inBoundaryWire(p.x, p.z, this.map) ? Math.min(stride, boundaryRules.wireSpeed) : stride;
         p.vx += ((c.x / len) * speed - p.vx) * 0.24;
         p.vz += ((c.z / len) * speed - p.vz) * 0.24;
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });
@@ -1409,6 +1418,7 @@ export class Game {
     advanceFlames(this,(p,n,source,team)=>this.damage(p,n,source,team,{kind:"burn",weapon:"Flamethrower burn",from:p.burnFrom}));
     this.advanceProjectiles();
     this.advanceGrenades();
+    advanceBoundary(this);
     advanceArtillery(this);
     for (const s of this.scoring !== "eliminations" ? this.sectors : []) {
       const occupants = this.players.filter((p) =>
@@ -2184,7 +2194,7 @@ export class Game {
       );
       const capturing = this.scoring === "domination" && this.sectors.some(s=>s.owner!==p.team && flagOccupant(this,p,s));
       hits.push({ target: p.id, damage });
-      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":"Artillery strike"):"Fragmentation grenade",from:{...at}});
+      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":profile.kind==="artillery-boundary"?"Left the battlefield":"Artillery strike"):"Fragmentation grenade",from:{...at}});
       if(artillery) {
         this.artilleryAudit.damagePrevented+=rawDamage-damage;
         if(p.hp<=0) { this.artilleryAudit.deaths++; if(capturing)this.artilleryAudit.captureInterruptions++; }
@@ -2378,8 +2388,10 @@ function* navigationNodeWork(map: MapDefinition): Generator<boolean, { nodes: Ve
       nodeKeys.push(key);
     }
   };
-  for (let x = -map.width / 2 + step; x <= map.width / 2 - step; x += step)
-    for (let z = -map.depth / 2 + step; z <= map.depth / 2 - step; z += step)
+  // The lattice covers the play area only: bots never route through a dead zone.
+  const area = playArea(map);
+  for (let x = -area.width / 2 + step; x <= area.width / 2 - step; x += step)
+    for (let z = -area.depth / 2 + step; z <= area.depth / 2 - step; z += step)
       add(x, z);
   for (const point of map.navigationPoints ?? []) add(point.x, point.z, point.y);
   for(const b of map.buildings??[])for(const post of b.posts)add(post.x,post.z,post.y);

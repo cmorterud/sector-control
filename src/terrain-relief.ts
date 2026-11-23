@@ -1,5 +1,6 @@
 import {
   baseGroundHeight,
+  playArea,
   terrainResolution,
   terrainPatchSize,
   type Depression,
@@ -121,7 +122,7 @@ export function buildTrenchElevation(map: MapDefinition): TerrainElevation {
       protection = Math.min(
         protection,
         smooth(
-          (Math.min(map.width / 2 - Math.abs(x), map.depth / 2 - Math.abs(z)) -
+          (Math.min(playArea(map).width / 2 - Math.abs(x), playArea(map).depth / 2 - Math.abs(z)) -
             1) /
             5,
         ),
@@ -185,7 +186,7 @@ export function buildTrenchRelief(
             ? scarEdge(depression, Math.atan2(nz, nx))
             : 1,
           r2 = (nx * nx + nz * nz) / (edge * edge);
-        if (r2 >= 1 || Math.abs(x) >= 15 || Math.abs(z) >= map.depth / 2 - 2)
+        if (r2 >= 1 || Math.abs(x) >= 15 || Math.abs(z) >= playArea(map).depth / 2 - 2)
           continue;
         if (baseGroundHeight(x, z, authored) < map.terrain!.bankHeight - 0.01)
           continue;

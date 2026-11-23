@@ -148,6 +148,44 @@ try {
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
+ if(!visualOnly&&map==='trenches') {
+  // Close views of the wire belt and a trench block. Kept out of the visual
+  // comparison, whose base revision may not know these viewpoints.
+  for(const detail of ['boundary-wire','trench-block']) {
+   const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
+   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
+   await screenshot('detail-'+detail,true);
+  }
+  // Walk out through the boundary wire: the warning must appear and count down,
+  // and staying out must end in the boundary salvo rather than a soldier's kill.
+  report.boundary=await client.evaluate(`(()=>{
+   const review=window.sectorRenderReview;
+   const send=(type,code)=>window.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
+   review.manual();
+   review.survey(true,'boundary-walk');
+   const start=review.state().player.x;
+   send('keydown','KeyW');
+   try {review.advance(75);} finally {send('keyup','KeyW');}
+   const out=review.state().player, banner=document.querySelector('.boundary-warning')?.textContent??'';
+   if(out.x>-80.2||out.x<start-8)throw Error('Did not walk into the boundary wire: x '+out.x);
+   if(!banner.includes('OUT OF BOUNDS')||!/ARTILLERY IN [1-5]/.test(banner))throw Error('Boundary warning missing: '+banner);
+   if(!document.querySelector('#ui').classList.contains('out-of-bounds'))throw Error('Boundary vignette missing');
+   return {x:out.x,banner};
+  })()`);
+  {
+   const before=await client.evaluate(`window.sectorRenderReview.state().frames`);
+   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
+   await screenshot('boundary-warning');
+  }
+  report.boundary.death=await client.evaluate(`(()=>{
+   const review=window.sectorRenderReview;
+   review.advance(150);
+   const s=review.state(), card=document.querySelector('.death-card')?.textContent??'';
+   if(s.player.hp!==0||!card.includes('Left the battlefield'))throw Error('Staying out did not end in the boundary salvo: hp '+s.player.hp+' card '+card);
+   return card;
+  })()`);
+  console.log(JSON.stringify({map,boundary:report.boundary}));
+ }
  if(!visualOnly&&map==='fort-vaux') {
   report.floorPlan=await client.evaluate(`(()=>{
    const key=()=>{window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));};

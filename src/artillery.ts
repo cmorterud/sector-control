@@ -1,7 +1,7 @@
 import { auditArtilleryCall } from "./artillery-audit";
 import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
-import { blocked, dist, groundHeight, walkSegment, type Vec } from "./map";
+import { blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
 import {
   idle,
   pathfind,
@@ -15,6 +15,7 @@ import {
 import {
   artilleryExplosionProfile,
   ambientArtilleryExplosionProfile,
+  boundaryArtilleryExplosionProfile,
 } from "./destruction";
 import { artillerySector } from "./artillery-sectors";
 
@@ -75,6 +76,7 @@ export interface FireMission {
 }
 export interface ArtilleryShell extends V3 {
   ambient?: boolean;
+  boundary?: boolean;
   id: number;
   mission: number;
   actor: number;
@@ -93,6 +95,8 @@ export interface ArtilleryState {
   missionSequence: number;
   shellSequence: number;
   reports: { mission: number; at: Vec; tick: number }[];
+  // Boundary salvo shells waiting for their launch tick.
+  boundary?: { mission: number; launchAt: number; target: Vec }[];
 }
 export interface ArtilleryEvade {
   mission: number;
@@ -123,6 +127,7 @@ export function createArtilleryState(
     missionSequence: 0,
     shellSequence: 0,
     reports: [],
+    boundary: [],
   };
 }
 // A snapshot-owned stream keeps stray timing/placement independent of combat RNG.
@@ -148,6 +153,7 @@ function launchShell(
   actor: number,
   team: Team,
   ambient = false,
+  boundary = false,
 ) {
   const side = team === "blue" ? -1 : 1;
   const floor = groundHeight(target.x, target.z, g.map);
@@ -161,6 +167,7 @@ function launchShell(
     actor,
     team,
     ...(ambient ? { ambient: true } : {}),
+    ...(boundary ? { boundary: true } : {}),
     x: target.x + side * shellApproach,
     y: surface + shellHeight,
     z: target.z,
@@ -194,10 +201,10 @@ function advanceAmbient(g: Game) {
     const target = {
       x:
         (ambientRandom(state) - 0.5) *
-        (g.map.width - ambientArtilleryRules.edgeMargin * 2),
+        (playArea(g.map).width - ambientArtilleryRules.edgeMargin * 2),
       z:
         (ambientRandom(state) - 0.5) *
-        (g.map.depth - ambientArtilleryRules.edgeMargin * 2),
+        (playArea(g.map).depth - ambientArtilleryRules.edgeMargin * 2),
     };
     if (
       Object.values(g.map.spawn).some(
@@ -239,8 +246,8 @@ export function artilleryTargetReason(
     return "Choose a target";
   if (
     target.area &&
-    (Math.abs(target.x) > g.map.width / 2 ||
-      Math.abs(target.z) > g.map.depth / 2)
+    (Math.abs(target.x) > playArea(g.map).width / 2 ||
+      Math.abs(target.z) > playArea(g.map).depth / 2)
   )
     return "Choose a sector on the map";
   if (target.area) target = { ...artillerySector(g.map, target), area: true };
@@ -255,8 +262,8 @@ export function artilleryTargetReason(
     return "Mark ground 15–70 m away";
   const margin = target.area ? 1 : artilleryRules.scatterRadius + 1;
   if (
-    Math.abs(target.x) > g.map.width / 2 - margin ||
-    Math.abs(target.z) > g.map.depth / 2 - margin
+    Math.abs(target.x) > playArea(g.map).width / 2 - margin ||
+    Math.abs(target.z) > playArea(g.map).depth / 2 - margin
   )
     return "Target too close to the map boundary";
   const from = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
@@ -329,12 +336,12 @@ export function requestArtillery(
       radius = Math.sqrt(g.random()) * artilleryRules.scatterRadius;
     mission.impacts.push({
       x: Math.max(
-        -g.map.width / 2 + 1,
-        Math.min(g.map.width / 2 - 1, center.x + Math.cos(angle) * radius),
+        -playArea(g.map).width / 2 + 1,
+        Math.min(playArea(g.map).width / 2 - 1, center.x + Math.cos(angle) * radius),
       ),
       z: Math.max(
-        -g.map.depth / 2 + 1,
-        Math.min(g.map.depth / 2 - 1, center.z + Math.sin(angle) * radius),
+        -playArea(g.map).depth / 2 + 1,
+        Math.min(playArea(g.map).depth / 2 - 1, center.z + Math.sin(angle) * radius),
       ),
     });
   }
@@ -355,8 +362,21 @@ export function requestArtillery(
   });
   return true;
 }
+// Queue a salvo on a soldier outside the play area. Each shell approaches from
+// the nearer map edge, so it flies in over the dead zone.
+export function boundarySalvo(g: Game, targets: Vec[], delays: number[]) {
+  const mission = ++g.artillery.missionSequence;
+  targets.forEach((target, i) =>
+    (g.artillery.boundary ??= []).push({ mission, launchAt: g.tick + (delays[i] ?? 0), target }),
+  );
+}
 export function advanceArtillery(g: Game) {
   advanceAmbient(g);
+  if (g.artillery.boundary?.length) g.artillery.boundary = g.artillery.boundary.filter((s) => {
+    if (g.tick < s.launchAt) return true;
+    launchShell(g, s.target, s.mission, -1, s.target.x < 0 ? "blue" : "red", false, true);
+    return false;
+  });
   g.artillery.reports = (g.artillery.reports ?? []).filter(
     (r) => g.tick - r.tick < 90,
   );
@@ -409,13 +429,15 @@ export function advanceArtillery(g: Game) {
       g.tick - shell.bornAt >= 90
     ) {
       const at = { x: shell.x, y: shell.y + 0.025, z: shell.z };
-      const profile = shell.ambient
-        ? ambientArtilleryExplosionProfile
-        : artilleryExplosionProfile;
+      const profile = shell.boundary
+        ? boundaryArtilleryExplosionProfile
+        : shell.ambient
+          ? ambientArtilleryExplosionProfile
+          : artilleryExplosionProfile;
       const hits = g.explode(
         at,
         shell.actor,
-        shell.ambient ? null : shell.team,
+        shell.ambient || shell.boundary ? null : shell.team,
         profile,
       );
       g.artillery.reports.push({

@@ -1,4 +1,4 @@
-import type { MapDefinition, Vec } from "./map";
+import { playArea, type MapDefinition, type Vec } from "./map";
 import type { Game } from "./simulation";
 import { createTacticalRoutes, drawTacticalTerrain } from "./tactical-terrain";
 
@@ -21,7 +21,7 @@ export class Minimap {
       this.map = map;
       this.terrainRevision = -1;
       this.nextDraw = 0;
-      this.frame.style.setProperty("--map-aspect", String(map.width / map.depth));
+      this.frame.style.setProperty("--map-aspect", String(playArea(map).width / playArea(map).depth));
       const compass = document.createElement("small");
       compass.textContent = "N";
       const routes = createTacticalRoutes(map);
@@ -42,8 +42,10 @@ export class Minimap {
       this.nextDraw = tick + 30;
     }
     const position = (marker: HTMLElement, point: Vec) => {
-      marker.style.left = `${(point.x / map.width + 0.5) * 100}%`;
-      marker.style.top = `${(point.z / map.depth + 0.5) * 100}%`;
+      // A soldier in the dead zone stays pinned to the minimap's edge.
+      const edge = (v: number) => Math.max(0, Math.min(100, (v + 0.5) * 100));
+      marker.style.left = `${edge(point.x / playArea(map).width)}%`;
+      marker.style.top = `${edge(point.z / playArea(map).depth)}%`;
     };
     this.flags.forEach((flag, i) => {
       const sector = g.sectors[i];

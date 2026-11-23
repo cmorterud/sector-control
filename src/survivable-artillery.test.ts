@@ -174,7 +174,9 @@ it("keeps high-ray rejection conservative across raised terrain, solid cover and
   expect(
     world.ray({ x: -21, y: 1, z: -1 }, { x: -15, y: 1, z: -1 }),
   ).toBeLessThan(1);
-  expect(world.ray({ x: 77, y: 3, z: 0 }, { x: 81, y: 3, z: 0 })).toBeLessThan(
+  // The terrain edge, beyond the dead zone, still stops low rays.
+  const edge = trenchMap.width / 2;
+  expect(world.ray({ x: edge - 3, y: 3, z: 0 }, { x: edge + 1, y: 3, z: 0 })).toBeLessThan(
     1,
   );
   const wall = new TestCollision({
