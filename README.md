@@ -19,7 +19,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
 - **Emplaced machine guns.** Choose Support · Emplacement kit on any map. Press **B** to preview, click to set up, then **E** to mount or dismount. **B** packs your unoccupied gun when you are close to it. The gun keeps its loaded ammunition, reserve and reload progress when you dismount.
 - **Armoury.** A weapon reference at [`/armoury/`](https://codymorterud.com/sector-control/armoury/), linked as **Armoury** above the map picker: damage by body part (head, chest, stomach, arms, legs), hits and time to kill, rate of fire, muzzle velocity and reloads for each faction's rifle, scoped rifle, pistol and machine gun. The game and reference use the same faction weapon stats in `src/weapon-stats.ts`.
-- **Readable combat feedback.** Brief directional hit indicators, a short view toward the last attack, a death report with weapon/distance/damage, a temporary death-location marker and damage-based assists on the scoreboard.
+- **Readable combat feedback.** Kill confirmations, a team-colored kill feed, directional hit indicators, a brief view toward the last attack, death reports and damage-based assists. The HUD minimap shows your position, heading and flag ownership.
 - **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
 - **No accounts or backend.** Soldiers, weapons, terrain and most audio are generated in code; a few landmark buildings are contributed models. There is no networking.
 

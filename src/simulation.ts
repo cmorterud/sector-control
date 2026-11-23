@@ -655,7 +655,7 @@ export type Event = { id: number; tick: number } & (
   | { type:"flamePickup"|"flameDrop";actor:number;kit:number;fuel:number }
   | { type:"flame";actor:number;from:V3;to:V3;fuel:number }
   | { type: "damage"; actor: number; source: number; amount?:number; at?:V3; from?:V3; kind?:DamageDetails["kind"]; weapon?:string }
-  | { type: "death"; actor: number; report?:DeathReport }
+  | { type: "death"; actor: number; report?:DeathReport; killer?: number }
   | { type: "assist"; actor:number; target:number; damage:number }
   | { type: "respawn" | "reload"; actor: number }
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
@@ -1873,8 +1873,12 @@ export class Game {
       victim.meleeThreat = null;
       victim.deaths++;
       const report=reportDeath(this,victim,wound,team);victim.lastDeath=report;
+      let killer: number | undefined;
       if (team !== null && victim.team !== team) {
-        if (shooter) shooter.kills++;
+        if (shooter) {
+          shooter.kills++;
+          killer = shooter.id;
+        }
         if (this.scoring === "eliminations") {
           this.scores[team]++;
           this.emit({ type: "score" });
@@ -1894,7 +1898,7 @@ export class Game {
       victim.combatReaction = victim.combatCover = null;
       victim.hop = null;
       victim.fall = null;
-      this.emit({ type: "death", actor: victim.id,report });
+      this.emit({ type: "death", actor: victim.id, report, ...(killer === undefined ? {} : { killer }) });
     }
   }
   private projectileDamage(shot: Projectile, at: V3, victim: Soldier) {

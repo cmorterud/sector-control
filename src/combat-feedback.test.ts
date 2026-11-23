@@ -1,6 +1,6 @@
 import {expect,it} from "vitest";
 import {CombatFeedback,deathCard} from "./combat-feedback";
-import {combatRules} from "./combat-history";
+import {combatRules,soldierName} from "./combat-history";
 import {scoreboardTable} from "./scoreboard";
 import {Game,TestCollision,idle,type Event} from "./simulation";
 import {industrialMap} from "./map";
@@ -56,6 +56,39 @@ it("shows the cause, distance, actual damage/hits and bounded assist notices",()
   expect(f.html(g,0).match(/class="assist-notice"/g)).toHaveLength(3);
   g.tick=90;expect(f.html(g,0)).not.toContain("assist-notice");
   expect(deathCard({...g.players[0].lastDeath!,weapon:'<img src="x">'},4)).toContain("&lt;img");
+});
+it("confirms only credited player kills and keeps a short team-colored feed", () => {
+  const g = scene(), f = new CombatFeedback();
+  const damage = (actor: number, source: number, team: "blue" | "red" | null) => {
+    g.events = [];
+    (g as any).damage(g.players[actor], 100, source, team);
+    for (const event of g.events) f.event(g, event);
+  };
+  damage(5, 0, "blue");
+  expect(f.killConfirmation(g)).toBe(`You killed ${soldierName(g.players[5], g.map)}`);
+  expect(f.killFeed(g)).toContain('kill-feed-entry red');
+  expect(f.killFeed(g)).toContain('<b class="blue">YOU</b>');
+  damage(6, 0, "blue");
+  expect(f.killConfirmation(g)).toContain(" + 1 more");
+  const confirmation = f.killConfirmation(g);
+  damage(2, 7, "red");
+  damage(3, 3, "blue");
+  damage(8, -1, null);
+  expect(f.killConfirmation(g)).toBe(confirmation);
+  expect(f.killFeed(g)).toContain('kill-feed-entry blue');
+  expect(f.killFeed(g).match(/kill-feed-entry/g)).toHaveLength(4);
+  const feed = f.killFeed(g);
+  g.events = [];
+  g.redeploy(0);
+  for (const event of g.events) f.event(g, event);
+  expect(f.killFeed(g)).toBe(feed);
+  g.tick = 90;
+  expect(f.killConfirmation(g)).toBe("");
+  expect(f.killFeed(g)).toBe(feed);
+  g.tick = 180;
+  expect(f.killFeed(g)).toBe("");
+  f.reset();
+  expect(f.killFeed(g)).toBe("");
 });
 it("includes assists in small, large and elimination scoreboards without changing the objective columns",()=>{
   for(const map of [industrialMap,trenchMap,{...industrialMap,scoring:"eliminations" as const}]) {

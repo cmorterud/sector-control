@@ -389,18 +389,117 @@ a.armoury-link:hover { background: #3f5856; }
 .death-card small { display:block;font-size:9px;letter-spacing:.12em;color:#c2c6b8; }
 .death-damage { font-size:12px;color:#c9cdbf; }
 .death-countdown { margin:13px 0 8px;color:#e2c78a;font-size:13px; }
-.combat-notices { position:absolute;right:24px;top:100px;max-width:330px;text-align:right; }
+.combat-notices { position:absolute;right:32px;bottom:max(138px,25vh);max-width:280px;text-align:right; }
 .assist-notice { margin:5px 0;padding:8px 11px;background:#142323da;border-right:2px solid #dfcb8e;font-size:11px;letter-spacing:.035em;color:#eee2ba; }
+.battle-sidebar {
+  position: absolute;
+  z-index: 7;
+  top: 80px;
+  right: 32px;
+  width: clamp(145px, 17vw, 212px);
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+}
+.battle-sidebar[hidden], #minimap [hidden], .kill-notice:empty, #kill-feed:empty { display: none; }
+#minimap {
+  position: relative;
+  width: min(100%, calc(155px * var(--map-aspect, 1)));
+  aspect-ratio: var(--map-aspect, 1);
+  overflow: hidden;
+  background: #182625;
+  border: 1px solid #c6bc9166;
+  box-shadow: 0 2px 8px #0d141760;
+}
+#minimap canvas, .minimap-routes { position: absolute; inset: 0; width: 100%; height: 100%; }
+.minimap-routes { opacity: .55; }
+#minimap small {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  padding: 0 3px;
+  background: #142323d9;
+  color: #ede5c8;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+.minimap-flag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #1c2929;
+  border-radius: 50%;
+  color: #132222;
+  background: #d0c7a3;
+  font-size: 9px;
+  line-height: 1;
+}
+.minimap-flag[data-state="blue"] { background: #64bdd6; }
+.minimap-flag[data-state="red"] { background: #e38e77; }
+.minimap-flag[data-state="contested"] { background: #efd07b; }
+.minimap-player {
+  position: absolute;
+  width: 12px;
+  height: 15px;
+  filter: drop-shadow(0 1px 1px #091516) drop-shadow(0 0 2px #091516);
+}
+.minimap-player::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #fffbee;
+  clip-path: polygon(50% 0, 96% 100%, 50% 75%, 4% 100%);
+}
+#kill-feed { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; width: 100%; }
+.kill-feed-entry {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 5px 8px;
+  border-right: 2px solid currentColor;
+  background: #142323db;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.kill-feed-entry b { overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
+.feed-action { color: #eee9d9; overflow: hidden; text-overflow: ellipsis; }
+.feed-action[aria-label] { flex-shrink: 0; }
+.kill-notice {
+  position: absolute;
+  z-index: 8;
+  top: calc(50% + clamp(22px, 4vh, 34px));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 50vw;
+  padding: 5px 12px;
+  background: #142323e5;
+  border-bottom: 2px solid #dfcb8e;
+  color: #f3ead0;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
 .dead #reticle,.dead #ammo,.dead .controls,.dead #labels,.dead #hit,.dead #capture { display:none!important; }
 .map-death { position:absolute;transform:translate(-50%,-50%);font:700 24px/1 sans-serif;color:#f4b09b;text-shadow:0 1px 3px #000,-1px -1px 1px #182522;pointer-events:none; }
 .map-death[hidden] { display:none; }
-@media(max-height:600px) { .death-card { bottom:65px;padding:12px 18px; } .death-card h2 { font-size:19px; } .combat-notices { top:80px; } }
+@media(max-height:600px) {
+  .death-card { bottom:65px;padding:12px 18px; }
+  .death-card h2 { font-size:19px; }
+  #minimap { width: min(100%, calc(113px * var(--map-aspect, 1))); }
+}
 @keyframes blink {
   to {
     opacity: 0.4;
   }
 }
 @media (max-width: 900px) {
+  .battle-sidebar { top: 18px; right: 18px; }
+  .combat-notices { right: 18px; }
   .brand span,
   .controls,
   .hint {
@@ -412,6 +511,9 @@ a.armoury-link:hover { background: #3f5856; }
   h1 {
     font-size: 44px;
   }
+}
+@media (max-width: 720px) {
+  .battle-sidebar { top: 136px; width: clamp(112px, 21vw, 145px); }
 }
 .playtest {
   position: fixed;

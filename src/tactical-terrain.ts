@@ -15,9 +15,9 @@ export function tacticalRelief(map: MapDefinition, size = 256) {
   }
   return { width, height, pixels };
 }
-export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition) {
+export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition, size = map.fort ? 720 : 256) {
   if (map.fort) {
-    canvas.width = 720;
+    canvas.width = size;
     canvas.height = Math.round(canvas.width * map.depth / map.width);
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#222d2b";
@@ -38,7 +38,7 @@ export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinitio
     ctx.fillText("SERVICE PASSAGE", 0, -19.5);
     return;
   }
-  const raster = tacticalRelief(map);
+  const raster = tacticalRelief(map, size);
   canvas.width = raster.width; canvas.height = raster.height;
   const ctx = canvas.getContext("2d")!;
   ctx.putImageData(new ImageData(raster.pixels, raster.width, raster.height), 0, 0);
@@ -49,4 +49,66 @@ export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinitio
     ctx.fillRect((b.x - b.w / 2 + map.width / 2) * sx,
       (b.z - b.d / 2 + map.depth / 2) * sz, Math.max(1, b.w * sx), Math.max(1, b.d * sz));
   }
+}
+
+// Roads and trench markings are shared by the full tactical map and minimap.
+export function createTacticalRoutes(map: MapDefinition) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${map.width} ${map.depth}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  for (const street of map.streets ?? []) {
+    const d=street.points.map((p,i)=>(i ? "L" : "M")+(p.x+map.width/2)+","+(p.z+map.depth/2)).join(" ");
+    const road = document.createElementNS(svg.namespaceURI, "path");
+    road.setAttribute("d", d);
+    road.setAttribute("stroke", "#b1a587");
+    road.setAttribute("stroke-width", String(street.width));
+    road.setAttribute("fill", "none");
+    svg.append(road);
+  }
+  for (const line of map.terrain?.trenchLines ?? [])
+    for (const s of line.sections) {
+      const path = document.createElementNS(svg.namespaceURI, "path");
+      path.setAttribute(
+        "d",
+        `M${s.x + map.width / 2},${s.z - s.length / 2 + map.depth / 2} v${s.length}`,
+      );
+      path.setAttribute(
+        "stroke",
+        line.team === "blue" ? "#64bdd6" : "#e38e77",
+      );
+      path.setAttribute("stroke-width", "2");
+      svg.append(path);
+    }
+  for (const route of [
+    ...(map.terrain?.communicationRoutes ?? []),
+    ...(map.terrain?.branchRoutes ?? []),
+  ]) {
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute(
+      "d",
+      route.points
+        .map(
+          (p, i) =>
+            `${i ? "L" : "M"}${p.x + map.width / 2},${p.z + map.depth / 2}`,
+        )
+        .join(" "),
+    );
+    path.setAttribute(
+      "stroke",
+      route.team === "blue" ? "#64bdd6" : "#e38e77",
+    );
+    path.setAttribute("stroke-width", "1.5");
+    path.setAttribute("fill", "none");
+    svg.append(path);
+  }
+  for (const bay of map.terrain?.shelterBays ?? []) {
+    const room = document.createElementNS(svg.namespaceURI, "rect");
+    room.setAttribute("x", String(bay.x + map.width / 2 - 2));
+    room.setAttribute("y", String(bay.z + map.depth / 2 - 2));
+    room.setAttribute("width", "4");
+    room.setAttribute("height", "4");
+    room.setAttribute("fill", bay.team === "blue" ? "#64bdd6" : "#e38e77");
+    svg.append(room);
+  }
+  return svg;
 }
