@@ -290,7 +290,7 @@ try {
   console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
  }
  if(!visualOnly&&armouryStats) {
-  if(armouryURL!==new URL('armoury/',base).href)throw Error('Weapons link does not point to the built Armoury');
+  if(armouryURL!==new URL('armoury/',base).href)throw Error('Briefing link does not point to the built Armoury');
   const expected=JSON.parse(await readFile(armouryStats,'utf8'));
   await client.send('Page.navigate',{url:armouryURL});
   await until(()=>client.evaluate(`location.href===${JSON.stringify(armouryURL)}&&document.readyState==='complete'&&!!document.querySelector('#armoury .card')`));

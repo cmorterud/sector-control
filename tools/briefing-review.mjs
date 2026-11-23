@@ -1,5 +1,10 @@
 // Runs in the real briefing before the existing battle scenarios start.
 export function checkBriefing(map, maps) {
+  const armoury = document.querySelector('#menu a.armoury-link');
+  const picker = document.querySelector('#menu .map-choice');
+  if (!armoury || armoury.textContent.trim() !== 'Armoury' || armoury.href !== new URL('armoury/', location.href).href ||
+      !picker || !(armoury.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING))
+    throw Error('The briefing needs an Armoury link above the map picker');
   const select = document.getElementById(map === 'training' ? 'training-loadout' : 'loadout');
   if (!select || select.disabled) throw Error(`${map} loadout selector is missing or disabled`);
   const choices = [...select.options];
