@@ -97,16 +97,17 @@ describe("concealing smoke", () => {
       p = g.players[0],
       log = new PlaytestLog();
     const c = { ...idle(), smoke: true, yaw: Math.PI / 2 };
+    expect(p.smokes).toBe(1);
     g.step(c);
     for (let i = 0; i < 6; i++) g.step({ ...idle(), yaw: c.yaw });
     log.recordTick(g, c, 0);
-    expect(p.smokes).toBe(1);
+    expect(p.smokes).toBe(0);
     expect(p.grenades).toBe(3);
     expect(p.ammo).toBe(30);
     expect(g.grenades[0].kind).toBe("smoke");
     for (let i = 0; i < 100; i++) {
-      g.step(idle());
-      log.recordTick(g, idle(), i / 30);
+      g.step(c);
+      log.recordTick(g, c, i / 30);
     }
     expect(log.summary().smokeThrows).toBe(1);
     expect(log.summary().smokeClouds).toBe(1);
@@ -117,7 +118,7 @@ describe("concealing smoke", () => {
     snapshot.smokeClouds[0].x = 99;
     expect(g.smokeClouds[0].x).not.toBe(99);
     g.respawn(p);
-    expect(p.smokes).toBe(2);
+    expect(p.smokes).toBe(1);
     expect(g.smokeClouds).toHaveLength(1);
   });
   it("blocks both viewing directions as it thickens, permits close silhouettes and rays above it, and fades", () => {
@@ -346,6 +347,17 @@ describe("covered squad advances", () => {
     expect(thrown).toBe(true);
     expect(crossed).toBe(true);
     expect(g.players[0].assaultId).toBeNull();
+  });
+  it("keeps a freshly respawned rifleman from screening a trench advance", () => {
+    const { g, m } = formedSquad();
+    const p = g.players[m.leader];
+    g.respawn(p);
+    Object.assign(p, { ...m.launch, y: 0.85, protectedUntil: 0, assaultId: m.id });
+    for (const id of m.members) if (id !== p.id) g.players[id].smokes = 0;
+    expect(p.smokes).toBe(1);
+    expect(assaultCommand(g, p, idle()).smoke).not.toBe(true);
+    g.tick += smokeRules.botSpawnDelay;
+    expect(assaultCommand(g, p, idle()).smoke).toBe(true);
   });
   it("waits for thick smoke before leaving, then keeps moving if that cloud disappears", () => {
     const { g, m } = formedSquad(),

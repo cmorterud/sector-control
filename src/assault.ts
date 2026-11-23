@@ -8,7 +8,7 @@ import {
   type Vec,
 } from "./map";
 import { artilleryThreat } from "./artillery";
-import { smokeDensity } from "./smoke";
+import { botSmokeAvailable, smokeDensity } from "./smoke";
 import type { Game, Soldier, Team, Command } from "./simulation";
 export interface Assault {
   id: number;
@@ -189,7 +189,7 @@ export function advanceAssaults(g: Game) {
       target,
       objective,
     } of candidates) {
-      const leader = members.find((p) => p.smokes > 0 && !p.reloadAt);
+      const leader = members.find((p) => botSmokeAvailable(g, p) && !p.reloadAt);
       if (!leader) continue;
       const m: Assault = {
         id: ++g.assaults.sequence,
@@ -264,11 +264,11 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
         q.hp > 0 &&
         q.assaultId === m.id &&
         m.progress[q.id] === stage &&
-        q.smokes > 0 &&
+        botSmokeAvailable(g, q) &&
         !q.reloadAt,
     );
   const carrier = carriers.find((q) => q.id === m.leader) ?? carriers[0];
-  if (!screen && carrier?.id === p.id && !p.reloadAt && p.smokes > 0) {
+  if (!screen && carrier?.id === p.id) {
     const desired =
       stage === 0
         ? m.route[0]

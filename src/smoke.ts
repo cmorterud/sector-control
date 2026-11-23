@@ -1,5 +1,5 @@
 import { foliageBlocks } from "./vegetation";
-import type { Game, V3, Team } from "./simulation";
+import type { Game, Soldier, V3, Team } from "./simulation";
 
 export interface SmokeCloud extends V3 {
   id: number;
@@ -9,6 +9,8 @@ export interface SmokeCloud extends V3 {
   expiresAt: number;
 }
 export const smokeRules = {
+  perSpawn: 1,
+  botSpawnDelay: 10 * 30,
   fuse: 75,
   lifetime: 20 * 30,
   grow: 45,
@@ -16,6 +18,11 @@ export const smokeRules = {
   radius: 6.5,
   height: 3.2,
 };
+
+export function botSmokeAvailable(g: Game, p: Soldier): boolean {
+  return p.smokes > 0 && g.tick >= p.botSmokeReadyAt && !g.humanPlayerIds.includes(p.id);
+}
+
 export function smokeDensity(cloud: SmokeCloud, tick: number): number {
   return Math.max(
     0,

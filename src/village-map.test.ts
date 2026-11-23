@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { villageMap } from "./village-map";
 import { blocked, groundHeight, walkSegment } from "./map";
 import { Game, TestCollision, pathfind, botCommand } from "./simulation";
@@ -87,21 +87,49 @@ it("lets both teams advance and contest the village in a live 100-soldier battle
   expect(captures).toBeGreaterThanOrEqual(2);
 }, 30000);
 
-it("screens exposed village road crossings with a limited individual smoke throw", () => {
-  const g = scene(true),
-    p = g.players[8];
-  p.x = -23;
-  p.z = 5;
-  p.y = groundHeight(p.x, p.z, g.map);
-  p.objective = 3;
-  p.nextThink = Infinity;
-  g.tick = 248;
-  const supply = p.smokes;
-  expect(botCommand(g, p).smoke).toBe(true);
-  expect(p.smokes).toBe(supply);
-  p.smokes = 0;
-  expect(botCommand(g, p).smoke).not.toBe(true);
-  p.smokes = supply;
-  p.reloadAt = g.tick + 30;
-  expect(botCommand(g, p).smoke).not.toBe(true);
+describe("bot smoke screens", () => {
+  function crossing() {
+    const g = scene(true), p = g.players[8];
+    Object.assign(p, {
+      x: -23, z: 5, y: groundHeight(-23, 5, g.map), objective: 3,
+      path: [{ x: -18, z: 5 }], nextThink: Infinity, protectedUntil: 0,
+    });
+    p.awareness.nextLook = Infinity;
+    g.tick = 320;
+    return { g, p };
+  }
+
+  it("holds smoke after spawning or when there is no pressure at the crossing", () => {
+    const { g, p } = crossing();
+    expect(botCommand(g, p).smoke).not.toBe(true);
+    p.suppression = 0.25;
+    g.tick = 248; // Old periodic throw for this soldier, even without contact.
+    expect(botCommand(g, p).smoke).not.toBe(true);
+    g.tick = 320;
+    expect(botCommand(g, p).smoke).toBe(true);
+    expect(p.smokes).toBe(1);
+    p.reloadAt = g.tick + 30;
+    expect(botCommand(g, p).smoke).not.toBe(true);
+  });
+
+  it("uses a recent sighting ahead and avoids duplicating a canister or cloud", () => {
+    const { g, p } = crossing();
+    p.awareness.observed = { x: -6, y: p.y + 1.5, z: -6 };
+    p.awareness.seenAt = g.tick - 60;
+    expect(botCommand(g, p).smoke).not.toBe(true);
+    p.awareness.seenAt = g.tick;
+    expect(botCommand(g, p).smoke).toBe(true);
+    const at = { x: -13, y: p.y + 2, z: 0 };
+    g.grenades.push({
+      ...at, id: 1, actor: 9, team: p.team, kind: "smoke",
+      vx: 0, vy: 0, vz: 0, bornAt: g.tick, explodeAt: g.tick + 75,
+    });
+    expect(botCommand(g, p).smoke).not.toBe(true);
+    g.grenades = [];
+    g.smokeClouds.push({ ...at, id: 1, actor: 9, team: p.team, bornAt: g.tick, expiresAt: g.tick + 600 });
+    expect(botCommand(g, p).smoke).not.toBe(true);
+    g.smokeClouds = [];
+    p.smokes = 0;
+    expect(botCommand(g, p).smoke).not.toBe(true);
+  });
 });

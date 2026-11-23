@@ -11,7 +11,9 @@ import {
 import { dominationRules, flagContains } from "./domination";
 import { angleDelta, turnToward } from "./awareness";
 import { buildingUnsafe, squadAnchor, squadContact, squadFeatures } from "./squads";
-import type { Command, Game, Soldier } from "./simulation";
+import { villageRoad } from "./ground-surface";
+import { botSmokeAvailable, smokeRules } from "./smoke";
+import type { Command, Game, Soldier, V3 } from "./simulation";
 
 export interface VillagePlan {
   objective: number;
@@ -382,4 +384,41 @@ export function villageSteering(
       (g.tick + p.id * 11) % 90 < 30;
     p.mode = c.crouch ? "Sheltering" : "Covering approach";
   }
+}
+
+export function screenCrossing(g: Game, p: Soldier, c: Command, objective: Vec) {
+  if (
+    !g.map.terrain || p.weapon !== "serviceRifle" || p.id % 8 !== 0 ||
+    !botSmokeAvailable(g, p) || p.reloadAt || g.tick < p.nextGrenade ||
+    g.tick < p.throwUntil || g.tick < p.staggerUntil ||
+    p.crouched || c.crouch || p.mantle || p.hop || p.fall || p.melee
+  ) return;
+
+  const dx = objective.x - p.x, dz = objective.z - p.z;
+  if (c.x * dx + c.z * dz <= 1) return;
+  const yaw = Math.atan2(dx, -dz);
+  // Use existing observations and suppression to decide if the crossing needs smoke.
+  const seen = p.awareness.observed;
+  const threatAhead = seen && g.tick - p.awareness.seenAt < 60 && dist(p, seen) > 8 &&
+    Math.abs(angleDelta(yaw, Math.atan2(seen.x - p.x, p.z - seen.z))) < 0.8;
+  if (p.suppression < 0.16 && !threatAhead) return;
+
+  const atCrossing = g.map.streets
+    ? Math.abs(dx) > 12 && p.y < groundHeight(p.x, p.z, g.map) + 0.25 &&
+      (villageRoad(g.map, p.x, p.z) > 0.65 ||
+        villageRoad(g.map, p.x + Math.sign(dx) * 3, p.z) > 0.65)
+    : Math.abs(p.x) > 6 && Math.abs(p.x) < 19 && p.x * objective.x < 0;
+  if (!atCrossing) return;
+
+  const ahead = { x: p.x + Math.sin(yaw) * 12, z: p.z - Math.cos(yaw) * 12 };
+  const nearCrossing = (at: V3) =>
+    Math.abs(at.y - p.y) < 4 && (dist(p, at) < 12 || dist(ahead, at) < 10);
+  if (g.grenades.some((grenade) => grenade.kind === "smoke" && nearCrossing(grenade)) ||
+    g.smokeClouds.some((cloud) => cloud.expiresAt - g.tick > smokeRules.fade && nearCrossing(cloud))) return;
+
+  c.smoke = true;
+  c.fire = c.reload = c.aim = c.sprint = false;
+  c.yaw = yaw;
+  c.pitch = 0.38;
+  p.mode = "Screening the crossing";
 }
