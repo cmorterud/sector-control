@@ -220,7 +220,7 @@ export class BattleAudio {
     const end = start + length;
     const filter = c.createBiquadFilter();
     filter.type = forest ? forest.band ? "bandpass" : "lowpass" : crack || whistle || mechanism ? "bandpass" : "lowpass";
-    filter.Q.value = whistle ? 7 : cue.kind === "wireWind" ? 9 : cue.kind === "crow" ? 5 : crack ? 0.8 : 0.5;
+    filter.Q.value = whistle ? 7 : cue.kind === "wireWind" ? 9 : cue.kind === "wireSnag" ? 6 : cue.kind === "crow" ? 5 : crack ? 0.8 : 0.5;
     filter.frequency.value = forest?.frequency ?? (mechanical ? mechanical.frequency : cue.kind === "flame" ? 1500 : melee
       ? cue.kind === "meleeSwing"
         ? 2400

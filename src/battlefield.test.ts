@@ -69,6 +69,26 @@ describe("battlefield presentation", () => {
       expect(r.seed - flash.tick).toBe(Math.round((Math.hypot(flash.x, flash.z) / 343) * 30));
     }
   });
+  it("rattles the wire only while a soldier pushes through it", () => {
+    const run = (x: number, vx: number) => {
+      const { g, feedback, cues, p } = scene();
+      Object.assign(p, { x, z: 0, y: groundHeight(x, 0, trenchMap), vx, vz: 0 });
+      for (let t = 1; t <= 90; t++) { g.tick = t; feedback.step(g); }
+      return cues.filter((c) => c.kind === "wireSnag");
+    };
+    const pushing = run(-81.5, -1.8);
+    expect(pushing.length).toBeGreaterThanOrEqual(4);
+    expect(pushing.length).toBeLessThanOrEqual(9);
+    expect(pushing.every((c) => c.local)).toBe(true);
+    expect(run(-81.5, 0)).toHaveLength(0);
+    expect(run(-70, -4)).toHaveLength(0);
+    // A soldier's own belt in no-man's land is clear to them.
+    const own = trenchMap.wireBelts!.find((b) => b.team === "blue")!;
+    const { g, feedback, cues, p } = scene();
+    Object.assign(p, { x: own.x, z: own.z, y: groundHeight(own.x, own.z, trenchMap), vx: 2, vz: 0 });
+    for (let t = 1; t <= 60; t++) { g.tick = t; feedback.step(g); }
+    expect(cues.some((c) => c.kind === "wireSnag")).toBe(p.team !== "blue");
+  });
   it("plays crown breakage and falling timber for Verdun IDs, with bounded nearby sounds",()=>{
     const g=new Game(new TestCollision(verdunMap),false,5000,12345,undefined,{map:verdunMap});
     const source=g.map.vegetation!.find(b=>b.id!.startsWith("verdun-wood-central")&&b.treeStyle==="pine")!;
