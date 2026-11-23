@@ -20,7 +20,11 @@ The north-up HUD minimap reuses the tactical map artwork, including the Fort Vau
 
 An enemy's finishing kill awards one assist to each other teammate who dealt at least 20 actual health damage within the preceding ten seconds (300 simulation ticks, inclusive). Individual hits age out independently, so a fresh small hit cannot refresh old damage. Contributions from dead teammates still count. Killer, victim, friendly contributors, suicides/redeploys and environmental deaths receive no assist credit. Overkill is limited to the health actually removed. Victim history clears on respawn and training resupply; match statistics persist through respawn.
 
-The scoreboard shows K / A / D and CAP where appropriate, for both small and full rosters. A short notification confirms the player's assist and contributed damage. Assists do not add objective points or duplicate the finishing kill's team point in elimination mode.
+A short notification confirms the player's assist and contributed damage.
+
+## Scoreboard
+
+Each team is ranked by personal points, with 300 per capture, 100 per kill and 75 per assist. The live match score still follows the mode's scoring rules. K/D is kills divided by deaths, with the current kill count shown before the first death. Bot names are drawn from their faction's name pool and stay with the same soldier through respawns. The scoreboard and combat messages use those same names.
 
 ## Verification
 
