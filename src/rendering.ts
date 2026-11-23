@@ -12,6 +12,7 @@ import { architecturePixels, architecturalTextures, cisternWaterNormals, type Ar
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
 import { brazierSites, clothScraps, mistBanks, type MistBank } from "./atmosphere";
+import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
 import { backdropBalloons, backdropBoxMesh, backdropGround, backdropScenery, backdropSmoke, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
@@ -484,7 +485,10 @@ export class Renderer implements CollisionWorld {
       this.buildDestructible(object);
     if (map.coast) this.buildCoast();
     if (map.boundary) this.buildBoundaryWire();
-    if (map.backdrop) this.buildBackdrop();
+    if (map.backdrop) {
+      this.buildBackdrop();
+      this.buildTrenchDressing();
+    }
     if (this.look.atmosphere) this.buildAtmosphere();
     for (const [x, z, w, d] of map.coast || map.backdrop ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
@@ -1397,7 +1401,7 @@ export class Renderer implements CollisionWorld {
         : object.stage === 1
           ? "#756951"
           : "#9a8c6a";
-    this.cube(
+    const panel = this.cube(
       b.kind,
       b.x,
       base + h / 2,
@@ -1409,7 +1413,10 @@ export class Renderer implements CollisionWorld {
       !object.lining,
       root,
     );
-    if (b.kind === "wood") {
+    // Intact trench revetments on refreshed maps show their faction finish.
+    const style = object.lining && this.map.backdrop && object.stage === 0 ? revetmentStyle(Number(object.id.split("-")[1]), b.x) : "timber";
+    if (style !== "timber") panel.render!.material = this.revetmentMaterial(style);
+    if (b.kind === "wood" && style !== "sandbag") {
       const wear = [...object.id].reduce((n, c) => n + c.charCodeAt(0), 0);
       for (const dz of [-b.d / 2 + 0.08, b.d / 2 - 0.08]) {
         const postHeight = object.lining
@@ -1835,14 +1842,7 @@ export class Renderer implements CollisionWorld {
     shapes.setColors(solids.colors);
     shapes.setIndices(solids.indices);
     shapes.update(pc.PRIMITIVE_TRIANGLES);
-    let painted = this.materials.get("backdrop scenery");
-    if (!painted) {
-      painted = new pc.StandardMaterial();
-      painted.diffuseVertexColor = true;
-      painted.gloss = 0.08;
-      painted.update();
-      this.materials.set("backdrop scenery", painted);
-    }
+    const painted = this.paintedMaterial();
     const wires = new pc.Mesh(device), wireLines = new Float32Array(scenery.lines);
     wires.setPositions(wireLines);
     wires.setNormals(new Float32Array(wireLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
@@ -1883,6 +1883,126 @@ export class Renderer implements CollisionWorld {
     });
     this.backdrop = { life, balloons, smoke, flashes, flares };
     life.enabled = this.quality !== "low";
+  }
+  // Vertex-coloured, lightly lit boxes shared by the backdrop and trench dressing.
+  private paintedMaterial() {
+    let painted = this.materials.get("backdrop scenery");
+    if (!painted) {
+      painted = new pc.StandardMaterial();
+      painted.diffuseVertexColor = true;
+      painted.gloss = 0.08;
+      painted.update();
+      this.materials.set("backdrop scenery", painted);
+    }
+    return painted;
+  }
+  private glowMaterial(hex: string) {
+    const key = `glow ${hex}`;
+    let m = this.materials.get(key);
+    if (!m) {
+      m = new pc.StandardMaterial();
+      m.diffuse = color("#000000");
+      m.emissive = color(hex);
+      m.useLighting = false;
+      m.update();
+      this.materials.set(key, m);
+    }
+    return m;
+  }
+  private revetmentMaterial(style: Exclude<RevetmentStyle, "timber">) {
+    const key = `revetment ${style}`;
+    let m = this.materials.get(key);
+    if (!m) {
+      m = new pc.StandardMaterial();
+      m.diffuseMap = this.texture(key, 128, 64, () => revetmentPixels(style));
+      m.diffuseMap.srgb = true;
+      m.gloss = style === "corrugated" ? 0.32 : 0.1;
+      m.update();
+      this.materials.set(key, m);
+    }
+    return m;
+  }
+  // Parados sandbags, props, dugouts, signs and sump water along the lines.
+  private buildTrenchDressing() {
+    const device = this.app.graphicsDevice, root = this.joint("trench dressing", this.mapRoot);
+    const props = trenchProps(this.map, brazierSites(this.map));
+    const solids = backdropBoxMesh([...paradosBags(this.map), ...props.boxes, ...dugouts(this.map).flatMap(dugoutBoxes)]);
+    const shapes = new pc.Mesh(device);
+    shapes.setPositions(solids.positions);
+    shapes.setNormals(solids.normals);
+    shapes.setColors(solids.colors);
+    shapes.setIndices(solids.indices);
+    shapes.update(pc.PRIMITIVE_TRIANGLES);
+    const cable = new pc.Mesh(device), cableLines = new Float32Array(props.cable);
+    cable.setPositions(cableLines);
+    cable.setNormals(new Float32Array(cableLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
+    cable.update(pc.PRIMITIVE_LINES);
+    const water = new pc.Mesh(device), wp: number[] = [], wn: number[] = [], wi: number[] = [];
+    for (const p of props.water) {
+      const y = groundHeight(p.x, p.z, this.map) + 0.012, first = wp.length / 3;
+      for (const [dx, dz] of [[-0.62, -0.42], [-0.62, 0.42], [0.62, 0.42], [0.62, -0.42]]) { wp.push(p.x + dx, y, p.z + dz); wn.push(0, 1, 0); }
+      wi.push(first, first + 1, first + 2, first, first + 2, first + 3);
+    }
+    water.setPositions(wp);
+    water.setNormals(wn);
+    water.setIndices(wi);
+    water.update(pc.PRIMITIVE_TRIANGLES);
+    let pool = this.materials.get("sump water");
+    if (!pool) {
+      pool = new pc.StandardMaterial();
+      pool.diffuse = color("#1b1f1d");
+      pool.gloss = 0.9;
+      pool.update();
+      this.materials.set("sump water", pool);
+    }
+    const instances = [new pc.MeshInstance(shapes, this.paintedMaterial(), root), new pc.MeshInstance(cable, this.material("#1f1c18"), root), new pc.MeshInstance(water, pool, root)];
+    instances[0].castShadow = true;
+    instances[1].castShadow = instances[2].castShadow = false;
+    root.addComponent("render", { meshInstances: instances });
+    for (const e of props.embers) this.cube("brazier embers", e.x, (e.y ?? 0) + 0.02, e.z, 0.36, 0.04, 0.36, "#000000", false, root).render!.material = this.glowMaterial("#ff7a2a");
+    for (const l of props.lanterns) {
+      this.cube("lantern", l.x, l.y, l.z, 0.12, 0.18, 0.12, "#000000", false, root).render!.material = this.glowMaterial("#ffcf7a");
+      this.cube("lantern cap", l.x, l.y + 0.12, l.z, 0.14, 0.05, 0.14, "#2a2621", false, root);
+    }
+    for (const d of dugouts(this.map))
+      this.cube("dugout lantern", d.x - d.rear * 0.16, d.floor + 1.55, d.z + 0.8, 0.11, 0.16, 0.11, "#000000", false, root).render!.material = this.glowMaterial("#ffcf7a");
+    if (typeof document === "undefined") return;
+    for (const sign of signboards(this.map)) {
+      this.cube("signboard post", sign.x + sign.facing * 0.02, sign.y - 0.9, sign.z - 0.55, 0.08, 1.9, 0.08, "#4a3c2b", false, root);
+      const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+      canvas.width = 256;
+      canvas.height = 96;
+      ctx.fillStyle = "#6f5c40";
+      ctx.fillRect(0, 0, 256, 96);
+      for (let y = 6; y < 96; y += 11) { ctx.fillStyle = y % 2 ? "#64533a" : "#7a6747"; ctx.fillRect(0, y, 256, 2); }
+      ctx.fillStyle = "#1c1915";
+      ctx.textAlign = "center";
+      const [name, direction] = sign.text.split("\n");
+      ctx.font = "bold 30px Georgia, serif";
+      ctx.fillText(name, 128, 40, 236);
+      ctx.font = "bold 34px Georgia, serif";
+      ctx.fillText(direction, 128, 82);
+      const texture = new pc.Texture(device, { width: 256, height: 96, format: pc.PIXELFORMAT_RGBA8, mipmaps: true, minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR, addressU: pc.ADDRESS_CLAMP_TO_EDGE, addressV: pc.ADDRESS_CLAMP_TO_EDGE });
+      texture.setSource(canvas);
+      texture.srgb = true;
+      const material = new pc.StandardMaterial();
+      material.diffuseMap = texture;
+      material.gloss = 0.1;
+      material.update();
+      // A quad facing into the trench, wound counter-clockwise for its reader,
+      // whose right hand points along (0, 0, -facing).
+      const right = -sign.facing, quad = new pc.Mesh(device), corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      quad.setPositions(corners.flatMap(([u, v]) => [sign.x + sign.facing * 0.01, sign.y + v * 0.19, sign.z + u * right * 0.5]));
+      quad.setNormals(corners.flatMap(() => [sign.facing, 0, 0]));
+      // The canvas uploads with its top row at v = 0.
+      quad.setUvs(0, corners.flatMap(([u, v]) => [(u + 1) / 2, (1 - v) / 2]));
+      quad.setIndices([0, 1, 2, 0, 2, 3]);
+      quad.update(pc.PRIMITIVE_TRIANGLES);
+      const board = this.joint("signboard", root);
+      board.addComponent("render", { meshInstances: [new pc.MeshInstance(quad, material, board)], castShadows: true });
+      this.cube("signboard backing", sign.x - sign.facing * 0.02, sign.y, sign.z, 0.04, 0.42, 1.06, "#4a3c2b", false, root);
+    }
   }
   private buildAtmosphere() {
     const atmosphere = this.look.atmosphere!, root = this.joint("atmosphere", this.mapRoot);
