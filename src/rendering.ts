@@ -1534,7 +1534,22 @@ export class Renderer implements CollisionWorld {
       slab("concrete overhead", rect, b.baseY! + b.h, b.h, "#777a71", roof, "fort-concrete");
     }
     this.batchGroup = this.mapBatch;
-    slab("open yard paving", fort.yard, .025, .04, "#8f8473", this.mapRoot);
+    const { yard, yardPassage } = fort;
+    const mouthStart = yardPassage.z - yardPassage.width / 2;
+    const mouthEnd = yardPassage.z + yardPassage.width / 2;
+    slab("open yard paving", yard, .025, .04, "#a29988", this.mapRoot);
+    const overhang = .28;
+    const coping = (rect: FortRect) =>
+      slab("yard wall coping", rect, 4.46, .21, "#a8a699", this.mapRoot);
+    for (const z of [yard.z0, yard.z1]) {
+      coping({ x0: yard.x0 - overhang, x1: yard.x1 + overhang, z0: z - overhang, z1: z + overhang });
+    }
+    for (const x of [yard.x0, yard.x1]) {
+      coping({ x0: x - overhang, x1: x + overhang, z0: yard.z0 + overhang, z1: mouthStart });
+      coping({ x0: x - overhang, x1: x + overhang, z0: mouthEnd, z1: yard.z1 - overhang });
+      slab("yard threshold", { x0: x - .25, x1: x + .25, z0: mouthStart, z1: mouthEnd },
+        .034, .035, "#989a8f", this.mapRoot, "fort-concrete");
+    }
     for (const room of fort.rooms.filter(r => r.vault)) {
       this.batchGroup = this.mapBatch;
       slab(`${room.name} floor`, room, .023, .035, room.id === "barracks" ? "#9a8061" : "#78827b",
@@ -1577,9 +1592,13 @@ export class Renderer implements CollisionWorld {
     surface.render!.material = waterMaterial;
     surface.render!.castShadows = false;
 
-    const lamp = (x: number, z: number, tint: string, intensity: number, range: number, fixture = true) => {
-      const light = this.joint("fort light", this.mapRoot, x, 2.47, z);
+    const fortLight = (name: string, x: number, y: number, z: number, tint: string, intensity: number, range: number) => {
+      const light = this.joint(name, this.mapRoot, x, y, z);
       light.addComponent("light", { type: "omni", color: color(tint), intensity, range, castShadows: false });
+      return light;
+    };
+    const lamp = (x: number, z: number, tint: string, intensity: number, range: number, fixture = true) => {
+      const light = fortLight("fort light", x, 2.47, z, tint, intensity, range);
       if (!fixture) return;
       const metal = "#3c3530";
       this.cube("lantern base", 0, -.22, 0, .20, .075, .20, metal, false, light);
@@ -1603,6 +1622,17 @@ export class Renderer implements CollisionWorld {
     lamp(16, -3, "#a2bdcc", 1.15, 8, false);
     lamp(30, -2.3, "#c4d7df", 1.8, 10, false);
     lamp(53, -2, "#b4ccda", 1.5, 8, false);
+
+    fortLight("sunken yard daylight", (yard.x0 + yard.x1) / 2, 4.6, yardPassage.z, "#cee0ed", 2.35, 13);
+    for (const [facing, edge] of [[-1, yard.x0], [1, yard.x1]]) {
+      fortLight("yard doorway daylight", edge - facing * .85, 2.5, yardPassage.z, "#d8e7ef", 1.35, 5.4);
+      const x = edge + facing * .72, y = 2.53, z = yardPassage.z;
+      this.cube("yard sign backing", x, y, z, .075, .39, 1.55, "#393228", false, this.mapRoot);
+      for (const offset of [-.59, .59]) {
+        this.cube("yard sign bracket", x, 2.79, z + offset, .037, .15, .037, "#64594a", false, this.mapRoot);
+      }
+      this.fortSign("COUR", x + facing * .041, y, z, facing * 90, "SUNKEN YARD");
+    }
 
     this.fortPortal(-7.86, 3, 90, 1.86);
     this.fortPortal(7.86, -3, -90, 1.86);
@@ -1637,8 +1667,8 @@ export class Renderer implements CollisionWorld {
     });
     portal.addComponent("render", { meshInstances: [new pc.MeshInstance(mesh, this.surfaceMaterial("fort-stone", tint), portal)] });
   }
-  private fortSign(label: string, x: number, y: number, z: number, yaw: number) {
-    const key = `fort sign:${label}`;
+  private fortSign(label: string, x: number, y: number, z: number, yaw: number, subtitle?: string) {
+    const key = `fort sign:${label}${subtitle ? `/${subtitle}` : ""}`;
     let material = this.materials.get(key);
     if (!material) {
       const texture = this.texture(key, 256, 64, () => {
@@ -1646,8 +1676,13 @@ export class Renderer implements CollisionWorld {
         const ctx = canvas.getContext("2d")!;
         ctx.fillStyle = "#30291f"; ctx.fillRect(0, 0, 256, 64);
         ctx.strokeStyle = "#746347"; ctx.strokeRect(3, 3, 250, 58);
-        ctx.font = "bold 34px sans-serif"; ctx.fillStyle = "#e0cba1";
-        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, 128, 33);
+        ctx.font = subtitle ? "bold 25px serif" : "bold 34px sans-serif";
+        ctx.fillStyle = "#e0cba1"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(label, 128, subtitle ? 23 : 33);
+        if (subtitle) {
+          ctx.font = "bold 17px sans-serif";
+          ctx.fillText(subtitle, 128, 45);
+        }
         return new Uint8Array(ctx.getImageData(0, 0, 256, 64).data);
       }, false);
       material = new pc.StandardMaterial();

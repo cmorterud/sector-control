@@ -6,7 +6,7 @@ Each `render-<map>` artifact contains four PNGs: `overview-intact.png` (HUD hidd
 
 Village also saves clean, fixed player-height inspection views: `detail-school.png`, `detail-inn.png`, `detail-street.png` and `detail-manor-room.png`. These hide the HUD and first-person weapon to show facade identity, roadside cover and a furnished interior before the battle advances.
 
-Fort Vaux saves four inspection views of the cistern, barracks, casemate and open yard. It also captures the floor plan and checks that neither the map nor HUD offers artillery targeting and both simulated scenarios have zero impacts.
+Fort Vaux saves inspection views of the cistern, barracks, casemate, Sunken Yard and both signed tunnel approaches. The browser walks through both yard exits in first person, verifies the 6v6 default and captures the floor plan. It also checks that the map and HUD have no artillery targeting and both scenarios have zero impacts.
 
 Village's diagnostic recording window is also ten minutes: software rendering the additional inspection views can exceed the ordinary two-minute wall-clock recording window before the 900-step battle advance begins. The simulated match duration and required tick/frame checks are unchanged.
 
