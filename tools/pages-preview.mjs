@@ -291,6 +291,27 @@ export async function verifyPublished(base, head, pr, fetcher = fetch, build = {
   console.log(`Verified ${Object.keys(manifest.files).length} published files for ${head}`);
 }
 
+// The run's artifact list lags a finished upload by a second or so, and the
+// Pages deployment looks the artifact up exactly once. Poll the same listing
+// until it shows this attempt's artifact, so the deployment cannot race it.
+export async function awaitArtifact(name, list, {attempts = 30, wait = () => delay(2000)} = {}) {
+  if (!/^[A-Za-z0-9._-]+$/.test(name ?? '')) throw Error('Invalid Pages artifact name');
+  for (let attempt = 1; ; attempt++) {
+    const found = (await list(name)).filter(artifact => artifact.name === name && !artifact.expired);
+    if (found.length === 1) return found[0];
+    if (found.length > 1) throw Error(`${found.length} artifacts named ${name} in this run`);
+    if (attempt === attempts) throw Error(`Artifact ${name} was not listed after ${attempts} checks`);
+    await wait();
+  }
+}
+async function awaitPagesArtifact() {
+  const run = Number(process.env.GITHUB_RUN_ID);
+  if (!Number.isSafeInteger(run) || run <= 0) throw Error('Missing workflow run');
+  const artifact = await awaitArtifact(process.env.PAGES_ARTIFACT, async name =>
+    (await api(`actions/runs/${run}/artifacts?name=${encodeURIComponent(name)}&per_page=100`)).artifacts);
+  console.log(`Artifact ${artifact.name} is listed (${artifact.size_in_bytes} bytes, ID ${artifact.id})`);
+}
+
 async function verifyWithRetry() {
   for (let attempt = 0; ; attempt++) {
     try { await verifyPublished(process.env.REVIEW_BASE_URL, process.env.EXPECTED_HEAD_SHA, Number(process.env.EXPECTED_PR_NUMBER), fetch, expectedCI()); return; }
@@ -347,7 +368,7 @@ export async function reportPreview() {
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const command = process.argv[2];
-  const commands = {stamp, resolve: resolveContext, stage: stageSite, verify: verifyWithRetry, 'verify-cleanup': verifyCleanup, report: reportPreview};
-  if (!commands[command]) throw Error('Expected stamp, resolve, stage, verify, verify-cleanup or report');
+  const commands = {stamp, resolve: resolveContext, stage: stageSite, artifact: awaitPagesArtifact, verify: verifyWithRetry, 'verify-cleanup': verifyCleanup, report: reportPreview};
+  if (!commands[command]) throw Error('Expected stamp, resolve, stage, artifact, verify, verify-cleanup or report');
   await commands[command]();
 }
