@@ -1,6 +1,7 @@
 import type { MapDefinition } from "./map";
 import { publicAsset } from "./public-assets";
 export const battlefieldInfo = {
+  "fort-vaux": { setting: "Verdun-inspired · 1916", factions: "France · Imperial Germany", description: "Indoor 12v12. Fight through flooded chambers and vaulted galleries for three flags. No artillery." },
   training: {setting:"Field training camp",factions:"British, French & German equipment",description:"Eight guided exercises: movement, every weapon, grenades, bayonets, artillery, destruction and squad combat. Free practice and resettable stations."},
   verdun: {setting:"Verdun-inspired · 1917", factions:"France · Imperial Germany", description:"An extended forest front with five flags and the ruined Broken Relay at its center."},
   industrial: { setting: "Industrial skirmish", factions: "Training teams", description: "Close lanes and industrial cover. Three control points." },
@@ -10,7 +11,7 @@ export const battlefieldInfo = {
 };
 export function battlefieldCard(map: MapDefinition, href?: string) {
   const info = battlefieldInfo[map.id];
-  const overview=!!map.buildings&&map.id!=="village",extension=map.id==="village"?"png":overview?"svg":"jpg";
+  const overview=!!map.buildings&&map.id!=="village"&&!map.fort,extension=map.id==="village"?"png":overview?"svg":"jpg";
   const content = `<img src="${publicAsset(`previews/${map.id}.${extension}`)}" alt="${map.name} ${overview ? "layout overview" : "battlefield"}" width="320" height="180" loading="lazy"><strong>${map.name}</strong><small>${info.setting} · ${info.factions}</small><p>${info.description}</p>`;
   return href ? `<a href="${href}">${content}</a>` : `<span aria-current="page">${content}</span>`;
 }

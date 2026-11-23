@@ -837,7 +837,7 @@ export class TestCollision implements CollisionWorld {
 export const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
 export function resolveTeamSize(map: MapDefinition, requested?: number) {
-  const fallback = map.id === "training" ? 4 : map.id === "industrial" ? 5 : 50;
+  const fallback = map.defaultTeamSize ?? (map.id === "training" ? 4 : map.id === "industrial" ? 5 : 50);
   return clamp(
     Number.isFinite(requested) ? Math.round(requested!) : fallback,
     1,
@@ -946,8 +946,9 @@ export class Game {
     this.flames = createFlames(this.map);
     this.artillery = createArtilleryState(
       seed,
-      options.ambientArtillery ?? (this.map.id !== "industrial" && this.map.id !== "training"),
+      this.map.artillery !== false && (options.ambientArtillery ?? (this.map.id !== "industrial" && this.map.id !== "training")),
     );
+    this.artillery.enabled = this.map.artillery !== false;
     this.assaults.enabled =
       (options.assaults ?? true) && this.map.id === "trenches";
     this.collision.setMap?.(this.map);

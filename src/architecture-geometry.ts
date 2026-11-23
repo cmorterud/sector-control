@@ -55,6 +55,14 @@ export function architecturePieces(b:Box,stage:number):ArchitecturePiece[] {
     add("splintered joist",0,h*.76,0,w*.78,.08,d*.12,"#69513a","wood",.12,true);
     return pieces;
   }
+  if (a.feature === "barricade") {
+    for (let i = 0; i < 4; i++)
+      add("weathered barricade plank", (i % 2 - .5) * .14, h * (.14 + i * .235), 0,
+        w * (1 - .065 * i), h * .205, d * .28, i % 2 ? "#66513d" : "#806650", "wood", (i - 1.5) * .023, true);
+    for (const side of [-1, 1])
+      add("barricade upright", side * w * .3, h * .49, d * .21, .16, h * .96, .18, "#66503b", "wood", side * .055, true);
+    return pieces;
+  }
   const wall=a.part==="wall",alongX=w>d;
   const face=(name:string,u:number,y:number,side:number,su:number,sy:number,depth:number,tint:string,surface:ArchitectureSurface="wood",chipped=false)=>
     add(name,alongX?u:side*(w/2+depth/2),y,alongX?side*(d/2+depth/2):u,

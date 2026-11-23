@@ -10,7 +10,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
-- **Six maps.** Trench front, Verdun sector, Village front, a smaller 5v5 Industrial map, the coastal Lighthouse point, and a guided training camp.
+- **Seven maps.** Trench front, Verdun sector, Village front, 5v5 Industrial, Lighthouse point, indoor Fort Vaux, and a guided training camp.
 - **Per-map light and atmosphere.** Each map has its own sun, generated sky, fog and colour grade, from Trench front's grey dawn to Village front's late afternoon. Rooms darken away from their windows. Graphics quality is Auto, Low, Medium or High in the briefing; Auto picks from real frame times.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Furnished village interiors.** Limewashed walls, shutters, lanterns, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Dining chairs and tableware add domestic detail. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
@@ -32,6 +32,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
+| Fort Vaux | 12v12 | France and Imperial Germany fight through vaulted galleries for three flags. **Q** opens the floor plan. No artillery |
 | Industrial | 5v5 | Three sectors among warehouse cover |
 
 On the combat flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
@@ -80,15 +81,15 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-Useful URL parameters: `?map=trenches`, `?map=verdun`, `?map=village` or `?map=headland` or `?map=training` selects a map (Industrial is the default), `?view=first` or `?view=third` sets the camera, `?bots=0` disables bots, `?difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `?quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `?duration=30` shortens the match to thirty seconds.
+Useful URL parameters: `map=trenches`, `verdun`, `village`, `headland`, `fort-vaux` or `training` selects a map (Industrial is the default), `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 
-[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pushes and pull requests. Six parallel headless Chrome jobs then render that same production build, one per map. Each saves an intact overview, a battle overview, first-person and third-person screenshots, plus browser errors and gameplay diagnostics. Find the `render-<map>` artifacts on each run; screenshots are retained for 14 days. Software rendering provides visual evidence, not a hardware FPS benchmark.
+[GitHub Actions](https://github.com/cmorterud/sector-control/actions/workflows/ci.yml) installs locked dependencies, type-checks, runs the tests and builds on pushes and pull requests. Seven parallel headless Chrome jobs then render that same production build, one per map. Each saves an intact overview, a battle overview, first-person and third-person screenshots, plus browser errors and gameplay diagnostics. Find the `render-<map>` artifacts on each run; screenshots are retained for 14 days. Software rendering provides visual evidence, not a hardware FPS benchmark.
 
 The render jobs verify the loadouts offered by each briefing. Industrial also opens the built Armoury and checks its displayed weapon stats against the gameplay profiles. Training exercises the emplacement controls through deployment and packing. Map and model PRs get downloadable side-by-side images from the target branch and proposed merge. The separate **Battlefield audits** workflow runs nightly or on demand and saves seeded AI, map and CPU performance reports. See [RENDER_REVIEW.md](docs/RENDER_REVIEW.md) for artifacts and local commands.
 
-A main push deploys to GitHub Pages only after tests, build and all six browser checks pass. Browser errors, missing assets, WebGL initialization failures and failure to progress through gameplay fail the rendered check. Passing same-repository PRs targeting `main` also receive playable previews at `/sector-control/pr-preview/pr-<number>/`. A bot comment links the preview after its deployed files and browser check pass; closing the PR removes it. Ordinary branch pushes and fork PRs validate without publishing. See [RENDER_REVIEW.md](docs/RENDER_REVIEW.md) and [PR_PREVIEWS.md](docs/PR_PREVIEWS.md).
+A main push deploys to GitHub Pages only after tests, build and all seven browser checks pass. Browser errors, missing assets, WebGL initialization failures and failure to progress through gameplay fail the rendered check. Passing same-repository PRs targeting `main` also receive playable previews at `/sector-control/pr-preview/pr-<number>/`. A bot comment links the preview after its deployed files and browser check pass; closing the PR removes it. Ordinary branch pushes and fork PRs validate without publishing. See [RENDER_REVIEW.md](docs/RENDER_REVIEW.md) and [PR_PREVIEWS.md](docs/PR_PREVIEWS.md).
 
 Pages is configured to use **GitHub Actions** as the build source. The game publishes at **https://codymorterud.com/sector-control/**; `https://cmorterud.github.io/sector-control/` redirects there through the account's existing custom domain. No personal token or repository secret is needed. The separate publisher executes only automation from `main`, maintains a generated `pages-content` branch containing production and active previews, and deploys the complete site. For a fork, select **GitHub Actions** in **Settings → Pages** and change `PAGES_SITE_URL` in `pages.yml` to that fork's Pages URL.
 

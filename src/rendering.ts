@@ -4,10 +4,11 @@ import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
 import { qualityProfiles, type Quality } from "./graphics-quality";
 import { lookFor, type MapLook } from "./map-look";
+import { fortVault, fortVaultHeight, inFortRect, type FortRect } from "./fort-vaux-map";
 import { skyCubemapFaces } from "./sky";
 import { shadeArchitecture } from "./room-light";
 import type {DeathView} from "./combat-feedback";
-import { architecturePixels, architecturalTextures, type ArchitecturalTexture } from "./architecture-surfaces";
+import { architecturePixels, architecturalTextures, cisternWaterNormals, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
@@ -236,6 +237,7 @@ export class Renderer implements CollisionWorld {
     materials: pc.StandardMaterial[];
   }[] = [];
   private mapRoot!: pc.Entity;
+  private fortRoof?: pc.Entity;
   private worldParent?: pc.Entity;
   private terrainPhysics = new TerrainPhysics();
   private terrainGeometryCache?: TerrainGeometryCache;
@@ -335,6 +337,8 @@ export class Renderer implements CollisionWorld {
     this.batchGroup = this.mapBatch;
     for (const key of terrainPatchKeys(map)) this.rebuildTerrainPatch(key);
     if (map.terrain) this.buildTrenchTerrain();
+    this.fortRoof = undefined;
+    if (map.fort) this.buildFort();
     for (const b of map.boxes) {
       if (map.destruction?.objects[b.id!]) continue;
       const c =
@@ -359,6 +363,10 @@ export class Renderer implements CollisionWorld {
         c,
         true,
       );
+      if (map.fort) {
+        if (b.id?.startsWith("fort-roof-") || b.id?.startsWith("fort-vault-")) obstacle.render!.enabled = false;
+        else this.fortStone(obstacle, b.w, b.h, b.d, b.walkable ? "#939081" : "#858073");
+      }
       const modelled = this.map.boxes.some((q) => q.model) && b.kind === "building";
       if (modelled) {
         // The box stays as the collider; the loaded model replaces its look.
@@ -1492,6 +1500,164 @@ export class Renderer implements CollisionWorld {
   }
   private worldBatch(base: number, x: number, z: number) {
     return this.sceneryBatches?.group(base, x, z) ?? base;
+  }
+  private fortStone(entity: pc.Entity, w: number, h: number, d: number, tint: string, surface: ArchitectureSurface = "fort-stone") {
+    const mesh = this.modelMesh(`fort-block:${w}:${h}:${d}`, () => {
+      const box = new pc.BoxGeometry();
+      const uvs = box.uvs!.map((uv, i) => {
+        const normal = Math.floor(i / 2) * 3;
+        const x = Math.abs(box.normals![normal]) > .5;
+        const y = Math.abs(box.normals![normal + 1]) > .5;
+        return uv * (i % 2 ? y ? d : h : x ? d : w) / 2.6;
+      });
+      return { positions: box.positions!, indices: box.indices!, normals: box.normals!, uvs };
+    });
+    entity.render!.meshInstances = [new pc.MeshInstance(mesh, this.surfaceMaterial(surface, tint), entity)];
+  }
+  private buildFort() {
+    const fort = this.map.fort!;
+    const previous = this.batchGroup;
+    this.fortRoof = this.joint("fort roof", this.mapRoot);
+    const roof = this.fortRoof;
+    const slab = (name: string, r: FortRect, top: number, h: number, tint: string,
+      parent: pc.Entity, surface: ArchitectureSurface = "fort-stone") => {
+      const w = r.x1 - r.x0, d = r.z1 - r.z0;
+      const e = this.cube(name, (r.x0 + r.x1) / 2, top - h / 2, (r.z0 + r.z1) / 2, w, h, d, tint, false, parent);
+      this.fortStone(e, w, h, d, tint, surface);
+      return e;
+    };
+    for (const b of fort.ceilings) {
+      const rect = { x0: b.x - b.w / 2, x1: b.x + b.w / 2, z0: b.z - b.d / 2, z1: b.z + b.d / 2 };
+      this.batchGroup = this.mapBatch;
+      slab("passage floor", rect, .022, .035, "#736d60", this.mapRoot, "slate");
+      this.batchGroup = -1;
+      slab("concrete overhead", rect, b.baseY! + b.h, b.h, "#777a71", roof, "fort-concrete");
+    }
+    this.batchGroup = this.mapBatch;
+    slab("open yard paving", fort.yard, .025, .04, "#8f8473", this.mapRoot);
+    for (const room of fort.rooms.filter(r => r.vault)) {
+      this.batchGroup = this.mapBatch;
+      slab(`${room.name} floor`, room, .023, .035, room.id === "barracks" ? "#9a8061" : "#78827b",
+        this.mapRoot, room.id === "barracks" ? "floorboards" : "slate");
+      this.batchGroup = -1;
+      const ceiling = this.joint(`${room.name} barrel vault`, roof);
+      const mesh = this.modelMesh(`vault:${room.id}`, () => {
+        const positions: number[] = [], uvs: number[] = [], indices: number[] = [];
+        for (let i = 0; i <= fortVault.segments; i++) {
+          const f = i / fortVault.segments, z = room.z0 + (room.z1 - room.z0) * f;
+          positions.push(room.x0, fortVaultHeight(f), z, room.x1, fortVaultHeight(f), z);
+          uvs.push(room.x0 / 3.8, z / 3.8, room.x1 / 3.8, z / 3.8);
+          if (i < fortVault.segments) indices.push(i * 2, i * 2 + 1, i * 2 + 3, i * 2, i * 2 + 3, i * 2 + 2);
+        }
+        return { positions, uvs, indices, normals: pc.calculateNormals(positions, indices) };
+      });
+      const material = this.surfaceMaterial("fort-concrete", "#8d918a");
+      ceiling.addComponent("render", { meshInstances: [new pc.MeshInstance(mesh, material, ceiling)], castShadows: true, receiveShadows: true });
+    }
+    this.batchGroup = -1;
+    const { water } = fort;
+    const surface = this.cube("cistern water", (water.x0 + water.x1) / 2, fort.waterHeight - .015, (water.z0 + water.z1) / 2,
+      water.x1 - water.x0, .03, water.z1 - water.z0, "#485954", false, this.mapRoot);
+    let waterMaterial = this.materials.get("cistern water");
+    if (!waterMaterial) {
+      waterMaterial = new pc.StandardMaterial();
+      waterMaterial.diffuse = color("#292d25");
+      waterMaterial.emissive = color("#0a1210");
+      waterMaterial.specular = color("#929b8e");
+      waterMaterial.gloss = .79;
+      waterMaterial.opacity = .87;
+      waterMaterial.blendType = pc.BLEND_NORMAL;
+      waterMaterial.depthWrite = false;
+      waterMaterial.normalMap = this.texture("cistern ripples", 128, 128, () => cisternWaterNormals());
+      waterMaterial.normalMapTiling.set(2, 2);
+      waterMaterial.bumpiness = .8;
+      waterMaterial.update();
+      this.materials.set("cistern water", waterMaterial);
+    }
+    surface.render!.material = waterMaterial;
+    surface.render!.castShadows = false;
+
+    const lamp = (x: number, z: number, tint: string, intensity: number, range: number, fixture = true) => {
+      const light = this.joint("fort light", this.mapRoot, x, 2.47, z);
+      light.addComponent("light", { type: "omni", color: color(tint), intensity, range, castShadows: false });
+      if (!fixture) return;
+      const metal = "#3c3530";
+      this.cube("lantern base", 0, -.22, 0, .20, .075, .20, metal, false, light);
+      this.cube("lantern roof", 0, .14, 0, .22, .10, .22, metal, false, light);
+      this.cube("lantern hook", 0, .28, 0, .046, .22, .05, metal, false, light);
+      const glass = this.cube("lantern glass", 0, -.04, 0, .14, .31, .14, tint, false, light);
+      let glow = this.materials.get(`fort lantern ${tint}`);
+      if (!glow) {
+        glow = new pc.StandardMaterial(); glow.useLighting = false; glow.emissive = color(tint); glow.update();
+        this.materials.set(`fort lantern ${tint}`, glow);
+      }
+      glass.render!.material = glow;
+      glass.render!.castShadows = false;
+      for (const dx of [-.08, .08]) for (const dz of [-.08, .08])
+        this.cube("lantern frame", dx, -.04, dz, .018, .36, .018, metal, false, light);
+    };
+    for (const [x, z] of [[-49, -.9], [-32, -3.7], [-25, 4.2], [-17, 1.3], [-5.7, 4.8], [-2.8, -5.7], [4.3, 5.6],
+      [-30, -18], [-12, -16], [2.6, -14.5], [14, -16], [30, -19], [-29, 16.5], [29, 15], [46, 0]])
+      lamp(x, z, "#ffbd77", 1.6, 7.2);
+    lamp(6.4, -3.9, "#a6c5d6", 1.4, 9, false);
+    lamp(16, -3, "#a2bdcc", 1.15, 8, false);
+    lamp(30, -2.3, "#c4d7df", 1.8, 10, false);
+    lamp(53, -2, "#b4ccda", 1.5, 8, false);
+
+    this.fortPortal(-7.86, 3, 90, 1.86);
+    this.fortPortal(7.86, -3, -90, 1.86);
+    this.fortPortal(0, -6.88, 0, 1.65);
+    this.fortSign("CASEMATE", 7.85, 3.22, -3, -90);
+    this.fortSign("STORES", 0, 2.98, -6.25, 0);
+    this.fortSign("BARRACKS", -7.85, 3.25, 3, 90);
+    this.fortSign("CISTERNE", -22.05, 3.23, 0, -90);
+    this.fortSign("CISTERNE", 22.05, 3.23, 0, 90);
+    this.batchGroup = previous;
+  }
+  private fortPortal(x: number, z: number, yaw: number, halfWidth: number) {
+    const portal = this.joint("stone portal", this.mapRoot, x, 0, z);
+    portal.setEulerAngles(0, yaw, 0);
+    const tint = "#a19885";
+    for (const side of [-1, 1]) {
+      const jamb = this.cube("portal jamb", side * (halfWidth + .09), 1.025, 0, .18, 2.05, .23, tint, false, portal);
+      this.fortStone(jamb, .18, 2.05, .23, tint);
+    }
+    const mesh = this.modelMesh(`fort-arch:${halfWidth}`, () => {
+      const positions: number[] = [], uvs: number[] = [], indices: number[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const angle = Math.PI * i / 12, c = Math.cos(angle), s = Math.sin(angle);
+        for (const trim of [0, .20]) {
+          const px = (halfWidth + trim) * c, py = 2.05 + (.72 + trim) * s;
+          positions.push(px, py, .115);
+          uvs.push(px * .8, py * .8);
+        }
+        if (i < 12) indices.push(i * 2, i * 2 + 1, i * 2 + 3, i * 2, i * 2 + 3, i * 2 + 2);
+      }
+      return { positions, uvs, indices, normals: pc.calculateNormals(positions, indices) };
+    });
+    portal.addComponent("render", { meshInstances: [new pc.MeshInstance(mesh, this.surfaceMaterial("fort-stone", tint), portal)] });
+  }
+  private fortSign(label: string, x: number, y: number, z: number, yaw: number) {
+    const key = `fort sign:${label}`;
+    let material = this.materials.get(key);
+    if (!material) {
+      const texture = this.texture(key, 256, 64, () => {
+        const canvas = document.createElement("canvas"); canvas.width = 256; canvas.height = 64;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#30291f"; ctx.fillRect(0, 0, 256, 64);
+        ctx.strokeStyle = "#746347"; ctx.strokeRect(3, 3, 250, 58);
+        ctx.font = "bold 34px sans-serif"; ctx.fillStyle = "#e0cba1";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, 128, 33);
+        return new Uint8Array(ctx.getImageData(0, 0, 256, 64).data);
+      }, false);
+      material = new pc.StandardMaterial();
+      material.useLighting = false; material.emissive = color("#ffffff"); material.emissiveMap = texture; material.update();
+      this.materials.set(key, material);
+    }
+    const sign = this.joint(label, this.mapRoot, x, y, z);
+    sign.addComponent("render", { type: "plane", material, castShadows: false });
+    sign.setEulerAngles(90, yaw, 0);
+    sign.setLocalScale(1.55, 1, .39);
   }
   private buildCoast() {
     const map=this.map,previous=this.batchGroup,meshes=coastalGeometry(map);
@@ -3501,9 +3667,10 @@ export class Renderer implements CollisionWorld {
     for (const s of g.scoring !== "eliminations" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
-      ring.setPosition(s.x, groundHeight(s.x, s.z, this.map) + 0.04, s.z);
-      for (let i = 0; i < 64; i++) {
-        const a = (i / 64) * Math.PI * 2;
+      ring.setPosition(s.x, groundHeight(s.x, s.z, this.map) + (this.map.fort?.waterHeight ?? 0) + .04, s.z);
+      const segments = this.map.fort ? 40 : 64;
+      for (let i = 0; i < segments; i++) {
+        const a = (i / segments) * Math.PI * 2;
         const e = this.cube(
           "boundary",
           Math.sin(a) *
@@ -3511,9 +3678,9 @@ export class Renderer implements CollisionWorld {
           0,
           Math.cos(a) *
             (g.scoring === "domination" ? dominationRules.radius : 8),
-          0.16,
-          0.05,
-          0.65,
+          this.map.fort ? .10 : .16,
+          this.map.fort ? .028 : .05,
+          this.map.fort ? .46 : .65,
           "#d4c699",
           false,
           ring,
@@ -3521,13 +3688,14 @@ export class Renderer implements CollisionWorld {
         e.setLocalEulerAngles(0, (a * 180) / Math.PI, 0);
       }
       if (g.scoring === "domination") {
+        const flagScale = this.map.fort ? .64 : 1;
         this.cube(
           "flagpole",
           0,
-          1.9,
+          1.9 * flagScale,
           0,
           0.07,
-          3.8,
+          3.8 * flagScale,
           0.07,
           "#a5a697",
           false,
@@ -3536,10 +3704,10 @@ export class Renderer implements CollisionWorld {
         this.cube(
           "flag cloth",
           0.7,
-          3.1,
+          3.1 * flagScale,
           0,
           1.3,
-          0.75,
+          0.75 * flagScale,
           0.045,
           "#d4c699",
           false,
@@ -3766,8 +3934,10 @@ export class Renderer implements CollisionWorld {
               ? "#de6e5f"
               : "#d4c699";
       const root = this.rings[i];
-      if (g.scoring === "domination" && positionObjectives)
-        root.setPosition(s.x, groundHeight(s.x, s.z, this.map) + 0.04, s.z);
+      if (g.scoring === "domination" && positionObjectives) {
+        const water = this.map.fort && inFortRect(s, this.map.fort.water) ? this.map.fort.waterHeight : 0;
+        root.setPosition(s.x, groundHeight(s.x, s.z, this.map) + water + .04, s.z);
+      }
       for (const child of root.children) {
         const e = child as pc.Entity;
         if (e.name !== "flagpole") e.render!.material = this.material(c);
@@ -3782,9 +3952,11 @@ export class Renderer implements CollisionWorld {
             z: s.z + local.z,
             y: groundHeight(s.x + local.x, s.z + local.z, g.map),
           };
+          const surface = this.map.fort ? Math.max(supportHeight(point.x, point.z, this.map, .23),
+            inFortRect(point, this.map.fort.water) ? this.map.fort.waterHeight : 0) : point.y;
           e.setLocalPosition(
             local.x,
-            point.y - root.getPosition().y + 0.04,
+            surface - root.getPosition().y + 0.04,
             local.z,
           );
           e.render!.enabled = flagContains(g, point, s);
@@ -3833,6 +4005,7 @@ export class Renderer implements CollisionWorld {
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
     this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
+    if (this.fortRoof) this.fortRoof.enabled = !overview;
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
       this.camera.camera!.projection = pc.PROJECTION_ORTHOGRAPHIC;

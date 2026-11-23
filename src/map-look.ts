@@ -56,6 +56,13 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     vignette: 0.25, exposure: 1, ambient: 1.35,
   },
   // Plain daylight for practice.
+  "fort-vaux": {
+    sun: { color: "#d5e5ed", intensity: 0.8, elevation: 55, azimuth: -42, shadowStrength: 0.9 },
+    sky: { zenith: "#677b86", horizon: "#939e9d", ground: "#57554b", clouds: 0.8, cloud: "#b3c0c2", glow: "#d8ded7" },
+    fog: { start: 34, end: 120 },
+    grade: { brightness: 0, contrast: 1.05, saturation: 0.91, tint: "#f2f0e7" },
+    vignette: 0.22, exposure: 0.98, ambient: 0.75,
+  },
   training: {
     sun: { color: "#fff0d6", intensity: 1.5, elevation: 45, azimuth: -35, shadowStrength: 0.85 },
     sky: { zenith: "#7c98b4", horizon: "#c3c7c1", ground: "#5a594b", clouds: 0.45, cloud: "#e6e6df", glow: "#fbeed5" },

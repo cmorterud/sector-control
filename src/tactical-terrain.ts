@@ -1,4 +1,5 @@
 import { groundHeight, type MapDefinition } from "./map";
+import type { FortRect } from "./fort-vaux-map";
 
 // Sample real, excavated terrain only when its revision changes. No actor data.
 export function tacticalRelief(map: MapDefinition, size = 256) {
@@ -15,6 +16,28 @@ export function tacticalRelief(map: MapDefinition, size = 256) {
   return { width, height, pixels };
 }
 export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition) {
+  if (map.fort) {
+    canvas.width = 720;
+    canvas.height = Math.round(canvas.width * map.depth / map.width);
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#222d2b";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(canvas.width / map.width, canvas.height / map.depth);
+    ctx.translate(map.width / 2, map.depth / 2);
+    const rect = ({ x0, x1, z0, z1 }: FortRect, color: string) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(x0, z0, x1 - x0, z1 - z0);
+    };
+    for (const room of [...map.fort.passages, ...map.fort.rooms]) rect(room, "#b7ad90");
+    rect(map.fort.yard, "#c0a174");
+    rect(map.fort.water, "#82a8a5");
+    ctx.fillStyle = "#f0dfb4";
+    ctx.font = "1.85px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("SUNKEN YARD", 0, map.fort.yard.z1 + 2.5);
+    ctx.fillText("SERVICE PASSAGE", 0, -19.5);
+    return;
+  }
   const raster = tacticalRelief(map);
   canvas.width = raster.width; canvas.height = raster.height;
   const ctx = canvas.getContext("2d")!;

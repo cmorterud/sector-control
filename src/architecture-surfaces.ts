@@ -1,6 +1,6 @@
 import { lookNoise } from "./battlefield-look";
-export type ArchitecturalTexture = "stone" | "brick" | "slate" | "tiles" | "fabric" | "iron" | "limewash";
-export const architecturalTextures: ArchitecturalTexture[] = ["stone", "brick", "slate", "tiles", "fabric", "iron", "limewash"];
+export type ArchitecturalTexture = "stone" | "brick" | "slate" | "tiles" | "fabric" | "iron" | "limewash" | "fort-stone" | "fort-concrete";
+export const architecturalTextures: ArchitecturalTexture[] = ["stone", "brick", "slate", "tiles", "fabric", "iron", "limewash", "fort-stone", "fort-concrete"];
 
 // Shared 1.6 m material tiles, sampled in meters by architectural meshes.
 export function architecturePixels(kind: ArchitecturalTexture, size = 256) {
@@ -25,6 +25,23 @@ export function architecturePixels(kind: ArchitecturalTexture, size = 256) {
       h=.5+grain*.025+trowel*.035-crack*.045;
       tone=.83+grain*.04+trowel*.03-stain*.035-crack*.045;
     }
+    if (kind === "fort-stone") {
+      const courses = v * 5 + (lookNoise(u * 12, v * 12, 12) - .5) * .25;
+      const course = Math.floor(courses);
+      const phase = lookNoise(course, 4, 5);
+      const stones = u * 5 + phase + (lookNoise(u * 18, v * 18, 18) - .5) * .22;
+      const edge = (n: number) => Math.abs(n - Math.round(n));
+      const mortar = Math.min(1, Math.min(edge(courses), edge(stones)) / .065);
+      const shade = lookNoise(Math.floor(stones), course, 5);
+      h = .24 + mortar * (.25 + grain * .11 + weather * .14);
+      tone = .38 + mortar * (.17 + shade * .15 + grain * .15 - weather * .12);
+    }
+    if (kind === "fort-concrete") {
+      const streak = lookNoise(u * 24, v * 6, 24), seepage = lookNoise(u * 4, v * 4, 4);
+      const pores = Math.max(0, lookNoise(u * 92, v * 92, 92) - .74) * 3;
+      h = .51 + grain * .08 + weather * .09 - pores * .2;
+      tone = .81 + grain * .12 - streak * .12 - seepage * .23 - pores * .15;
+    }
     const i=(y*size+x)*4;
     diffuse.set([tone*255,tone*(brick?208:kind==="tiles"?224:249),tone*(brick?175:kind==="tiles"?199:240),255],i);
     heights[y*size+x]=h;
@@ -37,4 +54,16 @@ export function architecturePixels(kind: ArchitecturalTexture, size = 256) {
     normal.set([(dx/length*.5+.5)*255,(dy/length*.5+.5)*255,(1/length*.5+.5)*255,255],(y*size+x)*4);
   }
   return {diffuse,normal,gloss};
+}
+
+export function cisternWaterNormals(size = 128) {
+  const height = (x: number, y: number) => lookNoise(x * 12 / size, y * 12 / size, 12) * .65
+    + lookNoise((x + y) * 6 / size, (y - x) * 6 / size, 6) * .35;
+  const normals = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const nx = height(x - 1, y) - height(x + 1, y), ny = height(x, y - 1) - height(x, y + 1);
+    const length = Math.hypot(nx, ny, 1);
+    normals.set([128 + 127 * nx / length, 128 + 127 * ny / length, 128 + 127 / length, 255], (y * size + x) * 4);
+  }
+  return normals;
 }

@@ -18,6 +18,7 @@ import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
 import { villageMap } from "./village-map";
 import { headlandMap } from "./headland-map";
+import { fortVauxMap } from "./fort-vaux-map";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
 import { ArtilleryMap } from "./artillery-map";
@@ -155,6 +156,8 @@ const map =
     ? villageMap
     : params.get("map") === "headland"
     ? headlandMap
+    : params.get("map") === "fort-vaux"
+    ? fortVauxMap
     : params.get("map") === "trenches"
       ? trenchMap
       : industrialMap;
@@ -171,7 +174,7 @@ updateControlHints();
 tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
-  const choices = [trainingMap, industrialMap, trenchMap, villageMap, verdunMap, headlandMap].map((battlefield) => {
+  const choices = [trainingMap, industrialMap, trenchMap, villageMap, verdunMap, headlandMap, fortVauxMap].map((battlefield) => {
     if (battlefield.id === map.id)
       return battlefieldCard(battlefield);
     const query = new URLSearchParams();
@@ -499,8 +502,8 @@ function hud(now: number) {
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
   );
-  el("ammo").innerHTML +=
-    `<small>${keyLabel(settings.bindings.tactical)} · ARTILLERY ${readyIn ? readyIn + "s" : "READY"}</small>`;
+  el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
+    ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}`}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -901,10 +904,12 @@ try {
     advance:advanceReview,
     combat:combatReview,
     survey:(firstPerson:boolean,detail?:string)=>{
-      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9]};
+      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-7.4,3,6,-2.2]};
       const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-3.3,-2.4,-6.8,-5.6]};
-      if(detail && (map.id!=="village"||!villageDetails[detail]))throw Error("Unknown review viewpoint");
-      const [x,z,tx,tz]=detail?villageDetails[detail]:poses[map.id],p=game.players[0];
+      const fortDetails:Record<string,[number,number,number,number]>={cistern:poses["fort-vaux"],barracks:[-35.4,2,-23,-1],casemate:[34.5,1,23,-1],yard:[-6,19,7,18]};
+      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : undefined) : poses[map.id];
+      if (!view) throw Error("Unknown review viewpoint");
+      const [x,z,tx,tz]=view,p=game.players[0];
       let at={x,z};
       for(const dx of [0,-2,2,-4,4])for(const dz of [0,-2,2,-4,4])if(!blocked(x+dx,z+dz,.7,game.map)&&blocked(at.x,at.z,.7,game.map))at={x:x+dx,z:z+dz};
       if(blocked(at.x,at.z,.7,game.map))throw Error("Review camera has no clear footing");
@@ -925,6 +930,8 @@ try {
       ? `France faces Imperial Germany across a longer forest front. Capture the ruined Broken Relay between the trench systems. ${teamSize} soldiers per team · five-flag domination. Verdun-inspired, 1917.`
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
+      : map.fort
+      ? `France and Imperial Germany fight for the flooded cistern under Fort Vaux. The service passage and open yard connect the barracks and east casemate. ${teamSize} soldiers per team · three-flag domination · no artillery.`
       : map.id === "village"
       ? `Fight through orchard gardens, workyards and paved courtyards to hold Saint-Martin Manor. Use low destructible cover between the houses; smoke screens the streets and artillery opens new routes. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "trenches"
@@ -932,7 +939,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly. Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
+    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: two per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {
