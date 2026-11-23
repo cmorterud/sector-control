@@ -52,7 +52,8 @@ it("auto quality steps down while play is slow and settles once it is fast enoug
 it("gives every map a look whose sky meets its fog at the horizon", () => {
   for (const id of Object.keys(mapLooks) as (keyof typeof mapLooks)[]) {
     const look = lookFor({ id }), sun = sunDirection(look);
-    expect(look.fog.end).toBeLessThanOrEqual(210);
+    // Geometry fades fully into the fog before the far clip removes it.
+    expect(look.fog.end).toBeLessThanOrEqual(look.farClip ?? 210);
     const horizon = hexColor(look.sky.horizon);
     // Facing away from the sun, the horizon is exactly the fog colour.
     const away: [number, number, number] = [-sun[0], 0, -sun[2]];

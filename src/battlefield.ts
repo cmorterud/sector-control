@@ -1,3 +1,4 @@
+import { distantFlashes } from "./backdrop";
 import { groundField, villageRoad } from "./ground-surface";
 import { treeHasCrown } from "./vegetation";
 import { inFortRect } from "./fort-vaux-map";
@@ -366,6 +367,7 @@ export class BattlefieldFeedback {
     }
     const listener = g.players[0];
     if (g.map.woodland && g.phase === "playing" && listener.hp > 0) this.forestAmbience(g);
+    if (g.map.backdrop && g.phase === "playing" && listener.hp > 0) this.backdropRumble(g);
     if (g.map.fort && g.phase === "playing" && listener.hp > 0 && Math.hypot(listener.x, listener.z) < 13 && g.tick >= this.nextDrip) {
       const offset = Math.sin(g.tick * 7.27);
       this.nextDrip = g.tick + 42 + Math.floor(Math.abs(offset) * 85);
@@ -419,6 +421,15 @@ export class BattlefieldFeedback {
         }
       }
       this.feet.set(p.id, { x: p.x, z: p.z, stride });
+    }
+  }
+  // Each distant burst on the horizon is heard when its sound would arrive.
+  private backdropRumble(g: Game) {
+    const p = g.players[0];
+    for (const flash of distantFlashes(g.map, g.tick - 36, g.tick + 1)) {
+      const delay = Math.round((Math.hypot(flash.x - p.x, flash.z - p.z) / 343) * 30);
+      if (flash.tick + delay === g.tick)
+        this.cue(g, "distantBattle", { x: flash.x, y: flash.y + 3, z: flash.z }, 0.45, false, false, g.tick);
     }
   }
   private forestAmbience(g: Game) {

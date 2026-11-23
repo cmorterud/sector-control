@@ -12,6 +12,8 @@ export interface MapLook {
   exposure: number;
   // How much brighter the sky's ambient light is than the sky looks.
   ambient: number;
+  // Camera far clip in metres; fog must close before it. Default 210 (180 on Industrial).
+  farClip?: number;
 }
 
 export const mapLooks: Record<MapDefinition["id"], MapLook> = {
@@ -27,9 +29,10 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
   trenches: {
     sun: { color: "#ecd5bd", intensity: 0.95, elevation: 16, azimuth: 70, shadowStrength: 0.7 },
     sky: { zenith: "#78879a", horizon: "#b5b9ba", ground: "#4b4e4b", clouds: 0.75, cloud: "#a9adb1", glow: "#e7cdb0" },
-    fog: { start: 40, end: 165 },
+    // Long enough to layer the distant woods, ruins and balloons into the haze.
+    fog: { start: 30, end: 280 },
     grade: { brightness: 0, contrast: 1.08, saturation: 0.82, tint: "#eaf0f6" },
-    vignette: 0.35, exposure: 1.1, ambient: 1.35,
+    vignette: 0.35, exposure: 1.1, ambient: 1.35, farClip: 420,
   },
   // Overcast late morning; green-grey haze between the trees.
   verdun: {

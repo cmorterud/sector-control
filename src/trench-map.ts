@@ -411,6 +411,7 @@ export const trenchMap: MapDefinition = {
   depth,
   playArea: { width: playWidth, depth: playDepth },
   boundary: { warningTicks: 5 * 30, wireDepth: 3 },
+  backdrop: true,
   navSpacing: 4,
   scoring: "domination",
   spawn: {

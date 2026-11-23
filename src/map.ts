@@ -188,6 +188,9 @@ export interface MapDefinition {
   // A barbed-wire belt this deep lines the play area just outside its edge.
   // A soldier outside the play area for warningTicks draws a lethal salvo.
   boundary?: { warningTicks: number; wireDepth: number };
+  // Draw distant land, the continuing front and its life past the terrain edge
+  // (src/backdrop.ts) instead of a perimeter wall.
+  backdrop?: boolean;
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
