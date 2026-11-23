@@ -1,10 +1,10 @@
 {
   "version": 1,
   "repository": "cmorterud/sector-control",
-  "source": "206d205993f1743d87979375eed6d0e9388b317a",
-  "head": "206d205993f1743d87979375eed6d0e9388b317a",
+  "source": "c3aae6099705e34d1bc0a0608faf5991429128ed",
+  "head": "c3aae6099705e34d1bc0a0608faf5991429128ed",
   "pr": 0,
-  "run": 45277905413,
+  "run": 45284716987,
   "attempt": 1,
   "base": "/sector-control/",
   "files": {
