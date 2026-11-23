@@ -79,7 +79,7 @@ import {
   walkSegment,
   terrainPatchSize,
   playArea,
-  inBoundaryWire,
+  inWire,
   type Vec,
   type Box,
   type MapDefinition,
@@ -1317,7 +1317,7 @@ export class Game {
         !p.fall &&
         this.tick >= p.nextMantle &&
         this.tick >= p.nextHop &&
-        !inBoundaryWire(p.x, p.z, this.map)
+        !inWire(p.x, p.z, this.map, p.team)
       ) {
         if (!this.startMantle(p, c)) this.startHop(p);
       }
@@ -1349,7 +1349,7 @@ export class Game {
                   : c.sprint && !c.aim
                     ? 7
                     : 4.5)),
-          speed = inBoundaryWire(p.x, p.z, this.map) ? Math.min(stride, boundaryRules.wireSpeed) : stride;
+          speed = inWire(p.x, p.z, this.map, p.team) ? Math.min(stride, boundaryRules.wireSpeed) : stride;
         p.vx += ((c.x / len) * speed - p.vx) * 0.24;
         p.vz += ((c.z / len) * speed - p.vz) * 0.24;
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });

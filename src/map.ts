@@ -188,6 +188,10 @@ export interface MapDefinition {
   // A barbed-wire belt this deep lines the play area just outside its edge.
   // A soldier outside the play area for warningTicks draws a lethal salvo.
   boundary?: { warningTicks: number; wireDepth: number };
+  // Belts of barbed wire in no-man's land, each owned by the side that laid it.
+  // Its own soldiers know the lanes through it; the enemy walks through slowly.
+  // Explosions cut segments away (destruction.wire).
+  wireBelts?: WireSegment[];
   // Draw distant land, the continuing front and its life past the terrain edge
   // (src/backdrop.ts) instead of a perimeter wall.
   backdrop?: boolean;
@@ -603,6 +607,13 @@ export function inBoundaryWire(x: number, z: number, map: MapDefinition) {
   if (!map.boundary) return false;
   const beyond = beyondPlayArea(x, z, map);
   return beyond > 0 && beyond < map.boundary.wireDepth;
+}
+export type WireSegment = { id: string; team: "blue" | "red"; x: number; z: number; w: number; d: number };
+// Inside the boundary belt, or an intact segment of the enemy's belt.
+export function inWire(x: number, z: number, map: MapDefinition, team?: "blue" | "red") {
+  if (inBoundaryWire(x, z, map)) return true;
+  const cut = map.destruction?.wire;
+  return !!map.wireBelts?.some((b) => b.team !== team && !cut?.[b.id] && Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
 }
 export function bodyBlocked(x: number, z: number, feet: number, r: number, map: MapDefinition, bodyHeight = 1.8): boolean {
   return outOfBounds(x, z, 1 + r, map) ||

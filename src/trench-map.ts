@@ -11,6 +11,7 @@ import {
   type Box,
   type TrenchLine,
   type CommunicationRoute,
+  type WireSegment,
 } from "./map";
 import { buildTrenchRelief, buildTrenchElevation } from "./terrain-relief";
 
@@ -160,6 +161,21 @@ for (const line of trenchLines) {
             (row - (counts[segment] - 1) / 2) * 1.2,
         });
       });
+}
+// Wire belts 5 m in front of each front line's parapet, following its zigzag
+// in 4 m segments. Gaps face the defenders' own flags and the centre, where
+// assaults close in; shells and grenades cut more.
+const beltGaps = { blue: [-33, 35, -1], red: [-27, 31, -1] };
+const wireBelts: WireSegment[] = [];
+for (const line of trenchLines) {
+  if (line.role !== "front") continue;
+  const side = line.team === "blue" ? -1 : 1;
+  for (const s of line.sections) {
+    const x = s.x - side * 9.5;
+    for (let z = s.z - s.length / 2 + 2; z <= s.z + s.length / 2 - 2; z += 4)
+      if (!beltGaps[line.team].some((gap) => Math.abs(z - gap) < 4))
+        wireBelts.push({ id: `belt-${line.team}-${z}`, team: line.team, x, z, w: 3, d: 4 });
+  }
 }
 // Every line runs on past the north and south edges of the sector: the front
 // continues beyond the wire. These stubs carry no firing steps or routes.
@@ -414,6 +430,7 @@ export const trenchMap: MapDefinition = {
   playArea: { width: playWidth, depth: playDepth },
   boundary: { warningTicks: 5 * 30, wireDepth: 3 },
   backdrop: true,
+  wireBelts,
   navSpacing: 4,
   scoring: "domination",
   spawn: {

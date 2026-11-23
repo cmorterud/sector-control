@@ -100,6 +100,8 @@ export interface DestructionState {
   // Kit pieces that lost their support, with the tick on which each falls.
   failing?: Record<string, number>;
   tick?: number;
+  // Wire belt segments blown apart.
+  wire?: Record<string, true>;
 }
 export interface DestructionChange {
   geometry?: boolean;
@@ -114,6 +116,8 @@ export interface DestructionChange {
   terrain: { key: string; depth: number }[];
   objects: { id: string; hp: number; stage: number }[];
   patches: string[];
+  // Wire belt segments this explosion cut.
+  wire?: string[];
 }
 export function runtimeMap(source: MapDefinition): MapDefinition {
   const map: MapDefinition = {
@@ -504,7 +508,16 @@ export function deformExplosion(
       relax();
     }
   }
-  if (!edits.size && !objects.length) return null;
+  // Blasts cut wire belt segments within reach (about 2.4 m for a shell, 1.4 m
+  // for a grenade: shellfire was poor at clearing wire); flame does not.
+  const cutReach = profile.kind === "flame" ? 0 : Math.min(2.5, profile.radius * 0.2), wire: string[] = [];
+  for (const b of map.wireBelts ?? []) {
+    if (state.wire?.[b.id]) continue;
+    const dx = Math.max(0, Math.abs(at.x - b.x) - b.w / 2), dz = Math.max(0, Math.abs(at.z - b.z) - b.d / 2);
+    if (Math.hypot(dx, dz) < cutReach) wire.push(b.id);
+  }
+  for (const id of wire) (state.wire ??= {})[id] = true;
+  if (!edits.size && !objects.length && !wire.length) return null;
   const patches = new Set<string>();
   const bounds: [number, number, number, number] = [
     Infinity,
@@ -562,7 +575,9 @@ export function deformExplosion(
     wallSamples,
     ...(collapses.length ? { collapses } : {}),
     ...(failing.length ? { failing } : {}),
-    geometry: true,
+    ...(wire.length ? { wire } : {}),
+    // Cutting wire alone changes no collision geometry.
+    geometry: edits.size > 0 || objects.length > 0,
     at: { ...at },
     crater,
     terrain: [...edits].map(([key, depth]) => ({ key, depth })),

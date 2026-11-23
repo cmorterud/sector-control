@@ -946,7 +946,8 @@ try {
         fortDetails["yard-east"] = [yard.x1 + 5.5, z, 0, z];
       }
       // Across the boundary wire behind Blue's spawn, and up Blue's front line to its trench block.
-      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22]};
+      // "no-mans-land" looks from the centre over a crater pond to Blue's wire belt.
+      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-15,-12,-7]};
       // Along a rear trench to its first dugout, and in front of the first signboard.
       const dugout=map.backdrop?dugouts(map)[0]:undefined,sign=map.backdrop?signboards(map)[0]:undefined;
       if(dugout)trenchDetails["trench-dugout"]=[dugout.x-dugout.rear*1.2,dugout.z+4.5,dugout.x,dugout.z];

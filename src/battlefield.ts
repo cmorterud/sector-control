@@ -1,4 +1,5 @@
 import { distantFlashes } from "./backdrop";
+import { inCraterPond } from "./no-mans-land";
 import { groundField, villageRoad } from "./ground-surface";
 import { treeHasCrown } from "./vegetation";
 import { inFortRect } from "./fort-vaux-map";
@@ -6,6 +7,7 @@ import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
   groundHeight,
+  inWire,
   playArea,
   supportHeight,
   type MapDefinition,
@@ -43,6 +45,7 @@ export type SoundKind =
   | "branchSnap"
   | "distantBattle"
   | "wireWind"
+  | "wireSnag"
   | "distantGun"
   | "crow"
   | "voice";
@@ -116,7 +119,7 @@ export function footSurface(
   if (board && intactBoard(board, map)) return "wood";
   const y = groundHeight(p.x, p.z, map);
   if (map.woodland && y > 1.5 && y >= baseGroundHeight(p.x, p.z, map) - .15 && groundField(map,p.x,p.z).litter > .35) return "leaves";
-  return "mud";
+  return inCraterPond(p, map) ? "splash" : "mud";
 }
 
 // Presentation only: never writes commands, simulation state or gameplay RNG.
@@ -131,6 +134,7 @@ export class BattlefieldFeedback {
   private nextCreak = 0;
   private nextDistant = 0;
   private nextWireWind = 0;
+  private nextSnag = 0;
   private nextGun = 0;
   private nextCrow = 0;
   private nextDrip = 0;
@@ -171,6 +175,7 @@ export class BattlefieldFeedback {
     this.nextCreak = 210;
     this.nextDistant = 400;
     this.nextWireWind = 90;
+    this.nextSnag = 0;
     this.nextGun = 240;
     this.nextCrow = 600;
     this.nextDrip = 60;
@@ -381,6 +386,13 @@ export class BattlefieldFeedback {
     if (g.map.backdrop && g.phase === "playing" && listener.hp > 0) {
       this.backdropRumble(g);
       this.trenchAmbience(g);
+    }
+    // Pushing through wire snags and rattles it.
+    if (g.phase === "playing" && listener.hp > 0 && g.tick >= this.nextSnag && Math.hypot(listener.vx, listener.vz) > 0.4 &&
+        inWire(listener.x, listener.z, g.map, listener.team)) {
+      this.nextSnag = g.tick + 10 + Math.floor(Math.abs(Math.sin(g.tick * 3.1)) * 9);
+      this.cue(g, "wireSnag", { x: listener.x, y: listener.y + 0.6, z: listener.z }, 0.1, true, false, g.tick);
+      this.stats.trenchSounds++;
     }
     if (g.map.fort && g.phase === "playing" && listener.hp > 0 && Math.hypot(listener.x, listener.z) < 13 && g.tick >= this.nextDrip) {
       const offset = Math.sin(g.tick * 7.27);

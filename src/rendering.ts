@@ -12,6 +12,7 @@ import { architecturePixels, architecturalTextures, cisternWaterNormals, type Ar
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
 import { brazierSites, clothScraps, mistBanks, type MistBank } from "./atmosphere";
+import { craterPonds, noMansLandDebris, wireBeltGeometry } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
 import { backdropBalloons, backdropBoxMesh, backdropGround, backdropScenery, backdropSmoke, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
 import { villageGardenProps } from "./village-outdoors";
@@ -188,6 +189,8 @@ export class Renderer implements CollisionWorld {
   materials = new Map<string, pc.StandardMaterial>();
   private architecturalModels?: Map<string,{surface:ArchitectureSurface;meshKey:string}[]>;
   private coastalSea?: {water:pc.StandardMaterial;foam:pc.StandardMaterial;time:number;pending:number};
+  // Intact and cut no-man's-land wire, rebuilt when a blast cuts a segment.
+  private wireBelts?: pc.Entity;
   // Ground mist, brazier and crater smoke, and cloth on the wire.
   private atmosphere?: {
     root: pc.Entity;
@@ -488,6 +491,7 @@ export class Renderer implements CollisionWorld {
     if (map.backdrop) {
       this.buildBackdrop();
       this.buildTrenchDressing();
+      this.buildNoMansLand();
     }
     if (this.look.atmosphere) this.buildAtmosphere();
     for (const [x, z, w, d] of map.coast || map.backdrop ? [] : [
@@ -1484,6 +1488,7 @@ export class Renderer implements CollisionWorld {
     }
     invalidateTerrainNormals(this.map,change);
     this.terrainGeometryCache?.invalidate(change);
+    if (change.wire?.length) this.buildWireBelts();
     // Overlapping blasts share one rebuild per patch; see flushTerrainWork.
     for (const key of change.patches) this.terrainWork.add(key);
     for (const changed of change.objects) {
@@ -1922,6 +1927,68 @@ export class Renderer implements CollisionWorld {
     }
     return m;
   }
+  // Standing water in old craters and flat debris, then the wire belts.
+  private buildNoMansLand() {
+    const device = this.app.graphicsDevice, root = this.joint("no-man's land", this.mapRoot);
+    const pond = new pc.Mesh(device), positions: number[] = [], normals: number[] = [], indices: number[] = [];
+    for (const p of craterPonds(this.map)) {
+      const centre = positions.length / 3;
+      positions.push(p.x, p.y, p.z);
+      normals.push(0, 1, 0);
+      for (let i = 0; i < 20; i++) {
+        const a = (i / 20) * Math.PI * 2, r = p.radius * (0.92 + 0.08 * Math.sin(i * 2.7));
+        positions.push(p.x + Math.cos(a) * r, p.y, p.z + Math.sin(a) * r);
+        normals.push(0, 1, 0);
+        indices.push(centre, centre + 1 + ((i + 1) % 20), centre + 1 + i);
+      }
+    }
+    const debris = backdropBoxMesh(noMansLandDebris(this.map)), litter = new pc.Mesh(device);
+    litter.setPositions(debris.positions);
+    litter.setNormals(debris.normals);
+    litter.setColors(debris.colors);
+    litter.setIndices(debris.indices);
+    litter.update(pc.PRIMITIVE_TRIANGLES);
+    const instances: pc.MeshInstance[] = [new pc.MeshInstance(litter, this.paintedMaterial(), root)];
+    if (indices.length) {
+      pond.setPositions(positions);
+      pond.setNormals(normals);
+      pond.setIndices(indices);
+      pond.update(pc.PRIMITIVE_TRIANGLES);
+      instances.push(new pc.MeshInstance(pond, this.sumpWater(), root));
+    }
+    root.addComponent("render", { meshInstances: instances, castShadows: false });
+    this.buildWireBelts();
+  }
+  private buildWireBelts() {
+    if (!this.map.wireBelts?.length) return;
+    this.wireBelts?.destroy();
+    const device = this.app.graphicsDevice, root = (this.wireBelts = this.joint("wire belts", this.mapRoot));
+    const wire = wireBeltGeometry(this.map), solids = backdropBoxMesh(wire.boxes), posts = new pc.Mesh(device);
+    posts.setPositions(solids.positions);
+    posts.setNormals(solids.normals);
+    posts.setColors(solids.colors);
+    posts.setIndices(solids.indices);
+    posts.update(pc.PRIMITIVE_TRIANGLES);
+    const strands = new pc.Mesh(device), lines = new Float32Array(wire.lines);
+    strands.setPositions(lines);
+    strands.setNormals(new Float32Array(lines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
+    strands.update(pc.PRIMITIVE_LINES);
+    const instances = [new pc.MeshInstance(posts, this.paintedMaterial(), root), new pc.MeshInstance(strands, this.material("#2b2824"), root)];
+    instances[0].castShadow = true;
+    instances[1].castShadow = false;
+    root.addComponent("render", { meshInstances: instances });
+  }
+  private sumpWater() {
+    let pool = this.materials.get("sump water");
+    if (!pool) {
+      pool = new pc.StandardMaterial();
+      pool.diffuse = color("#1b1f1d");
+      pool.gloss = 0.9;
+      pool.update();
+      this.materials.set("sump water", pool);
+    }
+    return pool;
+  }
   // Parados sandbags, props, dugouts, signs and sump water along the lines.
   private buildTrenchDressing() {
     const device = this.app.graphicsDevice, root = this.joint("trench dressing", this.mapRoot);
@@ -1947,15 +2014,7 @@ export class Renderer implements CollisionWorld {
     water.setNormals(wn);
     water.setIndices(wi);
     water.update(pc.PRIMITIVE_TRIANGLES);
-    let pool = this.materials.get("sump water");
-    if (!pool) {
-      pool = new pc.StandardMaterial();
-      pool.diffuse = color("#1b1f1d");
-      pool.gloss = 0.9;
-      pool.update();
-      this.materials.set("sump water", pool);
-    }
-    const instances = [new pc.MeshInstance(shapes, this.paintedMaterial(), root), new pc.MeshInstance(cable, this.material("#1f1c18"), root), new pc.MeshInstance(water, pool, root)];
+    const instances = [new pc.MeshInstance(shapes, this.paintedMaterial(), root), new pc.MeshInstance(cable, this.material("#1f1c18"), root), new pc.MeshInstance(water, this.sumpWater(), root)];
     instances[0].castShadow = true;
     instances[1].castShadow = instances[2].castShadow = false;
     root.addComponent("render", { meshInstances: instances });
