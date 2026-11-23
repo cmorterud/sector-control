@@ -62,6 +62,7 @@ killNotice.setAttribute("role", "status");
 el("hud").append(battleSidebar, killNotice);
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
+let displayedScoreboard = "";
 const escapePause = new EscapePause();
 let mouseCaptureNeeded = false,
   mouseCapturePending = false;
@@ -329,6 +330,8 @@ function start() {
   renderer.reset(game);
   battlefield.reset(game);
   combatFeedback.reset();
+  displayedScoreboard = "";
+  el("scoreboard").replaceChildren();
   audio ??= new BattleAudio();
   audio.reset();
   audio.volume(audioVolume);
@@ -575,11 +578,18 @@ function hud(now: number) {
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
-  if (held("scoreboard")) {
-    el("scoreboard").classList.remove("hidden");
-    el("scoreboard").innerHTML =
-      `<section class="panel"><div class="eyebrow">LIVE OPERATION</div><h2>Scoreboard</h2>${table()}</section>`;
-  } else el("scoreboard").classList.add("hidden");
+  const scoreboard = el("scoreboard");
+  const showScoreboard = held("scoreboard");
+  scoreboard.classList.toggle("hidden", !showScoreboard);
+  if (showScoreboard) {
+    const standings = table();
+    if (standings !== displayedScoreboard) {
+      const scroll = scoreboard.querySelector(".rosters")?.scrollTop ?? 0;
+      scoreboard.innerHTML = `<section class="panel"><div class="eyebrow">LIVE OPERATION</div><h2>Scoreboard</h2>${standings}</section>`;
+      scoreboard.querySelector(".rosters")!.scrollTop = scroll;
+      displayedScoreboard = standings;
+    }
+  }
   el("labels").classList.toggle("aiming", aim);
   el("labels").innerHTML =
     game.scoring === "eliminations" || (training&&training.lesson<6)

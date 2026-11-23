@@ -1,5 +1,6 @@
 import {angleDelta} from "./awareness";
-import {combatRules,soldierName,type DeathReport} from "./combat-history";
+import {combatRules,type DeathReport} from "./combat-history";
+import {soldierName} from "./soldier-names";
 import type {Event,Game,Team,V3} from "./simulation";
 
 export type DeathView={yaw:number;pitch:number;zoom:number};
