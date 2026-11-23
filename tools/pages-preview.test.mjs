@@ -4,7 +4,7 @@ import {mkdtemp, mkdir, writeFile, readFile, rm, symlink, link} from 'node:fs/pr
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {basePath, safePath, staticFiles, gitHash, stamp, validateBuild, isCurrentPR, replaceBuild, verifyPublished, readPublishedManifest, resolveContext, stageSite, reportPreview, awaitArtifact} from './pages-preview.mjs';
+import {basePath, safePath, staticFiles, gitHash, stamp, validateBuild, isCurrentPR, replaceBuild, verifyPublished, readPublishedManifest, resolveContext, stageSite, reportPreview} from './pages-preview.mjs';
 
 const repository = 'cmorterud/sector-control', head = 'a'.repeat(40), source = 'b'.repeat(40);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -260,25 +260,24 @@ test('publication resolver refuses failed, stale, fork and wrong-workflow runs b
   });
 });
 
-test('deployment waits for this attempt\'s artifact to be listed, and refuses duplicates', async () => {
-  const listed = {name: 'github-pages-2', id: 7, size_in_bytes: 10};
-  let polls = 0, waits = 0;
-  const lagging = async name => (assert.equal(name, 'github-pages-2'), ++polls < 3 ? [] : [listed]);
-  assert.equal(await awaitArtifact('github-pages-2', lagging, {wait: async () => {waits++;}}), listed);
-  assert.deepEqual([polls, waits], [3, 2]);
-  // An expired or differently named artifact is not this attempt's upload.
-  const stale = async () => [{name: 'github-pages-1', id: 1}, {name: 'github-pages-2', id: 2, expired: true}];
-  await assert.rejects(awaitArtifact('github-pages-2', stale, {attempts: 3, wait: async () => {}}), /not listed after 3 checks/);
-  await assert.rejects(awaitArtifact('github-pages-2', async () => [listed, {...listed, id: 8}], {wait: async () => {}}), /2 artifacts named/);
-  await assert.rejects(awaitArtifact('../other', lagging), /Invalid Pages artifact name/);
-});
-
-test('the publisher uploads, awaits and deploys one artifact name per attempt, in that order', async () => {
+test('the publisher deploys one artifact name per attempt and retries only a failed deployment', async () => {
   const workflow = await readFile(new URL('../.github/workflows/pages.yml', import.meta.url), 'utf8');
   const name = 'github-pages-${{ github.run_attempt }}';
-  const upload = workflow.indexOf(`name: ${name}`), wait = workflow.indexOf(`PAGES_ARTIFACT: ${name}`);
-  const run = workflow.indexOf('node tools/pages-preview.mjs artifact'), deploy = workflow.indexOf(`artifact_name: ${name}`);
-  assert.ok(upload > 0 && upload < wait && wait < run && run < deploy, 'upload, wait, then deploy');
-  assert.ok(workflow.indexOf('actions/deploy-pages@') > run, 'the deployment step follows the wait');
-  assert.equal(workflow.split(name).length - 1, 3);
+  // One upload and three deployment steps all use this attempt's name.
+  assert.equal(workflow.split(`name: ${name}`).length - 1, 4);
+  assert.equal(workflow.split(`artifact_name: ${name}`).length - 1, 3);
+  const steps = workflow.split(/\n      - /).filter(step => step.includes('actions/deploy-pages@'));
+  assert.equal(steps.length, 3);
+  const [first, retry, final] = steps;
+  assert.match(first, /id: deploy\n/);
+  assert.doesNotMatch(first, /outcome/);
+  assert.match(retry, /steps\.deploy\.outcome == 'failure'/);
+  assert.match(final, /steps\.deploy_retry\.outcome == 'failure'/);
+  // Only the last attempt may fail the job.
+  assert.match(first, /continue-on-error: true/);
+  assert.match(retry, /continue-on-error: true/);
+  assert.doesNotMatch(final, /continue-on-error/);
+  for (const step of steps) assert.match(step, /steps\.context\.outputs\.publish == 'true'/);
+  assert.ok(workflow.indexOf('upload-pages-artifact@') < workflow.indexOf('deploy-pages@'));
+  assert.match(workflow, /url: \$\{\{ steps\.deploy\.outputs\.page_url \|\| steps\.deploy_retry\.outputs\.page_url \|\| steps\.deploy_final\.outputs\.page_url \}\}/);
 });
