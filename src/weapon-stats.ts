@@ -50,7 +50,8 @@ export interface WeaponStats {
   summary: string;
 }
 
-const rifleDamage = { head: 150, chest: 100, stomach: 65, arms: 35, legs: 40 };
+// A rifle chest hit leaves a full-health soldier standing; the head still kills (#31).
+const rifleDamage = { head: 150, chest: 85, stomach: 65, arms: 35, legs: 40 };
 const scopedDamage = { head: 150, chest: 120, stomach: 80, arms: 45, legs: 50 };
 const machineGunDamage = { head: 70, chest: 38, stomach: 34, arms: 20, legs: 22 };
 const pistolFalloff = { start: 25, end: 50, minimum: 0.6 };
