@@ -70,6 +70,19 @@ export function villageRoad(map: MapDefinition, x: number, z: number) {
     (1 - smooth(29, 36, Math.abs(x)));
   return Math.max(main, cross);
 }
+// 1 in no-man's land and beside a trench, falling to 0 on the open rear ground.
+export function trenchChurn(map: MapDefinition, x: number, z: number) {
+  const lines = map.terrain?.trenchLines ?? [];
+  let front = Infinity, trench = Infinity;
+  for (const line of lines)
+    for (const s of line.sections) {
+      if (line.role === "front") front = Math.min(front, Math.abs(s.x));
+      trench = Math.min(trench, Math.hypot(Math.max(0, Math.abs(x - s.x) - 2), Math.max(0, Math.abs(z - s.z) - s.length / 2)));
+    }
+  if (front === Infinity) return 0;
+  const between = (1 - smooth(front - 6, front, Math.abs(x))) * (0.75 + lookNoise(x * 0.09 + 3, z * 0.09) * 0.25);
+  return Math.max(between, (1 - smooth(1.5, 7, trench)) * 0.8);
+}
 export function groundField(map: MapDefinition, x: number, z: number) {
   const c = context(map);
   const wx = x + (lookNoise(x * 0.028 + 17, z * 0.028) - 0.5) * 9;
@@ -94,6 +107,14 @@ export function groundField(map: MapDefinition, x: number, z: number) {
     (0.35 + smooth(8, 42, Math.abs(x)) * 0.65) * (1 - litter * .85);
   const indoors=map.buildings?.some(b=>Math.abs(x-b.x)<b.w/2 && Math.abs(z-b.z)<b.d/2);
   const yard=villageYardSurface(map,x,z),gravel=indoors?0:Math.max(yard.gravel,yard.path),garden=indoors?0:yard.garden;
+  // The Trench front is churned: no-man's land between the front lines is
+  // bare, wet earth, and the ground within a few metres of any trench is
+  // trodden mud. Grass survives only on the rear ground.
+  const churn = map.id === "trenches" ? trenchChurn(map, x, z) : 0;
+  if (churn > 0) {
+    wet = Math.max(wet, churn * (0.4 + lookNoise(x * 0.13 + 5, z * 0.13 - 8) * 0.55));
+    return { wet, dry: dry * (1 - churn * 0.8), grass: grass * (1 - churn), wear: Math.max(wear, churn * 0.55), litter, gravel, garden };
+  }
   return { wet, dry, grass:indoors?0:grass*(1-Math.max(gravel,yard.paving)),
     wear:indoors?Math.max(.8,wear):Math.max(wear,gravel*.8,yard.paving*.9), litter, gravel,garden };
 }
@@ -177,11 +198,13 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
       const shade =
         0.83 + dry * 0.18 - wet * 0.25 - wear * 0.12 + detail * 0.52;
       const i = (row * size + col) * 4;
+      // Trench front grass is winter-dead straw rather than green.
+      const tint = map.id === "trenches" ? [0.05, 0.03, 0.17] : [0.15, -0.015, 0.105];
       diffuse.set(
         [
-          clamp(shade - grass * 0.15) * 255,
-          clamp(shade * 0.94 + grass * 0.015) * 255,
-          clamp(shade * 0.83 - grass * 0.105) * 255,
+          clamp(shade - grass * tint[0]) * 255,
+          clamp(shade * 0.94 - grass * tint[1]) * 255,
+          clamp(shade * 0.83 - grass * tint[2]) * 255,
           255,
         ],
         i,

@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   groundField,
   groundSurfacePixels,
+  trenchChurn,
   groundPuddles,
   groundRubble,
 } from "./ground-surface";
@@ -27,6 +28,31 @@ it("spreads distinct wet, dry and faded grass areas over the field and wears aut
       groundField(trenchMap, r.entrance.x, r.entrance.z).wear,
     ).toBeGreaterThanOrEqual(0.35);
   expect(groundField(trenchMap, -75, 56).wear).toBe(0);
+});
+
+it("churns no-man's land and the trench sides to bare wet mud, keeping grass on the rear ground", () => {
+  const mean = (points: [number, number][], key: "wet" | "grass" | "wear") =>
+    points.reduce((n, [x, z]) => n + groundField(trenchMap, x, z)[key], 0) / points.length;
+  const grid = (x0: number, x1: number) => {
+    const out: [number, number][] = [];
+    for (let x = x0; x <= x1; x += 2) for (let z = -50; z <= 50; z += 5) out.push([x, z]);
+    return out;
+  };
+  const noMans = grid(-10, 10), rear = [...grid(-76, -62), ...grid(62, 76)];
+  expect(mean(noMans, "grass")).toBeLessThan(0.03);
+  expect(mean(rear, "grass")).toBeGreaterThan(mean(noMans, "grass") * 5);
+  expect(mean(noMans, "wet")).toBeGreaterThan(mean(rear, "wet"));
+  expect(mean(noMans, "wear")).toBeGreaterThan(0.35);
+  for (const [x, z] of noMans) expect(trenchChurn(trenchMap, x, z)).toBeGreaterThan(0.7);
+  // Beside a rear trench the ground is trodden; 20 m behind it, it is not.
+  expect(trenchChurn(trenchMap, -44.5, 13)).toBeGreaterThan(0.5);
+  expect(trenchChurn(trenchMap, -70, 13)).toBe(0);
+  expect(trenchChurn(industrialMap, 0, 0)).toBe(0);
+  // Dead grass bakes as straw: no greener than it is red.
+  const size = 96, pixels = groundSurfacePixels(trenchMap, size).diffuse;
+  let greener = 0;
+  for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 1] > pixels[i]) greener++;
+  expect(greener).toBe(0);
 });
 
 it("bakes a reproducible map-wide surface without a repeated three-meter color/normal/gloss tile", () => {
