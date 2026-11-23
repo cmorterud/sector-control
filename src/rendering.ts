@@ -11,6 +11,7 @@ import type {DeathView} from "./combat-feedback";
 import { architecturePixels, architecturalTextures, cisternWaterNormals, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
+import { backdropBalloons, backdropBoxMesh, backdropGround, backdropScenery, backdropSmoke, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
@@ -184,6 +185,14 @@ export class Renderer implements CollisionWorld {
   materials = new Map<string, pc.StandardMaterial>();
   private architecturalModels?: Map<string,{surface:ArchitectureSurface;meshKey:string}[]>;
   private coastalSea?: {water:pc.StandardMaterial;foam:pc.StandardMaterial;time:number;pending:number};
+  // Balloons, smoke columns, distant bursts and flares beyond the terrain edge.
+  private backdrop?: {
+    life: pc.Entity;
+    balloons: pc.Entity[];
+    smoke: { puffs: pc.Entity[]; scale: number }[];
+    flashes: { glow: pc.Entity; plume: pc.Entity; glowMaterial: pc.StandardMaterial; plumeMaterial: pc.StandardMaterial }[];
+    flares: { glow: pc.Entity; material: pc.StandardMaterial }[];
+  };
   private textures = new Map<string, pc.Texture>();
   private kitMeshes = new Map<string, pc.Mesh>();
   private look!: MapLook;
@@ -307,7 +316,7 @@ export class Renderer implements CollisionWorld {
       clearColor: color(look.sky.horizon),
       fov: 70,
       nearClip: 0.08,
-      farClip: trenches ? 210 : 180,
+      farClip: look.farClip ?? (trenches ? 210 : 180),
     });
     this.app.root.addChild(this.camera);
     const sun = this.sun = new pc.Entity("sun");
@@ -465,7 +474,8 @@ export class Renderer implements CollisionWorld {
       this.buildDestructible(object);
     if (map.coast) this.buildCoast();
     if (map.boundary) this.buildBoundaryWire();
-    for (const [x, z, w, d] of map.coast ? [] : [
+    if (map.backdrop) this.buildBackdrop();
+    for (const [x, z, w, d] of map.coast || map.backdrop ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
       [-map.width / 2, 0, 1, map.depth],
@@ -1793,6 +1803,123 @@ export class Renderer implements CollisionWorld {
     sign.setEulerAngles(90, yaw, 0);
     sign.setLocalScale(1.55, 1, .39);
   }
+  // Distant land, the continuing front and its silhouettes as three static
+  // meshes, plus a few animated entities that Low quality leaves out.
+  private buildBackdrop() {
+    const device = this.app.graphicsDevice, root = this.joint("backdrop", this.mapRoot);
+    const ground = backdropGround(this.map), land = new pc.Mesh(device);
+    land.setPositions(ground.positions);
+    land.setNormals(ground.normals);
+    land.setUvs(0, ground.uvs!);
+    land.setVertexStream(pc.SEMANTIC_TANGENT, pc.calculateTangents(ground.positions, ground.normals, ground.uvs!, ground.indices), 4);
+    land.setColors(ground.colors);
+    land.setIndices(ground.indices);
+    land.update(pc.PRIMITIVE_TRIANGLES);
+    const soil = this.surfaceMaterial("mud", "#ffffff");
+    soil.diffuseVertexColor = true;
+    soil.update();
+    const scenery = backdropScenery(this.map), solids = backdropBoxMesh(scenery.boxes), shapes = new pc.Mesh(device);
+    shapes.setPositions(solids.positions);
+    shapes.setNormals(solids.normals);
+    shapes.setColors(solids.colors);
+    shapes.setIndices(solids.indices);
+    shapes.update(pc.PRIMITIVE_TRIANGLES);
+    let painted = this.materials.get("backdrop scenery");
+    if (!painted) {
+      painted = new pc.StandardMaterial();
+      painted.diffuseVertexColor = true;
+      painted.gloss = 0.08;
+      painted.update();
+      this.materials.set("backdrop scenery", painted);
+    }
+    const wires = new pc.Mesh(device), wireLines = new Float32Array(scenery.lines);
+    wires.setPositions(wireLines);
+    wires.setNormals(new Float32Array(wireLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
+    wires.update(pc.PRIMITIVE_LINES);
+    const instances = [new pc.MeshInstance(land, soil, root), new pc.MeshInstance(shapes, painted, root), new pc.MeshInstance(wires, this.material("#2b2824"), root)];
+    for (const instance of instances) instance.castShadow = false;
+    root.addComponent("render", { meshInstances: instances });
+    const life = this.joint("backdrop life", root);
+    const shape = (name: string, parent: pc.Entity, type: "box" | "sphere" | "plane", material: pc.Material, scale: [number, number, number], at: [number, number, number] = [0, 0, 0]) => {
+      const e = this.joint(name, parent, ...at);
+      e.addComponent("render", { type, material, castShadows: false, receiveShadows: false });
+      e.setLocalScale(...scale);
+      return e;
+    };
+    const balloons = backdropBalloons.map((b) => {
+      const balloon = this.joint("observation balloon", life, b.x, b.y, b.z);
+      const canvas = this.material("#9d9784");
+      shape("balloon envelope", balloon, "sphere", canvas, [6.5, 6.5, 17]);
+      for (const [x, y, w, h] of [[0, 3.6, 0.3, 4.5], [3.4, -1.2, 4.2, 0.3], [-3.4, -1.2, 4.2, 0.3]])
+        shape("balloon fin", balloon, "box", canvas, [w, h, 3.8], [x, y, -8.4]);
+      shape("balloon basket", balloon, "box", this.material("#4a3f31"), [1.2, 1, 1.2], [0, -5.5, 1]);
+      shape("balloon tether", balloon, "box", this.material("#2b2824"), [0.05, b.y, 0.05], [0, -b.y / 2 - 5, 1]);
+      return balloon;
+    });
+    const smoke = backdropSmoke.map((s) => {
+      const column = this.joint("distant smoke", life, s.x, this.map.terrain!.bankHeight, s.z), material = this.dustMaterial("#86888a");
+      material.opacity = 0.42;
+      material.update();
+      return { puffs: Array.from({ length: 12 }, () => shape("smoke puff", column, "plane", material, [1, 1, 1])), scale: s.scale };
+    });
+    const flashes = Array.from({ length: 3 }, () => {
+      const glowMaterial = this.dustMaterial("#ffd08a"), plumeMaterial = this.dustMaterial("#4d4740");
+      return { glow: shape("distant burst", life, "plane", glowMaterial, [1, 1, 1]), plume: shape("distant burst plume", life, "plane", plumeMaterial, [1, 1, 1]), glowMaterial, plumeMaterial };
+    });
+    const flares = Array.from({ length: 2 }, () => {
+      const material = this.dustMaterial("#f2ffe6");
+      return { glow: shape("distant flare", life, "plane", material, [1, 1, 1]), material };
+    });
+    this.backdrop = { life, balloons, smoke, flashes, flares };
+    life.enabled = this.quality !== "low";
+  }
+  private drawBackdrop(g: Game, alpha: number) {
+    const b = this.backdrop;
+    if (!b?.life.enabled) return;
+    const tick = g.tick + alpha, t = tick / 30;
+    b.balloons.forEach((balloon, i) => {
+      const spec = backdropBalloons[i];
+      balloon.setPosition(spec.x, spec.y + Math.sin(t * 0.31 + i * 2) * 1.4, spec.z);
+      balloon.setEulerAngles(Math.sin(t * 0.23 + i) * 2, (spec.yaw * 180) / Math.PI + Math.sin(t * 0.07 + i) * 6, 0);
+    });
+    for (const column of b.smoke)
+      column.puffs.forEach((puff, i) => {
+        const rise = (t * 0.035 + i / column.puffs.length) % 1, size = (4 + rise * 16) * column.scale;
+        puff.setLocalPosition(rise ** 1.4 * 16 * column.scale, rise * 40 * column.scale, Math.sin(i * 2.1) * 2);
+        this.faceCamera(puff, i * 37);
+        puff.setLocalScale(size, 1, size * 1.1);
+      });
+    const bursts = distantFlashes(this.map, g.tick - 45, g.tick + 1);
+    b.flashes.forEach((slot, i) => {
+      const flash = bursts[bursts.length - 1 - i], age = flash ? (tick - flash.tick) / 30 : Infinity;
+      slot.glow.enabled = age < 0.35;
+      slot.plume.enabled = age < 1.5;
+      if (!flash) return;
+      const glow = Math.max(0, 1 - age / 0.35);
+      slot.glow.setPosition(flash.x, flash.y + 2, flash.z);
+      this.faceCamera(slot.glow);
+      slot.glow.setLocalScale(6 + age * 20, 1, 6 + age * 20);
+      slot.glowMaterial.opacity = glow;
+      slot.glowMaterial.update();
+      slot.plume.setPosition(flash.x, flash.y + 3 + age * 5, flash.z);
+      this.faceCamera(slot.plume, i * 50);
+      slot.plume.setLocalScale(5 + age * 9, 1, 6 + age * 10);
+      slot.plumeMaterial.opacity = 0.55 * Math.max(0, 1 - age / 1.5);
+      slot.plumeMaterial.update();
+    });
+    const burning = distantFlares(g.tick - flareTicks, g.tick + 1);
+    b.flares.forEach((slot, i) => {
+      const flare = burning[burning.length - 1 - i], at = flare && flarePosition(flare, tick);
+      slot.glow.enabled = !!at?.burning;
+      if (!at?.burning) return;
+      slot.glow.setPosition(at.x, at.y, at.z);
+      this.faceCamera(slot.glow);
+      const flicker = 0.8 + 0.2 * Math.sin(tick * 1.7 + i);
+      slot.glow.setLocalScale(2.6 * flicker, 1, 2.6 * flicker);
+      slot.material.opacity = flicker;
+      slot.material.update();
+    });
+  }
   // One mesh of pickets and one of line wires for the whole boundary belt.
   private buildBoundaryWire() {
     const wire = boundaryWireGeometry(this.map);
@@ -2035,6 +2162,7 @@ export class Renderer implements CollisionWorld {
   // post-processing (tone mapping, grade, vignette and ambient occlusion).
   setQuality(quality: Quality) {
     this.quality = quality;
+    if (this.backdrop) this.backdrop.life.enabled = quality !== "low";
     const profile = qualityProfiles[quality], light = this.sun.light!, look = this.look;
     light.numCascades = profile.cascades;
     light.cascadeDistribution = 0.6;
@@ -4178,6 +4306,7 @@ export class Renderer implements CollisionWorld {
     this.drawSmoke(g, alpha);
     this.drawBlasts(dt);
     this.drawEnvironmentEffects(dt);
+    this.drawBackdrop(g, alpha);
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {
       fx.life -= dt;
