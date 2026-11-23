@@ -13,6 +13,7 @@ import { grenadeExplosionProfile } from "./destruction";
 import { artilleryExplosionProfile } from "./destruction";
 import { verdunMap } from "./verdun-map";
 import { groundHeight } from "./map";
+import { distantFlashes } from "./backdrop";
 function scene(trench = true) {
   const g = new Game(
     new TestCollision(trench ? trenchMap : { ...industrialMap, boxes: [] }),
@@ -46,6 +47,27 @@ describe("battlefield presentation", () => {
     expect(footSurface(point!,g.map)).toBe("mud");
     const plain=scene(false);plain.g.tick=500;plain.feedback.step(plain.g);
     expect(plain.cues).toHaveLength(0);
+  });
+  it("plays trench ambience: louder wind near the wire, distant guns, crows and bursts heard after their flash", () => {
+    const listen = (x: number) => {
+      const { g, feedback, cues, p } = scene();
+      Object.assign(p, { x, z: 0, y: groundHeight(x, 0, trenchMap) });
+      for (let t = 1; t <= 2400; t++) { g.tick = t; feedback.step(g); }
+      return { cues, p, g };
+    };
+    const nearWire = listen(-78), middle = listen(0);
+    const kinds = new Set(nearWire.cues.map((c) => c.kind));
+    for (const kind of ["wireWind", "distantGun", "crow", "distantBattle"] as const) expect(kinds.has(kind)).toBe(true);
+    const wind = (cues: SoundCue[]) => cues.find((c) => c.kind === "wireWind")!.volume;
+    expect(wind(nearWire.cues)).toBeGreaterThan(wind(middle.cues) * 2);
+    // Every rumble matches a timetabled burst, delayed by its distance at 343 m/s.
+    const rumbles = middle.cues.filter((c) => c.kind === "distantBattle");
+    expect(rumbles.length).toBeGreaterThan(10);
+    for (const r of rumbles) {
+      const flash = distantFlashes(trenchMap, 0, 2400).find((f) => f.x === r.at.x && f.z === r.at.z)!;
+      expect(flash).toBeDefined();
+      expect(r.seed - flash.tick).toBe(Math.round((Math.hypot(flash.x, flash.z) / 343) * 30));
+    }
   });
   it("plays crown breakage and falling timber for Verdun IDs, with bounded nearby sounds",()=>{
     const g=new Game(new TestCollision(verdunMap),false,5000,12345,undefined,{map:verdunMap});

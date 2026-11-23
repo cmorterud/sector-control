@@ -6,6 +6,7 @@ import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
   groundHeight,
+  playArea,
   supportHeight,
   type MapDefinition,
   type Vec,
@@ -41,6 +42,9 @@ export type SoundKind =
   | "forestCreak"
   | "branchSnap"
   | "distantBattle"
+  | "wireWind"
+  | "distantGun"
+  | "crow"
   | "voice";
 export type SoundCue = {
   kind: SoundKind;
@@ -126,6 +130,9 @@ export class BattlefieldFeedback {
   private nextWind = 0;
   private nextCreak = 0;
   private nextDistant = 0;
+  private nextWireWind = 0;
+  private nextGun = 0;
+  private nextCrow = 0;
   private nextDrip = 0;
   stats = {
     footsteps: 0,
@@ -135,6 +142,7 @@ export class BattlefieldFeedback {
     leafSteps: 0,
     waterSteps: 0,
     forestSounds: 0,
+    trenchSounds: 0,
     cracks: 0,
     rifles: 0,
     distantRifles: 0,
@@ -162,6 +170,9 @@ export class BattlefieldFeedback {
     this.nextWind = 60;
     this.nextCreak = 210;
     this.nextDistant = 400;
+    this.nextWireWind = 90;
+    this.nextGun = 240;
+    this.nextCrow = 600;
     this.nextDrip = 60;
     for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[])
       this.stats[key] = 0;
@@ -367,7 +378,10 @@ export class BattlefieldFeedback {
     }
     const listener = g.players[0];
     if (g.map.woodland && g.phase === "playing" && listener.hp > 0) this.forestAmbience(g);
-    if (g.map.backdrop && g.phase === "playing" && listener.hp > 0) this.backdropRumble(g);
+    if (g.map.backdrop && g.phase === "playing" && listener.hp > 0) {
+      this.backdropRumble(g);
+      this.trenchAmbience(g);
+    }
     if (g.map.fort && g.phase === "playing" && listener.hp > 0 && Math.hypot(listener.x, listener.z) < 13 && g.tick >= this.nextDrip) {
       const offset = Math.sin(g.tick * 7.27);
       this.nextDrip = g.tick + 42 + Math.floor(Math.abs(offset) * 85);
@@ -430,6 +444,30 @@ export class BattlefieldFeedback {
       const delay = Math.round((Math.hypot(flash.x - p.x, flash.z - p.z) / 343) * 30);
       if (flash.tick + delay === g.tick)
         this.cue(g, "distantBattle", { x: flash.x, y: flash.y + 3, z: flash.z }, 0.45, false, false, g.tick);
+    }
+  }
+  // Wind keening through the boundary wire (louder near it), a machine gun
+  // far up or down the line, and the occasional crow.
+  private trenchAmbience(g: Game) {
+    const p = g.players[0], n = Math.abs(Math.sin(g.tick * 2.113 + 0.7)), bank = g.map.terrain?.bankHeight ?? 0;
+    if (g.tick >= this.nextWireWind) {
+      this.nextWireWind = g.tick + 210 + Math.floor(n * 210);
+      const area = playArea(g.map), toX = area.width / 2 - Math.abs(p.x), toZ = area.depth / 2 - Math.abs(p.z);
+      const at = toX < toZ ? { x: Math.sign(p.x || 1) * area.width / 2, z: p.z } : { x: p.x, z: Math.sign(p.z || 1) * area.depth / 2 };
+      const volume = 0.014 + 0.05 * Math.max(0, 1 - Math.max(0, Math.min(toX, toZ)) / 30);
+      this.cue(g, "wireWind", { ...at, y: bank + 1 }, volume, false, false, g.tick);
+      this.stats.trenchSounds++;
+    }
+    if (g.tick >= this.nextGun) {
+      this.nextGun = g.tick + 270 + Math.floor(n * 330);
+      this.cue(g, "distantGun", { x: (n - 0.5) * 140, y: bank + 1, z: (n < 0.5 ? -1 : 1) * (130 + n * 80) }, 0.22, false, false, g.tick);
+      this.stats.trenchSounds++;
+    }
+    if (g.tick >= this.nextCrow) {
+      this.nextCrow = g.tick + 750 + Math.floor(n * 750);
+      const a = n * Math.PI * 2, r = 45 + n * 40;
+      this.cue(g, "crow", { x: p.x + Math.cos(a) * r, y: p.y + 12, z: p.z + Math.sin(a) * r }, 0.05, false, false, g.tick);
+      this.stats.trenchSounds++;
     }
   }
   private forestAmbience(g: Game) {

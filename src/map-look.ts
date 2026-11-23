@@ -1,3 +1,4 @@
+import type { Atmosphere } from "./atmosphere";
 import type { MapDefinition } from "./map";
 
 // Each map's light and mood: sun, generated sky, fog and colour grade.
@@ -14,6 +15,8 @@ export interface MapLook {
   ambient: number;
   // Camera far clip in metres; fog must close before it. Default 210 (180 on Industrial).
   farClip?: number;
+  // Ground mist, brazier and crater smoke, cloth on the wire (src/atmosphere.ts).
+  atmosphere?: Atmosphere;
 }
 
 export const mapLooks: Record<MapDefinition["id"], MapLook> = {
@@ -25,14 +28,17 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     grade: { brightness: 0, contrast: 1.05, saturation: 0.9, tint: "#fff3e3" },
     vignette: 0.3, exposure: 1.05, ambient: 1.35,
   },
-  // Cold grey dawn over no man's land.
+  // Cold grey dawn over no man's land: a low warm sun under a heavy cloud
+  // deck, long shadows, mist lying in the field and pooled in the trenches.
   trenches: {
-    sun: { color: "#ecd5bd", intensity: 0.95, elevation: 16, azimuth: 70, shadowStrength: 0.7 },
-    sky: { zenith: "#78879a", horizon: "#b5b9ba", ground: "#4b4e4b", clouds: 0.75, cloud: "#a9adb1", glow: "#e7cdb0" },
+    sun: { color: "#f2c9a0", intensity: 1.15, elevation: 14, azimuth: 70, shadowStrength: 0.72 },
+    sky: { zenith: "#66758a", horizon: "#aab0b3", ground: "#47483f", clouds: 0.85, cloud: "#959aa0", glow: "#efc497" },
     // Long enough to layer the distant woods, ruins and balloons into the haze.
     fog: { start: 30, end: 280 },
-    grade: { brightness: 0, contrast: 1.08, saturation: 0.82, tint: "#eaf0f6" },
-    vignette: 0.35, exposure: 1.1, ambient: 1.35, farClip: 420,
+    // Shadowed trench walls keep about the old brightness; the sky does the mood.
+    grade: { brightness: 0, contrast: 1.1, saturation: 0.78, tint: "#e4ecf3" },
+    vignette: 0.42, exposure: 1.05, ambient: 1.45, farClip: 420,
+    atmosphere: { fieldMist: 0.2, trenchMist: 0.16 },
   },
   // Overcast late morning; green-grey haze between the trees.
   verdun: {
