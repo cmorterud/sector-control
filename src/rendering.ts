@@ -43,6 +43,7 @@ import {
   casualtyRules,
 } from "./soldier-presentation";
 import {
+  lookNoise,
   surfacePixels,
   dustPixels,
   maxBlastClouds,
@@ -1534,7 +1535,46 @@ export class Renderer implements CollisionWorld {
       slab("concrete overhead", rect, b.baseY! + b.h, b.h, "#777a71", roof, "fort-concrete");
     }
     this.batchGroup = this.mapBatch;
-    slab("open yard paving", fort.yard, .025, .04, "#8f8473", this.mapRoot);
+    const { yard, yardPassage } = fort;
+    const mouthStart = yardPassage.z - yardPassage.width / 2;
+    const mouthEnd = yardPassage.z + yardPassage.width / 2;
+    const drainX = (yard.x0 + yard.x1) / 2;
+    const drainWidth = .44;
+    slab("west yard paving", { ...yard, x1: drainX - drainWidth / 2 }, .045, .06, "#a29988", this.mapRoot);
+    slab("east yard paving", { ...yard, x0: drainX + drainWidth / 2 }, .045, .06, "#a29988", this.mapRoot);
+    slab("yard drainage channel", { ...yard, x0: drainX - drainWidth / 2, x1: drainX + drainWidth / 2 },
+      .01, .025, "#42483e", this.mapRoot, "slate");
+    for (const side of [-1, 1]) {
+      const edge = drainX + side * drainWidth / 2;
+      slab("stone drain edging", { ...yard, x0: edge - .055, x1: edge + .055 },
+        .05, .046, "#a6a399", this.mapRoot);
+    }
+    for (const end of [yard.z0 + .45, yard.z1 - .45]) {
+      for (let bar = -3; bar <= 3; bar++) {
+        this.cube("iron drain grate", drainX, .026, end + bar * .09, drainWidth, .032, .043, "#434640", false, this.mapRoot);
+      }
+    }
+    const overhang = .28;
+    const coping = (rect: FortRect) =>
+      slab("yard wall coping", rect, 4.46, .21, "#a8a699", this.mapRoot);
+    for (const z of [yard.z0, yard.z1]) {
+      coping({ x0: yard.x0 - overhang, x1: yard.x1 + overhang, z0: z - overhang, z1: z + overhang });
+    }
+    for (const x of [yard.x0, yard.x1]) {
+      coping({ x0: x - overhang, x1: x + overhang, z0: yard.z0 + overhang, z1: mouthStart });
+      coping({ x0: x - overhang, x1: x + overhang, z0: mouthEnd, z1: yard.z1 - overhang });
+      // The stone frame sits outside the clear passage and carries the visible end of its roof.
+      const portal = { x0: x - .45, x1: x + .45, z0: mouthStart - .37, z1: mouthEnd + .37 };
+      slab("yard portal lintel", portal, 3.42, .585, "#b0a18c", this.mapRoot);
+      slab("yard portal cornice", { ...portal, x0: x - .52, x1: x + .52 },
+        4.50, .27, "#a8a699", this.mapRoot);
+      for (const jamb of [{ ...portal, z1: mouthStart + .22 }, { ...portal, z0: mouthEnd - .22 }]) {
+        slab("yard portal jamb", jamb, 2.85, 2.85, "#b0a18c", this.mapRoot);
+      }
+      slab("yard threshold", { x0: x - .46, x1: x + .46, z0: mouthStart, z1: mouthEnd },
+        .054, .065, "#a9a79a", this.mapRoot);
+    }
+    this.fortYardBanks(yard, mouthStart, mouthEnd);
     for (const room of fort.rooms.filter(r => r.vault)) {
       this.batchGroup = this.mapBatch;
       slab(`${room.name} floor`, room, .023, .035, room.id === "barracks" ? "#9a8061" : "#78827b",
@@ -1577,9 +1617,13 @@ export class Renderer implements CollisionWorld {
     surface.render!.material = waterMaterial;
     surface.render!.castShadows = false;
 
-    const lamp = (x: number, z: number, tint: string, intensity: number, range: number, fixture = true) => {
-      const light = this.joint("fort light", this.mapRoot, x, 2.47, z);
+    const fortLight = (name: string, x: number, y: number, z: number, tint: string, intensity: number, range: number) => {
+      const light = this.joint(name, this.mapRoot, x, y, z);
       light.addComponent("light", { type: "omni", color: color(tint), intensity, range, castShadows: false });
+      return light;
+    };
+    const lamp = (x: number, z: number, tint: string, intensity: number, range: number, fixture = true) => {
+      const light = fortLight("fort light", x, 2.47, z, tint, intensity, range);
       if (!fixture) return;
       const metal = "#3c3530";
       this.cube("lantern base", 0, -.22, 0, .20, .075, .20, metal, false, light);
@@ -1604,6 +1648,17 @@ export class Renderer implements CollisionWorld {
     lamp(30, -2.3, "#c4d7df", 1.8, 10, false);
     lamp(53, -2, "#b4ccda", 1.5, 8, false);
 
+    fortLight("sunken yard daylight", (yard.x0 + yard.x1) / 2, 4.6, yardPassage.z, "#cee0ed", 2.35, 13);
+    for (const [facing, edge] of [[-1, yard.x0], [1, yard.x1]]) {
+      fortLight("yard doorway daylight", edge - facing * .85, 2.5, yardPassage.z, "#d8e7ef", 1.35, 5.4);
+      const x = edge + facing * .72, y = 2.53, z = yardPassage.z;
+      this.cube("yard sign backing", x, y, z, .075, .39, 1.55, "#393228", false, this.mapRoot);
+      for (const offset of [-.59, .59]) {
+        this.cube("yard sign bracket", x, 2.79, z + offset, .037, .15, .037, "#64594a", false, this.mapRoot);
+      }
+      this.fortSign("COUR", x + facing * .041, y, z, facing * 90, "SUNKEN YARD");
+    }
+
     this.fortPortal(-7.86, 3, 90, 1.86);
     this.fortPortal(7.86, -3, -90, 1.86);
     this.fortPortal(0, -6.88, 0, 1.65);
@@ -1613,6 +1668,78 @@ export class Renderer implements CollisionWorld {
     this.fortSign("CISTERNE", -22.05, 3.23, 0, -90);
     this.fortSign("CISTERNE", 22.05, 3.23, 0, 90);
     this.batchGroup = previous;
+  }
+  private fortYardBanks(yard: FortRect, mouthStart: number, mouthEnd: number) {
+    const sides = [
+      { x: yard.x0, z: yard.z0, dx: yard.x1 - yard.x0, dz: 0, nx: 0, nz: -1 },
+      { x: yard.x1, z: yard.z1, dx: yard.x0 - yard.x1, dz: 0, nx: 0, nz: 1 },
+      { x: yard.x0, z: mouthStart, dx: 0, dz: yard.z0 - mouthStart, nx: -1, nz: 0 },
+      { x: yard.x0, z: yard.z1, dx: 0, dz: mouthEnd - yard.z1, nx: -1, nz: 0 },
+      { x: yard.x1, z: yard.z0, dx: 0, dz: mouthStart - yard.z0, nx: 1, nz: 0 },
+      { x: yard.x1, z: mouthEnd, dx: 0, dz: yard.z1 - mouthEnd, nx: 1, nz: 0 },
+    ];
+    const profile = [
+      { inset: .23, y: 4.29, turf: 0 },
+      { inset: .62, y: 4.86, turf: .15 },
+      { inset: 1.23, y: 5.36, turf: 1 },
+      { inset: 2.14, y: 5.27, turf: 1 },
+      { inset: 3, y: 4.24, turf: .55 },
+    ];
+    const crest = (x: number, z: number) => (lookNoise(x * .6, z * .6, 29) - .5) * .42;
+    const bankHeight = (y: number, turf: number, x: number, z: number, along: number, length: number) => {
+      const taper = Math.min(1, .2 + Math.min(along, length - along) / 1.3);
+      return 4.29 + (y - 4.29 + crest(x, z) * (.35 + .65 * turf)) * taper;
+    };
+    const bank = this.modelMesh("fort sunken yard earth", () => {
+      const positions: number[] = [], uvs: number[] = [], indices: number[] = [], colors: number[] = [];
+      for (const { x, z, dx, dz, nx, nz } of sides) {
+        const length = Math.hypot(dx, dz);
+        const steps = Math.ceil(length * 1.35);
+        const start = positions.length / 3, rows = profile.length;
+        for (let i = 0; i <= steps; i++) {
+          for (const { inset, y, turf } of profile) {
+            const px = x + dx * i / steps + nx * inset, pz = z + dz * i / steps + nz * inset;
+            positions.push(px, bankHeight(y, turf, px, pz, length * i / steps, length), pz);
+            uvs.push(px * .4, pz * .4);
+            const tone = lookNoise(px * 1.8, pz * 1.8, 19) * .15;
+            colors.push(.44 - .04 * turf + tone, .31 + .16 * turf + tone, .22 + .025 * turf + tone, 1);
+          }
+          if (i === steps) continue;
+          for (let j = 0; j < rows - 1; j++) {
+            const a = start + i * rows + j, b = a + rows;
+            indices.push(a, b, a + 1, a + 1, b, b + 1);
+          }
+        }
+      }
+      return { positions, uvs, indices, colors, normals: pc.calculateNormals(positions, indices) };
+    });
+    const materialKey = "fort yard earth";
+    let material = this.materials.get(materialKey);
+    if (!material) {
+      material = this.surfaceMaterial("fort-concrete", "#ffffff").clone();
+      material.diffuseVertexColor = true;
+      material.gloss = .24;
+      material.update();
+      this.materials.set(materialKey, material);
+    }
+    const root = this.joint("earth banks beyond the yard walls", this.mapRoot);
+    root.addComponent("render", {
+      meshInstances: [new pc.MeshInstance(bank, material, root)],
+      batchGroupId: this.mapBatch,
+    });
+    const { inset, y } = profile[2];
+    for (const { x, z, dx, dz, nx, nz } of sides) {
+      const length = Math.hypot(dx, dz);
+      const tufts = Math.ceil(length * .92);
+      for (let i = 0; i < tufts; i++) {
+        const offset = (i + .5) / tufts;
+        const px = x + dx * offset + nx * inset, pz = z + dz * offset + nz * inset;
+        const height = bankHeight(y, 1, px, pz, length * offset, length) - .055;
+        const patch = this.forestPart("yard crest grass", "grass", i % 4, px, height, pz,
+          .8, .31 + lookNoise(px, pz, 31) * .33, .82, i % 3 === 0 ? "#797a4d" : "#667347", root);
+        patch.render!.castShadows = false;
+      }
+    }
   }
   private fortPortal(x: number, z: number, yaw: number, halfWidth: number) {
     const portal = this.joint("stone portal", this.mapRoot, x, 0, z);
@@ -1637,8 +1764,8 @@ export class Renderer implements CollisionWorld {
     });
     portal.addComponent("render", { meshInstances: [new pc.MeshInstance(mesh, this.surfaceMaterial("fort-stone", tint), portal)] });
   }
-  private fortSign(label: string, x: number, y: number, z: number, yaw: number) {
-    const key = `fort sign:${label}`;
+  private fortSign(label: string, x: number, y: number, z: number, yaw: number, subtitle?: string) {
+    const key = `fort sign:${label}${subtitle ? `/${subtitle}` : ""}`;
     let material = this.materials.get(key);
     if (!material) {
       const texture = this.texture(key, 256, 64, () => {
@@ -1646,8 +1773,13 @@ export class Renderer implements CollisionWorld {
         const ctx = canvas.getContext("2d")!;
         ctx.fillStyle = "#30291f"; ctx.fillRect(0, 0, 256, 64);
         ctx.strokeStyle = "#746347"; ctx.strokeRect(3, 3, 250, 58);
-        ctx.font = "bold 34px sans-serif"; ctx.fillStyle = "#e0cba1";
-        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, 128, 33);
+        ctx.font = subtitle ? "bold 25px serif" : "bold 34px sans-serif";
+        ctx.fillStyle = "#e0cba1"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(label, 128, subtitle ? 23 : 33);
+        if (subtitle) {
+          ctx.font = "bold 17px sans-serif";
+          ctx.fillText(subtitle, 128, 45);
+        }
         return new Uint8Array(ctx.getImageData(0, 0, 256, 64).data);
       }, false);
       material = new pc.StandardMaterial();

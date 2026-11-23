@@ -6,6 +6,7 @@ export interface FortLayout {
   rooms: FortRoom[];
   passages: FortRect[];
   yard: FortRect;
+  yardPassage: { z: number; width: number };
   water: FortRect;
   waterHeight: number;
   ceilings: Box[];
@@ -22,6 +23,7 @@ const rooms: FortRoom[] = [
   { id: "breach", name: "Breached entry", x0: 42, x1: 57, z0: -7, z1: 7 },
 ];
 const yard: FortRect = { x0: -8, x1: 8, z0: 14, z1: 25 };
+const yardPassage = { z: 19, width: 3.5 };
 const water: FortRect = { x0: -7.7, x1: 6.35, z0: -6.7, z1: 4.9 };
 
 // The turns break sight lines into the spawns and across the service passage.
@@ -35,8 +37,8 @@ const routes: { points: [number, number][]; width: number }[] = [
   { points: [[52, -6], [52, -11], [48, -11], [48, -17], [32, -17]], width: 3.5 },
   { points: [[-25, -19], [-18, -19], [-18, -16], [18, -16], [18, -19], [25, -19]], width: 3.5 },
   { points: [[0, -16], [0, -6]], width: 3.6 },
-  { points: [[-29, 6], [-29, 19], [-7, 19]], width: 3.5 },
-  { points: [[29, 6], [29, 19], [7, 19]], width: 3.5 },
+  { points: [[-29, 6], [-29, yardPassage.z], [yard.x0 + 1, yardPassage.z]], width: yardPassage.width },
+  { points: [[29, 6], [29, yardPassage.z], [yard.x1 - 1, yardPassage.z]], width: yardPassage.width },
 ];
 const passages = routes.flatMap(({ points, width }) => points.slice(1).map(([x, z], i) => {
   const [fromX, fromZ] = points[i], r = width / 2;
@@ -137,8 +139,8 @@ const flags = [
 
 export const fortVauxMap: MapDefinition = {
   id: "fort-vaux", name: "Fort Vaux", width: 122, depth: 56, navSpacing: 2.5,
-  defaultTeamSize: 12, scoring: "domination", artillery: false,
-  fort: { rooms, passages, yard, water, waterHeight: .13, ceilings, approach: { service: { x: 0, z: -16 }, yard: center(yard) } },
+  defaultTeamSize: 6, scoring: "domination", artillery: false,
+  fort: { rooms, passages, yard, yardPassage, water, waterHeight: .13, ceilings, approach: { service: { x: 0, z: -16 }, yard: center(yard) } },
   spawn: { blue: { x: -49.5, z: .8 }, red: { x: 49.5, z: -.8 } },
   sectors: flags,
   navigationPoints: routes.flatMap(({ points }) => points.map(([x, z]) => ({ x, z }))),

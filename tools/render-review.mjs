@@ -103,6 +103,12 @@ try {
   await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
   if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
    report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)})`);
+   if(map==='fort-vaux')await client.evaluate(`(()=>{
+    const card=document.querySelector('[data-battlefield="fort-vaux"]');
+    const brief=document.querySelector('#menu .panel > p');
+    if(!card.textContent.includes('6v6')||!card.textContent.includes('Verdun · 1916')||!brief?.textContent.includes('6v6'))
+     throw Error('Fort Vaux card or briefing differs from the 6v6 default');
+   })()`);
    if(armouryStats)armouryURL=await client.evaluate(`document.querySelector('.armoury-link')?.href`);
   }
   await client.evaluate(`document.querySelector('#primary').click()`);
@@ -160,6 +166,28 @@ try {
    return {available:true,flags:3,artillery:false};
   })()`);
   await screenshot('fort-floor-plan');
+  report.yardApproaches=await client.evaluate(`(()=>{
+   const review=window.sectorRenderReview;
+   const send=(type,code)=>window.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
+   send('keydown','KeyQ');send('keyup','KeyQ');
+   if(review.state().teamSize!==6)throw Error('Fort Vaux did not start 6v6');
+   review.manual();
+   return ['yard-west','yard-east'].map(side=>{
+    review.survey(true,side);
+    const before=review.state().player;
+    send('keydown','KeyW');
+    try {review.advance(60);} finally {send('keyup','KeyW');}
+    const after=review.state().player;
+    if(Math.abs(before.x)<=8||Math.abs(after.x)>=8||Math.abs(after.z-before.z)>.35)
+     throw Error('Could not walk into the Sunken Yard from '+side);
+    return side;
+   });
+  })()`);
+  for(const side of report.yardApproaches){
+   const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(side)}).frames`);
+   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
+   await screenshot('detail-'+side,true);
+  }
  }
  if(!visualOnly&&map==='industrial'){
   await client.evaluate(`(()=>{const s=document.createElement('style');s.textContent='.playtest{visibility:hidden!important}';document.head.append(s);})()`);

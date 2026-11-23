@@ -5,17 +5,18 @@ import { grenadeExplosionProfile } from "./destruction";
 import { flagContains } from "./domination";
 import { fortVauxMap, inFortRect } from "./fort-vaux-map";
 import { bodyBlocked, supportHeight, walkSegment } from "./map";
-import { Game, TestCollision, botCommand, idle, pathfind } from "./simulation";
+import { Game, TestCollision, botCommand, idle, pathfind, resolveTeamSize } from "./simulation";
 
 const match = (bots = true) => new Game(new TestCollision(fortVauxMap), bots, 3600, 12345, undefined,
   { map: fortVauxMap, ambientArtillery: true });
 
-it("deploys 12 French and 12 German soldiers in clear spawn rooms", () => {
+it("defaults to six French and six German soldiers in clear spawn rooms", () => {
   const g = match();
   expect(g.scoring).toBe("domination");
-  expect(g.teamSize).toBe(12);
-  expect(g.players.filter(p => p.faction === "french")).toHaveLength(12);
-  expect(g.players.filter(p => p.faction === "german")).toHaveLength(12);
+  expect(g.teamSize).toBe(6);
+  expect(g.players.filter(p => p.faction === "french")).toHaveLength(6);
+  expect(g.players.filter(p => p.faction === "german")).toHaveLength(6);
+  expect(resolveTeamSize(fortVauxMap, 12)).toBe(12);
   expect(g.sectors.map(s => [s.id, s.name])).toEqual([["A", "Barracks"], ["B", "Cistern"], ["C", "East Casemate"]]);
   for (const p of g.players) {
     expect(bodyBlocked(p.x, p.z, p.y, .6, g.map)).toBe(false);
@@ -45,7 +46,11 @@ it("lets both teams reach each sector and cross through the service and yard loo
   const roofRay = (x: number, z: number) => g.collision.ray({ x, y: 2, z }, { x, y: 6, z });
   expect(roofRay(0, -1)).toBeLessThan(1);
   expect(roofRay(0, -16)).toBeLessThan(1);
-  expect(roofRay(0, 19)).toBe(1);
+  const z = fort.yardPassage.z;
+  for (const edge of [fort.yard.x0, fort.yard.x1]) {
+    expect(roofRay(edge + Math.sign(edge), z)).toBeLessThan(1);
+    expect(roofRay(edge - Math.sign(edge), z)).toBe(1);
+  }
   expect(inFortRect({ x: 0, z: 19 }, fort.yard)).toBe(true);
 });
 
@@ -75,13 +80,15 @@ it("breaks timber cover with grenades and preserves the fort shell, walkway and 
   expect(footSurface({ x: 7, z: 5.7, y: .18 }, g.map, [])).toBe("concrete");
 });
 
-it("spreads a seeded match into the gallery, service passage and yard on both sides", () => {
-  const g = new Game(new TestCollision(fortVauxMap), true, 2700, 12345, undefined, { map: fortVauxMap, humanPlayerIds: [] });
+it.each([6, 12])("lets both sides contest the Cistern with %i soldiers per team", (teamSize) => {
+  const g = new Game(new TestCollision(fortVauxMap), true, 2700, 12345, undefined, { map: fortVauxMap, teamSize, humanPlayerIds: [] });
   const firstAtB = { blue: Infinity, red: Infinity };
   const routes = { blue: new Set<string>(), red: new Set<string>() };
   const fort = g.map.fort!;
+  let contested = false;
   while (g.phase === "playing") {
     g.step(g.players[0].hp > 0 ? botCommand(g, g.players[0]) : idle());
+    contested ||= g.sectors[1].contested;
     for (const p of g.players) {
       if (p.hp <= 0) continue;
       if (flagContains(g, p, g.sectors[1])) firstAtB[p.team] = Math.min(firstAtB[p.team], g.tick);
@@ -90,6 +97,11 @@ it("spreads a seeded match into the gallery, service passage and yard on both si
       if (inFortRect(p, fort.yard)) routes[p.team].add("yard");
     }
   }
-  for (const team of ["blue", "red"] as const) expect(routes[team]).toEqual(new Set(["gallery", "service", "yard"]));
+  for (const team of ["blue", "red"] as const) {
+    expect(routes[team].has("gallery")).toBe(true);
+    expect(routes[team].has("service")).toBe(true);
+    if (teamSize === 12) expect(routes[team].has("yard")).toBe(true);
+  }
   expect(Math.abs(firstAtB.blue - firstAtB.red)).toBeLessThan(75);
+  expect(contested).toBe(true);
 });

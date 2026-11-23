@@ -914,7 +914,7 @@ try {
   // without waiting for a software GPU to display every intermediate frame.
   // Normal play never installs this bridge or changes its frame loop.
   if(renderReview)Object.assign(window,{sectorRenderReview:{
-    state:()=>({frames:reviewFrames,tick:started?game.tick:0,paused,...(started?{player:{x:game.players[0].x,z:game.players[0].z,crouched:game.players[0].crouched,firstPerson:preferredFirstPerson,ammo:game.players[0].ammo,hp:game.players[0].hp,assists:game.players[0].assists},combat:{marker:combatFeedback.marker(game),view:renderer.deathView,report:game.players[0].lastDeath,fov:renderer.camera.camera!.fov}}:{}),...(training&&started?{training:{id:training.id,loadout:game.players[0].loadout,faction:game.players[0].faction,free:training.free}}:{})}),
+    state:()=>({frames:reviewFrames,tick:started?game.tick:0,paused,...(started?{teamSize:game.teamSize,player:{x:game.players[0].x,z:game.players[0].z,crouched:game.players[0].crouched,firstPerson:preferredFirstPerson,ammo:game.players[0].ammo,hp:game.players[0].hp,assists:game.players[0].assists},combat:{marker:combatFeedback.marker(game),view:renderer.deathView,report:game.players[0].lastDeath,fov:renderer.camera.camera!.fov}}:{}),...(training&&started?{training:{id:training.id,loadout:game.players[0].loadout,faction:game.players[0].faction,free:training.free}}:{})}),
     emplacement: () => ({
       count: game.emplacements.size,
       preview: renderer.machineGunPreview?.valid,
@@ -930,6 +930,11 @@ try {
       const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-7.4,3,6,-2.2]};
       const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-3.3,-2.4,-6.8,-5.6]};
       const fortDetails:Record<string,[number,number,number,number]>={cistern:poses["fort-vaux"],barracks:[-35.4,2,-23,-1],casemate:[34.5,1,23,-1],yard:[-6,19,7,18]};
+      if (map.fort) {
+        const { yard, yardPassage: { z } } = map.fort;
+        fortDetails["yard-west"] = [yard.x0 - 5.5, z, 0, z];
+        fortDetails["yard-east"] = [yard.x1 + 5.5, z, 0, z];
+      }
       const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : undefined) : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0];
@@ -937,6 +942,8 @@ try {
       for(const dx of [0,-2,2,-4,4])for(const dz of [0,-2,2,-4,4])if(!blocked(x+dx,z+dz,.7,game.map)&&blocked(at.x,at.z,.7,game.map))at={x:x+dx,z:z+dz};
       if(blocked(at.x,at.z,.7,game.map))throw Error("Review camera has no clear footing");
       game.respawn(p);Object.assign(p,{...at,y:groundHeight(at.x,at.z,game.map),yaw:Math.atan2(tx-at.x,-(tz-at.z)),pitch:-.04,protectedUntil:Infinity});
+      yaw = p.yaw;
+      pitch = p.pitch;
       preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
       battlefield.reset(game);renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
       const weapon=renderer.app.root.findByName("first-person weapon and arms") as Entity|null;
@@ -954,7 +961,7 @@ try {
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
       : map.fort
-      ? `France and Imperial Germany fight for the flooded cistern under Fort Vaux. The service passage and open yard connect the barracks and east casemate. ${teamSize} soldiers per team · three-flag domination · no artillery.`
+      ? `France and Imperial Germany fight for the flooded cistern under Fort Vaux. The service passage and Sunken Yard connect the barracks and east casemate. ${teamSize}v${teamSize} · three-flag domination · no artillery.`
       : map.id === "village"
       ? `Fight through orchard gardens, workyards and paved courtyards to hold Saint-Martin Manor. Use low destructible cover between the houses; smoke screens the streets and artillery opens new routes. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "trenches"
