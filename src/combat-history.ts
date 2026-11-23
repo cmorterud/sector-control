@@ -1,4 +1,4 @@
-import {factions, factionFor} from "./loadouts";
+import {soldierName} from "./soldier-names";
 import type {Game, Soldier, V3,Team} from "./simulation";
 
 export const combatRules={assistWindow:300,assistDamage:20,indicatorTicks:45,killerViewTicks:75,deathMarkerTicks:180};
@@ -9,7 +9,6 @@ export type DeathReport=Wound&{
   life:number;at:V3;sourceName:string;distance?:number;hits:number;
   assists:{actor:number;damage:number}[];
 };
-export const soldierName=(p:Soldier,map:Game["map"])=>p.id===0?"YOU":`${factions[p.faction??factionFor(map,p.team)].name} ${p.teamIndex+1}`;
 
 export function rememberWound(p:Soldier,wound:Wound) {
   p.recentDamage=(p.recentDamage??[]).filter(h=>wound.tick-h.tick<=combatRules.assistWindow);

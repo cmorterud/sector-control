@@ -42,12 +42,14 @@ function rifle(family: string): WeaponDesign {
   const smle = family === "smle", berthier = family === "berthier", lebel = family === "lebel";
   const muzzle = smle ? -.7 : berthier ? -.79 : lebel ? -.8 : -.78;
   const grip: V = smle ? [.105, -.055, 0] : [.115, 0, 0];
+  const receiver = round("receiver", [0, .025, .055], [smle ? .075 : .068, .29, .075]);
+  const frontBand = band(smle ? -.32 : -.55, .085);
   const parts: RiflePart[] = [
     stock(smle ? .94 : lebel ? 1.02 : 1, smle ? .11 : .095, lebel ? .19 : .165),
-    round("receiver", [0, .025, .055], [smle ? .075 : .068, .29, .075]),
+    receiver,
     round("barrel", [0, .025, (muzzle + .03) / 2], [.035, Math.abs(muzzle - .03), .035]),
     part("upper handguard", "handguard", [0, .025, smle ? -.3 : -.23], [smle ? .08 : .065, smle ? .49 : .37, .045], "walnut", [90, 0, 0]),
-    guard(), band(smle ? -.56 : -.42), band(smle ? -.32 : -.55, .085),
+    guard(), band(smle ? -.56 : -.42), frontBand,
     box("ejection port", [.029, .058, .035], [.018, .018, .15], "dark"),
     round("cleaning rod", [0, -.035, -.53], [.007, .36, .007]),
     part("sling swivel", "sling", [0, -.1, -.38], [.009, .03, .05]),
@@ -62,31 +64,41 @@ function rifle(family: string): WeaponDesign {
     parts.push(round("Lebel tubular magazine", [0, -.035, -.34], [.06, .65, .06], "walnut"));
     parts.push(box("Lebel side loading gate", [-.039, .012, -.015], [.008, .055, .09], "dark"));
   } else if (berthier) {
-    parts.push(box("Berthier charger guide", [0, .071, .07], [.065, .018, .04]));
+    parts.push(box("Berthier charger guide", [0, .066, .07], [.065, .028, .04]));
     parts.push(round("Berthier long nose ferrule", [0, -.004, -.53], [.075, .08, .09]));
   } else {
     parts.push(part("Gewehr Lange sight ramp", "handguard", [0, .067, -.16], [.055, .16, .047], "steel", [90, 0, 0]));
     parts.push(box("Gewehr straight bolt stop", [-.047, .038, .12], [.018, .045, .055]));
   }
-  const upgraded=berthier || family==="gewehr";
-  if(upgraded){
-    parts[0].shape=berthier?"berthierStock":"gewehrStock";
-    parts[0].size=[berthier?.091:.102,berthier?1.03:1.01,berthier?.17:.18];
-    parts.push(box("receiver left rail",[-.034,.052,.025],[.009,.012,.18],"edge"));
-    parts.push(box("receiver right rail",[.034,.052,.025],[.009,.012,.18],"steel"));
-    parts.push(part("rear sling loop","sling",[.034,-.105,.38],[.009,.04,.055]));
-    parts.push(box("recessed stock channel",[-.046,-.01,-.13],[.003,.018,.24],"dark"));
-    parts.push(box("stock wrist transition",[0,-.05,.24],[.067,.07,.11],"walnut"));
+  const upgraded = berthier || family === "gewehr";
+  const sightLeaf = box("rear sight leaf seat", [0, .054, -.172], [.048, .034, .14]);
+  if (upgraded) {
+    const furniture = parts[0];
+    furniture.shape = berthier ? "berthierStock" : "gewehrStock";
+    furniture.size = [berthier ? .091 : .102, berthier ? 1.03 : 1.01, berthier ? .17 : .18];
+    // The rails are machined into the receiver. Their inner edges stay inside
+    // its curved side through the full length of each rail, including during reloads.
+    const railX = receiver.size[0] * .36;
+    parts.push(box("receiver left rail", [-railX, .052, .025], [.017, .015, .18], "edge"));
+    parts.push(box("receiver right rail", [railX, .052, .025], [.017, .015, .18]));
+    parts.push(sightLeaf);
+    parts.push(part("rear sling loop", "sling", [.034, -.105, .38], [.009, .04, .055]));
+    parts.push(box("recessed stock channel", [-furniture.size[0] * .30, -.021, -.13], [.010, .012, .24], "dark"));
+    parts.push(box("stock wrist transition", [0, -.05, .24], [.067, .07, .11], "walnut"));
   }
-  const viewParts:RiflePart[]=!upgraded?[]:[
-    ...[-.1,.31].flatMap(z=>[
-      part("flush stock screw","screw",[.047,-.048,z],[.018,.003,.018],"edge",[0,0,90]),
-      box("engraved screw slot",[.049,-.048,z],[.001,.003,.012],"dark"),
-    ]),
-    box("receiver proof stamp",[-.037,.031,.035],[.001,.008,.025],"dark"),
-    box("sight leaf graduation",[-.019,.088,-.17],[.002,.003,.095],"edge"),
-    part("rear sling washer","band",[.045,-.09,.4],[.027,.004,.027],"steel",[0,0,90]),
-    box("barrel band spring",[-.04,-.015,-.49],[.005,.025,.09],"steel"),
+  const viewParts: RiflePart[] = !upgraded ? [] : [
+    ...[-.1, .31].flatMap(z => {
+      const x = parts[0].size[0] * (z < 0 ? .33 : .27);
+      return [
+        part("flush stock screw", "screw", [x, -.048, z], [.018, .009, .018], "edge", [0, 0, 90]),
+        box("engraved screw slot", [x + .004, -.048, z], [.001, .003, .012], "dark"),
+      ];
+    }),
+    box("receiver proof stamp", [-.033, .031, .035], [.003, .008, .025], "dark"),
+    ...Array.from({ length: 5 }, (_, i) => box("sight graduation",
+      [-sightLeaf.size[0] / 2, .064, sightLeaf.at[2] + (i - 2) * .014], [.002, .005, .003], "edge")),
+    part("rear sling washer", "band", [parts[0].size[0] * .40, -.09, .4], [.027, .010, .027], "steel", [0, 0, 90]),
+    box("barrel band spring", [-frontBand.size[0] * .43, frontBand.at[1], frontBand.at[2] + .014], [.011, .022, .045]),
   ];
   return {
     family, kind: "serviceRifle", parts, viewParts, actionParts: rifleAction(!smle, grip),

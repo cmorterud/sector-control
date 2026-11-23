@@ -216,7 +216,14 @@ try {
   await client.evaluate(`(()=>{if(window.sectorRenderReview.state().player.assists!==1||!document.querySelector('.assist-notice')?.textContent.includes('25 DAMAGE'))throw Error('Real teammate damage did not award an assist');})()`);
   await screenshot('combat-assist-notice');await key('Tab');
   await until(()=>client.evaluate(`!document.getElementById('scoreboard').classList.contains('hidden')`));
-  await client.evaluate(`(()=>{const board=document.getElementById('scoreboard'),row=[...board.querySelectorAll('.row')].find(r=>r.firstElementChild?.textContent==='YOU');if(!board.querySelector('[title="Assists"]')||row?.children[2].textContent!=='1')throw Error('Scoreboard assist column is missing or incorrect');})()`);
+  await client.evaluate(`(()=>{
+   const board=document.getElementById('scoreboard'),row=board.querySelector('.local-soldier');
+   if(board.querySelectorAll('table').length!==2||!board.querySelector('[title="Assists"]')||
+      row?.children[2].textContent!=='1'||row?.querySelector('.personal-points').textContent!=='75'||
+      !board.querySelector('[title="Kill-to-death ratio"]'))throw Error('Scoreboard assist, K/D or personal points are missing or incorrect');
+   const other=board.querySelector('.table tbody tr:not(.local-soldier) th');
+   if(!/^[A-Z]\\. [^0-9]+$/.test(other?.textContent??''))throw Error('Scoreboard is missing named soldiers');
+  })()`);
   await screenshot('combat-assist-scoreboard');await key('Tab','keyup');
   await stage('kill');
   await client.evaluate(`(()=>{
@@ -229,6 +236,14 @@ try {
       player.x!==0||marker.style.left!=='50%'||!Number.isFinite(parseFloat(marker.style.top)))throw Error('The minimap did not track the player');
   })()`);
   await screenshot('combat-kill-hud');
+  await key('Tab');
+  await until(()=>client.evaluate(`!document.getElementById('scoreboard').classList.contains('hidden')`));
+  await client.evaluate(`(()=>{
+   const row=document.querySelector('#scoreboard .local-soldier');
+   if(row.children[5].textContent!=='1.00'||row.querySelector('.personal-points').textContent!=='100')
+    throw Error('A real kill did not produce 100 points and a 1.00 K/D');
+  })()`);
+  await key('Tab','keyup');
   await client.evaluate(`(()=>{window.sectorRenderReview.advance(90);if(document.querySelector('.kill-notice').textContent||!document.querySelector('.kill-feed-entry.red'))throw Error('The kill confirmation and feed did not expire at different times');})()`);
   report.combatChecks={damageBearing:true,deathReport:true,deathView:true,deathViewEnds:true,shortViewport:true,respawnMarker:true,markerExpiry:true,assistCredit:true,scoreboard:true,killConfirmation:true,killFeed:true,minimap:true};
   console.log(JSON.stringify({map,combatChecks:report.combatChecks}));

@@ -1,10 +1,12 @@
 import {expect,it} from "vitest";
 import {CombatFeedback,deathCard} from "./combat-feedback";
-import {combatRules,soldierName} from "./combat-history";
+import {combatRules} from "./combat-history";
+import {soldierName} from "./soldier-names";
 import {scoreboardTable} from "./scoreboard";
 import {Game,TestCollision,idle,type Event} from "./simulation";
 import {industrialMap} from "./map";
 import {trenchMap} from "./trench-map";
+import {fortVauxMap} from "./fort-vaux-map";
 
 const scene=()=>new Game(new TestCollision(industrialMap),true,6000,1,undefined,{map:industrialMap,teamSize:5,ambientArtillery:false});
 const hit=(tick=0,from={x:10,y:1.65,z:8}):Extract<Event,{type:"damage"}>=>({type:"damage",actor:0,source:5,amount:25,at:{x:0,y:0,z:8},from,kind:"bullet",weapon:"AR-01",tick,id:tick+1});
@@ -90,12 +92,31 @@ it("confirms only credited player kills and keeps a short team-colored feed", ()
   f.reset();
   expect(f.killFeed(g)).toBe("");
 });
-it("includes assists in small, large and elimination scoreboards without changing the objective columns",()=>{
+it("ranks each roster by personal points and shows K/D in every mode",()=>{
   for(const map of [industrialMap,trenchMap,{...industrialMap,scoring:"eliminations" as const}]) {
     const g=new Game(new TestCollision(map),true,6000,1,undefined,{map,ambientArtillery:false});
-    Object.assign(g.players[0],{kills:3,assists:2,deaths:4,captures:1});const html=scoreboardTable(g);
-    expect(html).toContain('title="Assists">A');expect(html).toContain("YOU</span><span>3</span><span>2</span><span>4</span>");
-    expect(html.includes("<span>CAP</span>")).toBe(g.scoring!=="eliminations");
-    expect(html.includes('class="rosters"')).toBe(g.teamSize>8);
+    Object.assign(g.players[0],{kills:3,assists:2,deaths:4,captures:1});
+    Object.assign(g.players[1],{kills:1,captures:3});
+    const html=scoreboardTable(g), canCapture=g.scoring!=="eliminations";
+    const teammate=soldierName(g.players[1],map);
+    expect(html).toContain('title="Assists">A');
+    expect(html).toContain(`YOU</th><td>3</td><td>2</td><td>4</td>${canCapture?"<td>1</td>":""}<td>0.75</td><td class="personal-points">${canCapture?750:450}</td>`);
+    expect(html).toContain(`<td>1.00</td><td class="personal-points">${canCapture?1000:100}</td>`);
+    expect(html.includes('title="Captures">CAP')).toBe(canCapture);
+    expect(html.includes("300 per capture")).toBe(canCapture);
+    expect(html.indexOf(`>${teammate}</th>`) < html.indexOf(">YOU</th>")).toBe(canCapture);
+    expect(g.scores).toEqual({ blue: 0, red: 0 });
   }
+});
+it("keeps names distinct at full roster size and consistent after respawning", () => {
+  const g = new Game(new TestCollision(trenchMap), true, 6000, 1, undefined, { map: trenchMap, teamSize: 50 });
+  const names = g.players.map((p) => soldierName(p, g.map));
+  expect(names[0]).toBe("YOU");
+  expect(new Set(names).size).toBe(100);
+  expect(names[50]).toBe("F. Müller");
+  const fort = new Game(new TestCollision(fortVauxMap), true, 6000, 1, undefined, { map: fortVauxMap, teamSize: 6 });
+  const french = fort.players[1];
+  expect(soldierName(french, fort.map)).toBe("P. Bernard");
+  fort.respawn(french);
+  expect(soldierName(french, fort.map)).toBe("P. Bernard");
 });
