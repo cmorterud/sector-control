@@ -49,11 +49,11 @@ jobs:
     runs-on: ubuntu-latest
     # Software rendering at High quality (ambient occlusion, shadow cascades)
     # takes up to about six minutes on the larger maps.
-    timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village') && 13 || 9 }}
+    timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village' || matrix.map == 'fort-vaux') && 13 || 9 }}
     strategy:
       fail-fast: false
       matrix:
-        map: [industrial, trenches, verdun, village, headland, training]
+        map: [industrial, trenches, verdun, village, headland, training, fort-vaux]
     steps:
       - name: Check out source
         uses: actions/checkout@v6

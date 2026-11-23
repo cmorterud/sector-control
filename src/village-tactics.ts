@@ -37,7 +37,7 @@ const forward = (g: Game, p: Soldier) =>
   Math.sign(g.map.spawn[p.team === "blue" ? "red" : "blue"].x - g.map.spawn[p.team].x) || (p.team === "blue" ? 1 : -1);
 // Maps whose bots pick individual cover posts around a flag.
 export const usesVillageTactics = (map: { id: string }) =>
-  map.id === "village" || map.id === "verdun" || map.id === "headland";
+  map.id === "village" || map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux";
 
 // Probe actual geometry toward the opposing approach, or a recently observed
 // threat. No hidden enemy position or future artillery plan is consulted.
@@ -232,6 +232,13 @@ export function planVillageMove(
       const end = lane.points.at(-1)!;
       const exit = { x: end.x + forward(g, p) * 9.3, z: end.z };
       if ((exit.x - p.x) * forward(g, p) > 3 && !blocked(exit.x,exit.z,.7,g.map)) approach = exit;
+    }
+    if (g.map.fort && !stalled && !unsafe && p.suppression < .28) {
+      // Reserve most soldiers for the short galleries. A few approaching the
+      // center or opposite flag use a side route, then resume ordinary cover play.
+      const flank = flag.id === "B" && p.teamIndex % 4 === 1 ? g.map.fort.approach.service
+        : flag.home && flag.home !== p.team && p.teamIndex % 4 === 2 ? g.map.fort.approach.yard : null;
+      if (flank && (p.x * forward(g, p) < -15 || (old?.approach === flank && dist(p, flank) > 1.5))) approach = flank;
     }
     // Reachability matters more than a cover score. Only a bounded shortlist
     // needs full A*: the shared catalog uses cheap footprint/height checks.

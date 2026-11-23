@@ -1,5 +1,6 @@
 import { groundField, villageRoad } from "./ground-surface";
 import { treeHasCrown } from "./vegetation";
+import { inFortRect } from "./fort-vaux-map";
 import type { VoiceLine } from "./soldier-chatter";
 import {
   baseGroundHeight,
@@ -27,6 +28,8 @@ export type SoundKind =
   | "mud"
   | "wood"
   | "concrete"
+  | "splash"
+  | "drip"
   | "grenade"
   | "artillery"
   | "whistle"
@@ -87,7 +90,11 @@ export function footSurface(
   p: Vec,
   map: MapDefinition,
   boards = duckboards(map),
-): "wood" | "mud" | "concrete" | "leaves" {
+): "wood" | "mud" | "concrete" | "leaves" | "splash" {
+  if (map.fort) {
+    if ((p.y ?? 0) < map.fort.waterHeight && inFortRect(p, map.fort.water)) return "splash";
+    if (map.fort.rooms.some(room => room.id === "barracks" && inFortRect(p, room))) return "wood";
+  }
   if (!map.terrain) return "concrete";
   if(map.buildings && p.y !== undefined) {
     const floor=map.boxes.find(b=>b.walkable && Math.abs((b.baseY??0)+b.h-p.y!)<.12 && Math.abs(p.x-b.x)<=b.w/2 && Math.abs(p.z-b.z)<=b.d/2);
@@ -118,12 +125,14 @@ export class BattlefieldFeedback {
   private nextWind = 0;
   private nextCreak = 0;
   private nextDistant = 0;
+  private nextDrip = 0;
   stats = {
     footsteps: 0,
     woodSteps: 0,
     mudSteps: 0,
     concreteSteps: 0,
     leafSteps: 0,
+    waterSteps: 0,
     forestSounds: 0,
     cracks: 0,
     rifles: 0,
@@ -152,6 +161,7 @@ export class BattlefieldFeedback {
     this.nextWind = 60;
     this.nextCreak = 210;
     this.nextDistant = 400;
+    this.nextDrip = 60;
     for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[])
       this.stats[key] = 0;
     this.recent = [];
@@ -356,6 +366,11 @@ export class BattlefieldFeedback {
     }
     const listener = g.players[0];
     if (g.map.woodland && g.phase === "playing" && listener.hp > 0) this.forestAmbience(g);
+    if (g.map.fort && g.phase === "playing" && listener.hp > 0 && Math.hypot(listener.x, listener.z) < 13 && g.tick >= this.nextDrip) {
+      const offset = Math.sin(g.tick * 7.27);
+      this.nextDrip = g.tick + 42 + Math.floor(Math.abs(offset) * 85);
+      this.cue(g, "drip", { x: offset * 5, y: g.map.fort.waterHeight, z: offset * 3 }, .032);
+    }
     const nearby = g.players
       .filter(
         (p) => p.hp > 0 && Math.hypot(p.x - listener.x, p.z - listener.z) < 18,
@@ -393,7 +408,9 @@ export class BattlefieldFeedback {
           this.stats[
             surface === "wood"
               ? "woodSteps"
-              : surface === "leaves"
+              : surface === "splash"
+                ? "waterSteps"
+                : surface === "leaves"
                 ? "leafSteps"
               : surface === "mud"
                 ? "mudSteps"

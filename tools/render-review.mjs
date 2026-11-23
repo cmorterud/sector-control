@@ -9,7 +9,7 @@ import {inflateSync} from 'node:zlib';
 import {checkArmoury,checkBriefing} from './briefing-review.mjs';
 
 const map=process.argv[2]??'village';
-const maps=['industrial','trenches','verdun','village','headland','training'];
+const maps=['fort-vaux','training','trenches','village','verdun','headland','industrial'];
 if(!maps.includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
 const visualOnly=process.env.REVIEW_VISUAL_ONLY==='1';
@@ -94,7 +94,8 @@ try {
  await client.send('Runtime.enable');await client.send('Page.enable');await client.send('Network.enable');
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
-  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'?'600':'120',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
+  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'||map==='fort-vaux'?'600':'120',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
+  if(map==='fort-vaux'&&mode==='overview'&&!visualOnly&&!process.env.REVIEW_BASE_URL)query.delete('map');
   const destination=base+'?'+query;
   console.log(JSON.stringify({map,mode,stage:'loading'}));
   await client.send('Page.navigate',{url:destination});
@@ -115,8 +116,9 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  if(map==='village' && mode==='ground') {
-   for(const detail of ['school','inn','street','manor-room']) {
+  if((map==='village'||map==='fort-vaux') && mode==='ground') {
+   const details=map==='village'?['school','inn','street','manor-room']:['cistern','barracks','casemate','yard'];
+   for(const detail of details) {
     const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
     await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
     await screenshot('detail-'+detail,true);
@@ -134,8 +136,23 @@ try {
   await screenshot(mode==='overview'?'overview-battle':'third-person');
   await writeFile(join(out,mode+'-playtest.json'),JSON.stringify(log,null,2));
   if(log.summary.ticks<900||log.summary.frames<2)throw Error('Game did not progress through rendered frames');
+  if(map==='fort-vaux'&&(log.summary.artilleryImpacts||log.events.some(event=>event.type==='artilleryImpact')))
+   throw Error('Fort Vaux had an artillery impact');
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
+ }
+ if(!visualOnly&&map==='fort-vaux') {
+  report.floorPlan=await client.evaluate(`(()=>{
+   const key=()=>{window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));};
+   const review=window.sectorRenderReview;
+   review.survey(true);key();
+   const panel=document.querySelector('#tactical-map');
+   if(panel.classList.contains('hidden')||!panel.textContent.includes('FORT VAUX · FLOOR PLAN')||panel.querySelector('.tactical-grid button,.map-cursor'))throw Error('Fort Vaux opened artillery targeting instead of a floor plan');
+   for(const room of ['Barracks','Cistern','East Casemate'])if(!panel.textContent.includes(room))throw Error('Missing floor-plan flag '+room);
+   if(document.querySelector('#ammo').textContent.includes('ARTILLERY'))throw Error('Artillery HUD is visible at Fort Vaux');
+   return {available:true,flags:3,artillery:false};
+  })()`);
+  await screenshot('fort-floor-plan');
  }
  if(!visualOnly&&map==='industrial'){
   await client.evaluate(`(()=>{const s=document.createElement('style');s.textContent='.playtest{visibility:hidden!important}';document.head.append(s);})()`);
@@ -273,7 +290,7 @@ try {
   console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
  }
  if(!visualOnly&&armouryStats) {
-  if(armouryURL!==new URL('armoury/',base).href)throw Error('Weapons link does not point to the built Armoury');
+  if(armouryURL!==new URL('armoury/',base).href)throw Error('Briefing link does not point to the built Armoury');
   const expected=JSON.parse(await readFile(armouryStats,'utf8'));
   await client.send('Page.navigate',{url:armouryURL});
   await until(()=>client.evaluate(`location.href===${JSON.stringify(armouryURL)}&&document.readyState==='complete'&&!!document.querySelector('#armoury .card')`));

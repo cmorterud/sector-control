@@ -18,7 +18,7 @@ export const factions = {
   trainingRed: { name: "Red training", shirt: "#9f685a", trousers: "#62594b", helmet: "#796d57", rifle: "AR-01", scoped: "Scoped training rifle", support: "Training LMG", pistol: "Training pistol" },
 };
 export function factionFor(map: {id:string}, team: "blue"|"red"): FactionId {
-  return map.id === "industrial" ? team === "blue" ? "trainingBlue" : "trainingRed" : team === "red" ? "german" : map.id === "verdun" || map.id === "headland" ? "french" : "british";
+  return map.id === "industrial" ? team === "blue" ? "trainingBlue" : "trainingRed" : team === "red" ? "german" : map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux" ? "french" : "british";
 }
 export function rosterLoadout(index:number, size:number, kind:WeaponKind): Loadout {
   if (kind === "machineGun") return "support";

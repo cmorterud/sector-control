@@ -172,7 +172,8 @@ export class BattleAudio {
     this.stats.occluded += Number(!!cue.occluded);
     const c = this.context;
     const explosion = cue.kind === "artillery" || cue.kind === "grenade";
-    const foot = ["mud", "wood", "concrete", "leaves"].includes(cue.kind);
+    const wet = cue.kind === "splash" || cue.kind === "drip";
+    const foot = wet || ["mud", "wood", "concrete", "leaves"].includes(cue.kind);
     const rifle =
       cue.kind === "rifle" ||
       cue.kind === "serviceRifle" ||
@@ -207,7 +208,7 @@ export class BattleAudio {
                 : crack
                   ? 0.065
                   : foot
-                    ? 0.16
+                    ? wet ? 0.23 : 0.16
                     : cue.kind === "timber"
                       ? 1.5
                       : 0.65);
@@ -242,7 +243,7 @@ export class BattleAudio {
                   ? 550
                   : cue.kind === "wood"
                     ? 1900
-                    : foot
+                    : wet ? 3700 : foot
                       ? 2400
                       : cue.kind === "timber"
                         ? 1700
@@ -310,6 +311,11 @@ export class BattleAudio {
     if (cue.kind === "leaves") {
       for(const [offset,level] of [[.045,.28],[.08,.7],[.15,.18]])
         envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);
+    }
+    if (wet) {
+      for (const [offset, level] of [[.028,.3],[.057,.6],[.13,.1]])
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * level), start + offset);
+      filter.frequency.exponentialRampToValueAtTime(cue.occluded ? 400 : 750, end);
     }
     if(cue.kind === "forestWind") envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*.55),start+3.8);
     if(cue.kind === "forestCreak") {

@@ -1,10 +1,12 @@
 # Rendered review on every push
 
-The build/test/publish workflow renders its tested build in headless Chrome on GitHub’s Ubuntu runner. Six matrix jobs cover Industrial, Trenches, Verdun, Village, Lighthouse and Training grounds. Production and same-repository PR preview deployments wait for every rendered check. Ordinary branch pushes and fork pull requests validate without deployment. See [PR_PREVIEWS.md](PR_PREVIEWS.md).
+The build/test/publish workflow renders its tested build in headless Chrome on GitHub’s Ubuntu runner. Seven matrix jobs cover Industrial, Trenches, Verdun, Village, Lighthouse, Training grounds and Fort Vaux. Production and same-repository PR preview deployments wait for every rendered check. Ordinary branch pushes and fork pull requests validate without deployment. See [PR_PREVIEWS.md](PR_PREVIEWS.md).
 
 Each `render-<map>` artifact contains four PNGs: `overview-intact.png` (HUD hidden for map inspection), `overview-battle.png`, `first-person.png` and `third-person.png`. `report.json`, the overview and ground playtest logs, and `chrome.log` record the source SHA, WebGL renderer, simulation progress, browser errors and actual battle events. A failure screenshot is retained when possible. The job summary links to its artifact. Screenshot artifacts expire after 14 days; the intermediate build expires after seven days.
 
 Village also saves clean, fixed player-height inspection views: `detail-school.png`, `detail-inn.png`, `detail-street.png` and `detail-manor-room.png`. These hide the HUD and first-person weapon to show facade identity, roadside cover and a furnished interior before the battle advances.
+
+Fort Vaux saves four inspection views of the cistern, barracks, casemate and open yard. It also captures the floor plan and checks that neither the map nor HUD offers artillery targeting and both simulated scenarios have zero impacts.
 
 Village's diagnostic recording window is also ten minutes: software rendering the additional inspection views can exceed the ordinary two-minute wall-clock recording window before the 900-step battle advance begins. The simulated match duration and required tick/frame checks are unchanged.
 
@@ -12,11 +14,11 @@ The script uses real browser WebGL and an explicit `renderReview` bridge availab
 
 Industrial additionally fires real controlled rounds to verify hit direction, death reports, the brief death camera and its end after a scoped death, normal respawn, death-map marker expiry and damage-based assists. The check uses the normal tactical/scoreboard key handlers, verifies the assist column and checks death-card bounds at 600px height. Additional `combat-*.png` captures and `combatChecks` in the report preserve the evidence.
 
-Each build's browser jobs check the map links and available loadouts in the briefing, including the emplacement kit. Industrial follows the briefing's **Weapons** URL and checks each faction's Armoury cards against the gameplay profiles. It checks comparison-table visibility and sorting and saves `armoury-comparison.png`. Training drives deployment, mounting, firing, reloading, dismounting and packing through the normal input handlers.
+Each build's browser jobs check the map links and available loadouts in the briefing, including the emplacement kit. Industrial follows the briefing's **Armoury** URL and checks each faction's Armoury cards against the gameplay profiles. It checks comparison-table visibility and sorting and saves `armoury-comparison.png`. Training drives deployment, mounting, firing, reloading, dismounting and packing through the normal input handlers.
 
 ## Before-and-after images
 
-**Map and model visual comparison** builds both the target branch and proposed merge on map, model and rendering PRs. Each map job uses the same browser, graphics preset, opening seed and camera setup for both revisions. Download `visual-comparison-<map>` from the run summary, extract it and open `index.html` to compare overviews and first-person views side by side. Village also includes its four inspection views. These opening scenes are for review and do not gate publishing or merges.
+**Map and model visual comparison** builds both the target branch and proposed merge on map, model and rendering PRs. Each map job uses the same browser, graphics preset, opening seed and camera setup for both revisions. Download `visual-comparison-<map>` from the run summary, extract it and open `index.html` to compare overviews and first-person views side by side. Village and Fort Vaux also include four inspection views each. New maps receive screenshots of the proposed build until a base revision contains the map. These opening scenes are for review and do not gate publishing or merges.
 
 ## Nightly and on-demand audits
 

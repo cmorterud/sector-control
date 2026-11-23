@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        map: [industrial, trenches, verdun, village, headland, training]
+        map: [industrial, trenches, verdun, village, headland, training, fort-vaux]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -103,9 +103,13 @@ jobs:
           BASE_REVISION: ${{ github.event.pull_request.base.sha }}
           REVIEW_VISUAL_ONLY: '1'
         run: |
-          REVIEW_SOURCE_SHA="$BASE_REVISION" node tools/render-review.mjs "$MAP" visual-builds/before/dist playtest-artifacts/visual/before
+          if compgen -G "visual-builds/before/dist/previews/$MAP.*" >/dev/null; then
+            REVIEW_SOURCE_SHA="$BASE_REVISION" node tools/render-review.mjs "$MAP" visual-builds/before/dist playtest-artifacts/visual/before
+          fi
           node tools/render-review.mjs "$MAP" visual-builds/after/dist playtest-artifacts/visual/after
-          node tools/visual-comparison.mjs playtest-artifacts/visual
+          if test -d playtest-artifacts/visual/before; then
+            node tools/visual-comparison.mjs playtest-artifacts/visual
+          fi
       - name: Save both revisions and the comparison page
         if: always()
         id: screenshots
@@ -119,4 +123,9 @@ jobs:
         if: steps.screenshots.outputs.artifact-url != ''
         env:
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
-        run: printf '[Download the comparison](%s) and open `index.html` from the extracted folder.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          if test -f playtest-artifacts/visual/index.html; then
+            printf '[Download the comparison](%s) and open `index.html` from the extracted folder.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '[Download the new map screenshots](%s).\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          fi

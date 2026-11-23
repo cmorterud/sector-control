@@ -2,6 +2,7 @@ import type { FarmFront } from "./farm-front";
 import type { Woodland } from "./verdun-forest";
 import type { Landmark } from "./landmarks";
 import type { DestructionState } from "./destruction";
+import type { FortLayout } from "./fort-vaux-map";
 export const terrainResolution = 0.25;
 export const terrainPatchSize = 8;
 export type Vec = { x: number; z: number; y?: number };
@@ -52,7 +53,7 @@ export type Box = Vec & {
     gableSlope?: number;
     ridge?: number;
     eave?: -1 | 1;
-    feature?: "bookcase" | "desk" | "table" | "chair" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock";
+    feature?: "bookcase" | "desk" | "table" | "chair" | "bed" | "oven" | "hearth" | "counter" | "stall" | "cupboard" | "workbench" | "bell" | "clock" | "barricade";
     // A steep slate mansard slope standing in for the top story's facade.
     mansard?: boolean;
     // Palette name when it differs from the building id (kit buildings).
@@ -162,11 +163,14 @@ export interface KitRuntime {
   fallen: Record<string, number[]>;
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "village" | "verdun" | "headland" | "training";
+  id: "industrial" | "trenches" | "village" | "verdun" | "headland" | "training" | "fort-vaux";
   name: string;
   width: number;
   depth: number;
   navSpacing: number;
+  defaultTeamSize?: number;
+  artillery?: false;
+  fort?: FortLayout;
   navigationPoints?: Vec[];
   buildings?: {
     id: string; name: string; x: number; z: number; w: number; d: number;

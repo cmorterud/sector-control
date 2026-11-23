@@ -8,6 +8,9 @@ export class ArtilleryMap {
   open = false;
   private cursor = { x: 0.5, z: 0.5 };
   private panel = document.createElement("section");
+  private heading = document.createElement("h2");
+  private intro = document.createElement("p");
+  private closeButton = document.createElement("button");
   private grid = document.createElement("div");
   private status = document.createElement("p");
   private marker = document.createElement("i");
@@ -15,6 +18,8 @@ export class ArtilleryMap {
   private death = document.createElement("i");
   private terrain = document.createElement("canvas");
   private terrainRevision = -1;
+  private shortcut = "Q";
+  private targeting = true;
   private buttons: HTMLButtonElement[] = [];
   private flagMarkers: { id: string; dot: Element }[] = [];
   constructor(
@@ -26,22 +31,19 @@ export class ArtilleryMap {
     this.panel.id = "tactical-map";
     this.panel.className = "hidden";
     this.panel.setAttribute("aria-label", "Artillery tactical map");
-    this.panel.innerHTML = `<h2>ARTILLERY · CHOOSE A SECTOR</h2><p>Broad coordinates, imperfect fire. Battle continues.</p>`;
     this.grid.className = "tactical-grid";
     this.marker.className = "map-cursor";
     this.you.className = "map-you";
     this.you.title = "Your position";
     this.death.className="map-death";this.death.textContent="×";
     this.death.title="Last death location";this.death.setAttribute("aria-label","Last death location");
-    this.panel.append(this.grid, this.status);
-    const close = document.createElement("button");
-    close.textContent = "Q / RIGHT CLICK · CANCEL";
-    close.onclick = () => this.close();
-    this.panel.append(close);
+    this.closeButton.onclick = () => this.close();
+    this.panel.append(this.heading, this.intro, this.grid, this.status, this.closeButton);
     document.getElementById("ui")!.append(this.panel);
   }
   setShortcut(key: string) {
-    this.panel.querySelector(":scope > button")!.textContent = `${key} / RIGHT CLICK · CANCEL`;
+    this.shortcut = key;
+    this.closeButton.textContent = `${key} / RIGHT CLICK · ${this.targeting ? "CANCEL" : "CLOSE"}`;
   }
   close() {
     this.open = false;
@@ -57,9 +59,15 @@ export class ArtilleryMap {
     const g = this.game(),
       p = g.players[0];
     if (p.hp <= 0) return;
+    const artillery = this.targeting = g.map.artillery !== false;
+    this.panel.setAttribute("aria-label", artillery ? "Artillery tactical map" : "Fort floor plan");
+    this.heading.textContent = artillery ? "ARTILLERY · CHOOSE A SECTOR" : "FORT VAUX · FLOOR PLAN";
+    this.intro.textContent = artillery ? "Broad coordinates, imperfect fire. Battle continues." : "Barracks, cistern and east casemate. Battle continues.";
+    this.status.hidden = !artillery;
+    this.setShortcut(this.shortcut);
     this.open = true;
     this.panel.style.setProperty("--tactical-aspect",String(g.map.width/g.map.depth));
-    const sectors = artillerySectors(g.map);
+    const sectors = artillery ? artillerySectors(g.map) : [];
     this.grid.replaceChildren();
     this.grid.style.gridTemplateColumns = `repeat(${Math.ceil(g.map.width / 16)}, 1fr)`;
     this.grid.style.aspectRatio = `${g.map.width} / ${g.map.depth}`;
@@ -174,7 +182,9 @@ export class ArtilleryMap {
       label.setAttribute("text-anchor","middle");label.setAttribute("font-size","2.3");label.setAttribute("fill","#f8e9b2");label.textContent="EXERCISE AREA";
       svg.append(ring,label);
     }
-    this.grid.append(svg, this.you, this.marker,this.death);
+    this.grid.append(svg, this.you);
+    if (artillery) this.grid.append(this.marker);
+    this.grid.append(this.death);
     this.cursor = {
       x: Math.max(
         0,
@@ -189,6 +199,7 @@ export class ArtilleryMap {
     this.update();
   }
   move(e: MouseEvent, locked: boolean) {
+    if (this.game().map.artillery === false) return;
     const bounds = this.grid.getBoundingClientRect();
     if (locked) {
       this.cursor.x += e.movementX / bounds.width;
@@ -204,6 +215,7 @@ export class ArtilleryMap {
   select(target?: Vec) {
     if (!this.open) return;
     const g = this.game();
+    if (g.map.artillery === false) return;
     const selected = target ?? this.selected();
     const request = { x: selected.x, z: selected.z, area: true as const };
     if (artilleryTargetReason(g, g.players[0], request)) {
@@ -233,25 +245,27 @@ export class ArtilleryMap {
       drawTacticalTerrain(this.terrain, g.map);
       this.terrainRevision = revision;
     }
-    const sectors = artillerySectors(g.map),
-      selected = this.selected();
-    this.buttons.forEach((b, i) => {
-      const reason = artilleryTargetReason(g, p, { ...sectors[i], area: true });
-      // Keep unavailable cells in the mouse event path so right-click cancel
-      // and cursor tracking work even over a dimmed sector.
-      b.setAttribute("aria-disabled", String(!!reason));
-      b.title = reason ?? "Request broad sector";
-      b.classList.toggle("selected", sectors[i].name === selected.name);
-    });
-    const reason = artilleryTargetReason(g, p, { ...selected, area: true });
-    const ready = Math.max(
-      0,
-      Math.ceil((g.artillery.readyAt[p.team] - g.tick) / 30),
-    );
-    const error = artilleryUncertainty(g, p, selected);
-    this.status.textContent = `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO REQUEST"} · ${error === 10 ? "BLIND" : "OBSERVED"} ±${error}m drift + shell scatter`;
-    this.marker.style.left = `${this.cursor.x * 100}%`;
-    this.marker.style.top = `${this.cursor.z * 100}%`;
+    if (g.map.artillery !== false) {
+      const sectors = artillerySectors(g.map),
+        selected = this.selected();
+      this.buttons.forEach((b, i) => {
+        const reason = artilleryTargetReason(g, p, { ...sectors[i], area: true });
+        // Keep unavailable cells in the mouse event path so right-click cancel
+        // and cursor tracking work even over a dimmed sector.
+        b.setAttribute("aria-disabled", String(!!reason));
+        b.title = reason ?? "Request broad sector";
+        b.classList.toggle("selected", sectors[i].name === selected.name);
+      });
+      const reason = artilleryTargetReason(g, p, { ...selected, area: true });
+      const ready = Math.max(
+        0,
+        Math.ceil((g.artillery.readyAt[p.team] - g.tick) / 30),
+      );
+      const error = artilleryUncertainty(g, p, selected);
+      this.status.textContent = `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO REQUEST"} · ${error === 10 ? "BLIND" : "OBSERVED"} ±${error}m drift + shell scatter`;
+      this.marker.style.left = `${this.cursor.x * 100}%`;
+      this.marker.style.top = `${this.cursor.z * 100}%`;
+    }
     this.you.style.left = `${(p.x / g.map.width + 0.5) * 100}%`;
     this.you.style.top = `${(p.z / g.map.depth + 0.5) * 100}%`;
     const death=this.deathLocation?.();this.death.hidden=!death;

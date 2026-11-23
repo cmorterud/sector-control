@@ -27,7 +27,7 @@ function field(blocked = false, id: MapDefinition["id"] = "village") {
   return { game, player, teammate, target, step, setup };
 }
 
-it.each(["industrial", "trenches", "verdun", "village", "headland", "training"] as const)(
+it.each(["industrial", "trenches", "verdun", "village", "headland", "training", "fort-vaux"] as const)(
   "offers the kit and accepts a clear placement on %s",
   id => {
     const { game, player, step } = field(false, id);
