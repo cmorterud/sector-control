@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { equipLoadout, factions, switchWeapon } from "./loadouts";
-import { armouryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats } from "./weapon-stats";
+import { armouryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
 
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
@@ -20,8 +20,13 @@ it("follows the damage design rules", () => {
     expect(w.damage.arms).toBeLessThan(w.damage.stomach);
     expect(w.damage.legs).toBeLessThan(w.damage.stomach);
     expect(w.damage.stomach).toBeLessThanOrEqual(w.damage.chest);
-    if (w.role === "rifle" || w.role === "scoped") {
-      // A rifle to the head or chest always kills; anywhere else takes two or more.
+    if (w.role === "rifle") {
+      // A rifle kills with one hit to the head and two to the chest or stomach.
+      expect(shotsToKill(w, "head")).toBe(1);
+      expect(shotsToKill(w, "chest")).toBe(2);
+      expect(shotsToKill(w, "stomach")).toBe(2);
+    } else if (w.role === "scoped") {
+      // A scoped rifle still kills with any hit to the head or chest.
       expect(shotsToKill(w, "head")).toBe(1);
       expect(shotsToKill(w, "chest")).toBe(1);
       expect(shotsToKill(w, "stomach")).toBe(2);
@@ -36,7 +41,9 @@ it("derives hits and time to kill, and game velocity, from the stats", () => {
   const lewis = weaponStats.find(w => w.id === "lewis")!;
   expect(shotsToKill(lewis, "chest")).toBe(Math.ceil(soldierHealth / 38));
   expect(timeToKill(lewis, "chest")).toBeCloseTo((3 - 1) * 60 / 450, 6);
-  expect(timeToKill(weaponStats.find(w => w.id === "smle")!, "chest")).toBe(0);
+  const smle = weaponStats.find(w => w.id === "smle")!;
+  expect(timeToKill(smle, "head")).toBe(0);
+  expect(timeToKill(smle, "chest")).toBe(shotInterval(smle) / weaponTicksPerSecond);
   expect(gameMuzzleVelocity(weaponStats.find(w => w.id === "smle")!)).toBe(192);
   const fastest = [...weaponStats].sort((a, b) => gameMuzzleVelocity(b) - gameMuzzleVelocity(a))[0];
   expect(fastest.faction).toBe("german");
@@ -94,6 +101,27 @@ it.each([
   expect(switchWeapon(shooter, "sidearm", 0)).toBe(true);
   g.step(idle());
   expect(target.hp).toBe(Math.max(0, soldierHealth - w.damage[zone]));
+});
+
+it.each(weaponStats.filter(w => w.role === "rifle"))("takes two $name chest rounds or one head round to kill a full-health soldier", w => {
+  const hit = (g: Game, shooterId: number, team: typeof g.players[0]["team"], y: number) => {
+    g.projectiles.push({
+      actor: shooterId, team, id: g.projectiles.length + 1, weapon: "serviceRifle", weaponId: w.name,
+      x: 0, y, z: 1, vx: 0, vy: 0, vz: -192, remaining: 60, bornAt: 0, origin: { x: 0, y, z: 12 },
+    });
+    g.step(idle());
+  };
+  const chest = weaponRange();
+  Object.assign(chest.target, { x: 0, z: 0, yaw: 0 });
+  hit(chest.g, chest.shooter.id, chest.shooter.team, 1.3);
+  expect(chest.target.hp).toBeGreaterThan(0);
+  expect(chest.target.hp).toBe(soldierHealth - w.damage.chest);
+  hit(chest.g, chest.shooter.id, chest.shooter.team, 1.3);
+  expect(chest.target.hp).toBe(0);
+  const head = weaponRange();
+  Object.assign(head.target, { x: 0, z: 0, yaw: 0 });
+  hit(head.g, head.shooter.id, head.shooter.team, 1.7);
+  expect(head.target.hp).toBe(0);
 });
 
 it("applies pistol falloff on a projectile beyond the old 25 metre limit", () => {
