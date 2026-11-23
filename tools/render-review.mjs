@@ -146,7 +146,13 @@ try {
   report.floorPlan=await client.evaluate(`(()=>{
    const key=()=>{window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));};
    const review=window.sectorRenderReview;
-   review.survey(true);key();
+   review.survey(true);
+   const minimap=document.querySelector('#minimap'), mapCanvas=minimap.querySelector('canvas');
+   if(!minimap.offsetWidth||minimap.querySelectorAll('.minimap-flag').length!==3||!minimap.querySelector('.minimap-player'))
+    throw Error('Fort Vaux minimap is missing the player marker or objective flags');
+   const corridor=mapCanvas.getContext('2d').getImageData(mapCanvas.width/2,mapCanvas.height/2,1,1).data;
+   if(corridor[0]===34&&corridor[1]===45)throw Error('Fort minimap is missing its interior floor plan');
+   key();
    const panel=document.querySelector('#tactical-map');
    if(panel.classList.contains('hidden')||!panel.textContent.includes('FORT VAUX · FLOOR PLAN')||panel.querySelector('.tactical-grid button,.map-cursor'))throw Error('Fort Vaux opened artillery targeting instead of a floor plan');
    for(const room of ['Barracks','Cistern','East Casemate'])if(!panel.textContent.includes(room))throw Error('Missing floor-plan flag '+room);
@@ -163,7 +169,7 @@ try {
   await client.evaluate(`(()=>{if(window.sectorRenderReview.state().player.hp!==75||!document.querySelector('.damage-bearing'))throw Error('A real hit did not show a directional indicator');})()`);
   await screenshot('combat-hit-direction');
   await stage('death');
-  await client.evaluate(`(()=>{const s=window.sectorRenderReview.state(),card=document.querySelector('.death-card');if(s.player.hp!==0||!s.combat.view||!card?.textContent.includes('AR-01')||!card.textContent.includes('100 damage'))throw Error('Death view or report did not reflect real shots');})()`);
+  await client.evaluate(`(()=>{const s=window.sectorRenderReview.state(),card=document.querySelector('.death-card');if(s.player.hp!==0||!s.combat.view||!card?.textContent.includes('AR-01')||!card.textContent.includes('100 damage'))throw Error('Death view or report did not reflect real shots');if(!document.querySelector('.kill-feed-entry.blue b.blue')?.textContent.includes('YOU'))throw Error('The death of a friendly soldier was not blue in the kill feed');})()`);
   await screenshot('combat-death-card');
   await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:600,deviceScaleFactor:1,mobile:false});
   await client.evaluate(`(()=>{const r=document.querySelector('.death-card').getBoundingClientRect();if(r.top<0||r.bottom>innerHeight||r.left<0||r.right>innerWidth)throw Error('Death card is clipped at 600px height');})()`);
@@ -172,6 +178,7 @@ try {
   await client.evaluate(`window.sectorRenderReview.advance(80)`);
   await client.evaluate(`(()=>{const s=window.sectorRenderReview.state();if(s.player.hp!==0||s.combat.view||s.combat.fov<69)throw Error('The brief death view did not end at a wide field of view');})()`);
   await stage('respawn');await key('KeyQ');await key('KeyQ','keyup');
+  await until(()=>client.evaluate(`document.querySelector('.battle-sidebar').hidden`));
   await client.evaluate(`(()=>{const s=window.sectorRenderReview.state(),m=document.querySelector('.map-death');if(s.player.hp!==100||s.combat.view||!m||m.hidden||!s.combat.marker)throw Error('Respawn did not retain the death marker and restore the camera');})()`);
   await screenshot('combat-death-map');
   await client.evaluate(`window.sectorRenderReview.advance(181)`);
@@ -183,7 +190,19 @@ try {
   await until(()=>client.evaluate(`!document.getElementById('scoreboard').classList.contains('hidden')`));
   await client.evaluate(`(()=>{const board=document.getElementById('scoreboard'),row=[...board.querySelectorAll('.row')].find(r=>r.firstElementChild?.textContent==='YOU');if(!board.querySelector('[title="Assists"]')||row?.children[2].textContent!=='1')throw Error('Scoreboard assist column is missing or incorrect');})()`);
   await screenshot('combat-assist-scoreboard');await key('Tab','keyup');
-  report.combatChecks={damageBearing:true,deathReport:true,deathView:true,deathViewEnds:true,shortViewport:true,respawnMarker:true,markerExpiry:true,assistCredit:true,scoreboard:true};
+  await stage('kill');
+  await client.evaluate(`(()=>{
+   const confirmation=document.querySelector('.kill-notice'), row=document.querySelector('.kill-feed-entry.red');
+   if(!confirmation.textContent.startsWith('You killed ')||row?.querySelector('b.blue')?.textContent!=='YOU'||
+      !confirmation.textContent.includes(row.querySelector('b.red').textContent))throw Error('A real kill did not display the victim in the toast and red kill feed');
+   const {player}=window.sectorRenderReview.state(), marker=document.querySelector('.minimap-player');
+   const map=document.querySelector('#minimap'),canvas=map.querySelector('canvas');
+   if(!map.offsetWidth||!canvas.width||marker.hidden||!marker.style.transform.includes('rotate')||
+      player.x!==0||marker.style.left!=='50%'||!Number.isFinite(parseFloat(marker.style.top)))throw Error('The minimap did not track the player');
+  })()`);
+  await screenshot('combat-kill-hud');
+  await client.evaluate(`(()=>{window.sectorRenderReview.advance(90);if(document.querySelector('.kill-notice').textContent||!document.querySelector('.kill-feed-entry.red'))throw Error('The kill confirmation and feed did not expire at different times');})()`);
+  report.combatChecks={damageBearing:true,deathReport:true,deathView:true,deathViewEnds:true,shortViewport:true,respawnMarker:true,markerExpiry:true,assistCredit:true,scoreboard:true,killConfirmation:true,killFeed:true,minimap:true};
   console.log(JSON.stringify({map,combatChecks:report.combatChecks}));
  }
  if(!visualOnly&&map==='training'){

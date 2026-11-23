@@ -22,6 +22,7 @@ import { fortVauxMap } from "./fort-vaux-map";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
 import { ArtilleryMap } from "./artillery-map";
+import { Minimap } from "./minimap";
 import { flagContains } from "./domination";
 import { Renderer } from "./rendering";
 import {
@@ -50,6 +51,16 @@ root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTR
 const el = (id: string) => document.getElementById(id)!;
 const combatFeedback=new CombatFeedback(),combatOverlay=document.createElement("div");
 combatOverlay.id="combat-feedback";el("hud").append(combatOverlay);
+const battleSidebar = document.createElement("aside");
+battleSidebar.className = "battle-sidebar";
+battleSidebar.hidden = true;
+battleSidebar.innerHTML = '<div id="minimap" role="img" aria-label="North-up battlefield minimap"></div><ol id="kill-feed" aria-label="Kill feed"></ol>';
+const killNotice = document.createElement("div");
+killNotice.className = "kill-notice";
+killNotice.setAttribute("role", "status");
+el("hud").append(battleSidebar, killNotice);
+const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
+let displayedFeed = "";
 const escapePause = new EscapePause();
 let mouseCaptureNeeded = false,
   mouseCapturePending = false;
@@ -453,8 +464,21 @@ function table() {
 }
 function hud(now: number) {
   const p = game.players[0];
+  const playing = !paused && !held("scoreboard");
+  const aimingScope = p.hp > 0 && !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick);
+  const clearHUD = playing && !tacticalMap.open;
   root.classList.toggle("dead",p.hp<=0);
-  combatOverlay.innerHTML=paused||held("scoreboard")?"":combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw);
+  combatOverlay.innerHTML=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw):"";
+  battleSidebar.hidden = !clearHUD || aimingScope;
+  if (!battleSidebar.hidden) {
+    minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
+    const feed = combatFeedback.killFeed(game);
+    if (feed !== displayedFeed) {
+      killFeed.innerHTML = displayedFeed = feed;
+    }
+  }
+  const confirmation = clearHUD ? combatFeedback.killConfirmation(game) : "";
+  if (killNotice.textContent !== confirmation) killNotice.textContent = confirmation;
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
@@ -482,7 +506,7 @@ function hud(now: number) {
   }
   el("health").innerHTML =
     `<small>VITALS / ${factions[p.faction ?? factionFor(map,p.team)].name.toUpperCase()}</small><strong>${Math.ceil(p.hp)}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
-  root.classList.toggle("scoped", !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick));
+  root.classList.toggle("scoped", aimingScope);
   el("ammo").innerHTML =
     `<small>${p.weaponId ?? weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : p.weapon === "machineGun" ? "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
@@ -774,7 +798,7 @@ function advanceReview(ticks:number) {
   accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
 }
 function combatReview(stage:string) {
-  if(!renderReview||map.id!=="industrial"||!["hit","death","respawn","assist"].includes(stage))throw Error("Unknown combat review");
+  if(!renderReview||map.id!=="industrial"||!["hit","death","respawn","assist","kill"].includes(stage))throw Error("Unknown combat review");
   reviewManual=true;keys.clear();triggerDown=fire=aim=reload=mantle=grenade=smoke=melee=false;
   pendingEquip=pendingArtillery=undefined;pendingRedeploy=false;preferredFirstPerson=true;chosenLoadout="rifleman";
   start();game.commandOverride=()=>idle();
@@ -796,6 +820,7 @@ function combatReview(stage:string) {
     }
   };
   if(stage==="assist"){shoot(player,enemy,1);shoot(ally,enemy,3);}
+  else if(stage==="kill")shoot(player,enemy,4);
   else {shoot(enemy,player,stage==="hit"?1:4);if(stage!=="hit")advanceReview(stage==="respawn"?150:20);}
   renderer.remember(game);hud(performance.now());
   return {hp:player.hp,assists:player.assists,tick:game.tick};

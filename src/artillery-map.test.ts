@@ -4,7 +4,10 @@ import { headlandMap } from "./headland-map";
 import { villageMap } from "./village-map";
 import {Game,TestCollision} from "./simulation";
 import {industrialMap} from "./map";
-vi.mock("./tactical-terrain",()=>({drawTacticalTerrain:vi.fn()}));
+vi.mock(import("./tactical-terrain"), async (importOriginal) => ({
+  ...await importOriginal(),
+  drawTacticalTerrain: vi.fn(),
+}));
 
 // Only the SVG construction is under test; terrain painting and live game
 // updates are separate from the road paths that caused the black polygons.

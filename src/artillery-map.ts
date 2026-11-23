@@ -2,7 +2,7 @@ import { artillerySector, artillerySectors } from "./artillery-sectors";
 import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import type { Game } from "./simulation";
 import type { Vec } from "./map";
-import { drawTacticalTerrain } from "./tactical-terrain";
+import { createTacticalRoutes, drawTacticalTerrain } from "./tactical-terrain";
 
 export class ArtilleryMap {
   open = false;
@@ -82,67 +82,7 @@ export class ArtilleryMap {
       this.grid.append(b);
       return b;
     });
-    // Static trench strokes and your own position only; no live enemy intelligence.
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${g.map.width} ${g.map.depth}`);
-    svg.setAttribute("preserveAspectRatio", "none");
-    if (g.map.streets) {
-      for (const street of g.map.streets ?? []) {
-        const d=street.points.map((p,i)=>(i ? "L" : "M")+(p.x+g.map.width/2)+","+(p.z+g.map.depth/2)).join(" ");
-        const road = document.createElementNS(svg.namespaceURI, "path");
-        road.setAttribute("d", d);
-        road.setAttribute("stroke", "#b1a587");
-        road.setAttribute("stroke-width", String(street.width));
-        road.setAttribute("fill", "none");
-        svg.append(road);
-      }
-
-    }
-    for (const line of g.map.terrain?.trenchLines ?? [])
-      for (const s of line.sections) {
-        const path = document.createElementNS(svg.namespaceURI, "path");
-        path.setAttribute(
-          "d",
-          `M${s.x + g.map.width / 2},${s.z - s.length / 2 + g.map.depth / 2} v${s.length}`,
-        );
-        path.setAttribute(
-          "stroke",
-          line.team === "blue" ? "#64bdd6" : "#e38e77",
-        );
-        path.setAttribute("stroke-width", "2");
-        svg.append(path);
-      }
-    for (const route of [
-      ...(g.map.terrain?.communicationRoutes ?? []),
-      ...(g.map.terrain?.branchRoutes ?? []),
-    ]) {
-      const path = document.createElementNS(svg.namespaceURI, "path");
-      path.setAttribute(
-        "d",
-        route.points
-          .map(
-            (p, i) =>
-              `${i ? "L" : "M"}${p.x + g.map.width / 2},${p.z + g.map.depth / 2}`,
-          )
-          .join(" "),
-      );
-      path.setAttribute(
-        "stroke",
-        route.team === "blue" ? "#64bdd6" : "#e38e77",
-      );
-      path.setAttribute("stroke-width", "1.5");
-      path.setAttribute("fill", "none");
-      svg.append(path);
-    }
-    for (const bay of g.map.terrain?.shelterBays ?? []) {
-      const room = document.createElementNS(svg.namespaceURI, "rect");
-      room.setAttribute("x", String(bay.x + g.map.width / 2 - 2));
-      room.setAttribute("y", String(bay.z + g.map.depth / 2 - 2));
-      room.setAttribute("width", "4");
-      room.setAttribute("height", "4");
-      room.setAttribute("fill", bay.team === "blue" ? "#64bdd6" : "#e38e77");
-      svg.append(room);
-    }
+    const svg = createTacticalRoutes(g.map);
     this.flagMarkers = [];
     if (g.scoring === "domination")
       for (const s of g.sectors) {
