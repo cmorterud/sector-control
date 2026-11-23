@@ -6,6 +6,7 @@ import { flagContains } from "./domination";
 import { fortVauxMap, inFortRect } from "./fort-vaux-map";
 import { bodyBlocked, supportHeight, walkSegment } from "./map";
 import { Game, TestCollision, botCommand, idle, pathfind, resolveTeamSize } from "./simulation";
+import { planVillageMove } from "./village-tactics";
 
 const match = (bots = true) => new Game(new TestCollision(fortVauxMap), bots, 3600, 12345, undefined,
   { map: fortVauxMap, ambientArtillery: true });
@@ -93,15 +94,49 @@ it.each([6, 12])("lets both sides contest the Cistern with %i soldiers per team"
       if (p.hp <= 0) continue;
       if (flagContains(g, p, g.sectors[1])) firstAtB[p.team] = Math.min(firstAtB[p.team], g.tick);
       if (Math.abs(p.x) > 8 && Math.abs(p.x) < 17 && Math.abs(p.z) < 6) routes[p.team].add("gallery");
-      if (Math.abs(p.x) < 12 && Math.abs(p.z - fort.approach.service.z) < 2) routes[p.team].add("service");
+      // The service passage counts only on the team's own half: reaching it
+      // from the Cistern down the short link is not a flank.
+      const ownHalf = p.x * (p.team === "blue" ? 1 : -1) < -4;
+      if (ownHalf && Math.abs(p.x) < 12 && Math.abs(p.z - fort.approach.service.z) < 2) routes[p.team].add("service");
       if (inFortRect(p, fort.yard)) routes[p.team].add("yard");
     }
   }
   for (const team of ["blue", "red"] as const) {
     expect(routes[team].has("gallery")).toBe(true);
     expect(routes[team].has("service")).toBe(true);
-    if (teamSize === 12) expect(routes[team].has("yard")).toBe(true);
   }
   expect(Math.abs(firstAtB.blue - firstAtB.red)).toBeLessThan(75);
   expect(contested).toBe(true);
+});
+
+const crossesCistern = (path: { x: number; z: number }[]) => path.some(q => Math.abs(q.x) < 8 && Math.abs(q.z) < 7);
+
+it("connects each spawn through its stores to the service passage without the Cistern", () => {
+  const { spawn, fort } = fortVauxMap;
+  for (const team of ["blue", "red"] as const) {
+    const side = team === "blue" ? -1 : 1;
+    for (const goal of [{ x: 50 * side, z: -11 }, { x: 30 * side, z: -17 }, fort!.approach.serviceEntry[team], { x: 12 * side, z: -16 }]) {
+      const path = pathfind(spawn[team], goal, fortVauxMap);
+      expect(path.length).toBeGreaterThan(0);
+      expect(crossesCistern(path)).toBe(false);
+    }
+  }
+});
+
+it("sends service and yard flankers round the Cistern for both teams", () => {
+  const g = new Game(new TestCollision(fortVauxMap), true, 600, 12345, undefined, { map: fortVauxMap, teamSize: 6, humanPlayerIds: [] });
+  const fort = g.map.fort!, flag = (id: string) => g.sectors.findIndex(s => s.id === id);
+  for (const team of ["blue", "red"] as const) {
+    const soldier = (index: number) => g.players.find(p => p.team === team && p.teamIndex === index)!;
+    for (const [p, objective, approach] of [
+      [soldier(1), flag("B"), fort.approach.serviceEntry[team]],
+      [soldier(2), flag(team === "blue" ? "C" : "A"), fort.approach.yard],
+    ] as const) {
+      Object.assign(p, { ...g.map.spawn[team], suppression: 0, objective, villagePlan: null });
+      planVillageMove(g, p, (a, b) => pathfind(a, b, g.map));
+      expect(p.villagePlan?.approach).toBe(approach);
+      expect(p.path.length).toBeGreaterThan(0);
+      expect(crossesCistern(p.path)).toBe(false);
+    }
+  }
 });

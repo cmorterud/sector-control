@@ -10,7 +10,9 @@ export interface FortLayout {
   water: FortRect;
   waterHeight: number;
   ceilings: Box[];
-  approach: { service: Vec; yard: Vec };
+  // serviceEntry is where each team's stores room opens onto the service
+  // passage, so a flanker walks its length instead of cutting through the Cistern.
+  approach: { service: Vec; serviceEntry: Record<"blue" | "red", Vec>; yard: Vec };
 }
 
 const rooms: FortRoom[] = [
@@ -24,6 +26,7 @@ const rooms: FortRoom[] = [
 ];
 const yard: FortRect = { x0: -8, x1: 8, z0: 14, z1: 25 };
 const yardPassage = { z: 19, width: 3.5 };
+const serviceRoute: [number, number][] = [[-25, -19], [-18, -19], [-18, -16], [18, -16], [18, -19], [25, -19]];
 const water: FortRect = { x0: -7.7, x1: 6.35, z0: -6.7, z1: 4.9 };
 
 // The turns break sight lines into the spawns and across the service passage.
@@ -35,7 +38,7 @@ const routes: { points: [number, number][]; width: number }[] = [
   { points: [[36, 0], [43, 0]], width: 4 },
   { points: [[-52, -6], [-52, -11], [-48, -11], [-48, -17], [-32, -17]], width: 3.5 },
   { points: [[52, -6], [52, -11], [48, -11], [48, -17], [32, -17]], width: 3.5 },
-  { points: [[-25, -19], [-18, -19], [-18, -16], [18, -16], [18, -19], [25, -19]], width: 3.5 },
+  { points: serviceRoute, width: 3.5 },
   { points: [[0, -16], [0, -6]], width: 3.6 },
   { points: [[-29, 6], [-29, yardPassage.z], [yard.x0 + 1, yardPassage.z]], width: yardPassage.width },
   { points: [[29, 6], [29, yardPassage.z], [yard.x1 - 1, yardPassage.z]], width: yardPassage.width },
@@ -140,10 +143,19 @@ const flags = [
 export const fortVauxMap: MapDefinition = {
   id: "fort-vaux", name: "Fort Vaux", width: 122, depth: 56, navSpacing: 2.5,
   defaultTeamSize: 6, scoring: "domination", artillery: false,
-  fort: { rooms, passages, yard, yardPassage, water, waterHeight: .13, ceilings, approach: { service: { x: 0, z: -16 }, yard: center(yard) } },
+  fort: { rooms, passages, yard, yardPassage, water, waterHeight: .13, ceilings, approach: {
+    service: { x: 0, z: -16 },
+    serviceEntry: { blue: { x: serviceRoute[0][0], z: serviceRoute[0][1] }, red: { x: serviceRoute.at(-1)![0], z: serviceRoute.at(-1)![1] } },
+    yard: center(yard),
+  } },
   spawn: { blue: { x: -49.5, z: .8 }, red: { x: 49.5, z: -.8 } },
   sectors: flags,
-  navigationPoints: routes.flatMap(({ points }) => points.map(([x, z]) => ({ x, z }))),
+  // Every 1.25 m along each route: the regular 2.5 m lattice can miss narrow
+  // corridors entirely, leaving rooms such as the stores unreachable.
+  navigationPoints: routes.flatMap(({ points }) => points.slice(1).flatMap(([x, z], i) => {
+    const [fromX, fromZ] = points[i], steps = Math.max(1, Math.ceil(Math.hypot(x - fromX, z - fromZ) / 1.25));
+    return Array.from({ length: steps + (i === points.length - 2 ? 1 : 0) }, (_, j) => ({ x: fromX + (x - fromX) * j / steps, z: fromZ + (z - fromZ) * j / steps }));
+  })),
   buildings: rooms.map(room => ({ id: room.id, name: room.name, ...center(room), w: room.x1 - room.x0,
     d: room.z1 - room.z0, baseY: 0, stories: 1, posts: [] })),
   boxes: [...solid, ...ceilings, ...vaultColliders, ...walkway, ...contents],

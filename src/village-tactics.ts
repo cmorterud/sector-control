@@ -238,9 +238,13 @@ export function planVillageMove(
     if (g.map.fort && !stalled && !unsafe && p.suppression < .28) {
       // Reserve most soldiers for the short galleries. A few approaching the
       // center or opposite flag use a side route, then resume ordinary cover play.
-      const flank = flag.id === "B" && p.teamIndex % 4 === 1 ? g.map.fort.approach.service
+      const entry = g.map.fort.approach.serviceEntry[p.team];
+      const flank = flag.id === "B" && p.teamIndex % 4 === 1 ? entry
         : flag.home && flag.home !== p.team && p.teamIndex % 4 === 2 ? g.map.fort.approach.yard : null;
-      if (flank && (p.x * forward(g, p) < -15 || (old?.approach === flank && dist(p, flank) > 1.5))) approach = flank;
+      // A service flanker is only sent to the entry while still behind it, so
+      // one who has passed it carries on along the passage.
+      const behind = flank === entry ? (p.x - entry.x) * forward(g, p) < -1.5 : p.x * forward(g, p) < -15;
+      if (flank && (behind || (old?.approach === flank && dist(p, flank) > 1.5))) approach = flank;
     }
     // Reachability matters more than a cover score. Only a bounded shortlist
     // needs full A*: the shared catalog uses cheap footprint/height checks.
