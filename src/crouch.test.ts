@@ -276,7 +276,7 @@ describe("crouching combat profile", () => {
     for (let i = 0; i < 6; i++) g.step({ ...idle(), crouch: true, yaw: Math.PI / 2 });
     const e = g.events.find((e) => e.type === "smokeThrow");
     expect(e?.type === "smokeThrow" && e.from.y).toBeCloseTo(1.18);
-    expect(p.smokes).toBe(1);
+    expect(p.smokes).toBe(0);
     expect(p.grenades).toBe(3);
     expect(p.crouched).toBe(true);
     for (let i = 0; i < 120; i++) g.step({ ...idle(), crouch: true });

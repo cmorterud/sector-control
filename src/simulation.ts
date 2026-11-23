@@ -1,6 +1,5 @@
 import { advanceEmplacements, checkEmplacementSupport, damageEmplacements, dismount, emplacementCommand, emplacementView, mountedGun, operateGun, type Emplacement } from "./emplacements";
 import { damageAt, soldierHealth, type HitZone } from "./weapon-stats";
-import { villageRoad } from "./ground-surface";
 import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
 import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
@@ -16,6 +15,7 @@ import {
   villageSpawn,
   villageSteering,
   villageCover,
+  screenCrossing,
   usesVillageTactics,
   type VillagePlan,
 } from "./village-tactics";
@@ -381,6 +381,7 @@ export interface Soldier extends Vec {
   reserve: number;
   grenades: number;
   smokes: number;
+  botSmokeReadyAt: number;
   suppression: number;
   combatReaction?: CombatReaction | null;
   combatCover?: CombatCover | null;
@@ -1001,7 +1002,8 @@ export class Game {
         ammo: 30,
         reserve: 120,
         grenades: 3,
-        smokes: 2,
+        smokes: smokeRules.perSpawn,
+        botSmokeReadyAt: 0,
         suppression: 0,
         combatReaction: null,
         combatCover: null,
@@ -1145,7 +1147,8 @@ export class Game {
     p.reserve = profile.reserve;
     if (p.inventory) Object.assign(p.inventory[p.equippedSlot ?? "primary"], { ammo: p.ammo, reserve: p.reserve });
     p.grenades = 3;
-    p.smokes = 2;
+    p.smokes = smokeRules.perSpawn;
+    p.botSmokeReadyAt = this.tick + smokeRules.botSpawnDelay;
     p.suppression = 0;
     p.combatReaction = p.combatCover = null;
     p.nextCombatReaction = p.nextCombatCover = this.tick;
@@ -2931,27 +2934,9 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     const landing = mantleLanding(p, c, g.map);
     c.mantle = !!landing && dist(landing, objective) + 0.3 < dist(p, objective);
   }
-  // A few village riflemen screen an exposed road crossing individually. This
-  // spends their normal smoke supply; it does not introduce a squad controller.
-  if (
-    usesVillageTactics(g.map) &&
-    p.weapon === "serviceRifle" &&
-    p.id % 8 === 0 &&
-    p.smokes > 0 &&
-    p.reloadAt === 0 &&
-    g.tick >= p.throwUntil &&
-    (g.map.streets
-      ? (villageRoad(g.map,p.x,p.z)>.65 || villageRoad(g.map,p.x+Math.sign(objective.x-p.x)*3,p.z)>.65) && Math.abs(objective.x-p.x)>12 && p.y<groundHeight(p.x,p.z,g.map)+.25
-      : Math.abs(p.x)>6 && Math.abs(p.x)<19 && p.x*objective.x<0) &&
-    g.tick % 240 === p.id % 240 &&
-    !g.smokeClouds.some((cloud) => dist(p, cloud) < 16)
-  ) {
-    c.smoke = true;
-    c.fire = c.reload = false;
-    c.yaw = Math.atan2(objective.x - p.x, p.z - objective.z);
-    c.pitch = 0.38;
-  }
-  if (usesVillageTactics(g.map))
+  if (usesVillageTactics(g.map)) {
     villageSteering(g, p, c, target ? dist(p, target) : Infinity);
+    screenCrossing(g, p, c, objective);
+  }
   return braceCommand(g, p, assaultCommand(g, p, c));
 }

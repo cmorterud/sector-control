@@ -5,6 +5,7 @@ import {equipLoadout, type Loadout, type FactionId} from "./loadouts";
 import {weaponProfile} from "./weapons";
 import {soldierHealth} from "./weapon-stats";
 import {flagContains} from "./domination";
+import {smokeRules} from "./smoke";
 import {trainingStations, type TrainingStationId} from "./training-map";
 
 export const trainingLessons = [
@@ -123,7 +124,7 @@ export class TrainingSession {
     const p=g.players[0],profile=weaponProfile(p);
     if(p.hp<=0)return false;
     if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
-    p.hp=soldierHealth;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=2;
+    p.hp=soldierHealth;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=smokeRules.perSpawn;
     p.reloadAt=0;g.artillery.readyAt.blue=g.tick;
     resupplyEmplacement(g,p);
     const kit=g.flames.kits.find(k=>k.carrier===0);if(kit)kit.fuel=240;

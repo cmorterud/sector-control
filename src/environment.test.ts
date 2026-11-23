@@ -193,7 +193,7 @@ it("routes a later wave through a newly excavated crater and crouches while regr
       y: 0.85,
       hp: 100,
       ammo: 30,
-      smokes: 2,
+      smokes: 1,
       protectedUntil: 0,
     });
   g.explode(
