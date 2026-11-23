@@ -1,6 +1,7 @@
+import { calculateTangents } from "playcanvas";
 import { expect, it } from "vitest";
 import {
-  backdropBoxMesh, backdropGround, backdropHeight, backdropRules, backdropScenery, backdropTrenches,
+  backdropBoxMesh, backdropGround, mirrorIntoMap, backdropHeight, backdropRules, backdropScenery, backdropTrenches,
   distantFlares, distantFlashes, flarePosition, flareTicks, trenchEnds,
 } from "./backdrop";
 import { trenchMap } from "./trench-map";
@@ -79,4 +80,24 @@ it("schedules distant bursts and flares deterministically, far from the fighting
     expect(end.burning).toBe(true);
     expect(flarePosition(flare, flare.tick + flareTicks).burning).toBe(false);
   }
+});
+
+it("mirrors ground texture coordinates back into the map, continuous at the edge", () => {
+  for (const [v, half, inside] of [[96, 96, 96], [100, 96, 92], [-100, 96, -92], [290, 96, -94], [-81, 80, -79]])
+    expect(mirrorIntoMap(v, half)).toBeCloseTo(inside, 6);
+  for (let i = 0; i < ground.uvs!.length; i += 2) {
+    expect(Math.abs(ground.uvs![i] * 3)).toBeLessThanOrEqual(hx + 1e-6);
+    expect(Math.abs(ground.uvs![i + 1] * 3)).toBeLessThanOrEqual(hz + 1e-6);
+  }
+});
+
+it("gives every ground vertex a usable tangent, which mirrored coordinates would not", () => {
+  const unit = (uvs: Float32Array) => {
+    const t = calculateTangents([...ground.positions], [...ground.normals], [...uvs], [...ground.indices]);
+    let bad = 0;
+    for (let i = 0; i < t.length; i += 4) if (!(Math.hypot(t[i], t[i + 1], t[i + 2]) > 0.5)) bad++;
+    return bad;
+  };
+  expect(unit(ground.tangentUvs!)).toBe(0);
+  expect(unit(ground.uvs!)).toBeGreaterThan(0);
 });

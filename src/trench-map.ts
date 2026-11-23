@@ -19,9 +19,11 @@ const spawnDistance = 60,
   rearCoverDistance = 55;
 // The fought-over area. A dead zone of open ground rings it out to the terrain
 // edge: a barbed-wire belt marks the line, and soldiers past it are shelled.
+// Terrain patches are 8 m and start at whole multiples of 8, so both half
+// extents must be multiples of 8 or the outer patches overhang the edge.
 const playWidth = 160,
   playDepth = 128,
-  deadZone = 12;
+  deadZone = 16;
 const width = playWidth + deadZone * 2,
   depth = playDepth + deadZone * 2,
   cellSize = 1;

@@ -1829,7 +1829,7 @@ export class Renderer implements CollisionWorld {
     land.setPositions(ground.positions);
     land.setNormals(ground.normals);
     land.setUvs(0, ground.uvs!);
-    land.setVertexStream(pc.SEMANTIC_TANGENT, pc.calculateTangents(ground.positions, ground.normals, ground.uvs!, ground.indices), 4);
+    land.setVertexStream(pc.SEMANTIC_TANGENT, pc.calculateTangents(ground.positions, ground.normals, ground.tangentUvs!, ground.indices), 4);
     land.setColors(ground.colors);
     land.setIndices(ground.indices);
     land.update(pc.PRIMITIVE_TRIANGLES);
