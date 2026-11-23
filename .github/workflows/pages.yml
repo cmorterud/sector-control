@@ -38,7 +38,7 @@ jobs:
       pull-requests: read
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url || steps.deploy_final.outputs.page_url }}
     outputs:
       publish: ${{ steps.context.outputs.publish }}
       pr: ${{ steps.context.outputs.pr }}
@@ -84,17 +84,36 @@ jobs:
           path: playtest-artifacts/pages-site
       - uses: actions/configure-pages@v6
         if: steps.context.outputs.publish == 'true'
-      # The deployment looks the artifact up once, and the run's artifact list
-      # lags the upload: without this wait about half the deployments failed.
-      - name: Wait until the uploaded site is listed for this run
+      # deploy-pages looks the artifact up once, in the Actions results
+      # service, whose listing lags a finished upload by a few seconds. About
+      # half of all deployments failed there. The public REST listing is a
+      # different service and can show the artifact while the lookup still
+      # misses it, so the only reliable check is the deployment itself: pause
+      # briefly, then retry it up to twice with longer pauses.
+      - name: Let the artifact listing settle
         if: steps.context.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PAGES_ARTIFACT: github-pages-${{ github.run_attempt }}
-        run: node tools/pages-preview.mjs artifact
+        run: sleep 5
       - uses: actions/deploy-pages@v5
         if: steps.context.outputs.publish == 'true'
         id: deploy
+        continue-on-error: true
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+      - name: Wait before retrying the deployment
+        if: steps.context.outputs.publish == 'true' && steps.deploy.outcome == 'failure'
+        run: sleep 20
+      - uses: actions/deploy-pages@v5
+        if: steps.context.outputs.publish == 'true' && steps.deploy.outcome == 'failure'
+        id: deploy_retry
+        continue-on-error: true
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+      - name: Wait before the final deployment attempt
+        if: steps.context.outputs.publish == 'true' && steps.deploy_retry.outcome == 'failure'
+        run: sleep 40
+      - uses: actions/deploy-pages@v5
+        if: steps.context.outputs.publish == 'true' && steps.deploy_retry.outcome == 'failure'
+        id: deploy_final
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
 
