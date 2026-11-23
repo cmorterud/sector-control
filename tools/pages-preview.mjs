@@ -256,13 +256,34 @@ export async function stageSite() {
   await appendFile(process.env.GITHUB_STEP_SUMMARY, `Published content snapshot: \`${commit.sha}\`\n\n${context.cleanup ? 'Closed previews removed.' : `[Play ${context.pr ? `PR #${context.pr}` : 'production'}](${context.url}) — browser verification follows.`}\n`);
 }
 
-export async function verifyPublished(base, head, pr, fetcher = fetch) {
+export function expectedCI(env = process.env) {
+  return {
+    ...(env.EXPECTED_CI_RUN ? {run: Number(env.EXPECTED_CI_RUN)} : {}),
+    ...(env.EXPECTED_CI_ATTEMPT ? {attempt: Number(env.EXPECTED_CI_ATTEMPT)} : {}),
+  };
+}
+
+export async function readPublishedManifest(base, expected = {}, fetcher = fetch) {
   const url = new URL(base);
-  if (url.protocol !== 'https:' || !url.pathname.endsWith('/') || url.search || url.hash || url.username || url.password || !shaPattern.test(head)) throw Error('Invalid verification target');
-  const response = await fetcher(new URL(`revision.json?revision=${head}`, url), {cache: 'no-store', signal: AbortSignal.timeout(30000)});
+  if (url.protocol !== 'https:' || !url.pathname.endsWith('/') || url.search || url.hash || url.username || url.password ||
+      (expected.head !== undefined && !shaPattern.test(expected.head))) throw Error('Invalid verification target');
+  const revisionURL = new URL('revision.json', url);
+  if (expected.head) revisionURL.searchParams.set('revision', expected.head);
+  if (expected.run !== undefined) revisionURL.searchParams.set('run', expected.run);
+  if (expected.attempt !== undefined) revisionURL.searchParams.set('attempt', expected.attempt);
+  const response = await fetcher(revisionURL, {cache: 'no-store', signal: AbortSignal.timeout(30000)});
   if (!response.ok) throw Error(`Published revision HTTP ${response.status}`);
   const manifest = await response.json();
-  validateBuild(manifest, {repository: repositoryName(), head, pr, run: manifest.run, attempt: manifest.attempt});
+  validateBuild(manifest, {...manifest, ...expected});
+  if (!shaPattern.test(manifest.head) || manifest.base !== url.pathname) throw Error('Published revision does not match the deployment path');
+  if (expected.source !== undefined && manifest.source !== expected.source) throw Error('Published merge revision changed during browser verification');
+  return manifest;
+}
+
+export async function verifyPublished(base, head, pr, fetcher = fetch, build = {}) {
+  if (!shaPattern.test(head)) throw Error('Invalid verification target');
+  const url = new URL(base);
+  const manifest = await readPublishedManifest(base, {repository: repositoryName(), head, pr, ...build}, fetcher);
   for (const [path, hash] of Object.entries(manifest.files)) {
     const asset = await fetcher(new URL(path, url), {cache: 'no-store', signal: AbortSignal.timeout(30000)});
     if (!asset.ok || digest(Buffer.from(await asset.arrayBuffer())) !== hash) throw Error(`Published asset missing or stale: ${path}`);
@@ -272,7 +293,7 @@ export async function verifyPublished(base, head, pr, fetcher = fetch) {
 
 async function verifyWithRetry() {
   for (let attempt = 0; ; attempt++) {
-    try { await verifyPublished(process.env.REVIEW_BASE_URL, process.env.EXPECTED_HEAD_SHA, Number(process.env.EXPECTED_PR_NUMBER)); return; }
+    try { await verifyPublished(process.env.REVIEW_BASE_URL, process.env.EXPECTED_HEAD_SHA, Number(process.env.EXPECTED_PR_NUMBER), fetch, expectedCI()); return; }
     catch (error) { if (attempt === 11) throw error; console.log(`Waiting for Pages CDN: ${error.message}`); await delay(5000); }
   }
 }
@@ -292,11 +313,21 @@ async function verifyCleanup() {
   }
 }
 
-async function reportPreview() {
+export async function reportPreview() {
   const prNumber = Number(process.env.PREVIEW_PR), head = process.env.PREVIEW_HEAD;
   if (!Number.isSafeInteger(prNumber) || prNumber < 1) throw Error('Invalid PR number');
   const pr = await api(`pulls/${prNumber}`), cleanup = process.env.PREVIEW_CLEANUP === 'true';
   if (cleanup ? pr.state === 'open' : !isCurrentPR(pr, repositoryName(), head)) return;
+  if (!cleanup && process.env.PREVIEW_STAGED === 'true') {
+    // The Pages snapshot may have been replaced while a read-only Chrome job
+    // ran. A new CI attempt can supersede it even at the same PR head SHA.
+    const file = await api(`contents/pr-preview/pr-${prNumber}/revision.json?ref=${stateBranch}`, {missing: true});
+    if (!file) return;
+    if (file.encoding !== 'base64') throw Error('Invalid published revision encoding');
+    const manifest = JSON.parse(Buffer.from(file.content, 'base64').toString());
+    const {run, attempt} = expectedCI();
+    if (manifest.head !== head || manifest.run !== run || manifest.attempt !== attempt) return;
+  }
   const ready = process.env.PUBLISH_RESULT === 'success' && process.env.VERIFY_RESULT === 'success';
   const runURL = `https://github.com/${repositoryName()}/actions/runs/${process.env.GITHUB_RUN_ID}`;
   const url = siteURL(repositoryName(), prNumber);

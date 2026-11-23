@@ -7,6 +7,7 @@ import {resolve,join,extname,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {inflateSync} from 'node:zlib';
 import {checkArmoury,checkBriefing} from './briefing-review.mjs';
+import {expectedCI,readPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
 const maps=['fort-vaux','training','trenches','village','verdun','headland','industrial'];
@@ -73,11 +74,11 @@ async function screenshot(name,clean=false){
 }
 try {
  if(process.env.REVIEW_BASE_URL){
-  const response=await fetch(new URL('revision.json',base));
-  if(!response.ok)throw Error('Deployed revision metadata is unavailable');
-  const revision=await response.json();
-  if(!/^[a-f0-9]{40}$/.test(revision.source)||!/^[a-f0-9]{40}$/.test(revision.head)||revision.base!==new URL(base).pathname)throw Error('Invalid deployed revision metadata');
+  const expected=expectedCI();
+  if(process.env.EXPECTED_HEAD_SHA)expected.head=process.env.EXPECTED_HEAD_SHA;
+  const revision=await readPublishedManifest(base,expected);
   report.checkerSource=report.source;report.source=revision.source;report.head=revision.head;report.deployment=base;
+  report.ciRun=revision.run;report.ciAttempt=revision.attempt;
  }
  // Chrome keeps its browser sandbox. Software graphics makes the capture
  // reproducible on hosted runners with no physical display or discrete GPU.
@@ -299,6 +300,7 @@ try {
   console.log(JSON.stringify({armoury:report.armoury}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);
+ if(report.deployment)await readPublishedManifest(base,{head:report.head,source:report.source,run:report.ciRun,attempt:report.ciAttempt});
  console.log(JSON.stringify({map,source:report.source,scenarios:report.scenarios.map(s=>({mode:s.mode,ticks:s.summary.ticks,frames:s.summary.frames,shots:s.summary.shots,artilleryImpacts:s.summary.artilleryImpacts,errors:s.summary.errors.length})),errors:report.errors}));
 }catch(error){report.errors.push(String(error));console.error(error);process.exitCode=1;if(client)try{await screenshot('failure');}catch{}}
 finally {

@@ -1,6 +1,6 @@
-# Rendered review on every push
+# Rendered review
 
-The build/test/publish workflow renders its tested build in headless Chrome on GitHub’s Ubuntu runner. Seven matrix jobs cover Industrial, Trenches, Verdun, Village, Lighthouse, Training grounds and Fort Vaux. Production and same-repository PR preview deployments wait for every rendered check. Ordinary branch pushes and fork pull requests validate without deployment. See [PR_PREVIEWS.md](PR_PREVIEWS.md).
+The build/test/publish workflow renders its built archive in headless Chrome on GitHub’s Ubuntu runners. Seven matrix jobs cover Industrial, Trenches, Verdun, Village, Lighthouse, Training grounds and Fort Vaux. They can start while game tests run. Production and same-repository PR previews wait for the build, all test shards and every browser check. Fork PRs receive checks, and branch-only runs are available manually. See [PR_PREVIEWS.md](PR_PREVIEWS.md).
 
 Each `render-<map>` artifact contains four PNGs: `overview-intact.png` (HUD hidden for map inspection), `overview-battle.png`, `first-person.png` and `third-person.png`. `report.json`, the overview and ground playtest logs, and `chrome.log` record the source SHA, WebGL renderer, simulation progress, browser errors and actual battle events. A failure screenshot is retained when possible. The job summary links to its artifact. Screenshot artifacts expire after 14 days; the intermediate build expires after seven days.
 
@@ -30,4 +30,4 @@ SwiftShader is selected explicitly on the display-less hosted runner. Its FPS is
 
 For a local review after a production build: `node tools/render-review.mjs village dist`. `CHROME_PATH` selects an installed Chrome binary; the default is the Ubuntu runner’s `/usr/bin/google-chrome`. Chrome uses a fresh temporary profile, localhost-only server and debugging connection. The script leaves Chrome’s browser sandbox enabled.
 
-`PAGES_BASE_PATH` selects a PR's nested asset base when serving locally. `REVIEW_BASE_URL` instead points the same browser check at a deployed HTTPS site. The publisher verifies every published asset's SHA-256 and runs Village, Industrial combat-feedback scenarios and Training Grounds controls on a separate read-only runner before reporting `preview-ready` success. These deployed screenshots are saved as `deployed-browser-review`.
+`PAGES_BASE_PATH` selects a PR's nested asset base when serving locally. `REVIEW_BASE_URL` points the same browser check at a deployed HTTPS site. The publisher verifies every published asset's SHA-256, then runs Village, Industrial combat feedback, and Training controls on three separate read-only runners. Their `deployed-browser-<map>` artifacts contain the screenshots and diagnostic logs. `preview-ready` requires all three replays of the same published build.

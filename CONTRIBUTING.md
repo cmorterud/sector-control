@@ -17,11 +17,11 @@ Run the game with `npm run dev`. Add regression coverage for gameplay or collisi
 
 ## Playtest the PR
 
-CI checks type safety and simulation behavior, then renders all seven maps. A passing same-repository PR receives a playable Pages preview. Wait for `preview-ready` and the bot's **Play this PR** link; the comment identifies the exact head revision. If a later revision fails, the old preview may remain online, so do not assume the URL contains your newest changes.
+CI builds and runs three game-test shards in parallel. The seven map renders start when the build is ready. A passing same-repository PR receives a playable Pages preview. Wait for `preview-ready` and the bot's **Play this PR** link; the comment identifies the exact head revision. If a later revision fails, the old preview may remain online, so do not assume the URL contains your newest changes.
 
 Use that link to check movement and mantling, first/third person switching, aiming and firing, reloading, artillery, destruction, pause/resume, redeploy and map selection as relevant to the change. The automated screenshots use software rendering and do not establish real hardware performance or replace playing the controls yourself.
 
-Push fixes to the same branch. The preview updates after the new checks pass. Closing or merging the PR removes it. Do not edit or push generated files on `pages-content`.
+Push fixes to the same branch. A newer PR revision cancels its older CI run and updates the preview after passing. To run the full suite on a branch before opening a PR, use **Run workflow** in Actions. Closing or merging the PR removes the preview. Do not edit or push generated files on `pages-content`.
 
 ## Review and assets
 

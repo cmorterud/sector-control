@@ -19,16 +19,16 @@ permissions:
 env:
   PAGES_SITE_URL: https://codymorterud.com/sector-control/
 
-# Keep every queued publication, including closes, rather than replacing pending work.
-concurrency:
-  group: pages-publication
-  queue: max
-
 jobs:
   publish:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    # Serialize snapshot writes and deployment, then release the queue while
+    # read-only verifiers check their individual revisions.
+    concurrency:
+      group: pages-publication
+      queue: max
     permissions:
       contents: write
       actions: read
@@ -43,6 +43,8 @@ jobs:
       publish: ${{ steps.context.outputs.publish }}
       pr: ${{ steps.context.outputs.pr }}
       head: ${{ steps.context.outputs.head }}
+      run: ${{ steps.context.outputs.run }}
+      attempt: ${{ steps.context.outputs.attempt }}
       url: ${{ steps.context.outputs.url }}
       reason: ${{ steps.context.outputs.reason }}
       cleanup: ${{ steps.context.outputs.cleanup }}
@@ -83,14 +85,11 @@ jobs:
         if: steps.context.outputs.publish == 'true'
         id: deploy
 
-  verify:
+  verify-assets:
     needs: publish
     if: needs.publish.result == 'success' && needs.publish.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Deployed PR JavaScript runs only on this read-only, secret-free runner.
-    permissions:
-      contents: read
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v6
         with:
@@ -105,44 +104,60 @@ jobs:
           REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
           EXPECTED_HEAD_SHA: ${{ needs.publish.outputs.head }}
           EXPECTED_PR_NUMBER: ${{ needs.publish.outputs.pr }}
+          EXPECTED_CI_RUN: ${{ needs.publish.outputs.run }}
+          EXPECTED_CI_ATTEMPT: ${{ needs.publish.outputs.attempt }}
         run: node tools/pages-preview.mjs verify
-      - name: Play the deployed Village map in Chrome
-        if: needs.publish.outputs.cleanup != 'true'
-        env:
-          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
-        run: node tools/render-review.mjs village dist playtest-artifacts/preview-browser
-      - name: Check deployed hit directions, death reports and assists
-        if: needs.publish.outputs.cleanup != 'true'
-        env:
-          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
-        run: node tools/render-review.mjs industrial dist playtest-artifacts/deployed-combat-browser
-      - name: Exercise the deployed training controls and every station
-        if: needs.publish.outputs.cleanup != 'true'
-        env:
-          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
-        run: node tools/render-review.mjs training dist playtest-artifacts/deployed-training-browser
       - name: Verify closed preview is gone and production remains available
         if: needs.publish.outputs.cleanup == 'true'
         env:
           REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
           EXPECTED_PR_NUMBER: ${{ needs.publish.outputs.pr }}
         run: node tools/pages-preview.mjs verify-cleanup
+
+  verify-browser:
+    name: Deployed browser (${{ matrix.map }})
+    needs: [publish, verify-assets]
+    if: needs.verify-assets.result == 'success' && needs.publish.outputs.cleanup != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    # Deployed PR JavaScript runs only on read-only, secret-free runners.
+    strategy:
+      fail-fast: false
+      matrix:
+        map: [village, industrial, training]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Play the deployed map in Chrome
+        env:
+          MAP: ${{ matrix.map }}
+          REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
+          EXPECTED_HEAD_SHA: ${{ needs.publish.outputs.head }}
+          EXPECTED_CI_RUN: ${{ needs.publish.outputs.run }}
+          EXPECTED_CI_ATTEMPT: ${{ needs.publish.outputs.attempt }}
+        run: node tools/render-review.mjs "$MAP" dist playtest-artifacts/deployed-browser
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: deployed-browser-review
-          path: |
-            playtest-artifacts/preview-browser
-            playtest-artifacts/deployed-combat-browser
-            playtest-artifacts/deployed-training-browser
+          name: deployed-browser-${{ matrix.map }}
+          path: playtest-artifacts/deployed-browser/
           if-no-files-found: ignore
           retention-days: 14
 
   report:
-    needs: [publish, verify]
+    needs: [publish, verify-assets, verify-browser]
     if: always() && needs.publish.outputs.pr != ''
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    # Keep the final status write atomic with respect to newer deployments.
+    concurrency:
+      group: pages-publication
+      queue: max
     permissions:
       contents: read
       statuses: write
@@ -163,6 +178,9 @@ jobs:
           PREVIEW_URL: ${{ needs.publish.outputs.url }}
           PREVIEW_REASON: ${{ needs.publish.outputs.reason }}
           PREVIEW_CLEANUP: ${{ needs.publish.outputs.cleanup }}
+          PREVIEW_STAGED: ${{ needs.publish.result == 'success' && needs.publish.outputs.publish == 'true' }}
+          EXPECTED_CI_RUN: ${{ needs.publish.outputs.run }}
+          EXPECTED_CI_ATTEMPT: ${{ needs.publish.outputs.attempt }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
-          VERIFY_RESULT: ${{ needs.verify.result }}
+          VERIFY_RESULT: ${{ needs.verify-assets.result == 'success' && (needs.verify-browser.result == 'success' || (needs.publish.outputs.cleanup == 'true' && needs.verify-browser.result == 'skipped')) && 'success' || 'failure' }}
         run: node tools/pages-preview.mjs report
