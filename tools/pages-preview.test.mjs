@@ -4,7 +4,7 @@ import {mkdtemp, mkdir, writeFile, readFile, rm, symlink, link} from 'node:fs/pr
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {basePath, safePath, staticFiles, gitHash, stamp, validateBuild, isCurrentPR, replaceBuild, verifyPublished, resolveContext, stageSite} from './pages-preview.mjs';
+import {basePath, safePath, staticFiles, gitHash, stamp, validateBuild, isCurrentPR, replaceBuild, verifyPublished, readPublishedManifest, resolveContext, stageSite, reportPreview} from './pages-preview.mjs';
 
 const repository = 'cmorterud/sector-control', head = 'a'.repeat(40), source = 'b'.repeat(40);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -124,12 +124,47 @@ test('deployed verification rejects stale revisions and altered/missing assets',
     assert.equal(calls[1], base + 'index.html');
     await assert.rejects(verifyPublished(base, source, 42, fetcher), /provenance/);
     await assert.rejects(verifyPublished(base, head, 43, fetcher), /provenance/);
+    await verifyPublished(base, head, 42, fetcher, {run: 123, attempt: 1});
+    await assert.rejects(verifyPublished(base, head, 42, fetcher, {run: 123, attempt: 2}), /provenance/);
+    await assert.rejects(verifyPublished(base, head, 42, fetcher, {run: 122, attempt: 1}), /provenance/);
+    await assert.rejects(readPublishedManifest(base, {head, source: head, run: 123, attempt: 1}, fetcher), /merge revision changed/);
     const altered = async url => new Response(url.pathname.endsWith('revision.json') ? JSON.stringify(manifest()) : 'changed');
     await assert.rejects(verifyPublished(base, head, 42, altered), /missing or stale/);
     await assert.rejects(verifyPublished(base, head, 42, async () => new Response('', {status: 404})), /HTTP 404/);
     await assert.rejects(verifyPublished('https://example.com/?redirect=evil', head, 42, fetcher), /Invalid verification/);
   } finally {
     if (original === undefined) delete process.env.GITHUB_REPOSITORY; else process.env.GITHUB_REPOSITORY = original;
+  }
+});
+
+test('a completed browser replay cannot report after a newer publication at the same PR head', async () => {
+  const oldFetch = globalThis.fetch;
+  const settings = {GITHUB_REPOSITORY: repository, GITHUB_RUN_ID: '456', GH_TOKEN: 'fake-test-token',
+    PAGES_SITE_URL: 'https://example.com/sector-control/', PREVIEW_PR: '42', PREVIEW_HEAD: head,
+    PREVIEW_URL: 'https://example.com/sector-control/pr-preview/pr-42/', PREVIEW_CLEANUP: 'false',
+    PREVIEW_STAGED: 'true', EXPECTED_CI_RUN: '123', EXPECTED_CI_ATTEMPT: '1', PUBLISH_RESULT: 'success', VERIFY_RESULT: 'success'};
+  const oldEnv = Object.fromEntries(Object.keys(settings).map(key => [key, process.env[key]]));
+  Object.assign(process.env, settings);
+  try {
+    for (const attempt of [2, 1]) {
+      const writes = [];
+      globalThis.fetch = async (url, options) => {
+        const path = String(url).split(`/repos/${repository}/`)[1];
+        if (options.method !== 'GET') writes.push(JSON.parse(options.body));
+        if (path === 'pulls/42') return Response.json({state: 'open', head: {sha: head, repo: {full_name: repository}}, base: {ref: 'main', repo: {full_name: repository}}});
+        if (path === 'contents/pr-preview/pr-42/revision.json?ref=pages-content')
+          return Response.json({encoding: 'base64', content: Buffer.from(JSON.stringify({...manifest(), attempt})).toString('base64')});
+        if (path === `statuses/${head}`) return Response.json({});
+        if (path.startsWith('issues/42/comments')) return Response.json([]);
+        throw Error('Unexpected test request ' + path);
+      };
+      await reportPreview();
+      assert.equal(writes.length, attempt === 2 ? 0 : 2);
+      if (attempt === 1) assert.equal(writes[0].state, 'success');
+    }
+  } finally {
+    globalThis.fetch = oldFetch;
+    for (const [key, value] of Object.entries(oldEnv)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
 

@@ -1,6 +1,15 @@
 name: Build, test, render and publish
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A PR update replaces the previous run. Main and manual runs stay independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -9,7 +18,7 @@ env:
   PAGES_BASE_PATH: /${{ github.event.repository.name }}/${{ github.event_name == 'pull_request' && format('pr-preview/pr-{0}/', github.event.pull_request.number) || '' }}
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,9 +33,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Type-check and test
-        run: npm run check -- --maxWorkers=1
 
       - name: Test Pages publication and preview isolation
         run: npm run test:pages
@@ -44,8 +50,28 @@ jobs:
           path: dist
           retention-days: 7
 
+  tests:
+    name: Game tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - name: Run simulation and regression tests
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: npm test -- --maxWorkers=1 --shard="$SHARD/3"
+
   render:
-    needs: build-and-test
+    needs: build
     runs-on: ubuntu-latest
     # Software rendering at High quality (ambient occlusion, shadow cascades)
     # takes up to about six minutes on the larger maps.
@@ -97,12 +123,13 @@ jobs:
 
   pr-ready:
     if: always()
-    needs: [build-and-test, render]
+    needs: [build, tests, render]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - name: Require every build and rendered check
+      - name: Require the build, every test shard and every rendered check
         env:
-          BUILD_RESULT: ${{ needs.build-and-test.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.tests.result }}
           RENDER_RESULT: ${{ needs.render.result }}
-        run: test "$BUILD_RESULT" = success && test "$RENDER_RESULT" = success
+        run: test "$BUILD_RESULT" = success && test "$TEST_RESULT" = success && test "$RENDER_RESULT" = success
