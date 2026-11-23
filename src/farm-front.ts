@@ -1,4 +1,4 @@
-import {groundHeight,dist,type MapDefinition,type Box,type Depression,type Vec} from "./map";
+import {groundHeight,dist,playArea,type MapDefinition,type Box,type Depression,type Vec} from "./map";
 
 export interface FarmFront {
   tracks: {points:Vec[];width:number}[];
@@ -12,7 +12,7 @@ export const farmDrainage:Depression[] = [
 export function buildFarmFront(map:MapDefinition):{parts:Box[];farm:FarmFront} {
   const parts:Box[]=[];
   const place=(id:string,x:number,z:number,w:number,d:number,h:number,kind:Box['kind'],farmProp?:Box['farmProp'],lift=0)=>{
-    if(Math.abs(x)>map.width/2-4 || Math.abs(z)>map.depth/2-3)return;
+    if(Math.abs(x)>playArea(map).width/2-4 || Math.abs(z)>playArea(map).depth/2-3)return;
     if(Object.values(map.spawn).some(p=>dist(p,{x,z})<13))return;
     if(map.sectors.some(p=>dist(p,{x,z})<3))return;
     if(map.terrain?.firingPositions?.some(p=>Math.abs(x-p.x)<w/2+1.3 && Math.abs(z-p.z)<d/2+1.3))return;

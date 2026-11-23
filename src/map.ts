@@ -182,6 +182,12 @@ export interface MapDefinition {
   // Closed outline of the playable land. Ground beyond it is sea: authored
   // below the land and closed to movement, navigation and deployment.
   coast?: Vec[];
+  // The fought-over rectangle, centred like the map. The terrain may extend
+  // past it as a dead zone that bots never use and humans are shelled in.
+  playArea?: { width: number; depth: number };
+  // A barbed-wire belt this deep lines the play area just outside its edge.
+  // A soldier outside the play area for warningTicks draws a lethal salvo.
+  boundary?: { warningTicks: number; wireDepth: number };
   scoring?: "sectors" | "eliminations" | "domination";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
@@ -582,6 +588,18 @@ export function coastDistance(x: number, z: number, map: MapDefinition): number 
 export function outOfBounds(x: number, z: number, margin: number, map: MapDefinition): boolean {
   return Math.abs(x) > map.width / 2 - margin || Math.abs(z) > map.depth / 2 - margin ||
     (!!map.coast && coastDistance(x, z, map) < margin);
+}
+export const playArea = (map: Pick<MapDefinition, "width" | "depth" | "playArea">) =>
+  map.playArea ?? { width: map.width, depth: map.depth };
+// How far a point lies outside the play area; negative inside it.
+export function beyondPlayArea(x: number, z: number, map: Pick<MapDefinition, "width" | "depth" | "playArea">) {
+  const area = playArea(map);
+  return Math.max(Math.abs(x) - area.width / 2, Math.abs(z) - area.depth / 2);
+}
+export function inBoundaryWire(x: number, z: number, map: MapDefinition) {
+  if (!map.boundary) return false;
+  const beyond = beyondPlayArea(x, z, map);
+  return beyond > 0 && beyond < map.boundary.wireDepth;
 }
 export function bodyBlocked(x: number, z: number, feet: number, r: number, map: MapDefinition, bodyHeight = 1.8): boolean {
   return outOfBounds(x, z, 1 + r, map) ||

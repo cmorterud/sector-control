@@ -1,4 +1,4 @@
-import { blocked, groundHeight, type MapDefinition, type Vec } from "./map";
+import { blocked, groundHeight, playArea, type MapDefinition, type Vec } from "./map";
 export interface CraterCover extends Vec {
   radius: number;
   depth: number;
@@ -27,7 +27,7 @@ export function availableCraterCover(map: MapDefinition): CraterCover[] {
   for (const c of source) {
     if (
       Math.abs(c.x) >= 14 ||
-      Math.abs(c.z) > map.depth / 2 - 4 ||
+      Math.abs(c.z) > playArea(map).depth / 2 - 4 ||
       blocked(c.x, c.z, 0.8, map)
     )
       continue;

@@ -45,7 +45,8 @@ import { weaponAim } from "./recoil";
 import { CrouchToggle, eyeHeightOf } from "./crouch";
 import { PlaytestRecorder } from "./playtest";
 import { AutoQuality, parseQuality, qualityStorageKey, type Quality, type QualityChoice } from "./graphics-quality";
-import { mantleLanding, dist, groundHeight, industrialMap, blocked } from "./map";
+import { mantleLanding, dist, groundHeight, industrialMap, blocked, beyondPlayArea } from "./map";
+import { boundaryCountdown } from "./boundary";
 import { trenchMap } from "./trench-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
@@ -59,7 +60,10 @@ battleSidebar.innerHTML = '<div id="minimap" role="img" aria-label="North-up bat
 const killNotice = document.createElement("div");
 killNotice.className = "kill-notice";
 killNotice.setAttribute("role", "status");
-el("hud").append(battleSidebar, killNotice);
+const boundaryNotice = document.createElement("div");
+boundaryNotice.className = "boundary-warning";
+boundaryNotice.setAttribute("role", "alert");
+el("hud").append(battleSidebar, killNotice, boundaryNotice);
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
 let displayedScoreboard = "";
@@ -483,6 +487,11 @@ function hud(now: number) {
   }
   const confirmation = clearHUD ? combatFeedback.killConfirmation(game) : "";
   if (killNotice.textContent !== confirmation) killNotice.textContent = confirmation;
+  const countdown = boundaryCountdown(game, p),
+    outside = !paused && p.hp > 0 && countdown !== null && beyondPlayArea(p.x, p.z, game.map) > 0,
+    boundaryText = outside ? `OUT OF BOUNDS · RETURN TO THE LINE · ${countdown ? `ARTILLERY IN ${countdown}` : "ARTILLERY INBOUND"}` : "";
+  if (boundaryNotice.textContent !== boundaryText) boundaryNotice.textContent = boundaryText;
+  root.classList.toggle("out-of-bounds", outside);
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
@@ -935,7 +944,9 @@ try {
         fortDetails["yard-west"] = [yard.x0 - 5.5, z, 0, z];
         fortDetails["yard-east"] = [yard.x1 + 5.5, z, 0, z];
       }
-      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : undefined) : poses[map.id];
+      // Across the boundary wire behind Blue's spawn, and up Blue's front line to its trench block.
+      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22]};
+      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "trenches" ? trenchDetails[detail] : undefined) : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0];
       let at={x,z};

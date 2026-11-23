@@ -10,6 +10,7 @@ import { shadeArchitecture } from "./room-light";
 import type {DeathView} from "./combat-feedback";
 import { architecturePixels, architecturalTextures, cisternWaterNormals, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
+import { boundaryWireGeometry } from "./boundary-wire";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
@@ -463,6 +464,7 @@ export class Renderer implements CollisionWorld {
     for (const object of Object.values(map.destruction!.objects))
       this.buildDestructible(object);
     if (map.coast) this.buildCoast();
+    if (map.boundary) this.buildBoundaryWire();
     for (const [x, z, w, d] of map.coast ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
@@ -1790,6 +1792,26 @@ export class Renderer implements CollisionWorld {
     sign.addComponent("render", { type: "plane", material, castShadows: false });
     sign.setEulerAngles(90, yaw, 0);
     sign.setLocalScale(1.55, 1, .39);
+  }
+  // One mesh of pickets and one of line wires for the whole boundary belt.
+  private buildBoundaryWire() {
+    const wire = boundaryWireGeometry(this.map);
+    if (!wire.lines.length) return;
+    const device = this.app.graphicsDevice, root = this.joint("boundary wire", this.mapRoot);
+    const pickets = new pc.Mesh(device);
+    pickets.setPositions(wire.pickets.positions);
+    pickets.setNormals(wire.pickets.normals);
+    pickets.setIndices(wire.pickets.indices);
+    pickets.update(pc.PRIMITIVE_TRIANGLES);
+    const strands = new pc.Mesh(device);
+    strands.setPositions(wire.lines);
+    strands.setNormals(new Float32Array(wire.lines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
+    strands.update(pc.PRIMITIVE_LINES);
+    const posts = new pc.MeshInstance(pickets, this.material("#3a332a"), root);
+    posts.castShadow = true;
+    const wires = new pc.MeshInstance(strands, this.material("#2b2824"), root);
+    wires.castShadow = false;
+    root.addComponent("render", { meshInstances: [posts, wires] });
   }
   private buildCoast() {
     const map=this.map,previous=this.batchGroup,meshes=coastalGeometry(map);

@@ -17,8 +17,13 @@ import { buildTrenchRelief, buildTrenchElevation } from "./terrain-relief";
 const bankHeight = 2.4;
 const spawnDistance = 60,
   rearCoverDistance = 55;
-const width = 160,
-  depth = 128,
+// The fought-over area. A dead zone of open ground rings it out to the terrain
+// edge: a barbed-wire belt marks the line, and soldiers past it are shelled.
+const playWidth = 160,
+  playDepth = 128,
+  deadZone = 12;
+const width = playWidth + deadZone * 2,
+  depth = playDepth + deadZone * 2,
   cellSize = 1;
 const columns = width / cellSize,
   rows = depth / cellSize;
@@ -154,6 +159,27 @@ for (const line of trenchLines) {
         });
       });
 }
+// Every line runs on past the north and south edges of the sector: the front
+// continues beyond the wire. These stubs carry no firing steps or routes.
+const trenchBlocks: (Vec & { w: number })[] = [];
+for (const line of trenchLines) {
+  const side = line.team === "blue" ? -1 : 1;
+  for (const [section, north] of [[line.sections[0], -1], [line.sections.at(-1)!, 1]] as const) {
+    const end = section.z + (north * section.length) / 2,
+      edge = (north * depth) / 2,
+      x = section.x - (line.role === "front" ? side : 0),
+      w = line.role === "front" ? 4 : 2;
+    floors.push({ x, z: (end + edge) / 2, w, d: Math.abs(edge - end) });
+    for (const lining of [-1, 1])
+      liningCandidates.push({
+        x: section.x + (line.role === "front" && lining === -side ? -side * 3.06 : lining * 1.06),
+        z: (end + edge) / 2,
+        w: 0.12,
+        d: Math.abs(edge - end) - 2,
+      });
+    trenchBlocks.push({ x, z: north * (playDepth / 2 - 0.7), w });
+  }
+}
 for (const team of ["blue", "red"] as const) {
   const side = team === "blue" ? -1 : 1;
   const front = trenchLines.find((l) => l.team === team && l.role === "front")!;
@@ -236,7 +262,7 @@ for (const route of communicationRoutes) {
     [-13, -17, -9, 9, 13, 17, -5]
       .map((offset) => route.entrance.z + offset)
       .find((z) => {
-        if (z - 2 < -depth / 2 + 2 || z + 2 > depth / 2 - 2) return false;
+        if (z - 2 < -playDepth / 2 + 2 || z + 2 > playDepth / 2 - 2) return false;
         const section = atZ(z),
           lo = Math.min(section.x, middle) - 0.8,
           hi = Math.max(section.x, middle) + 0.8;
@@ -383,6 +409,8 @@ export const trenchMap: MapDefinition = {
   name: "Trench front",
   width,
   depth,
+  playArea: { width: playWidth, depth: playDepth },
+  boundary: { warningTicks: 5 * 30, wireDepth: 3 },
   navSpacing: 4,
   scoring: "domination",
   spawn: {
@@ -491,6 +519,20 @@ for (const wall of liningCandidates) {
   }
   addPanel(end);
 }
+
+// Sandbag blocks close each continuing trench just inside the boundary. They
+// sit on the trench floor rather than raising the earth beneath them.
+for (const block of trenchBlocks)
+  trenchMap.boxes.push({
+    id: `trench-block-${block.x}-${block.z}`,
+    x: block.x,
+    z: block.z,
+    w: block.w + 0.6,
+    d: 1.1,
+    h: 1.3,
+    baseY: groundHeight(block.x, block.z, trenchMap),
+    kind: "sandbag",
+  });
 
 const landmarkLayout = buildLandmarks(trenchMap);
 trenchMap.landmarks = landmarkLayout.landmarks;
