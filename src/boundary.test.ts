@@ -23,9 +23,12 @@ const run = (g: Game, ticks: number, command: Partial<Command> = {}) => {
 const boundaryEvents = (events: GameEvent[]) =>
   events.flatMap((e) => (e.type === "boundary" ? [e.phase] : []));
 
-it("rings the unchanged 160 by 128 m sector with a 12 m dead zone", () => {
+it("rings the unchanged 160 by 128 m sector with a 16 m dead zone", () => {
   expect(area).toEqual({ width: 160, depth: 128 });
-  expect([trenchMap.width, trenchMap.depth]).toEqual([184, 152]);
+  expect([trenchMap.width, trenchMap.depth]).toEqual([192, 160]);
+  // Whole 8 m terrain patches tile the map exactly, edge to edge.
+  expect((trenchMap.width / 2) % 8).toBe(0);
+  expect((trenchMap.depth / 2) % 8).toBe(0);
   expect(trenchMap.boundary).toEqual({ warningTicks: 150, wireDepth: 3 });
   const inside = [
     ...Object.values(trenchMap.spawn),

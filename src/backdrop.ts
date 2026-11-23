@@ -19,7 +19,11 @@ export type BackdropBox = {
   x: number; y: number; z: number; w: number; h: number; d: number;
   yaw?: number; lean?: number; color: string;
 };
-export type BackdropMesh = { positions: Float32Array; normals: Float32Array; uvs?: Float32Array; colors: Float32Array; indices: Uint32Array };
+export type BackdropMesh = {
+  positions: Float32Array; normals: Float32Array; uvs?: Float32Array; colors: Float32Array; indices: Uint32Array;
+  // Unmirrored coordinates for tangents: mirrored ones cancel along each fold.
+  tangentUvs?: Float32Array;
+};
 
 const smooth = (a: number, b: number, v: number) => {
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
@@ -46,6 +50,16 @@ export function backdropHeight(map: MapDefinition, x: number, z: number) {
     7 * smooth(130, backdropRules.radius, d);
 }
 
+// The ground material paints the whole map onto one clamped texture, so a
+// point beyond the edge would smear the edge texels outward. Mirror its texture
+// coordinate back into the map instead: continuous at the seam, never stretched.
+export function mirrorIntoMap(v: number, half: number) {
+  const span = half * 2, period = span * 2;
+  let t = (((v + half) % period) + period) % period;
+  if (t > span) t = period - t;
+  return t - half;
+}
+
 // A square ring of ground from the terrain edge to the horizon radius.
 export function backdropGround(map: MapDefinition): BackdropMesh {
   const { radius, cell } = backdropRules, hx = map.width / 2, hz = map.depth / 2;
@@ -55,7 +69,7 @@ export function backdropGround(map: MapDefinition): BackdropMesh {
     return [...set].sort((a, b) => a - b);
   };
   const xs = ticks(hx), zs = ticks(hz);
-  const positions: number[] = [], normals: number[] = [], uvs: number[] = [], colors: number[] = [], indices: number[] = [];
+  const positions: number[] = [], normals: number[] = [], uvs: number[] = [], tangentUvs: number[] = [], colors: number[] = [], indices: number[] = [];
   const node = new Map<number, number>();
   const vertex = (i: number, j: number) => {
     const key = j * xs.length + i;
@@ -68,7 +82,8 @@ export function backdropGround(map: MapDefinition): BackdropMesh {
     index = positions.length / 3;
     positions.push(x, y, z);
     normals.push(nx / length, (2 * e) / length, nz / length);
-    uvs.push(x / 3, z / 3);
+    uvs.push(mirrorIntoMap(x, hx) / 3, mirrorIntoMap(z, hz) / 3);
+    tangentUvs.push(x / 3, z / 3);
     colors.push(...soilColor(x, y, z, false, 0), exposedEarth(0));
     node.set(key, index);
     return index;
@@ -82,7 +97,7 @@ export function backdropGround(map: MapDefinition): BackdropMesh {
     }
   return {
     positions: new Float32Array(positions), normals: new Float32Array(normals),
-    uvs: new Float32Array(uvs), colors: new Float32Array(colors), indices: new Uint32Array(indices),
+    uvs: new Float32Array(uvs), tangentUvs: new Float32Array(tangentUvs), colors: new Float32Array(colors), indices: new Uint32Array(indices),
   };
 }
 
