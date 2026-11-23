@@ -15,12 +15,18 @@ export function checkBriefing(map, maps) {
   select.value = prior;
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const cards = [...document.querySelectorAll('.map-choice > a')];
-  const destinations = cards.map(card => new URL(card.href).searchParams.get('map') ?? 'industrial').sort();
-  const expectedMaps = maps.filter(id => id !== map).sort();
-  if (document.querySelectorAll('.map-choice [aria-current="page"]').length !== 1 ||
-      JSON.stringify(destinations) !== JSON.stringify(expectedMaps)) throw Error('Battlefield menu is missing a map or links to the wrong destination');
-  return { map, loadouts: expected };
+  const cards = [...document.querySelectorAll('.map-choice > *')];
+  const order = cards.map(card => card.dataset.battlefield);
+  if (cards.length !== maps.length || order.some((id, index) => id !== maps[index]))
+    throw Error('Battlefield menu is missing a map or displays maps out of order');
+  const active = cards.filter(card => card.getAttribute('aria-current') === 'page');
+  if (active.length !== 1 || active[0].dataset.battlefield !== map)
+    throw Error(`Battlefield menu did not select ${map}`);
+  for (const card of cards.filter(card => card !== active[0])) {
+    if (!card.href || new URL(card.href).searchParams.get('map') !== card.dataset.battlefield)
+      throw Error(`Battlefield menu links ${card.dataset.battlefield} to the wrong destination`);
+  }
+  return { map, loadouts: expected, order };
 }
 
 // Compares visible DOM text to the independently bundled game profiles.

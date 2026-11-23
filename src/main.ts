@@ -147,20 +147,9 @@ const saveQuality = (value: string) => { try { localStorage.setItem(qualityStora
 let reviewFrames = 0;
 let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
-const map =
-  params.get("map") === "training"
-    ? trainingMap
-    : params.get("map") === "verdun"
-    ? verdunMap
-    : params.get("map") === "village"
-    ? villageMap
-    : params.get("map") === "headland"
-    ? headlandMap
-    : params.get("map") === "fort-vaux"
-    ? fortVauxMap
-    : params.get("map") === "trenches"
-      ? trenchMap
-      : industrialMap;
+const battlefields = [fortVauxMap, trainingMap, trenchMap, villageMap, verdunMap, headlandMap, industrialMap];
+const requestedMap = params.get("map");
+const map = battlefields.find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
 const training=map.id==="training"?new TrainingSession():undefined;
 root.classList.toggle("training-active",!!training);
 let trainingReset=false;
@@ -174,12 +163,10 @@ updateControlHints();
 tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 const teamSize = resolveTeamSize(map, requestedTeamSize);
 function battlefieldChoices() {
-  const choices = [trainingMap, industrialMap, trenchMap, villageMap, verdunMap, headlandMap, fortVauxMap].map((battlefield) => {
+  const choices = battlefields.map((battlefield) => {
     if (battlefield.id === map.id)
       return battlefieldCard(battlefield);
-    const query = new URLSearchParams();
-    if (battlefield.id !== "industrial") query.set("map", battlefield.id);
-    query.set("view", preferredFirstPerson ? "first" : "third");
+    const query = new URLSearchParams({ map: battlefield.id, view: preferredFirstPerson ? "first" : "third" });
     return battlefieldCard(battlefield, `?${query}`);
   });
   return `<nav class="map-choice" aria-label="Battlefield">${choices.join("")}</nav>`;

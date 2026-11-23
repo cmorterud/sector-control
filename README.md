@@ -81,7 +81,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-Useful URL parameters: `map=trenches`, `verdun`, `village`, `headland`, `fort-vaux` or `training` selects a map (Industrial is the default), `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
+The briefing opens on Fort Vaux. Use `?map=industrial`, `trenches`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 

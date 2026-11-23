@@ -9,7 +9,7 @@ import {inflateSync} from 'node:zlib';
 import {checkArmoury,checkBriefing} from './briefing-review.mjs';
 
 const map=process.argv[2]??'village';
-const maps=['industrial','trenches','verdun','village','headland','training','fort-vaux'];
+const maps=['fort-vaux','training','trenches','village','verdun','headland','industrial'];
 if(!maps.includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
 const visualOnly=process.env.REVIEW_VISUAL_ONLY==='1';
@@ -95,6 +95,7 @@ try {
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
   const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'||map==='fort-vaux'?'600':'120',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
+  if(map==='fort-vaux'&&mode==='overview'&&!visualOnly&&!process.env.REVIEW_BASE_URL)query.delete('map');
   const destination=base+'?'+query;
   console.log(JSON.stringify({map,mode,stage:'loading'}));
   await client.send('Page.navigate',{url:destination});
