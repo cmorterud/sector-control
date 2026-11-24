@@ -11,6 +11,8 @@ import {expectedCI,awaitPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
 const maps=['fort-vaux','training','trenches','night-raid','village','verdun','headland','industrial'];
+// Industrial still renders for CI checks but is not offered in the briefing.
+const pickerMaps=maps.filter(id=>id!=='industrial');
 if(!maps.includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
 const visualOnly=process.env.REVIEW_VISUAL_ONLY==='1';
@@ -120,7 +122,7 @@ try {
    await delay(5000);
   }
   if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
-   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)},${!!published})`);
+   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(pickerMaps)},${!!published})`);
    if(map==='fort-vaux')await client.evaluate(`(()=>{
     const card=document.querySelector('[data-battlefield="fort-vaux"]');
     const brief=document.querySelector('#menu .panel > p');

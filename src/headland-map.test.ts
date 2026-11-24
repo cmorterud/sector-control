@@ -11,9 +11,9 @@ const scene = (bots = false, teamSize?: number) =>
     ambientArtillery: false,
     teamSize,
   });
-it("offers three-flag 50v50 domination between France and Germany with clear spawns", () => {
+it("offers three-flag 25v25 domination between France and Germany with clear spawns", () => {
   const g = scene(true);
-  expect(g.players).toHaveLength(100);
+  expect(g.players).toHaveLength(50);
   expect(g.scoring).toBe("domination");
   expect(g.sectors.map((s) => s.id)).toEqual(["A", "B", "C"]);
   expect(new Set(g.players.map((p) => p.faction))).toEqual(new Set(["french", "german"]));

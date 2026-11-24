@@ -72,6 +72,7 @@ const streets = [
 
 export const headlandMap: MapDefinition = {
   id: "headland", name: "Lighthouse point", width, depth, navSpacing: 4, navigationPoints: [],
+  defaultTeamSize: 25,
   buildings, streets, coast, scoring: "domination",
   spawn: { blue: { x: -113, z: -9 }, red: { x: 124, z: -16 } },
   sectors: [

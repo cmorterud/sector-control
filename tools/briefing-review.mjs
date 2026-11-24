@@ -30,7 +30,10 @@ export function checkBriefing(map, maps, newer = false) {
   if (known.length !== maps.length || known.some((id, index) => id !== maps[index]) || (!newer && cards.length !== maps.length))
     throw Error('Battlefield menu is missing a map or displays maps out of order');
   const active = cards.filter(card => card.getAttribute('aria-current') === 'page');
-  if (active.length !== 1 || active[0].dataset.battlefield !== map)
+  // A map opened by URL but not offered in the picker has no current card
+  // (an older published build may still offer it).
+  const offered = maps.includes(map) || (newer && active.length === 1);
+  if (offered ? active.length !== 1 || active[0].dataset.battlefield !== map : active.length !== 0)
     throw Error(`Battlefield menu did not select ${map}`);
   for (const card of cards.filter(card => card !== active[0])) {
     if (!card.href || new URL(card.href).searchParams.get('map') !== card.dataset.battlefield)
