@@ -99,6 +99,17 @@ Each side has a wire belt about five meters in front of its front-line parapet, 
 
 A barbed-wire belt surrounds the sector, just outside the playable area. Inside the wire you can only walk: no sprinting, hopping or mantling. Once you cross it, a banner counts down five seconds. Stay out and a three-shell salvo walks along the wire onto you, repeating until you return; it credits no one. Stepping back in for a full second clears the warning, but popping in and out does not reset the countdown. Each trench line continues past the north and south wire behind a sandbag block. Bots never leave the playable area.
 
+## Night raid
+
+Choose **Night raid** in the start menu or open `?map=night-raid`. It is Trench front's ground after dark, with 24 soldiers a side: the same trenches, wire and four flags, so knowing the day map is knowing this one.
+
+- **You see about fifteen meters.** Beyond that the ground is black. Bots follow the same rule: a soldier in the dark is seen only within 15 m, however clear the line to them.
+- **A fire gives you away.** Braziers burn in the rear trenches and light about seven meters around them. A soldier standing in that light is seen from across the field, by players and bots alike.
+- **Steer by the lamps.** Lanterns hang at the dugouts and along the trench walls, and each flag has a lamp on its pole. They are shaded: enough to walk toward, too little to be shot by.
+- **Follow the tape.** Each side has pegged two lines of white tape through the lanes it left in its own wire.
+
+The rule lives in `src/night.ts`: `sightLimit(map, target)` is 15 m in the dark and rises to 90 m beside an open fire. The renderer places a light at every lamp the rule lists, so what you see and what a bot sees agree.
+
 ## Village front prototype
 
 Choose **Village front** in the start menu or open [the village map](http://localhost:5173/?map=village). It keeps the trench map's 50v50 roster, service rifles, machine gunners, grenades, bayonets and artillery, with the same domination rules.

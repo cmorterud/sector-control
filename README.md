@@ -10,8 +10,8 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
-- **Seven maps.** Trench front, Verdun sector, Village front, 5v5 Industrial, Lighthouse point, indoor Fort Vaux, and a guided training camp.
-- **Per-map light and atmosphere.** Each map has its own sun, generated sky, fog and color grade, from Trench front's gray dawn to Village front's late afternoon. On Trench front a low sun burns through a heavy cloud deck; mist lies across no-man's land and pools in the trenches, brazier smoke drifts from the shelter bays, fresh craters smolder, and you hear wind keening in the wire, a machine gun far up the line and crows. Rooms darken away from their windows. Graphics quality is Auto, Low, Medium or High in the briefing; Auto picks from real frame times.
+- **Eight maps.** Trench front, Night raid, Verdun sector, Village front, 5v5 Industrial, Lighthouse point, indoor Fort Vaux, and a guided training camp.
+- **Per-map light and atmosphere.** Each map has its own sun, generated sky, fog and color grade, from Trench front's gray dawn to Village front's late afternoon. On Trench front a low sun burns through a heavy cloud deck; mist lies across no-man's land and pools in the trenches, brazier smoke drifts from the shelter bays, fresh craters smoulder, and you hear wind keening in the wire, a machine gun far up the line and crows. Rooms darken away from their windows. Graphics quality is Auto, Low, Medium or High in the briefing; Auto picks from real frame times.
 - **Lived-in trenches.** On Trench front, sandbags line the parados, British stretches mix timber, corrugated iron and sandbag revetments while German ones use timber and wicker, and dugout entrances glow with lanterns. Painted boards name each trench and point to its flag; crates, rifle racks, stretchers, braziers, periscopes, field telephone cable and standing water fill the lines. All of it stays off the firing steps and adds no cover.
 - **Wired no-man's land.** On Trench front, each side has a barbed-wire belt in front of its parapet, with gaps at its flags and the center. Your own side knows the lanes through its wire; the enemy's slows you to a walk and rattles as you push through. Shells and grenades cut it. The old craters hold standing water, and the debris of earlier fighting lies between the lines. The ground there is churned to bare, wet earth; grass, winter-dead and straw-colored, survives only behind the lines.
 - **A wired battlefield edge.** On Trench front, a belt of barbed wire marks the edge of the sector and slows you to a walk. Stay beyond it for five seconds and the guns walk a salvo onto you. The trenches run on past the wire behind sandbag blocks, and the front continues to the horizon: parapets and wire, broken woods, a shelled village and château, observation balloons, smoke columns, and distant shellfire and flares.
@@ -32,6 +32,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | --- | --- | --- |
 | Training grounds | Guided practice | Eight repeatable exercises covering movement, all weapons, artillery, destruction and squad combat |
 | Trench front | 50v50 | Four flags in opposing trench lines across no man's land |
+| Night raid | 24v24 | Trench front after dark. You see about 15 m; lamps light pools of trench, and white tape marks the lanes through the wire |
 | Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
@@ -84,7 +85,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-The briefing opens on Fort Vaux. Use `?map=industrial`, `trenches`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
+The briefing opens on Fort Vaux. Use `?map=industrial`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 

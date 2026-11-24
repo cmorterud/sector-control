@@ -10,7 +10,7 @@ import {checkArmory,checkBriefing} from './briefing-review.mjs';
 import {expectedCI,awaitPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
-const maps=['fort-vaux','training','trenches','village','verdun','headland','industrial'];
+const maps=['fort-vaux','training','trenches','night-raid','village','verdun','headland','industrial'];
 if(!maps.includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
 const visualOnly=process.env.REVIEW_VISUAL_ONLY==='1';
@@ -120,7 +120,7 @@ try {
    await delay(5000);
   }
   if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
-   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)})`);
+   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)},${!!published})`);
    if(map==='fort-vaux')await client.evaluate(`(()=>{
     const card=document.querySelector('[data-battlefield="fort-vaux"]');
     const brief=document.querySelector('#menu .panel > p');
@@ -141,9 +141,11 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  if((map==='village'||map==='fort-vaux'||map==='trenches') && mode==='ground') {
+  if((map==='village'||map==='fort-vaux'||map==='trenches'||map==='night-raid') && mode==='ground') {
    const details=map==='village'?['school','inn','street','manor-room']
     :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
+    // By lamplight at a dugout, in the dark of no-man's land, and from a firing step.
+    :map==='night-raid'?['trench-dugout','no-mans-land','firing-step']
     :['cistern','barracks','casemate','yard'];
    for(const detail of details) {
     let before;

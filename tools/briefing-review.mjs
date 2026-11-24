@@ -1,5 +1,9 @@
 // Runs in the real briefing before the existing battle scenarios start.
-export function checkBriefing(map, maps) {
+// `newer` is set when checking a published build, which may come from a branch
+// that has added a map these tools do not list yet: the known maps must still
+// all be there in order, and extra cards are allowed. A build checked with its
+// own tools must match the list exactly.
+export function checkBriefing(map, maps, newer = false) {
   const armory = document.querySelector('#menu a.armory-link');
   const picker = document.querySelector('#menu .map-choice');
   if (!armory || armory.textContent.trim() !== 'Armory' || armory.href !== new URL('armory/', location.href).href ||
@@ -22,7 +26,8 @@ export function checkBriefing(map, maps) {
 
   const cards = [...document.querySelectorAll('.map-choice > *')];
   const order = cards.map(card => card.dataset.battlefield);
-  if (cards.length !== maps.length || order.some((id, index) => id !== maps[index]))
+  const known = order.filter(id => maps.includes(id));
+  if (known.length !== maps.length || known.some((id, index) => id !== maps[index]) || (!newer && cards.length !== maps.length))
     throw Error('Battlefield menu is missing a map or displays maps out of order');
   const active = cards.filter(card => card.getAttribute('aria-current') === 'page');
   if (active.length !== 1 || active[0].dataset.battlefield !== map)

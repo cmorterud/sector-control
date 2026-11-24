@@ -49,6 +49,7 @@ import {
   crouchRules,
 } from "./crouch";
 import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
+import { sightLimit } from "./night";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
 import { firstPersonView, viewMuzzle } from "./player-view";
 import {
@@ -83,6 +84,7 @@ import {
   type Vec,
   type Box,
   type MapDefinition,
+  trenchGround,
 } from "./map";
 import {
   runtimeMap,
@@ -957,7 +959,7 @@ export class Game {
     );
     this.artillery.enabled = this.map.artillery !== false;
     this.assaults.enabled =
-      (options.assaults ?? true) && this.map.id === "trenches";
+      (options.assaults ?? true) && trenchGround(this.map);
     this.collision.setMap?.(this.map);
     this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
@@ -2708,7 +2710,8 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       q.team !== p.team &&
       q.hp > 0 &&
       (canNotice(g, p, q) || (!!g.tactics && audible(g, p, q))) &&
-      dist(q, p) < range &&
+      // At night an unlit soldier is only seen close up (src/night.ts).
+      dist(q, p) < Math.min(range, sightLimit(g.map, q)) &&
       !smokeBlocks(
         g,
         { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },
