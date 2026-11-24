@@ -48,7 +48,7 @@ it("rejects a blocked placement and leaves the player carrying the kit", () => {
   expect(player.weapon).toBe("pistol");
 });
 
-it("gates setup time, limits traverse, ignores movement, and fires from the emplacement with its Armoury stats", () => {
+it("gates setup time, limits traverse, ignores movement, and fires from the emplacement with its Armory stats", () => {
   const { game, player, target, step } = field();
   const pistolAmmo = player.ammo;
   step({ deployGun: true });

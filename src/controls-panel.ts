@@ -28,7 +28,7 @@ export class ControlsPanel {
     if (!this.open) return false;
     if (event.code === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (this.waiting) { this.waiting = null; this.status.textContent = "Binding cancelled."; }
+      if (this.waiting) { this.waiting = null; this.status.textContent = "Binding canceled."; }
       else this.close();
       return true;
     }

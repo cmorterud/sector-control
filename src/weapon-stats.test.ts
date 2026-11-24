@@ -2,13 +2,13 @@ import { expect, it } from "vitest";
 import { equipLoadout, factions, kitFor, riflemanWeapon, switchWeapon } from "./loadouts";
 import { fortVauxMap } from "./fort-vaux-map";
 import { trenchMap } from "./trench-map";
-import { armouryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
+import { armoryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
 
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
 
-it("gives every Armoury faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
-  for (const f of armouryFactions) {
+it("gives every Armory faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
+  for (const f of armoryFactions) {
     expect(factions[f].name).toBeTruthy();
     // The two armies that fight inside Fort Vaux also have a carbine.
     const carbine = f === "french" || f === "german" ? ["carbine"] : [];
@@ -63,7 +63,7 @@ function weaponRange() {
   return { g, shooter, target };
 }
 
-it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armoury profile when equipping, firing and reloading", w => {
+it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armory profile when equipping, firing and reloading", w => {
   const { g, shooter } = weaponRange();
   shooter.faction = w.faction;
   equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : "rifleman", w.role === "carbine" ? "carbine" : "service");
