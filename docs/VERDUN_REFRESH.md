@@ -9,9 +9,9 @@ Trench front's refresh (docs/TRENCH_REFRESH.md), carried over to Verdun, plus de
 | 1 | #67 | 16 m dead zone around the field, boundary wire belt, five-second out-of-bounds countdown and salvo |
 | 2 | #68 | Woods carried on past the wire, hill country to the horizon, a ruined village and a fort on a ridge, balloons, smoke, distant bursts and flares |
 | 3 | #69 | Mist through the woods and in the trenches, brazier and crater smoke, cloth on the wire, a lower overcast sun |
-| 4 | | Parados bags, French and German revetments, dugouts, French and German signboards and props for the 2 m trenches |
-| 5–6 | | Owned wire belts in front of the front lines, water in the shell scars, debris, and churned ground where the field was fought over |
-| 7 | | Denser flank belts and central groves, and more trees past the wire |
+| 4 | #71 | Parados bags, French and German revetments, dugouts, French and German signboards and props for the 2 m trenches |
+| 5–6 | #74 | Owned wire belts in front of the front lines, water in the shell scars, debris, and churned ground where the field was fought over |
+| 7 | this PR | Denser flank belts and central groves, and more trees past the wire |
 
 ## Rules and numbers
 
@@ -39,6 +39,7 @@ As on Trench front, everything outside the boundary rule and the wire checks is 
 - **A bigger terrain removes an old wall.** Bots dodging artillery picked escape points on a 24 m ring that the old terrain edge used to rule out. With a dead zone they ran into it and were shelled.
 - **Carry density from inside the field.** Woodland density is already near zero at the field's edge, so the dead zone samples it 8 m inside.
 - **Bake per-texel rules onto a grid.** The ground texture samples its churn for every texel; a 0.5 m grid made the cost vanish.
+- **Detail views cost CI time.** Each Verdun view takes 25–35 s on a hosted runner's software renderer; Verdun's render and comparison jobs got longer limits (13 and 18 minutes) in #71.
 - **Kill vitest's workers, not just its runner.** Stopping a long scratch run left its fork workers playing matches with no parent.
 
 ## Validation
