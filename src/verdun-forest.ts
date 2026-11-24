@@ -99,11 +99,11 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
     return true;
   };
   let trees = 0;
-  for (let attempt = 0; attempt < 2400 && trees < 124; attempt++) {
+  for (let attempt = 0; attempt < 4000 && trees < 180; attempt++) {
     const x = (random() - .5) * (span - 12), z = (random() - .5) * 116;
     const density = woodlandDensity(flanks, x, z);
     if (random() > density || (Math.abs(x) < 24 && Math.abs(z) < 28)) continue;
-    if (parts.some((b) => dist(b, { x, z }) < 3.8 + random() * .8)) continue;
+    if (parts.some((b) => dist(b, { x, z }) < 3.2 + random() * .7)) continue;
     const choice = random();
     const treeStyle: Box["treeStyle"] = choice < .35 ? "pine" : choice < .53 ? "sparse" : choice < .82 ? "bare" : "snapped";
     const diameter = .5 + random() * .48;
@@ -135,14 +135,14 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   seed = 0xc37a1917;
   for (const [groveIndex, grove] of (woodland.groves ?? []).entries()) {
     let count = 0;
-    for (let attempt = 0; attempt < 600 && count < 14; attempt++) {
+    for (let attempt = 0; attempt < 900 && count < 17; attempt++) {
       const angle = random() * Math.PI * 2, radius = Math.sqrt(random());
       const x = grove.x + Math.cos(angle) * radius * grove.radiusX;
       const z = grove.z + Math.sin(angle) * radius * grove.radiusZ;
       // Three broad breaks cross the field. Trunks can interrupt other lines,
       // giving attackers real cover without forming a continuous tree screen.
       if ([-20, 1, 22].some(lane => Math.abs(z - lane) < 3.2)) continue;
-      if (parts.some(b => b.kind === "tree" && dist(b, { x, z }) < 2.8)) continue;
+      if (parts.some(b => b.kind === "tree" && dist(b, { x, z }) < 2.5)) continue;
       const choice = random();
       const treeStyle: Box["treeStyle"] = choice < .45 ? "pine" : choice < .6 ? "sparse" : choice < .9 ? "bare" : "snapped";
       const diameter = .65 + random() * .25;

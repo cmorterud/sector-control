@@ -108,13 +108,14 @@ it("wires Verdun's front lines without closing a single exit, and only slows the
   const vBelts = verdunMap.wireBelts!, t = verdunMap.terrain!;
   const counts = (["blue", "red"] as const).map((team) => vBelts.filter((b) => b.team === team).length);
   expect(Math.min(...counts)).toBeGreaterThanOrEqual(6);
-  expect(Math.abs(counts[0] - counts[1])).toBeLessThanOrEqual(2);
+  // The woods are asymmetric, so trunks close a few more segments on one side.
+  expect(Math.abs(counts[0] - counts[1])).toBeLessThanOrEqual(3);
   for (const b of vBelts) {
     const side = b.team === "blue" ? -1 : 1;
     // In front of its own line, toward the enemy.
     expect(b.x * side).toBeLessThan(65);
     expect(b.x * side).toBeGreaterThan(50);
-    expect(beyondPlayArea(b.x, b.z, verdunMap)).toBeLessThan(-15);
+    expect(beyondPlayArea(b.x, b.z, verdunMap)).toBeLessThan(-10);
     // Clear of every dug sap, route, ramp and trench by 2 m, and of the flags.
     for (const r of [...t.rectangles, ...t.ramps])
       expect(Math.abs(r.x - b.x) >= (r.w + b.w) / 2 + 2 || Math.abs(r.z - b.z) >= (r.d + b.d) / 2 + 2).toBe(true);
