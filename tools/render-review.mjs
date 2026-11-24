@@ -146,7 +146,7 @@ try {
     // Each level of the airship, a flag room on two of them and the view from an engine car.
     :map==='zeppelin'?['keel','station','gallery','bomb-bay','top','engine-car']
     :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
-    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench','trench-dugout','trench-sign']
+    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench','trench-dugout','trench-sign','no-mans-land']
     // By lamplight at a dugout, in the dark of no-man's land, and from a firing step.
     :map==='night-raid'?['trench-dugout','no-mans-land','firing-step']
     :['cistern','barracks','casemate','yard'];

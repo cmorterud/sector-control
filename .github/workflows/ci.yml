@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     # Software rendering at High quality (ambient occlusion, shadow cascades)
     # takes up to about six minutes on the larger maps. Maps with many detail
-    # views take longer: Verdun's ten run 25-35 s each on a hosted runner.
+    # views take longer: Verdun's eleven run 25-35 s each on a hosted runner.
     timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village' || matrix.map == 'fort-vaux' || matrix.map == 'verdun') && 13 || 9 }}
     strategy:
       fail-fast: false
