@@ -1,8 +1,13 @@
 name: Map and model visual comparison
 
+# Opt-in: add the `visual-comparison` label to a PR to run it. It renders every
+# map twice (base and merge), about 50 runner-minutes, so it no longer runs on
+# every map, model or rendering change. With the label on, each new push
+# compares again; remove the label to stop.
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - '.github/workflows/visual-comparison.yml'
       - 'tools/render-review.mjs'
@@ -32,8 +37,10 @@ on:
 permissions:
   contents: read
 
+# Adding some other label must not cancel a comparison in progress, so those
+# events get a group of their own.
 concurrency:
-  group: visual-comparison-${{ github.event.pull_request.number }}
+  group: visual-comparison-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name != 'visual-comparison' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 env:
@@ -41,6 +48,9 @@ env:
 
 jobs:
   builds:
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'visual-comparison') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'visual-comparison')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
