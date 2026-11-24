@@ -1,9 +1,9 @@
-import { armouryFactions, gameMuzzleVelocity, gameRateOfFire, hitZones, reloadDuration, shotsToKill, timeToKill, weaponStats, weaponTicksPerSecond } from '../src/weapon-stats';
+import { armoryFactions, gameMuzzleVelocity, gameRateOfFire, hitZones, reloadDuration, shotsToKill, timeToKill, weaponStats, weaponTicksPerSecond } from '../src/weapon-stats';
 
 // The simulation tests check these profiles against actual shots and reloads.
-// The browser review checks that the built Armoury displays the same values.
+// The browser review checks that the built Armory displays the same values.
 console.log(JSON.stringify({
-  factions: armouryFactions,
+  factions: armoryFactions,
   weapons: weaponStats.map(weapon => ({
     name: weapon.name,
     faction: weapon.faction,

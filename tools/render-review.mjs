@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {resolve,join,extname,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {inflateSync} from 'node:zlib';
-import {checkArmoury,checkBriefing} from './briefing-review.mjs';
+import {checkArmory,checkBriefing} from './briefing-review.mjs';
 import {expectedCI,awaitPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
@@ -14,7 +14,7 @@ const maps=['fort-vaux','training','trenches','night-raid','village','verdun','h
 if(!maps.includes(map))throw Error('Unknown map');
 const dist=resolve(process.argv[3]??'dist'),out=resolve(process.argv[4]??`playtest-artifacts/render-${map}`);
 const visualOnly=process.env.REVIEW_VISUAL_ONLY==='1';
-const armouryStats=process.env.REVIEW_ARMOURY_STATS;
+const armoryStats=process.env.REVIEW_ARMORY_STATS;
 const sitePath=process.env.PAGES_BASE_PATH??`/${process.env.GITHUB_REPOSITORY?.split('/')[1]??'sector-control'}/`;
 if(!/^\/[a-zA-Z0-9_/-]+\/$/.test(sitePath))throw Error('Invalid deployment base path');
 await mkdir(out,{recursive:true});
@@ -35,7 +35,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=process.env.REVIEW_BASE_URL??`http://127.0.0.1:${server.address().port}${sitePath}`;
 if(!base.endsWith('/')||!['https:','http:'].includes(new URL(base).protocol))throw Error('Invalid review URL');
-let browser,client,chromeLog='',armouryURL,published;
+let browser,client,chromeLog='',armoryURL,published;
 const report={map,source:process.env.REVIEW_SOURCE_SHA??process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:visualOnly?'Fixed viewpoints at the start of the seeded match.':'Controlled snapshots advance 900 real simulation/presentation steps; software GPU displays checkpoints. Not a real-time FPS benchmark.'};
 // Inspect the clean overview itself, so a black/flat canvas cannot pass merely
 // because the HUD and simulation continue running. Chrome emits 8-bit RGB(A).
@@ -127,7 +127,7 @@ try {
     if(!card.textContent.includes('6v6')||!card.textContent.includes('Verdun · 1916')||!brief?.textContent.includes('6v6'))
      throw Error('Fort Vaux card or briefing differs from the 6v6 default');
    })()`);
-   if(armouryStats)armouryURL=await client.evaluate(`document.querySelector('.armoury-link')?.href`);
+   if(armoryStats)armoryURL=await client.evaluate(`document.querySelector('.armory-link')?.href`);
   }
   await client.evaluate(`document.querySelector('#primary').click()`);
   await until(()=>client.evaluate(`!!document.querySelector('.playtest')`));
@@ -434,14 +434,17 @@ try {
   console.log(JSON.stringify({map,emplacement:report.emplacement}));
   console.log(JSON.stringify({map,trainingControls:report.trainingControls}));
  }
- if(!visualOnly&&armouryStats) {
-  if(armouryURL!==new URL('armoury/',base).href)throw Error('Briefing link does not point to the built Armoury');
-  const expected=JSON.parse(await readFile(armouryStats,'utf8'));
-  await client.send('Page.navigate',{url:armouryURL});
-  await until(()=>client.evaluate(`location.href===${JSON.stringify(armouryURL)}&&document.readyState==='complete'&&!!document.querySelector('#armoury .card')`));
-  report.armoury=await client.evaluate(`(${checkArmoury})(${JSON.stringify(expected)})`);
-  await screenshot('armoury-comparison');
-  console.log(JSON.stringify({armoury:report.armoury}));
+ if(!visualOnly&&armoryStats) {
+  if(armoryURL!==new URL('armory/',base).href)throw Error('Briefing link does not point to the built Armory');
+  const expected=JSON.parse(await readFile(armoryStats,'utf8'));
+  await client.send('Page.navigate',{url:armoryURL});
+  await until(()=>client.evaluate(`location.href===${JSON.stringify(armoryURL)}&&document.readyState==='complete'&&!!document.querySelector('#armory .card')`));
+  report.armory=await client.evaluate(`(${checkArmory})(${JSON.stringify(expected)})`);
+  await screenshot('armory-comparison');
+  // The page used to live at armoury/; old links and bookmarks must still arrive.
+  await client.send('Page.navigate',{url:new URL('armoury/?from=old-link',base).href});
+  await until(()=>client.evaluate(`location.href===${JSON.stringify(armoryURL+'?from=old-link')}&&!!document.querySelector('#armory .card')`));
+  console.log(JSON.stringify({armory:report.armory}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);
  if(report.deployment)await awaitPublishedManifest(base,{head:report.head,source:report.source,run:report.ciRun,attempt:report.ciAttempt});

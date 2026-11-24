@@ -14,7 +14,7 @@ The script uses real browser WebGL and an explicit `renderReview` bridge availab
 
 Industrial additionally fires real controlled rounds to verify hit direction, death reports, the brief death camera and its end after a scoped death, normal respawn, death-map marker expiry and damage-based assists. The check uses the normal tactical/scoreboard key handlers, verifies the assist column and checks death-card bounds at 600px height. Additional `combat-*.png` captures and `combatChecks` in the report preserve the evidence.
 
-Each build's browser jobs check the map links and available loadouts in the briefing, including the emplacement kit. Industrial follows the briefing's **Armoury** URL and checks each faction's Armoury cards against the gameplay profiles. It checks comparison-table visibility and sorting and saves `armoury-comparison.png`. Training drives deployment, mounting, firing, reloading, dismounting and packing through the normal input handlers.
+Each build's browser jobs check the map links and available loadouts in the briefing, including the emplacement kit. Industrial follows the briefing's **Armory** URL and checks each faction's Armory cards against the gameplay profiles. It checks comparison-table visibility and sorting and saves `armory-comparison.png`. Training drives deployment, mounting, firing, reloading, dismounting and packing through the normal input handlers.
 
 ## Before-and-after images
 

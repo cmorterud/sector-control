@@ -95,7 +95,7 @@ Each uncontested flag earns its owner **one point every three seconds**. First t
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
-Each side has a wire belt about five metres in front of its front-line parapet, following the trench's zigzag in 4 m segments. Gaps are left opposite the defenders' two flags and the centre. A side's own soldiers pass through its belt freely; the enemy is slowed to a walk and cannot sprint, hop or mantle there. A shell cuts any segment within about 2.4 m and a grenade within 1.4 m; cut segments stay cut and show as broken stakes and a low tangle. The six starting craters hold standing water you splash through.
+Each side has a wire belt about five meters in front of its front-line parapet, following the trench's zigzag in 4 m segments. Gaps are left opposite the defenders' two flags and the center. A side's own soldiers pass through its belt freely; the enemy is slowed to a walk and cannot sprint, hop or mantle there. A shell cuts any segment within about 2.4 m and a grenade within 1.4 m; cut segments stay cut and show as broken stakes and a low tangle. The six starting craters hold standing water you splash through.
 
 A barbed-wire belt surrounds the sector, just outside the playable area. Inside the wire you can only walk: no sprinting, hopping or mantling. Once you cross it, a banner counts down five seconds. Stay out and a three-shell salvo walks along the wire onto you, repeating until you return; it credits no one. Stepping back in for a full second clears the warning, but popping in and out does not reset the countdown. Each trench line continues past the north and south wire behind a sandbag block. Bots never leave the playable area.
 
@@ -145,9 +145,9 @@ The November 14 repair keeps the soldier's height when leaving a destroyed tread
 
 A follow-up shortens both manor stairways to household proportions: 16 treads of 32 cm over a 5.12 m run (about 34°, previously 20 treads over 12.4 m), each ending on its own upper landing. The first-floor slab now covers the rest of the old long stairwell openings. Stair navigation anchors and walk checks use the same 45 cm support footprint as soldiers, so a route cannot rest on a point embedded in the next riser. `villageStairRules` in `src/village-buildings.ts` holds the dimensions.
 
-## Lighthouse point greybox
+## Lighthouse point graybox
 
-Choose **Lighthouse point** in the start menu or open `?map=headland`. This is an early greybox of a 300 × 170 m coastal headland, compressed from a friend's roughly 1,100 m layout sketch. France deploys by the mainland road in the west; Imperial Germany deploys on the eastern tip behind the lighthouse. Three flags sit between them: **A Cliff Park**, **B Fountain Square** and **C Walled Green**, joined by a loop road. It uses the 50v50 roster and domination rules.
+Choose **Lighthouse point** in the start menu or open `?map=headland`. This is an early graybox of a 300 × 170 m coastal headland, compressed from a friend's roughly 1,100 m layout sketch. France deploys by the mainland road in the west; Imperial Germany deploys on the eastern tip behind the lighthouse. Three flags sit between them: **A Cliff Park**, **B Fountain Square** and **C Walled Green**, joined by a loop road. It uses the 50v50 roster and domination rules.
 
 The coastline is an authored outline (`coast` on the map definition). Ground beyond it is sea bed one bank height below the land, under a flat sea plane, and is closed to movement, navigation and deployment about a meter back from the cliff edge. Open-sea terrain patches are not built.
 
@@ -235,7 +235,7 @@ On Trench front, a single heavy shell also falls spontaneously every **8–22 se
 
 ### Ground appearance
 
-Trench front uses a continuous battlefield-sized material: broad irregular wet mud, lighter dry earth and sparse faded-green areas, with two differently rotated/scaled mud layers blended across them. Fine surface normals remain visible nearby without the former three-metre repeating color tile. Worn paths connect spawn approaches to rear entries and faint broken tracks cross the field. Thirty small cosmetic stones/clods sit near the approaches; up to nine shallow, glossy puddles fit inside existing hollows. Explosions remove affected dressing and reveal warmer, darker fresh-cut soil; authored old craters keep their weathered surface. This changes presentation without altering terrain heights, movement, blast rules or navigation.
+Trench front uses a continuous battlefield-sized material: broad irregular wet mud, lighter dry earth and sparse faded-green areas, with two differently rotated/scaled mud layers blended across them. Fine surface normals remain visible nearby without the former three-meter repeating color tile. Worn paths connect spawn approaches to rear entries and faint broken tracks cross the field. Thirty small cosmetic stones/clods sit near the approaches; up to nine shallow, glossy puddles fit inside existing hollows. Explosions remove affected dressing and reveal warmer, darker fresh-cut soil; authored old craters keep their weathered surface. This changes presentation without altering terrain heights, movement, blast rules or navigation.
 
 ## Crouching
 
@@ -269,7 +269,7 @@ Support and communication trenches retain **2 m floor lanes**, with compact dogl
 
 The battlefield starts with **rolling ground and broad hollows**, across no man's land and the rear areas, plus six real shell craters and five shallow depressions. The broad landforms dip by up to about 0.95 m; rear rises reach roughly 0.3 m, while central crests stay low enough to preserve firing-step sightlines. Six larger 0.55–0.7 m shell bowls have rotated, uneven outlines, with nine smaller 0.18–0.24 m hollows overlapping their shoulders and the broad depressions. Scattered clods vary in size and angle, replacing identical blocks around circular rims. The six major bowls remain the bots’ starting cover anchors. Slopes blend back to level around trench lips, floors, steps, rear entry ramps, spawns and fixed cover. Movement, bullets and camera collision share the visible surface; foliage roots follow it. Grenades and artillery continue excavating this starting terrain, and restarting restores it.
 
-Fifty distinct firing positions per side are spread along longer steps, with 1.2 m spacing. The short Blue setback keeps four positions. Spawn formations start five metres farther back to keep the larger roster off the entrance ramps.
+Fifty distinct firing positions per side are spread along longer steps, with 1.2 m spacing. The short Blue setback keeps four positions. Spawn formations start five meters farther back to keep the larger roster off the entrance ramps.
 
 Trenches are **2.4 m deep**, with **0.85 m firing steps** along the front edges. The floor conceals a standing soldier from the opposing trench. On a step, the head/helmet and raised rifle clear the parapet while the torso stays behind earth. Walk back off the step to shelter. Cover and visibility come from the actual world geometry; shots aimed below the parapet strike the bank.
 
