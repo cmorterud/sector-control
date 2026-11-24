@@ -129,6 +129,18 @@ Open the tactical map and press **F** to switch it from a fire mission to a flar
 
 The rule lives in `src/night.ts`: `sightLimit(map, target)` is 15 m in the dark and rises to 90 m beside an open fire. The renderer places a light at every lamp the rule lists, so what you see and what a bot sees agree.
 
+## Zeppelin
+
+Choose **Zeppelin** in the start menu or open `?map=zeppelin`. Six a side fight aboard a German naval airship drifting above a sea of cloud at dusk. French boarders spawn at the stern and the crew at the bow; the ship is the same both ways round.
+
+- **Three lanes, one above another.** The **keel** runs along the bottom of the hull, close and cluttered with fuel tanks and crates. The **gallery** runs through the gas cells above it: longer sight lines between valve housings. The **top walk** runs along the outside of the hull with nothing but vents for cover.
+- **Stairs join them.** A tower at each end climbs from the keel to the gallery and on to the top walk. Each engine station has two stairs up to the gallery bridge that crosses it. In the bomb bay a stair climbs from the keel to the bridge, and a tower from the bridge to the top walk.
+- **Three flags.** **A** (Aft engines) and **C** (Forward engines) are the stations near each spawn; **B** is the bomb bay amidships. Each station has engine cars on gangways to either side. You capture a flag from its floor; the bridge above gives cover, not the capture.
+- **Stay aboard.** Rails line every drop to open sky. They stop you, not bullets. Anyone who did fall would not survive.
+- **No artillery or flares,** and grenades break only crates: the airship itself stands up to anything.
+
+`src/zeppelin-map.ts` builds the stern half and turns it 180 degrees for the bow, so every route has its twin. `MapDefinition.sky` gives a map no ground: height queries off the decks return a floor far below, and a fall past `fallLimit` kills.
+
 ## Village front prototype
 
 Choose **Village front** in the start menu or open [the village map](http://localhost:5173/?map=village). It keeps the trench map's 50v50 roster, service rifles, machine gunners, grenades, bayonets and artillery, with the same domination rules.

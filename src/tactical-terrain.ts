@@ -1,5 +1,6 @@
 import { groundHeight, playArea, type MapDefinition } from "./map";
 import type { FortRect } from "./fort-vaux-map";
+import { hullRadius } from "./zeppelin-map";
 
 // Sample real, excavated terrain only when its revision changes. No actor data.
 export function tacticalRelief(map: MapDefinition, size = 256) {
@@ -15,7 +16,40 @@ export function tacticalRelief(map: MapDefinition, size = 256) {
   }
   return { width, height, pixels };
 }
-export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition, size = map.fort ? 720 : 256) {
+export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition, size = map.fort || map.zeppelin ? 720 : 256) {
+  // Zeppelin floor plan: the hull from above, the keel's rooms and corridor
+  // filled in, the top walk over them in a lighter wash, the gallery as the
+  // line along the middle and each stair tower dark.
+  if (map.zeppelin) {
+    const z = map.zeppelin, area = playArea(map);
+    canvas.width = size;
+    canvas.height = Math.round(size * area.depth / area.width);
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#2c3149";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(canvas.width / area.width, canvas.height / area.depth);
+    ctx.translate(area.width / 2, area.depth / 2);
+    ctx.beginPath();
+    for (let x = -z.hull.half; x <= z.hull.half; x += 1) ctx.lineTo(x, -hullRadius(x));
+    for (let x = z.hull.half; x >= -z.hull.half; x -= 1) ctx.lineTo(x, hullRadius(x));
+    ctx.fillStyle = "#8f8b7d";
+    ctx.fill();
+    const fill = (rects: FortRect[], color: string) => { ctx.fillStyle = color; for (const r of rects) ctx.fillRect(r.x0, r.z0, r.x1 - r.x0, r.z1 - r.z0); };
+    fill(z.plan.keel, "#d8c79f");
+    ctx.globalAlpha = 0.35;
+    fill(z.plan.top, "#f4ead0");
+    ctx.globalAlpha = 1;
+    fill(z.plan.gallery.map((r) => ({ ...r, z0: -0.35, z1: 0.35 })), "#f6eccb");
+    fill(z.towers.map((t) => t.interior), "#5e5b52");
+    fill(z.bombDoors, "#2c3149");
+    ctx.fillStyle = "#f0dfb4";
+    ctx.font = "1.7px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("STAIRS", -55, -4.5);
+    ctx.fillText("STAIRS", 55, 6.5);
+    ctx.fillText("GALLERY ALONG THE MIDDLE · TOP WALK ABOVE", 0, -12);
+    return;
+  }
   if (map.fort) {
     canvas.width = size;
     canvas.height = Math.round(canvas.width * playArea(map).depth / playArea(map).width);
