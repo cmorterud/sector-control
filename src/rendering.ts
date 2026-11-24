@@ -5153,10 +5153,11 @@ export class Renderer implements CollisionWorld {
       }
     }
     if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") this.blastCasualties(e);
-    if (this.map.night && (e.type === "grenadeExplosion" || e.type === "artilleryImpact")) {
+    // Burst lights are built only on night maps.
+    if (this.burstLights?.length && (e.type === "grenadeExplosion" || e.type === "artilleryImpact")) {
       // Light the flash from the slot that has been dark longest.
-      const burst = this.burstLights.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b), this.burstLights[0]);
-      if (burst) {
+      const burst = this.burstLights.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b));
+      {
         burst.bornAt = e.tick;
         burst.radius = burstRadius(e.type === "artilleryImpact" ? artilleryExplosionProfile.radius : grenadeExplosionProfile.radius);
         burst.light.setPosition(e.at.x, e.at.y + 2.5, e.at.z);

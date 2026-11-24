@@ -120,6 +120,13 @@ Open the tactical map and press **F** to switch it from a fire mission to a flar
 
 `src/flares.ts` holds the rules; its light feeds the same `sightLimit`.
 
+### Bursts and muzzle flash
+
+- **A burst shows the ground around it.** For under half a second a shell lights about 36 m and a grenade about 28 m. A barrage strobes no-man's land, and anyone caught in a flash can be glimpsed from across the field.
+- **Firing gives you away.** For a second after a shot, the shooter can be seen from up to 60 m.
+- **Craters glow.** A fresh crater's embers burn for twenty seconds. They mark where a shell fell; they do not light anyone.
+- Smoke and dust are dark at night unless something lights them.
+
 The rule lives in `src/night.ts`: `sightLimit(map, target)` is 15 m in the dark and rises to 90 m beside an open fire. The renderer places a light at every lamp the rule lists, so what you see and what a bot sees agree.
 
 ## Village front prototype
