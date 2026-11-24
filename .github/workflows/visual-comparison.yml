@@ -22,6 +22,7 @@ on:
       - 'src/village-*.ts'
       - 'src/battlefield-dressing.ts'
       - 'src/graphics-quality.ts'
+      - 'src/boot.ts'
       - 'src/main.ts'
       - 'src/rendering.ts'
       - 'src/room-light.ts'

@@ -4,7 +4,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 ![Verdun sector](public/previews/verdun.jpg)
 
-**[Play it in your browser](https://codymorterud.com/sector-control/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Passing builds and rendered checks on `main` publish automatically through GitHub Actions.
+**[Play it in your browser](https://codymorterud.com/sector-control/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Phones and tablets without a mouse see a short notice instead, with a link to share to a computer and a **Try anyway** option; add `?desktop` to the URL to skip it. Passing builds and rendered checks on `main` publish automatically through GitHub Actions.
 
 ## Features
 
