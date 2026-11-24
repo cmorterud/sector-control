@@ -80,10 +80,20 @@ export function isCurrentPR(pr, repository, head) {
 }
 
 // Production owns the root; a PR owns exactly one numbered subtree.
-export function replaceBuild(existing, incoming, pr) {
+// Pages caches each page for up to ten minutes, so a visitor can be served the
+// replaced build's HTML after a deployment. `previousAssets` lists the files of
+// the build being replaced (from its revision.json): its hashed bundle files
+// stay for one more deployment so that page still loads. A build's manifest
+// never lists files retained from the build before it, so they drop next time.
+export function replaceBuild(existing, incoming, pr, previousAssets = []) {
   if (!Number.isSafeInteger(pr) || pr < 0) throw Error('Invalid PR number');
   const prefix = pr ? `pr-preview/pr-${pr}/` : '';
   const next = new Map([...existing].filter(([path]) => pr ? !path.startsWith(prefix) : path.startsWith('pr-preview/')));
+  for (const path of previousAssets) {
+    if (typeof path !== 'string' || !/^assets\/[A-Za-z0-9._-]+$/.test(path)) continue;
+    const file = existing.get(prefix + path);
+    if (file) next.set(prefix + safePath(path), file);
+  }
   for (const [path, file] of incoming) {
     safePath(path);
     if (path.startsWith('pr-preview/')) throw Error('A build cannot contain nested previews');
@@ -204,6 +214,17 @@ async function readState() {
   return {parent: ref.object.sha, files};
 }
 
+// The file list of the build about to be replaced, or none if it has no
+// readable manifest. Retention is a courtesy; it must never block a publish.
+async function previousBuildFiles(files, pr) {
+  const entry = files.get(`${pr ? `pr-preview/pr-${pr}/` : ''}revision.json`);
+  if (!entry) return [];
+  try {
+    const blob = await api(`git/blobs/${entry.sha}`);
+    return Object.keys(JSON.parse(Buffer.from(blob.content, 'base64').toString()).files ?? {});
+  } catch { return []; }
+}
+
 export async function stageSite() {
   const context = JSON.parse(await readFile(contextFile, 'utf8'));
   const previous = await readState();
@@ -228,7 +249,7 @@ export async function stageSite() {
     for (const [path, hash] of Object.entries(manifest.files)) if (!incoming.has(path) || digest(incoming.get(path).bytes) !== hash) throw Error(`Asset hash mismatch: ${path}`);
     const html = incoming.get('index.html')?.bytes.toString() ?? '';
     if (!html.includes(`src="${manifest.base}assets/`)) throw Error('Build uses the wrong asset base');
-    files = replaceBuild(files, incoming, context.pr);
+    files = replaceBuild(files, incoming, context.pr, await previousBuildFiles(files, context.pr));
   }
   if (!files.has('index.html')) throw Error('No production build to publish; run CI on main first');
   await rm(siteDir, {recursive: true, force: true}); await mkdir(siteDir, {recursive: true});
