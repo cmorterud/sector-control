@@ -141,10 +141,18 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  if((map==='village'||map==='fort-vaux') && mode==='ground') {
-   const details=map==='village'?['school','inn','street','manor-room']:['cistern','barracks','casemate','yard'];
+  if((map==='village'||map==='fort-vaux'||map==='trenches') && mode==='ground') {
+   const details=map==='village'?['school','inn','street','manor-room']
+    :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
+    :['cistern','barracks','casemate','yard'];
    for(const detail of details) {
-    const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
+    let before;
+    try{before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);}
+    catch(error){
+     // The visual comparison runs this script against the base build, which may predate a viewpoint.
+     if(!visualOnly||!/Unknown review viewpoint/.test(String(error)))throw error;
+     console.log(JSON.stringify({map,stage:'viewpoint unknown to this build',detail}));continue;
+    }
     await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
     await screenshot('detail-'+detail,true);
    }
@@ -167,13 +175,6 @@ try {
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
  if(!visualOnly&&map==='trenches') {
-  // Close views of the wire belt and a trench block. Kept out of the visual
-  // comparison, whose base revision may not know these viewpoints.
-  for(const detail of ['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']) {
-   const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
-   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
-   await screenshot('detail-'+detail,true);
-  }
   // Walk out through the boundary wire: the warning must appear and count down,
   // and staying out must end in the boundary salvo rather than a soldier's kill.
   report.boundary=await client.evaluate(`(()=>{
