@@ -542,7 +542,7 @@ export class Renderer implements CollisionWorld {
       this.buildBackdrop();
       if (map.woodland) this.buildDeadZoneForest();
       if (map.terrain?.trenchLines?.length) this.buildTrenchDressing();
-      if (trenchGround(map)) this.buildNoMansLand();
+      if (trenchGround(map) || map.noMansLand) this.buildNoMansLand();
     }
     if (this.look.atmosphere) this.buildAtmosphere();
     if (map.night) this.buildNight();

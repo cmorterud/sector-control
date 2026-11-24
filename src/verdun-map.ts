@@ -1,4 +1,4 @@
-import { groundHeight, type MapDefinition, type Vec, type Box } from "./map";
+import { groundHeight, type MapDefinition, type Vec, type Box, type WireSegment } from "./map";
 import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
 import { buildVerdunForest, verdunWoodland, verdunFlankX } from "./verdun-forest";
@@ -155,6 +155,37 @@ for(const line of terrain.trenchLines!) for(const s of line.sections) for(const 
   const x=s.x+side*1.15;
   if(groundHeight(x+side*.25,z,verdunMap)>.3 && groundHeight(x-side*.35,z,verdunMap)<.1) terrain.lining.push({x,z,w:.12,d:1.8});
  }
+
+// Wire belts about 5 m in front of each front line, in 4 m segments that only
+// the enemy is slowed by. A segment is left out wherever a dug sap, route,
+// ramp or trench comes within 2 m, a trunk or cover stands on its wire, or a
+// flag is close, so every exit and track stays open. The wire follows the
+// rolling ground; only trench floors and deep scars are refused.
+const wireBelts: WireSegment[] = [];
+const near = (b: {x:number;z:number;w:number;d:number}, x: number, z: number, w: number, d: number, margin: number) =>
+ Math.abs(b.x - x) < (b.w + w) / 2 + margin && Math.abs(b.z - z) < (b.d + d) / 2 + margin;
+for (const line of terrain.trenchLines!) {
+ if (line.role !== "front") continue;
+ const side = line.team === "blue" ? -1 : 1;
+ for (const s of line.sections) {
+  const x = s.x - side * 6;
+  for (let z = s.z - s.length / 2 + 2; z <= s.z + s.length / 2 - 2; z += 4) {
+   if ([...terrain.rectangles, ...terrain.ramps].some(r => near(r, x, z, 3, 4, 2))) continue;
+   // The two picket rows and the coil between them, 1 m apart.
+   if ([...boxes, ...vegetation].some(b => b.kind !== "brush" && Math.abs(b.z - z) < 2 + b.d / 2 &&
+     [-1, 0, 1].some(row => Math.abs(b.x - (x + row)) < b.w / 2 + 0.35))) continue;
+   if (verdunMap.sectors.some(f => Math.hypot(f.x - x, f.z - z) < 9)) continue;
+   let lowest = Infinity;
+   for (let dx = -2; dx <= 2; dx += 1) for (let dz = -2.5; dz <= 2.5; dz += 1) lowest = Math.min(lowest, groundHeight(x + dx, z + dz, verdunMap));
+   if (lowest < bankHeight - 1.2) continue;
+   wireBelts.push({ id: `belt-${line.team}-${Math.round(s.x)}-${z}`, team: line.team, x, z, w: 3, d: 4 });
+  }
+ }
+}
+verdunMap.wireBelts = wireBelts;
+// Water stands in the shell scars, and the debris of earlier fighting lies
+// across the whole field between the front lines.
+verdunMap.noMansLand = { width: 112, scarPonds: true };
 
 // Fine local waypoints connect narrow ruin entrances to the coarse field graph.
 for(const flag of verdunMap.sectors) for(let x=-8;x<=8;x+=2) for(let z=-8;z<=8;z+=2) verdunMap.navigationPoints!.push({x:flag.x+x,z:flag.z+z});

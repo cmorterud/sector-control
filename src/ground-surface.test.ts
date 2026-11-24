@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import {
+  exactFieldChurn,
+  fieldChurn,
   groundField,
   groundSurfacePixels,
   trenchChurn,
@@ -8,6 +10,8 @@ import {
 } from "./ground-surface";
 import { soilColor } from "./battlefield-look";
 import { trenchMap } from "./trench-map";
+import { verdunMap } from "./verdun-map";
+import { villageMap } from "./village-map";
 import { groundHeight, industrialMap } from "./map";
 import { Game, TestCollision } from "./simulation";
 import { grenadeExplosionProfile } from "./destruction";
@@ -53,6 +57,26 @@ it("churns no-man's land and the trench sides to bare wet mud, keeping grass on 
   let greener = 0;
   for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 1] > pixels[i]) greener++;
   expect(greener).toBe(0);
+});
+
+it("churns Verdun where it was fought over, but keeps the leaf litter under its trees", () => {
+  const t = verdunMap.terrain!;
+  // Every trench floor is trodden mud, and so is every shell scar's bowl.
+  for (const line of t.trenchLines!) for (const s of line.sections) expect(fieldChurn(verdunMap, s.x, s.z)).toBeGreaterThan(0.75);
+  for (const scar of t.shellScars!) expect(fieldChurn(verdunMap, scar.x, scar.z)).toBeGreaterThan(0.8);
+  // The baked grid matches the exact field to within its interpolation.
+  for (const [x, z] of [[-30, 7], [12.3, -40.1], [-80, 30], [55.5, 0.25]])
+    expect(Math.abs(fieldChurn(verdunMap, x, z) - exactFieldChurn(verdunMap, x, z))).toBeLessThan(0.06);
+  // Deep in a woodland belt the ground is barely touched and the litter remains;
+  // behind the rear lines it is untouched.
+  expect(fieldChurn(verdunMap, -34, 48)).toBeLessThan(0.3);
+  expect(groundField(verdunMap, -34, 48).litter).toBeGreaterThan(0.5);
+  expect(fieldChurn(verdunMap, -96, 0)).toBe(0);
+  // Open ground between the front lines is mostly bare.
+  const open = [[-20, -1], [26, 1], [0, 21], [-24, 21]].map(([x, z]) => groundField(verdunMap, x, z).grass);
+  expect(Math.max(...open)).toBeLessThan(0.3);
+  // Churn is Verdun's opt-in: Village front's ground is unchanged.
+  expect(villageMap.noMansLand).toBeUndefined();
 });
 
 it("bakes a reproducible map-wide surface without a repeated three-meter color/normal/gloss tile", () => {

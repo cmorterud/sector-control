@@ -199,6 +199,10 @@ export interface MapDefinition {
   // Its own soldiers know the lanes through it; the enemy walks through slowly.
   // Explosions cut segments away (destruction.wire).
   wireBelts?: WireSegment[];
+  // No-man's land dressing beyond the trench maps (src/no-mans-land.ts): how
+  // wide a band across x its debris covers, and whether water stands in its
+  // shell scars as well as its authored craters.
+  noMansLand?: { width: number; scarPonds?: boolean };
   // Draw distant land, the continuing front and its life past the terrain edge
   // (src/backdrop.ts) instead of a perimeter wall.
   backdrop?: boolean;
