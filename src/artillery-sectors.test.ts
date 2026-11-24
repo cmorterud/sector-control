@@ -44,13 +44,13 @@ it("allows a blind call from the trench floor with bounded extra dispersion and 
   const m = g.artillery.missions[0];
   expect(m.target).toEqual({ x: 24, z: 8 });
   expect(m.uncertainty).toBe(10);
-  expect(m.dangerRadius).toBe(36);
+  expect(m.dangerRadius).toBe(33);
   expect(m.firstImpactAt - m.calledAt).toBe(120);
   expect(m.endsAt - m.firstImpactAt).toBe(150);
   expect(m.impacts).toHaveLength(8);
   expect(m.impacts.every((v) => dist(v, m.target) <= 24.001)).toBe(true);
   expect(m.impacts.some((v) => dist(v, m.target) > 14)).toBe(true);
-  expect(artilleryThreat(g, { x: m.target.x + 35, z: m.target.z })).toBe(m);
+  expect(artilleryThreat(g, { x: m.target.x + m.dangerRadius! - 1, z: m.target.z })).toBe(m);
   expect(g.artillery.readyAt.blue).toBe(g.tick + 900);
   expect(requestArtillery(g, p, target)).toBe(false);
 });

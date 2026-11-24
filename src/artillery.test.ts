@@ -169,7 +169,7 @@ describe("artillery missions", () => {
     );
     expect(Math.max(...radii)).toBeGreaterThan(10);
     expect(radii.every((r) => r <= 14)).toBe(true);
-    expect(artilleryRules.dangerRadius).toBe(26);
+    expect(artilleryRules.dangerRadius).toBe(23);
     expect(impacts[0].tick).toBe(mission.firstImpactAt);
     expect(impacts[0].tick - launchedAt).toBe(24);
     impacts.forEach((e, i) =>
@@ -270,8 +270,10 @@ describe("artillery damage and bots", () => {
     expect(p.hp).toBe(0);
     expect(enemy.hp).toBe(0);
     expect(groundHeight(0, 0, g.map)).toBeCloseTo(-0.9, 3);
-    expect(groundHeight(2, 0, g.map)).toBeLessThan(-0.35);
-    expect(groundHeight(4, 0, g.map)).toBeCloseTo(0, 3);
+    // The bowl is 1.875 m across its radius, so probe at three-quarters of
+    // the former 2 m and 4 m points.
+    expect(groundHeight(1.5, 0, g.map)).toBeLessThan(-0.26);
+    expect(groundHeight(3, 0, g.map)).toBeCloseTo(0, 3);
   });
   it("reserves Blue's charge for the player, lets Red coordinate, and returns bots to firing positions after retreating", () => {
     const g = new Game(

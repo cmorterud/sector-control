@@ -166,7 +166,7 @@ it("creates a persistent artillery bowl that actually shields a crouched soldier
     (c) => c.created && Math.hypot(c.x, c.z - z) < 1,
   )!;
   expect(hole).toBeDefined();
-  expect(hole.depth).toBeGreaterThan(1.1);
+  expect(hole.depth).toBeGreaterThan(1.1 * 0.75);
   const floor = groundHeight(0, z, g.map);
   expect(
     g.collision.ray({ x: -10, y: 2.5, z }, { x: 0, y: floor + 1.05, z }),

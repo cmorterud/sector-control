@@ -56,7 +56,7 @@ it("lands reproducible single stray shells at irregular intervals, independently
     for (const e of impacts) {
       expect(e.ambient).toBe(true);
       expect(e.actor).toBe(-1);
-      expect(e.radius).toBe(24);
+      expect(e.radius).toBe(18);
       expect(Math.abs(e.at.x)).toBeLessThan(g.map.width / 2 - 7.9);
       expect(Math.abs(e.at.z)).toBeLessThan(g.map.depth / 2 - 7.9);
       for (const spawn of Object.values(g.map.spawn))
@@ -64,7 +64,7 @@ it("lands reproducible single stray shells at irregular intervals, independently
     }
     expect(
       g.map.destruction!.craters.some(
-        (c) => c.shape && c.shape.radiusX > 4 && c.shape.radiusZ > 4,
+        (c) => c.shape && c.shape.radiusX > 3 && c.shape.radiusZ > 3,
       ),
     ).toBe(true);
     const log = new PlaytestLog();
@@ -80,8 +80,9 @@ it("lands reproducible single stray shells at irregular intervals, independently
 it("damages both teams beyond the guided shell radius without awarding kills or team points; spawn protection remains", () => {
   const g = scene(flat),
     p = g.players[0];
-  Object.assign(p, { x: -15, z: 0, y: 0, protectedUntil: 0 });
-  g.players.push({ ...p, id: 1, team: "red", x: 15 });
+  // Beyond the guided shell's 9 m reach, well inside the stray shell's 18 m.
+  Object.assign(p, { x: -11.25, z: 0, y: 0, protectedUntil: 0 });
+  g.players.push({ ...p, id: 1, team: "red", x: 11.25 });
   g.players.push({ ...p, id: 2, x: 2, protectedUntil: 100 });
   g.tick = 1;
   g.artillery.shells.push({
