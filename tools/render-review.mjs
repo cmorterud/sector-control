@@ -95,7 +95,7 @@ try {
  await client.send('Runtime.enable');await client.send('Page.enable');await client.send('Network.enable');
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
-  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'||map==='fort-vaux'?'600':'120',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
+  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:'600',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
   if(map==='fort-vaux'&&mode==='overview'&&!visualOnly&&!process.env.REVIEW_BASE_URL)query.delete('map');
   // Pages caches a page for up to ten minutes. Like the manifest request, ask
   // for a URL unique to this revision so an earlier deployment's HTML cannot answer.
@@ -141,10 +141,18 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  if((map==='village'||map==='fort-vaux') && mode==='ground') {
-   const details=map==='village'?['school','inn','street','manor-room']:['cistern','barracks','casemate','yard'];
+  if((map==='village'||map==='fort-vaux'||map==='trenches') && mode==='ground') {
+   const details=map==='village'?['school','inn','street','manor-room']
+    :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
+    :['cistern','barracks','casemate','yard'];
    for(const detail of details) {
-    const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
+    let before;
+    try{before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);}
+    catch(error){
+     // The visual comparison runs this script against the base build, which may predate a viewpoint.
+     if(!visualOnly||!/Unknown review viewpoint/.test(String(error)))throw error;
+     console.log(JSON.stringify({map,stage:'viewpoint unknown to this build',detail}));continue;
+    }
     await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
     await screenshot('detail-'+detail,true);
    }
@@ -177,13 +185,6 @@ try {
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
  if(!visualOnly&&map==='trenches') {
-  // Close views of the wire belt and a trench block. Kept out of the visual
-  // comparison, whose base revision may not know these viewpoints.
-  for(const detail of ['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']) {
-   const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
-   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
-   await screenshot('detail-'+detail,true);
-  }
   // Walk out through the boundary wire: the warning must appear and count down,
   // and staying out must end in the boundary salvo rather than a soldier's kill.
   report.boundary=await client.evaluate(`(()=>{

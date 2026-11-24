@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
-    "test:pages": "node --test tools/pages-preview.test.mjs"
+    "test:pages": "node --test tools/pages-preview.test.mjs tools/visual-comparison.test.mjs"
   },
   "dependencies": {
     "playcanvas": "^2.0.0",

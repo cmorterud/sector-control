@@ -27,7 +27,7 @@ import { VisualWorkQueue } from "./visual-work";
 import { SceneryBatches } from "./scenery-batches";
 import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
-import { weaponDesign } from "./weapon-design";
+import { bayonetMount, weaponDesign } from "./weapon-design";
 import { flagCloth, flagColor, flagRingColor, type FlagState } from "./flag";
 import { factions, scoped } from "./loadouts";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
@@ -3088,31 +3088,11 @@ export class Renderer implements CollisionWorld {
       this.riflePart("rear sight base",0,.064,design.rear,.055,.045,.085,"steel",rifle,"buttplate");
     }
     if (service) {
-      const blade = part(
-        "bayonet blade",
-        0,
-        -0.05,
-        -0.82,
-        0.025,
-        0.3,
-        0.045,
-        "#aeb6ad",
-        rifle,
-        "stock",
-      );
-      blade.setLocalEulerAngles(90, 0, 0);
-      this.cube(
-        "bayonet guard",
-        0,
-        -0.05,
-        -0.68,
-        0.07,
-        0.025,
-        0.025,
-        "#565d53",
-        false,
-        rifle,
-      );
+      // Mounted at this rifle's own muzzle, wherever that is.
+      const mount = bayonetMount(design?.muzzle ?? -0.7);
+      part("bayonet blade", ...mount.blade.at, ...mount.blade.size, "#aeb6ad", rifle, "stock")
+        .setLocalEulerAngles(90, 0, 0);
+      this.cube("bayonet guard", ...mount.guard.at, ...mount.guard.size, "#565d53", false, rifle);
     }
     if (!design && service && p.faction === "british") part("SMLE box magazine", 0, -.11, .03, .09, .12, .16, "#414945", rifle);
     if (!design && service && p.faction === "french") part("Berthier extended magazine", 0, -.12, .04, .075, .15, .13, "#424a46", rifle);

@@ -30,7 +30,27 @@ const box = (name: string, at: V, size: V, tint = "steel") => part(name, "slot",
 const stock = (length: number, width = .105, height = .17, z = .04) =>
   part("wooden stock", "stock", [0, -.045, z], [width, length, height], "walnut", [90, 0, 0]);
 const guard = () => part("open trigger guard", "guard", [0, -.105, .18], [.012, .09, .14]);
-const band = (z: number, width = .1) => round("barrel band", [0, -.015, z], [width, .025, .13]);
+// A band hugs the wood and metal it wraps, a few millimetres proud of them. Each
+// piece is [width, bottom, top]: one around the stock or fore-end, and where the
+// barrel or handguard rides above the wood, a second around that.
+type BandPiece = [number, number, number];
+const band = (z: number, pieces: BandPiece[]) => pieces.map(([width, bottom, top]) =>
+  round("barrel band", [0, (bottom + top) / 2, z], [width, .025, top - bottom]));
+// `swivel` is the underside of the stock where the front sling swivel hangs.
+const furniture: Record<string, { rear: [number, BandPiece[]]; front: [number, BandPiece[]]; swivel: number }> = {
+  smle: { rear: [-.56, [[.095, -.08, .045]]], front: [-.32, [[.088, -.0775, .0055], [.085, 0, .05]]], swivel: -.0722 },
+  gewehr: { rear: [-.42, [[.075, -.074, .007], [.05, .003, .0455]]], front: [-.55, [[.04, .005, .045]]], swivel: -.0728 },
+  berthier: { rear: [-.42, [[.06, -.069, .005], [.05, .003, .0455]]], front: [-.55, [[.08, -.0675, .0475]]], swivel: -.0672 },
+  lebel: { rear: [-.42, [[.072, -.0792, .0144], [.05, .003, .0455]]], front: [-.55, [[.065, -.0675, .004], [.04, .002, .045]]], swivel: -.0778 },
+};
+// The bayonet is fixed at the muzzle: the blade runs forward tucked beneath the
+// barrel, and its guard covers the blade's root and reaches up to ring the barrel.
+export function bayonetMount(muzzle: number): { blade: { at: V; size: V }; guard: { at: V; size: V } } {
+  return {
+    blade: { at: [0, -.012, muzzle - .12], size: [.025, .3, .03] },
+    guard: { at: [0, .0035, muzzle + .03], size: [.03, .083, .014] },
+  };
+}
 const rifleAction = (straight: boolean, knob: V): RiflePart[] => [
   round("bolt body", [-.05, .005, .02], [.052, .24, .052]),
   part("bolt handle", "steel", [.015, 0, 0], [.018, .075, .018], "steel", [0, 0, -90]),
@@ -43,16 +63,17 @@ function rifle(family: string): WeaponDesign {
   const muzzle = smle ? -.7 : berthier ? -.79 : lebel ? -.8 : -.78;
   const grip: V = smle ? [.105, -.055, 0] : [.115, 0, 0];
   const receiver = round("receiver", [0, .025, .055], [smle ? .075 : .068, .29, .075]);
-  const frontBand = band(smle ? -.32 : -.55, .085);
+  const fit = furniture[family], rearBand = band(...fit.rear), frontBand = band(...fit.front);
   const parts: RiflePart[] = [
     stock(smle ? .94 : lebel ? 1.02 : 1, smle ? .11 : .095, lebel ? .19 : .165),
     receiver,
     round("barrel", [0, .025, (muzzle + .03) / 2], [.035, Math.abs(muzzle - .03), .035]),
     part("upper handguard", "handguard", [0, .025, smle ? -.3 : -.23], [smle ? .08 : .065, smle ? .49 : .37, .045], "walnut", [90, 0, 0]),
-    guard(), band(smle ? -.56 : -.42), frontBand,
+    guard(), ...rearBand, ...frontBand,
     box("ejection port", [.029, .058, .035], [.018, .018, .15], "dark"),
     round("cleaning rod", [0, -.035, -.53], [.007, .36, .007]),
-    part("sling swivel", "sling", [0, -.1, -.38], [.009, .03, .05]),
+    // The top of the loop is sunk 3 mm into the underside of the stock.
+    part("sling swivel", "sling", [0, fit.swivel - .012, -.38], [.009, .03, .05]),
     part("buttplate", "buttplate", [0, -.09, .54], [.1, .015, .17], "steel", [90, 0, 0]),
   ];
   if (smle) {
@@ -65,7 +86,8 @@ function rifle(family: string): WeaponDesign {
     parts.push(box("Lebel side loading gate", [-.039, .012, -.015], [.008, .055, .09], "dark"));
   } else if (berthier) {
     parts.push(box("Berthier charger guide", [0, .066, .07], [.065, .028, .04]));
-    parts.push(round("Berthier long nose ferrule", [0, -.004, -.53], [.075, .08, .09]));
+    // The nose ferrule closes over the tip of the stock and the barrel above it.
+    parts.push(round("Berthier long nose ferrule", [0, -.01, -.5175], [.075, .105, .11]));
   } else {
     parts.push(part("Gewehr Lange sight ramp", "handguard", [0, .067, -.16], [.055, .16, .047], "steel", [90, 0, 0]));
     parts.push(box("Gewehr straight bolt stop", [-.047, .038, .12], [.018, .045, .055]));
@@ -98,7 +120,7 @@ function rifle(family: string): WeaponDesign {
     ...Array.from({ length: 5 }, (_, i) => box("sight graduation",
       [-sightLeaf.size[0] / 2, .064, sightLeaf.at[2] + (i - 2) * .014], [.002, .005, .003], "edge")),
     part("rear sling washer", "band", [parts[0].size[0] * .40, -.09, .4], [.027, .010, .027], "steel", [0, 0, 90]),
-    box("barrel band spring", [-frontBand.size[0] * .43, frontBand.at[1], frontBand.at[2] + .014], [.011, .022, .045]),
+    box("barrel band spring", [-frontBand[0].size[0] * .43, frontBand[0].at[1], frontBand[0].at[2] + .014], [.011, .022, .045]),
   ];
   return {
     family, kind: "serviceRifle", parts, viewParts, actionParts: rifleAction(!smle, grip),
