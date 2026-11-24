@@ -10,7 +10,7 @@ import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
-import { factions, factionFor, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
+import { factions, factionFor, kitFor, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -242,7 +242,7 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${faction.rifle}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };

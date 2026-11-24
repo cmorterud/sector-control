@@ -35,7 +35,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
-| Fort Vaux | 6v6 | France and Imperial Germany fight through vaulted galleries and the open-air Sunken Yard for three flags. **Q** opens the floor plan. No artillery |
+| Fort Vaux | 6v6 | France and Imperial Germany fight through vaulted galleries and the open-air Sunken Yard for three flags. Riflemen carry carbines: shorter, and quicker between shots. **Q** opens the floor plan. No artillery |
 | Industrial | 5v5 | Three sectors among warehouse cover |
 
 On the combat flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
