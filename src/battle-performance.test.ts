@@ -15,3 +15,14 @@ test("bounds diagnostic history, never reads the clock when disabled, and resets
  const saved=p.summary();saved.slowFrames[0].counts.deaths=999;expect(p.summary().slowFrames[0].counts.deaths).toBe(1);
  p.reset();expect(p.summary().frames.count).toBe(0);expect(p.summary().slowFrames).toEqual([]);
 });
+
+test("summarises sampled gauges and ignores them while disabled", () => {
+  const p = new BattlePerformance(() => 0);
+  p.gauge("drawables", 500);
+  expect(p.summary().gauges).toEqual({});
+  p.enabled = true;
+  for (const n of [400, 600, 500]) p.gauge("drawables", n);
+  expect(p.summary().gauges).toEqual({ drawables: { samples: 3, average: 500, max: 600 } });
+  p.reset();
+  expect(p.summary().gauges).toEqual({});
+});

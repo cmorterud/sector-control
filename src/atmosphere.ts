@@ -58,3 +58,33 @@ export function clothScraps(map: MapDefinition) {
   }
   return scraps;
 }
+
+// Every scrap as one two-sided mesh hanging from its strand, restirred in place
+// each frame: 26 separate planes would otherwise be 26 draws.
+export function clothGeometry(scraps: ReturnType<typeof clothScraps>) {
+  const n = scraps.length, positions = new Float32Array(n * 24), normals = new Float32Array(n * 24), colors = new Float32Array(n * 32), indices: number[] = [];
+  scraps.forEach((scrap, i) => {
+    const tint = [1, 3, 5].map((k) => (parseInt(scrap.color.slice(k, k + 2), 16) / 255) ** 2.2);
+    for (let v = 0; v < 8; v++) colors.set([...tint, 1], i * 32 + v * 4);
+    const f = i * 8, b = f + 4;
+    indices.push(f, f + 1, f + 2, f, f + 2, f + 3, b, b + 2, b + 1, b, b + 3, b + 2);
+  });
+  const update = (seconds: number) => {
+    scraps.forEach((scrap, i) => {
+      const along = [Math.cos(scrap.yaw), 0, -Math.sin(scrap.yaw)], out = [Math.sin(scrap.yaw), 0, Math.cos(scrap.yaw)];
+      const swing = ((Math.sin(seconds * 1.9 + i * 1.3) * 18 + Math.sin(seconds * 4.3 + i) * 5) * Math.PI) / 180;
+      const hang = [out[0] * Math.sin(swing) * 0.5, -Math.cos(swing) * 0.5, out[2] * Math.sin(swing) * 0.5];
+      const normal = [out[0] * Math.cos(swing), Math.sin(swing), out[2] * Math.cos(swing)];
+      const top = [scrap.x, scrap.y + 0.25, scrap.z];
+      const corners = [[-0.16, 0], [0.16, 0], [0.16, 1], [-0.16, 1]].map(([a, h]) => [0, 1, 2].map((k) => top[k] + along[k] * a + hang[k] * h));
+      for (let face = 0; face < 2; face++)
+        corners.forEach((corner, v) => {
+          positions.set(corner, i * 24 + face * 12 + v * 3);
+          // The first face winds toward -out, the second back toward +out.
+          normals.set(normal.map((c) => (face ? c : -c)), i * 24 + face * 12 + v * 3);
+        });
+    });
+  };
+  update(0);
+  return { positions, normals, colors, indices, update };
+}
