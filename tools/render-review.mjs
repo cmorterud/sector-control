@@ -7,7 +7,7 @@ import {resolve,join,extname,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {inflateSync} from 'node:zlib';
 import {checkArmoury,checkBriefing} from './briefing-review.mjs';
-import {expectedCI,readPublishedManifest} from './pages-preview.mjs';
+import {expectedCI,awaitPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
 const maps=['fort-vaux','training','trenches','village','verdun','headland','industrial'];
@@ -76,7 +76,7 @@ try {
  if(process.env.REVIEW_BASE_URL){
   const expected=expectedCI();
   if(process.env.EXPECTED_HEAD_SHA)expected.head=process.env.EXPECTED_HEAD_SHA;
-  const revision=published=await readPublishedManifest(base,expected);
+  const revision=published=await awaitPublishedManifest(base,expected);
   report.checkerSource=report.source;report.source=revision.source;report.head=revision.head;report.deployment=base;
   report.ciRun=revision.run;report.ciAttempt=revision.attempt;
  }
@@ -100,16 +100,24 @@ try {
   // Pages caches a page for up to ten minutes. Like the manifest request, ask
   // for a URL unique to this revision so an earlier deployment's HTML cannot answer.
   if(published){query.set('revision',published.head);query.set('run',published.run);}
-  const destination=base+'?'+query;
   console.log(JSON.stringify({map,mode,stage:'loading'}));
-  await client.send('Page.navigate',{url:destination});
-  await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
-  if(published){
+  let destination;
+  // A Pages edge that has not switched yet can still answer with the previous
+  // build's page. Reload from a fresh URL a few times before calling it wrong.
+  for(let attempt=1;;attempt++){
+   if(attempt>1)query.set('check',String(attempt));
+   destination=base+'?'+query;
+   await client.send('Page.navigate',{url:destination});
+   await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
+   if(!published)break;
    // The page under test must be the published build, not a cached predecessor.
    const root=new URL(base).pathname;
    const loaded=await client.evaluate(`[...document.querySelectorAll('script[src],link[rel="stylesheet"][href]')].map(e=>new URL(e.src||e.href,location.href).pathname)`);
    const foreign=loaded.filter(path=>path.startsWith(root)&&!Object.hasOwn(published.files,path.slice(root.length)));
-   if(!loaded.some(path=>path.startsWith(root+'assets/'))||foreign.length)throw Error('The deployed page is not build '+published.head+': it loads '+(foreign.join(', ')||'no bundle'));
+   if(loaded.some(path=>path.startsWith(root+'assets/'))&&!foreign.length)break;
+   if(attempt===6)throw Error('The deployed page is not build '+published.head+': it loads '+(foreign.join(', ')||'no bundle'));
+   console.log(JSON.stringify({map,mode,stage:'waiting for Pages CDN',attempt,foreign}));
+   await delay(5000);
   }
   if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
    report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)})`);
@@ -410,7 +418,7 @@ try {
   console.log(JSON.stringify({armoury:report.armoury}));
  }
  if(report.errors.length)throw Error(`${report.errors.length} browser errors`);
- if(report.deployment)await readPublishedManifest(base,{head:report.head,source:report.source,run:report.ciRun,attempt:report.ciAttempt});
+ if(report.deployment)await awaitPublishedManifest(base,{head:report.head,source:report.source,run:report.ciRun,attempt:report.ciAttempt});
  console.log(JSON.stringify({map,source:report.source,scenarios:report.scenarios.map(s=>({mode:s.mode,ticks:s.summary.ticks,frames:s.summary.frames,shots:s.summary.shots,artilleryImpacts:s.summary.artilleryImpacts,errors:s.summary.errors.length})),errors:report.errors}));
 }catch(error){report.errors.push(String(error));console.error(error);process.exitCode=1;if(client)try{await screenshot('failure');}catch{}}
 finally {

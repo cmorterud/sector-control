@@ -301,6 +301,23 @@ export async function readPublishedManifest(base, expected = {}, fetcher = fetch
   return manifest;
 }
 
+// Pages edges do not all switch to a new deployment at once: minutes after a
+// publish, one can still answer with the previous build's manifest. Keep
+// asking, with a fresh URL each time so no cached answer is reused, until the
+// expected publication appears. A genuinely different publication never
+// matches, so it still fails once the attempts run out.
+export async function awaitPublishedManifest(base, expected = {}, {attempts = 12, wait = () => delay(5000), fetcher = fetch, log = console.log} = {}) {
+  for (let attempt = 1; ; attempt++) {
+    const fresh = (url, options) => { const u = new URL(url); u.searchParams.set('check', `${Date.now()}-${attempt}`); return fetcher(u, options); };
+    try { return await readPublishedManifest(base, expected, fresh); }
+    catch (error) {
+      if (attempt >= attempts || /Invalid verification target/.test(error.message)) throw error;
+      log(`Waiting for Pages CDN (${attempt}/${attempts}): ${error.message}`);
+      await wait();
+    }
+  }
+}
+
 export async function verifyPublished(base, head, pr, fetcher = fetch, build = {}) {
   if (!shaPattern.test(head)) throw Error('Invalid verification target');
   const url = new URL(base);
