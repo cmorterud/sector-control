@@ -11,8 +11,9 @@ import type {DeathView} from "./combat-feedback";
 import { architecturePixels, architecturalTextures, cisternWaterNormals, type ArchitecturalTexture } from "./architecture-surfaces";
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
-import { brazierSites, clothScraps, mistBanks, type MistBank } from "./atmosphere";
-import { craterPonds, noMansLandDebris, wireBeltGeometry } from "./no-mans-land";
+import { brazierSites, clothGeometry, clothScraps, mistBanks, type MistBank } from "./atmosphere";
+import { BillboardBuffer } from "./billboards";
+import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
 import { backdropBalloons, backdropBoxMesh, backdropGround, backdropScenery, backdropSmoke, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
 import { villageGardenProps } from "./village-outdoors";
@@ -191,19 +192,25 @@ export class Renderer implements CollisionWorld {
   private coastalSea?: {water:pc.StandardMaterial;foam:pc.StandardMaterial;time:number;pending:number};
   // Intact and cut no-man's-land wire, rebuilt when a blast cuts a segment.
   private wireBelts?: pc.Entity;
+  private wireCache: WireCache = new Map();
   // Ground mist, brazier and crater smoke, and cloth on the wire.
   private atmosphere?: {
     root: pc.Entity;
-    mists: { entity: pc.Entity; bank: MistBank }[];
-    braziers: pc.Entity[][];
-    smoulders: { puffs: pc.Entity[]; material: pc.StandardMaterial; at: V3 | null; bornAt: number }[];
-    cloth: pc.Entity[];
+    banks: MistBank[];
+    sites: Vec[];
+    fieldMist: { buffer: BillboardBuffer; mesh: pc.Mesh };
+    trenchMist: { buffer: BillboardBuffer; mesh: pc.Mesh };
+    brazierSmoke: { buffer: BillboardBuffer; mesh: pc.Mesh };
+    craterSmoke: { buffer: BillboardBuffer; mesh: pc.Mesh };
+    smoulders: { at: V3 | null; bornAt: number }[];
+    cloth: ReturnType<typeof clothGeometry>;
+    clothMesh: pc.Mesh;
   };
   // Balloons, smoke columns, distant bursts and flares beyond the terrain edge.
   private backdrop?: {
     life: pc.Entity;
     balloons: pc.Entity[];
-    smoke: { puffs: pc.Entity[]; scale: number }[];
+    smoke: { buffer: BillboardBuffer; mesh: pc.Mesh };
     flashes: { glow: pc.Entity; plume: pc.Entity; glowMaterial: pc.StandardMaterial; plumeMaterial: pc.StandardMaterial }[];
     flares: { glow: pc.Entity; material: pc.StandardMaterial }[];
   };
@@ -1488,7 +1495,7 @@ export class Renderer implements CollisionWorld {
     }
     invalidateTerrainNormals(this.map,change);
     this.terrainGeometryCache?.invalidate(change);
-    if (change.wire?.length) this.buildWireBelts();
+    if (change.wire?.length) this.buildWireBelts(change.at);
     // Overlapping blasts share one rebuild per patch; see flushTerrainWork.
     for (const key of change.patches) this.terrainWork.add(key);
     for (const changed of change.objects) {
@@ -1872,12 +1879,7 @@ export class Renderer implements CollisionWorld {
       shape("balloon tether", balloon, "box", this.material("#2b2824"), [0.05, b.y, 0.05], [0, -b.y / 2 - 5, 1]);
       return balloon;
     });
-    const smoke = backdropSmoke.map((s) => {
-      const column = this.joint("distant smoke", life, s.x, this.map.terrain!.bankHeight, s.z), material = this.dustMaterial("#86888a");
-      material.opacity = 0.42;
-      material.update();
-      return { puffs: Array.from({ length: 12 }, () => shape("smoke puff", column, "plane", material, [1, 1, 1])), scale: s.scale };
-    });
+    const smoke = this.billboards("distant smoke", life, backdropSmoke.length * 12, "#86888a", 0.42);
     const flashes = Array.from({ length: 3 }, () => {
       const glowMaterial = this.dustMaterial("#ffd08a"), plumeMaterial = this.dustMaterial("#4d4740");
       return { glow: shape("distant burst", life, "plane", glowMaterial, [1, 1, 1]), plume: shape("distant burst plume", life, "plane", plumeMaterial, [1, 1, 1]), glowMaterial, plumeMaterial };
@@ -1888,6 +1890,21 @@ export class Renderer implements CollisionWorld {
     });
     this.backdrop = { life, balloons, smoke, flashes, flares };
     life.enabled = this.quality !== "low";
+  }
+  // Mesh instances the scene would submit before culling: the total, and the
+  // share under each named presentation root. Renderer-independent, so it can be
+  // compared across machines where frame times cannot.
+  drawables() {
+    const all = new Set<pc.MeshInstance>();
+    for (const layer of this.app.scene.layers.layerList) for (const instance of layer.meshInstances) all.add(instance);
+    const roots: Record<string, number> = {};
+    for (const child of this.mapRoot?.children ?? []) {
+      let n = 0;
+      for (const render of (child as pc.Entity).findComponents("render") as pc.RenderComponent[])
+        if (render.enabled && render.entity.enabled) n += render.meshInstances.filter((m) => all.has(m)).length;
+      if (n > 8) roots[child.name] = (roots[child.name] ?? 0) + n;
+    }
+    return { total: all.size, roots };
   }
   // Vertex-coloured, lightly lit boxes shared by the backdrop and trench dressing.
   private paintedMaterial() {
@@ -1959,11 +1976,14 @@ export class Renderer implements CollisionWorld {
     root.addComponent("render", { meshInstances: instances, castShadows: false });
     this.buildWireBelts();
   }
-  private buildWireBelts() {
+  // `near` is where a blast landed: segments within 10 m are resampled against
+  // the cratered ground; the rest keep their cached geometry.
+  private buildWireBelts(near?: { x: number; z: number }) {
     if (!this.map.wireBelts?.length) return;
     this.wireBelts?.destroy();
     const device = this.app.graphicsDevice, root = (this.wireBelts = this.joint("wire belts", this.mapRoot));
-    const wire = wireBeltGeometry(this.map), solids = backdropBoxMesh(wire.boxes), posts = new pc.Mesh(device);
+    const wire = wireBeltGeometry(this.map, this.wireCache, near && ((s) => Math.hypot(s.x - near.x, s.z - near.z) < 10));
+    const solids = backdropBoxMesh(wire.boxes), posts = new pc.Mesh(device);
     posts.setPositions(solids.positions);
     posts.setNormals(solids.normals);
     posts.setColors(solids.colors);
@@ -2067,48 +2087,57 @@ export class Renderer implements CollisionWorld {
       this.cube("signboard backing", sign.x - sign.facing * 0.02, sign.y, sign.z, 0.04, 0.42, 1.06, "#4a3c2b", false, root);
     }
   }
+  // A dynamic mesh of camera-facing quads sharing one smoke material.
+  private billboards(name: string, parent: pc.Entity, capacity: number, hex: string, opacity: number) {
+    const buffer = new BillboardBuffer(capacity), mesh = new pc.Mesh(this.app.graphicsDevice), material = this.dustMaterial(hex);
+    material.opacity = opacity;
+    material.opacityVertexColor = true;
+    material.opacityVertexColorChannel = "a";
+    material.update();
+    mesh.setPositions(buffer.positions);
+    mesh.setUvs(0, buffer.uvs);
+    mesh.setColors32(buffer.colors);
+    mesh.setIndices(buffer.indices);
+    mesh.update(pc.PRIMITIVE_TRIANGLES);
+    const entity = this.joint(name, parent), instance = new pc.MeshInstance(mesh, material, entity);
+    instance.castShadow = false;
+    // The quads move every frame and span the map; never cull the batch.
+    instance.cull = false;
+    entity.addComponent("render", { meshInstances: [instance], castShadows: false, receiveShadows: false });
+    return { buffer, mesh };
+  }
+  private beginBillboards(batch: { buffer: BillboardBuffer }) {
+    const r = this.camera.right, u = this.camera.up;
+    batch.buffer.begin([r.x, r.y, r.z], [u.x, u.y, u.z]);
+    return batch.buffer;
+  }
+  private endBillboards(batch: { buffer: BillboardBuffer; mesh: pc.Mesh }) {
+    batch.buffer.end();
+    batch.mesh.setPositions(batch.buffer.positions);
+    batch.mesh.setColors32(batch.buffer.colors);
+    batch.mesh.update(pc.PRIMITIVE_TRIANGLES, false);
+  }
   private buildAtmosphere() {
     const atmosphere = this.look.atmosphere!, root = this.joint("atmosphere", this.mapRoot);
-    const puff = (parent: pc.Entity, material: pc.Material) => {
-      const e = this.joint("smoke wisp", parent);
-      e.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
-      return e;
+    const banks = mistBanks(this.map), sites = brazierSites(this.map);
+    const cloth = clothGeometry(clothScraps(this.map)), clothMesh = new pc.Mesh(this.app.graphicsDevice);
+    clothMesh.setPositions(cloth.positions);
+    clothMesh.setNormals(cloth.normals);
+    clothMesh.setColors(cloth.colors);
+    clothMesh.setIndices(cloth.indices);
+    clothMesh.update(pc.PRIMITIVE_TRIANGLES);
+    const scraps = this.joint("cloth on wire", root), clothInstance = new pc.MeshInstance(clothMesh, this.paintedMaterial(), scraps);
+    clothInstance.castShadow = false;
+    scraps.addComponent("render", { meshInstances: [clothInstance], castShadows: false });
+    this.atmosphere = {
+      root, banks, sites,
+      fieldMist: this.billboards("field mist", root, banks.filter((b) => !b.trench).length || 1, "#bcc1c3", atmosphere.fieldMist),
+      trenchMist: this.billboards("trench mist", root, banks.filter((b) => b.trench).length || 1, "#b4b9bb", atmosphere.trenchMist),
+      brazierSmoke: this.billboards("brazier smoke", root, Math.max(1, sites.length * 6), "#9c9d99", 0.22),
+      craterSmoke: this.billboards("smouldering craters", root, 30, "#5e5a55", 0.34),
+      smoulders: Array.from({ length: 6 }, () => ({ at: null, bornAt: -1e9 })),
+      cloth, clothMesh,
     };
-    const fieldMist = this.dustMaterial("#bcc1c3"), trenchMist = this.dustMaterial("#b4b9bb");
-    fieldMist.opacity = atmosphere.fieldMist;
-    trenchMist.opacity = atmosphere.trenchMist;
-    fieldMist.update();
-    trenchMist.update();
-    const mists = mistBanks(this.map).map((bank) => ({ entity: puff(root, bank.trench ? trenchMist : fieldMist), bank }));
-    const brazierSmoke = this.dustMaterial("#9c9d99");
-    brazierSmoke.opacity = 0.22;
-    brazierSmoke.update();
-    const braziers = brazierSites(this.map).map((site) => {
-      const column = this.joint("brazier smoke", root, site.x, groundHeight(site.x, site.z, this.map) + 0.6, site.z);
-      return Array.from({ length: 6 }, () => puff(column, brazierSmoke));
-    });
-    const smoulders = Array.from({ length: 6 }, () => {
-      const material = this.dustMaterial("#5e5a55"), column = this.joint("smouldering crater", root);
-      return { puffs: Array.from({ length: 5 }, () => puff(column, material)), material, at: null, bornAt: -1e9 };
-    });
-    const cloth = clothScraps(this.map).map((scrap) => {
-      const key = `cloth ${scrap.color}`;
-      let material = this.materials.get(key);
-      if (!material) {
-        material = new pc.StandardMaterial();
-        material.diffuse = color(scrap.color);
-        material.gloss = 0.05;
-        material.cull = pc.CULLFACE_NONE;
-        material.update();
-        this.materials.set(key, material);
-      }
-      const e = this.joint("cloth on wire", root, scrap.x, scrap.y, scrap.z);
-      e.addComponent("render", { type: "plane", material, castShadows: false });
-      e.setLocalScale(0.32, 1, 0.5);
-      e.setEulerAngles(90, (scrap.yaw * 180) / Math.PI, 0);
-      return e;
-    });
-    this.atmosphere = { root, mists, braziers, smoulders, cloth };
     root.enabled = this.quality !== "low";
   }
   private drawAtmosphere(g: Game, alpha: number) {
@@ -2116,44 +2145,41 @@ export class Renderer implements CollisionWorld {
     if (!a?.root.enabled) return;
     const tick = g.tick + alpha, t = tick / 30;
     // Field banks drift along the front and wrap; trench banks only sway.
-    // A bank closer than 7 m is hidden rather than filling the screen.
+    // A bank closer than 7 m is left out rather than filling the screen.
     const eye = this.camera.getPosition(), span = playArea(this.map).depth + 30;
-    a.mists.forEach(({ entity, bank }, i) => {
+    const field = this.beginBillboards(a.fieldMist), trench = this.beginBillboards(a.trenchMist);
+    a.banks.forEach((bank, i) => {
       const z = bank.trench
         ? bank.z + Math.sin(t * 0.2 + i) * 1.2
         : ((((bank.z + span / 2 + t * bank.drift) % span) + span) % span) - span / 2;
-      entity.enabled = Math.hypot(bank.x - eye.x, bank.y - eye.y, z - eye.z) > 7;
-      if (!entity.enabled) return;
-      entity.setPosition(bank.x, bank.y, z);
-      this.faceCamera(entity, (i * 23) % 9 - 4);
-      entity.setLocalScale(bank.w, 1, bank.h);
+      if (Math.hypot(bank.x - eye.x, bank.y - eye.y, z - eye.z) > 7)
+        (bank.trench ? trench : field).add(bank.x, bank.y, z, bank.w, bank.h, (i * 23) % 9 - 4);
     });
-    a.braziers.forEach((puffs, n) =>
-      puffs.forEach((puff, i) => {
-        const rise = (t * 0.09 + i / puffs.length + n * 0.37) % 1, size = 0.5 + rise * 1.9;
-        puff.setLocalPosition(rise * 1.6 + Math.sin(t * 0.7 + i) * 0.15, rise * 6.5, Math.sin(i * 2.3 + n) * 0.2);
-        this.faceCamera(puff, i * 41 + n * 17);
-        puff.setLocalScale(size, 1, size * 1.2);
-      }),
-    );
+    this.endBillboards(a.fieldMist);
+    this.endBillboards(a.trenchMist);
+    const braziers = this.beginBillboards(a.brazierSmoke);
+    a.sites.forEach((site, n) => {
+      const y = groundHeight(site.x, site.z, this.map) + 0.6;
+      for (let i = 0; i < 6; i++) {
+        const rise = (t * 0.09 + i / 6 + n * 0.37) % 1, size = 0.5 + rise * 1.9;
+        braziers.add(site.x + rise * 1.6 + Math.sin(t * 0.7 + i) * 0.15, y + rise * 6.5, site.z + Math.sin(i * 2.3 + n) * 0.2, size, size * 1.2, i * 41 + n * 17);
+      }
+    });
+    this.endBillboards(a.brazierSmoke);
+    const craters = this.beginBillboards(a.craterSmoke);
     for (const slot of a.smoulders) {
-      const age = (tick - slot.bornAt) / 30, life = Math.max(0, 1 - age / 25);
-      slot.puffs[0].parent!.enabled = !!slot.at && life > 0;
+      const life = Math.max(0, 1 - (tick - slot.bornAt) / 30 / 25);
       if (!slot.at || life <= 0) continue;
-      slot.puffs[0].parent!.setPosition(slot.at.x, slot.at.y + 0.3, slot.at.z);
-      slot.material.opacity = 0.34 * life;
-      slot.material.update();
-      slot.puffs.forEach((puff, i) => {
-        const rise = (t * 0.07 + i / slot.puffs.length) % 1, size = 0.9 + rise * 3.4;
-        puff.setLocalPosition(rise * 2.4, rise * 7, Math.sin(i * 1.9) * 0.4);
-        this.faceCamera(puff, i * 53);
-        puff.setLocalScale(size, 1, size * 1.15);
-      });
+      for (let i = 0; i < 5; i++) {
+        const rise = (t * 0.07 + i / 5) % 1, size = 0.9 + rise * 3.4;
+        craters.add(slot.at.x + rise * 2.4, slot.at.y + 0.3 + rise * 7, slot.at.z + Math.sin(i * 1.9) * 0.4, size, size * 1.15, i * 53, life);
+      }
     }
-    a.cloth.forEach((scrap, i) => {
-      const angles = scrap.getEulerAngles();
-      scrap.setEulerAngles(90 + Math.sin(t * 1.9 + i * 1.3) * 18 + Math.sin(t * 4.3 + i) * 5, angles.y, 0);
-    });
+    this.endBillboards(a.craterSmoke);
+    a.cloth.update(t);
+    a.clothMesh.setPositions(a.cloth.positions);
+    a.clothMesh.setNormals(a.cloth.normals);
+    a.clothMesh.update(pc.PRIMITIVE_TRIANGLES, false);
   }
   private drawBackdrop(g: Game, alpha: number) {
     const b = this.backdrop;
@@ -2164,13 +2190,13 @@ export class Renderer implements CollisionWorld {
       balloon.setPosition(spec.x, spec.y + Math.sin(t * 0.31 + i * 2) * 1.4, spec.z);
       balloon.setEulerAngles(Math.sin(t * 0.23 + i) * 2, (spec.yaw * 180) / Math.PI + Math.sin(t * 0.07 + i) * 6, 0);
     });
-    for (const column of b.smoke)
-      column.puffs.forEach((puff, i) => {
-        const rise = (t * 0.035 + i / column.puffs.length) % 1, size = (4 + rise * 16) * column.scale;
-        puff.setLocalPosition(rise ** 1.4 * 16 * column.scale, rise * 40 * column.scale, Math.sin(i * 2.1) * 2);
-        this.faceCamera(puff, i * 37);
-        puff.setLocalScale(size, 1, size * 1.1);
-      });
+    const smoke = this.beginBillboards(b.smoke), base = this.map.terrain?.bankHeight ?? 0;
+    for (const column of backdropSmoke)
+      for (let i = 0; i < 12; i++) {
+        const rise = (t * 0.035 + i / 12) % 1, size = (4 + rise * 16) * column.scale;
+        smoke.add(column.x + rise ** 1.4 * 16 * column.scale, base + rise * 40 * column.scale, column.z + Math.sin(i * 2.1) * 2, size, size * 1.1, i * 37);
+      }
+    this.endBillboards(b.smoke);
     const bursts = distantFlashes(this.map, g.tick - 45, g.tick + 1);
     b.flashes.forEach((slot, i) => {
       const flash = bursts[bursts.length - 1 - i], age = flash ? (tick - flash.tick) / 30 : Infinity;
@@ -2181,13 +2207,12 @@ export class Renderer implements CollisionWorld {
       slot.glow.setPosition(flash.x, flash.y + 2, flash.z);
       this.faceCamera(slot.glow);
       slot.glow.setLocalScale(6 + age * 20, 1, 6 + age * 20);
-      slot.glowMaterial.opacity = glow;
-      slot.glowMaterial.update();
+      // Per-instance opacity: updating the material would rebuild its shader every frame.
+      slot.glow.render!.meshInstances[0].setParameter("material_opacity", glow);
       slot.plume.setPosition(flash.x, flash.y + 3 + age * 5, flash.z);
       this.faceCamera(slot.plume, i * 50);
       slot.plume.setLocalScale(5 + age * 9, 1, 6 + age * 10);
-      slot.plumeMaterial.opacity = 0.55 * Math.max(0, 1 - age / 1.5);
-      slot.plumeMaterial.update();
+      slot.plume.render!.meshInstances[0].setParameter("material_opacity", 0.55 * Math.max(0, 1 - age / 1.5));
     });
     const burning = distantFlares(g.tick - flareTicks, g.tick + 1);
     b.flares.forEach((slot, i) => {
@@ -2198,8 +2223,7 @@ export class Renderer implements CollisionWorld {
       this.faceCamera(slot.glow);
       const flicker = 0.8 + 0.2 * Math.sin(tick * 1.7 + i);
       slot.glow.setLocalScale(2.6 * flicker, 1, 2.6 * flicker);
-      slot.material.opacity = flicker;
-      slot.material.update();
+      slot.glow.render!.meshInstances[0].setParameter("material_opacity", flicker);
     });
   }
   // One mesh of pickets and one of line wires for the whole boundary belt.

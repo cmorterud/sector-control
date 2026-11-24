@@ -40,6 +40,7 @@ Everything outside `boundary.ts`, `map.ts` and the wire checks in `simulation.ts
 - **Flat translucent sheets make bad mist.** Seen from above they wash out everything beneath them. Billboards that hide within 7 m of the camera work.
 - **Wire that slows everyone punishes the defenders' own assaults.** Belts are owned for that reason; seeded battles stayed balanced only after the change.
 - **Judge light on a real GPU.** CI's software renderer shows shade far brighter than real hardware does. The first look was tuned against CI screenshots and came out crushed to black inside the trenches. `detail-firing-step` is the view to check.
+- **One quad per entity adds up.** Mist, smoke and cloth were about 225 separate draws. They are now a handful of dynamic meshes (`src/billboards.ts`), with fades carried in vertex alpha instead of per-frame material updates. The perf log's `drawables` gauge counts mesh instances, which compares across machines where frame times do not.
 - **Bot matches are nearly deterministic.** The seed barely changes them, so a seeded match is one sample, not many.
 
 ## Validation

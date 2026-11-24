@@ -918,6 +918,11 @@ try {
   // Copy the WebGL surface while its drawing buffer is still available.
   renderer.app.on("postrender", () => {
     battlePerformance.end("renderSubmit",renderStart);
+    if (renderStart !== undefined && reviewFrames % 30 === 0) {
+      const drawables = renderer.drawables();
+      battlePerformance.gauge("drawables", drawables.total);
+      for (const [root, n] of Object.entries(drawables.roots)) battlePerformance.gauge(`drawables: ${root}`, n);
+    }
     if (started) { reviewFrames++; recording?.frame(game, rawFrameMs, paused); }
   });
   // Explicit diagnostic mode: advance the real simulation and presentation
