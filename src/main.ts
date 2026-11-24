@@ -343,7 +343,9 @@ function start() {
   if (params.has("playtest"))
     recording = new PlaytestRecorder(
       renderer.canvas,
-      Math.max(5, Math.min(renderReview ? 600 : 120, Number(params.get("clip") ?? 60) || 60)),
+      // The render review ends its own recording with finish(). A wall-clock limit
+      // there would publish the log early whenever a slow renderer took its time.
+      renderReview ? Infinity : Math.max(5, Math.min(120, Number(params.get("clip") ?? 60) || 60)),
       params.get("video") !== "0",
       audio.capture.stream,
     );

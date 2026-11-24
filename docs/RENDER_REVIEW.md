@@ -18,7 +18,7 @@ Each build's browser jobs check the map links and available loadouts in the brie
 
 ## Before-and-after images
 
-**Map and model visual comparison** builds both the target branch and proposed merge on map, model and rendering PRs. Each map job uses the same browser, graphics preset, opening seed and camera setup for both revisions. Download `visual-comparison-<map>` from the run summary, extract it and open `index.html` to compare overviews and first-person views side by side. Village and Fort Vaux also include four inspection views each. New maps receive screenshots of the proposed build until a base revision contains the map. These opening scenes are for review and do not gate publishing or merges.
+**Map and model visual comparison** builds both the target branch and proposed merge on map, model and rendering PRs. Each map job uses the same browser, graphics preset, opening seed and camera setup for both revisions. Download `visual-comparison-<map>` from the run summary, extract it and open `index.html` to compare overviews and first-person views side by side. Village and Fort Vaux also include four inspection views each. New maps receive screenshots of the proposed build until a base revision contains the map. These opening scenes are for review and do not gate publishing or merges. A viewpoint that only one revision has is shown alone, labelled as new or removed; the base build is simply not asked for viewpoints it predates. Trench front's close-ups (boundary wire, trench block, dugout, signboard, no-man's land, firing step) are captured before the battle, so they are compared too.
 
 ## Nightly and on-demand audits
 
