@@ -23,6 +23,7 @@ class Timing {
 export class BattlePerformance {
   enabled = false;
   private stages = new Map<string, Timing>();
+  private gauges = new Map<string, Timing>();
   private frames = new Timing();
   private pending: Record<string, number> = {};
   private counts: Record<string, number> = {};
@@ -31,7 +32,7 @@ export class BattlePerformance {
   private lastTick = 0;
   private slow: { tick: number; frameMs: number; phases: Record<string,number>; counts: Record<string,number> }[] = [];
   constructor(private clock: () => number = () => performance.now()) {}
-  reset() { this.stages.clear(); this.frames = new Timing(); this.pending = {}; this.counts = {}; this.totals = {}; this.slow = []; this.last = undefined; }
+  reset() { this.stages.clear(); this.gauges.clear(); this.frames = new Timing(); this.pending = {}; this.counts = {}; this.totals = {}; this.slow = []; this.last = undefined; }
   begin() { return this.enabled ? this.clock() : undefined; }
   end(name: string, start: number | undefined) {
     if (start === undefined || !this.enabled) return;
@@ -39,6 +40,13 @@ export class BattlePerformance {
     let stats = this.stages.get(name);
     if (!stats) { stats = new Timing(); this.stages.set(name,stats); }
     stats.add(ms); this.pending[name] = (this.pending[name] ?? 0) + ms;
+  }
+  // A sampled quantity such as a draw count, summarised like a timed stage.
+  gauge(name: string, value: number) {
+    if (!this.enabled) return;
+    let stats = this.gauges.get(name);
+    if (!stats) { stats = new Timing(); this.gauges.set(name, stats); }
+    stats.add(value);
   }
   count(name: string, n = 1) { if (this.enabled) {this.counts[name] = (this.counts[name] ?? 0) + n;this.totals[name] = (this.totals[name] ?? 0) + n;} }
   // The elapsed frame belongs to work since the PREVIOUS callback, including
@@ -59,7 +67,7 @@ export class BattlePerformance {
     this.pending = {}; this.counts = {}; this.last = paused ? undefined : now; this.lastTick = tick;
   }
   summary() {
-    return { version:1, note:"CPU phases are nested/inclusive; renderSubmit is CPU submission, not GPU timing. Percentiles use 1ms buckets. Slow frames refer to the preceding callback interval.", frames:this.frames.summary(), counters:{...this.totals}, stages:Object.fromEntries([...this.stages].map(([name,stats])=>[name,stats.summary()])), slowFrames:structuredClone(this.slow) };
+    return { version:1, note:"CPU phases are nested/inclusive; renderSubmit is CPU submission, not GPU timing. Percentiles use 1ms buckets. Slow frames refer to the preceding callback interval.", frames:this.frames.summary(), gauges:Object.fromEntries([...this.gauges].map(([name,stats])=>{const {count,averageMs,maxMs}=stats.summary();return [name,{samples:count,average:averageMs,max:maxMs}];})), counters:{...this.totals}, stages:Object.fromEntries([...this.stages].map(([name,stats])=>[name,stats.summary()])), slowFrames:structuredClone(this.slow) };
   }
 }
 export const battlePerformance = new BattlePerformance();

@@ -13,13 +13,31 @@ const hash = (n: number) => {
 
 // Pickets, strands, apron wire and a coil for every intact segment; a few
 // broken stakes and a low tangle where a blast has cut one.
-export function wireBeltGeometry(map: MapDefinition): { boxes: BackdropBox[]; lines: number[] } {
+// A shell that cuts wire lands on a frame already busy with terrain and
+// ragdolls, so a cache keeps each segment's geometry: only segments whose cut
+// state changed, or that `stale` picks out, are sampled against the ground again.
+export type WireCache = Map<string, { cut: boolean; boxes: BackdropBox[]; lines: number[] }>;
+export function wireBeltGeometry(map: MapDefinition, cache?: WireCache, stale?: (segment: WireSegment) => boolean): { boxes: BackdropBox[]; lines: number[] } {
   const boxes: BackdropBox[] = [], lines: number[] = [], cut = map.destruction?.wire ?? {};
+  (map.wireBelts ?? []).forEach((s, n) => {
+    const isCut = !!cut[s.id];
+    let entry = cache?.get(s.id);
+    if (!entry || entry.cut !== isCut || stale?.(s)) {
+      entry = { cut: isCut, ...segmentGeometry(map, s, n, isCut) };
+      cache?.set(s.id, entry);
+    }
+    for (const box of entry.boxes) boxes.push(box);
+    for (const v of entry.lines) lines.push(v);
+  });
+  return { boxes, lines };
+}
+function segmentGeometry(map: MapDefinition, s: WireSegment, n: number, isCut: boolean) {
+  const boxes: BackdropBox[] = [], lines: number[] = [];
   const ground = (x: number, z: number) => groundHeight(x, z, map);
   const line = (a: number[], b: number[]) => lines.push(...a, ...b);
-  (map.wireBelts ?? []).forEach((s: WireSegment, n) => {
+  {
     const z0 = s.z - s.d / 2, z1 = s.z + s.d / 2, rows = [s.x - s.w / 2 + 0.5, s.x + s.w / 2 - 0.5];
-    if (cut[s.id]) {
+    if (isCut) {
       for (let i = 0; i < 3; i++) {
         const x = s.x + (hash(n * 3 + i) - 0.5) * s.w, z = z0 + hash(n * 5 + i) * s.d;
         boxes.push({ x, y: ground(x, z) - 0.05, z, w: 0.06, h: 0.5 + hash(n + i) * 0.5, d: 0.06, lean: 0.6 + hash(n * 7 + i), yaw: hash(n * 11 + i) * 6, color: "#3a332a" });
@@ -32,7 +50,7 @@ export function wireBeltGeometry(map: MapDefinition): { boxes: BackdropBox[]; li
         };
         line(p(0), p(1));
       }
-      return;
+      return { boxes, lines };
     }
     for (const [r, x] of rows.entries()) {
       const posts: number[][] = [];
@@ -64,7 +82,7 @@ export function wireBeltGeometry(map: MapDefinition): { boxes: BackdropBox[]; li
       if (previous) line(previous, point);
       previous = point;
     }
-  });
+  }
   return { boxes, lines };
 }
 

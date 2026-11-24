@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { footSurface } from "./battlefield";
 import { grenadeExplosionProfile } from "./destruction";
 import { beyondPlayArea, groundHeight, inWire } from "./map";
-import { craterPonds, inCraterPond, noMansLandDebris, wireBeltGeometry } from "./no-mans-land";
+import { craterPonds, inCraterPond, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { Game, TestCollision, idle } from "./simulation";
 import { trenchMap } from "./trench-map";
 
@@ -81,4 +81,23 @@ it("scatters flat debris across no-man's land, clear of the wire and water", () 
     for (const p of ponds) expect(Math.hypot(d.x - p.x, d.z - p.z)).toBeGreaterThan(p.radius);
     for (const b of belts) expect(Math.abs(d.x - b.x) < b.w / 2 && Math.abs(d.z - b.z) < b.d / 2).toBe(false);
   }
+});
+
+it("rebuilds only the cut and nearby wire segments from its cache", () => {
+  const g = game(), cache: WireCache = new Map();
+  const fresh = wireBeltGeometry(g.map), first = wireBeltGeometry(g.map, cache);
+  expect(first).toEqual(fresh);
+  expect(cache.size).toBe(belts.length);
+  const before = new Map(cache);
+  const target = belts.find((b) => b.team === "red")!, y = groundHeight(target.x, target.z, g.map);
+  g.explode({ x: target.x, y: y + 0.05, z: target.z }, -1, null, grenadeExplosionProfile);
+  const near = (s: { x: number; z: number }) => Math.hypot(s.x - target.x, s.z - target.z) < 10;
+  const after = wireBeltGeometry(g.map, cache, near);
+  // Identical to building everything from scratch on the changed map.
+  expect(after).toEqual(wireBeltGeometry(g.map));
+  const rebuilt = belts.filter((b) => cache.get(b.id) !== before.get(b.id)).map((b) => b.id);
+  expect(rebuilt).toContain(target.id);
+  expect(rebuilt.length).toBeLessThan(8);
+  for (const id of rebuilt) expect(near(belts.find((b) => b.id === id)!) || id === target.id).toBe(true);
+  expect(cache.get(target.id)!.cut).toBe(true);
 });
