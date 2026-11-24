@@ -977,15 +977,18 @@ try {
       // "no-mans-land" looks from the centre over a crater pond to Blue's wire belt.
       const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-15,-12,-7]};
       // Along a rear trench to its first dugout, and in front of the first signboard.
-      const dugout=map.backdrop?dugouts(map)[0]:undefined,sign=map.backdrop?signboards(map)[0]:undefined;
+      const dressed=map.backdrop&&trenchGround(map),dugout=dressed?dugouts(map)[0]:undefined,sign=dressed?signboards(map)[0]:undefined;
       // From the trench floor behind a Blue firing step, east toward the parapet
       // and the low sun: the shadowed bank a Blue player looks at most.
       const step=map.terrain?.firingPositions?.find(f=>f.team==="blue"&&Math.abs(f.z)<12);
       if(step)trenchDetails["firing-step"]=[step.x-2.6,step.z+0.6,step.x+40,step.z+0.6];
       if(dugout)trenchDetails["trench-dugout"]=[dugout.x-dugout.rear*1.2,dugout.z+4.5,dugout.x,dugout.z];
       if(sign)trenchDetails["trench-sign"]=[sign.x+sign.facing*1.6,sign.z+1.6,sign.x,sign.z];
-      // Verdun: across the boundary wire behind Blue's spawn, and a walk out through it.
-      const verdunDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-99,22,-108,32],"boundary-walk":[-100,6,-116,6]};
+      // Verdun: across the boundary wire behind Blue's spawn, and a walk out through it;
+      // north out of the woods past the wire; west to the village, east to the fort's
+      // ridge; and south along the continuing front.
+      const verdunDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-99,22,-108,32],"boundary-walk":[-100,6,-116,6],
+        "dead-zone-woods":[-40,-56,-46,-96],"west-horizon":[-97,30,-186,46],"east-horizon":[97,-36,222,-46],"south-front":[58,56,68,140]};
       const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0];
