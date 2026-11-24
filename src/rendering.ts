@@ -12,11 +12,12 @@ import { architecturePixels, architecturalTextures, cisternWaterNormals, type Ar
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
 import { brazierSites, clothGeometry, clothScraps, mistBanks, type MistBank } from "./atmosphere";
-import { nightLamps, tapeBoxes } from "./night";
+import { burstRadius, nightLamps, nightRules, tapeBoxes } from "./night";
 import { flareBrightness, flarePosition as starShellPosition, flareRules } from "./flares";
 
 // How bright a fresh flare's light is; tuned on a real GPU.
 const flareLightIntensity = 9;
+const burstLightIntensity = 16;
 import { BillboardBuffer } from "./billboards";
 import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
@@ -84,6 +85,8 @@ import {
   runtimeMap,
   type Destructible,
   type DestructionChange,
+  artilleryExplosionProfile,
+  grenadeExplosionProfile,
 } from "./destruction";
 import { TerrainGeometryCache, terrainPatchKeys, type TerrainGeometry } from "./terrain-geometry";
 import { scarRubble } from "./terrain-relief";
@@ -2028,6 +2031,9 @@ export class Renderer implements CollisionWorld {
   // (src/night.ts), a shaded lamp on each flagpole, and tape through the wire lanes.
   private nightVision?: pc.Entity;
   private flareRigs: { light: pc.Entity; core: pc.Entity; halo: pc.Entity }[] = [];
+  // The flash of the last few bursts, and the embers they leave in their craters.
+  private burstLights: { light: pc.Entity; bornAt: number; radius: number }[] = [];
+  private craterGlows: pc.Entity[] = [];
   private buildNight() {
     const root = this.joint("night lamps", this.mapRoot);
     const vision = this.look.nightVision;
@@ -2047,6 +2053,18 @@ export class Renderer implements CollisionWorld {
       const rig = { light, core: quad("flare", "#ffffff"), halo: quad("flare halo", "#dcefc6") };
       rig.light.enabled = rig.core.enabled = rig.halo.enabled = false;
       return rig;
+    });
+    this.burstLights = Array.from({ length: 3 }, () => {
+      const light = this.joint("burst light", root);
+      light.addComponent("light", { type: "omni", color: color("#ffd9a0"), intensity: 0, range: 40, castShadows: false });
+      light.enabled = false;
+      return { light, bornAt: -1e9, radius: 0 };
+    });
+    this.craterGlows = Array.from({ length: 6 }, () => {
+      const glow = this.joint("crater embers", root);
+      glow.addComponent("render", { type: "plane", material: this.dustMaterial("#ff6a20"), castShadows: false, receiveShadows: false });
+      glow.enabled = false;
+      return glow;
     });
     const glow = { brazier: ["#ff8a3a", 2.0], lantern: ["#ffc878", 0.9], flag: ["#ffdca8", 0.8] } as const;
     for (const lamp of nightLamps(this.map)) {
@@ -2261,6 +2279,22 @@ export class Renderer implements CollisionWorld {
         quad.setLocalScale(size, 1, size);
         quad.render!.meshInstances[0].setParameter("material_opacity", opacity * strength);
       }
+    });
+    // A burst's flash lasts as long as the rule says it shows the ground.
+    for (const burst of this.burstLights) {
+      const age = tick - burst.bornAt;
+      burst.light.enabled = age >= 0 && age < nightRules.burstTicks;
+      if (burst.light.enabled) burst.light.light!.intensity = burstLightIntensity * (1 - age / nightRules.burstTicks) ** 2;
+    }
+    // Fresh craters glow for twenty seconds, sharing the slots of their smoke.
+    this.craterGlows.forEach((glow, i) => {
+      const slot = this.atmosphere?.smoulders[i], age = slot?.at ? (tick - slot.bornAt) / 30 : Infinity;
+      glow.enabled = age < 20;
+      if (!slot?.at || age >= 20) return;
+      glow.setPosition(slot.at.x, slot.at.y + 0.25, slot.at.z);
+      this.faceCamera(glow);
+      glow.setLocalScale(2.4, 1, 1.2);
+      glow.render!.meshInstances[0].setParameter("material_opacity", 0.55 * (1 - age / 20) * (0.85 + 0.15 * Math.sin(tick * 0.4 + i)));
     });
   }
   private drawBackdrop(g: Game, alpha: number) {
@@ -5116,6 +5150,16 @@ export class Renderer implements CollisionWorld {
       }
     }
     if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") this.blastCasualties(e);
+    if (this.map.night && (e.type === "grenadeExplosion" || e.type === "artilleryImpact")) {
+      // Light the flash from the slot that has been dark longest.
+      const burst = this.burstLights.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b), this.burstLights[0]);
+      if (burst) {
+        burst.bornAt = e.tick;
+        burst.radius = burstRadius(e.type === "artilleryImpact" ? artilleryExplosionProfile.radius : grenadeExplosionProfile.radius);
+        burst.light.setPosition(e.at.x, e.at.y + 2.5, e.at.z);
+        burst.light.light!.range = burst.radius * 1.25;
+      }
+    }
     if (e.type === "destruction") {
       for (const [i, id] of (e.change.collapses ?? []).slice(0, 4).entries()) {
         const b = this.map.destruction!.objects[id].original;

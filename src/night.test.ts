@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { lightAt, nightLamps, nightRules, sightLimit, tapeBoxes, wireLanes } from "./night";
+import { burstRadius, lightAt, nightLamps, nightRules, sightLimit, tapeBoxes, wireLanes } from "./night";
+import { artilleryExplosionProfile, grenadeExplosionProfile } from "./destruction";
 import { nightRaidMap } from "./night-map";
 import { trenchMap } from "./trench-map";
 import { groundHeight, inWire, trenchGround } from "./map";
@@ -149,4 +150,78 @@ it("tapes the lanes each side left through its own wire", () => {
     expect(b.y).toBeLessThan(groundHeight(b.x, b.z, nightRaidMap) + 0.05);
     expect(inWire(b.x, b.z, nightRaidMap, "blue") && inWire(b.x, b.z, nightRaidMap, "red")).toBe(false);
   }
+});
+
+it("shows the ground around a burst for a moment, and only at night", () => {
+  const g = match(), at = { x: 4, y: groundHeight(4, 12, g.map) + 0.1, z: 12 };
+  g.tick = 600;
+  expect(lightAt(g, { x: 14, z: 12 })).toBe(0);
+  g.explode(at, -1, null, artilleryExplosionProfile);
+  expect(g.bursts).toHaveLength(1);
+  expect(g.bursts[0]).toMatchObject({ x: 4, z: 12, tick: 600, radius: burstRadius(artilleryExplosionProfile.radius) });
+  // A shell lights about 35 m; a grenade less.
+  expect(burstRadius(artilleryExplosionProfile.radius)).toBe(36);
+  expect(burstRadius(grenadeExplosionProfile.radius)).toBe(28);
+  expect(lightAt(g, { x: 14, z: 12 })).toBeGreaterThan(0.8);
+  expect(sightLimit(g, { x: 14, z: 12 })).toBeGreaterThan(70);
+  expect(lightAt(g, { x: 4 + 37, z: 12 })).toBe(0);
+  // The flash fades and is gone in under half a second.
+  g.tick += 6;
+  const fading = lightAt(g, { x: 14, z: 12 });
+  expect(fading).toBeGreaterThan(0);
+  expect(fading).toBeLessThan(0.6);
+  g.tick += nightRules.burstTicks;
+  expect(lightAt(g, { x: 14, z: 12 })).toBe(0);
+  expect(sightLimit(g, { x: 14, z: 12 })).toBe(15);
+  // The list stays short however long the shelling goes on.
+  for (let i = 0; i < 40; i++) g.explode(at, -1, null, grenadeExplosionProfile);
+  expect(g.bursts.length).toBeLessThanOrEqual(16);
+  // By day there is nothing to light.
+  const day = match(trenchMap);
+  day.explode(at, -1, null, artilleryExplosionProfile);
+  expect(day.bursts).toHaveLength(0);
+});
+
+it("gives a bot a glimpse of an enemy by a burst's flash", () => {
+  const g = match(), p = g.players[0], enemy = g.players[g.teamSize];
+  for (const q of g.players) if (q !== p && q !== enemy) Object.assign(q, { x: q.team === "blue" ? -70 : 70, z: 55, hp: 0 });
+  const look = () => {
+    Object.assign(enemy, { x: 0, z: 12, y: groundHeight(0, 12, g.map), hp: 100, lastShotAt: -1000 });
+    Object.assign(p, { x: -28, z: 12, yaw: Math.PI / 2, target: -1, hp: 100 });
+    p.y = groundHeight(p.x, p.z, g.map);
+    p.awareness.nextLook = g.tick;
+    expect(g.collision.ray({ x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z }, { x: enemy.x, y: enemy.y + 1.25, z: enemy.z })).toBe(1);
+    botCommand(g, p);
+    return p.target === enemy.id;
+  };
+  g.tick = 600;
+  expect(look()).toBe(false);
+  // A shell lands 12 m beyond the enemy: for a moment they stand out against it.
+  g.bursts.push({ x: 12, z: 12, tick: g.tick, radius: 36 });
+  expect(look()).toBe(true);
+  g.tick += nightRules.burstTicks + 1;
+  expect(look()).toBe(false);
+});
+
+it("gives away a soldier who has just fired", () => {
+  const g = match(), p = g.players[0], enemy = g.players[g.teamSize];
+  for (const q of g.players) if (q !== p && q !== enemy) Object.assign(q, { x: q.team === "blue" ? -70 : 70, z: 55, hp: 0 });
+  const look = (distance: number, firedAgo: number) => {
+    Object.assign(enemy, { x: 0, z: 12, y: groundHeight(0, 12, g.map), hp: 100, lastShotAt: g.tick - firedAgo });
+    Object.assign(p, { x: -distance, z: 12, yaw: Math.PI / 2, target: -1, hp: 100 });
+    p.y = groundHeight(p.x, p.z, g.map);
+    p.awareness.nextLook = g.tick;
+    botCommand(g, p);
+    return p.target === enemy.id;
+  };
+  g.tick = 600;
+  // Silent, 28 m off: unseen. Having fired a third of a second ago: seen.
+  expect(look(28, 1000)).toBe(false);
+  expect(look(28, 10)).toBe(true);
+  // The flash is forgotten after a second.
+  expect(look(28, nightRules.muzzleTicks + 1)).toBe(false);
+  expect(sightLimit(g, { x: 6, z: 12, lastShotAt: g.tick - 10 })).toBe(nightRules.muzzleSight);
+  expect(sightLimit(g, { x: 6, z: 12, lastShotAt: g.tick - nightRules.muzzleTicks })).toBe(15);
+  // By day firing changes nothing about how far a soldier is seen.
+  expect(sightLimit({ map: trenchMap, tick: 600 }, { x: 6, z: 12, lastShotAt: 590 })).toBe(Infinity);
 });

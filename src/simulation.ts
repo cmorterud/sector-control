@@ -49,7 +49,7 @@ import {
   crouchRules,
 } from "./crouch";
 import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
-import { sightLimit } from "./night";
+import { burstRadius, sightLimit, type Burst } from "./night";
 import { advanceFlares, botFlareTarget, createFlareState, requestFlare } from "./flares";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
 import { firstPersonView, viewMuzzle } from "./player-view";
@@ -922,6 +922,7 @@ export class Game {
   grenades: Grenade[] = [];
   artillery = createArtilleryState();
   flares = createFlareState();
+  bursts: Burst[] = [];
   assaults = createAssaultState();
   smokeClouds: SmokeCloud[] = [];
   smokeSequence = 0;
@@ -1089,6 +1090,7 @@ export class Game {
       grenadeSequence: this.grenadeSequence,
       artillery: this.artillery,
       flareState: this.flares,
+      bursts: this.bursts,
       flames: this.flames,
       emplacements: [...this.emplacements.values()],
       artilleryAudit: this.artilleryAudit,
@@ -2164,6 +2166,11 @@ export class Game {
   }
   explode(at: V3, actor: number, team: Team | null, profile: ExplosionProfile) {
     const hits: { target: number; damage: number }[] = [];
+    // At night the flash shows the ground around it for a moment (src/night.ts).
+    if (this.map.night) {
+      this.bursts.push({ x: at.x, z: at.z, tick: this.tick, radius: burstRadius(profile.radius) });
+      if (this.bursts.length > 16) this.bursts.shift();
+    }
     for (const p of this.players) {
       if (p.hp > 0 && this.tick >= p.protectedUntil) {
         const reach = profile.radius * 1.8;

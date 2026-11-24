@@ -412,6 +412,12 @@ function handle(e: Event) {
   if (e.type === "smokeThrow" && e.actor === 0) sound(300, 0.12, 0.035);
   if (e.type === "smokeBloom" && dist(game.players[0], e.at) < 45)
     sound(200, 0.9, 0.025);
+  // The pop of the burst and the hiss of it burning, heard across the field.
+  if (e.type === "flare" && e.phase === "burst" && dist(game.players[0], e.at) < 130) {
+    const near = Math.max(0.25, 1 - dist(game.players[0], e.at) / 130);
+    sound(1500, 0.1, 0.05 * near);
+    sound(2700, 2.4, 0.012 * near);
+  }
   if (e.type === "flare" && e.phase === "call" && e.actor === 0) {
     artilleryNotice = "FLARE AWAY · LIGHT IN 3s";
     artilleryNoticeUntil = performance.now() + 3000;
