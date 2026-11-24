@@ -111,6 +111,62 @@ describe("Zeppelin layout", () => {
   });
 });
 
+// Walks a soldier with a player's commands, [x, z, ticks] at a time, and
+// returns every drop: how far it fell from where its fall began.
+function walk(start: Vec, legs: [number, number, number][]) {
+  const g = match(), p = g.players[0], drops: number[] = [];
+  Object.assign(p, { ...start, vx: 0, vz: 0, protectedUntil: Infinity });
+  let from: number | undefined;
+  for (const [x, z, ticks] of legs)
+    for (let t = 0; t < ticks; t++) {
+      const before = p.y;
+      g.step({ ...idle(), x, z, yaw: Math.atan2(x, -z) });
+      if (p.fall && from === undefined) from = before;
+      if (!p.fall && from !== undefined) { drops.push(from - p.y); from = undefined; }
+    }
+  return { p, drops };
+}
+
+describe("Zeppelin stairs", () => {
+  it("builds every part of the airship with a real size", () => {
+    const flat = zeppelinMap.boxes.filter((b) => !(b.w > 0 && b.d > 0 && b.h > 0));
+    expect(flat.map((b) => b.id)).toEqual([]);
+  });
+
+  it("walks a player down every stair tower from the top walk without a drop", () => {
+    for (const t of zeppelinMap.zeppelin!.towers) {
+      const lane = (l: [number, number]) => (l[0] + l[1]) / 2, across = Math.sign(lane(t.laneB) - lane(t.laneA));
+      // Arrive from the top walk over the far landing, then come down flight
+      // by flight: toward the near end in lane A, toward the far end in lane B.
+      const farX = t.nearX + t.dir * (2 * 2 + 3.75 + 1);
+      const legs: [number, number, number][] = [];
+      for (let n = t.flights - 1; n >= 0; n--) {
+        const inA = n % 2 === 0;
+        legs.push([inA ? -t.dir : t.dir, 0, 60]);
+        if (n) legs.push([0, inA ? across : -across, 25]);
+      }
+      const { p, drops } = walk(at(farX, lane(t.laneA), top), legs);
+      expect(drops.filter((d) => d > 0.5), `tower at x ${t.nearX}`).toEqual([]);
+      expect(p.y, `tower at x ${t.nearX}`).toBeCloseTo(t.base, 1);
+    }
+  });
+
+  it("lets no wandering soldier drop more than a stair's step on the upper decks", () => {
+    let seed = 11;
+    const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const starts = zeppelinMap.navigationPoints!.filter((q) => q.y! > 5 && next() < 0.12);
+    for (const s of starts) {
+      const legs: [number, number, number][] = Array.from({ length: 3 }, () => {
+        const a = Math.floor(next() * 8) * Math.PI / 4;
+        return [Math.cos(a), Math.sin(a), 15 + Math.floor(next() * 30)];
+      });
+      const { p, drops } = walk(s, legs);
+      expect(drops.filter((d) => d > 1), `from ${JSON.stringify(s)}`).toEqual([]);
+      expect(p.hp).toBe(100);
+    }
+  }, 120_000);
+});
+
 describe("Zeppelin edges", () => {
   it("keeps a soldier aboard who runs, hops or vaults at a rail", () => {
     const g = match(), p = g.players[0];
