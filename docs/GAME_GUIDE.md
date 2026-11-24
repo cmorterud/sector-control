@@ -2,7 +2,7 @@
 
 Detailed reference for mechanics, maps and development scenarios, accumulated as features were added; newer notes within a section supersede older ones. Start with the [README](../README.md). [HANDOFF.md](HANDOFF.md) holds the development log: project decisions, implementation state, validation and recorded-playtest status.
 
-Local single-player shooter with toggleable first- and third-person views. Industrial is 5v5 territory control; Trench front is 50v50 domination with four flags; Village front and Verdun sector have five flags. Matches last up to eight minutes.
+Local single-player shooter with toggleable first- and third-person views. Trench front is 50v50 domination with four flags; Village front and Verdun sector have five flags. Matches last up to eight minutes.
 
 ## Public trial
 
@@ -159,7 +159,7 @@ A follow-up shortens both manor stairways to household proportions: 16 treads of
 
 ## Lighthouse point graybox
 
-Choose **Lighthouse point** in the start menu or open `?map=headland`. This is an early graybox of a 300 × 170 m coastal headland, compressed from a friend's roughly 1,100 m layout sketch. France deploys by the mainland road in the west; Imperial Germany deploys on the eastern tip behind the lighthouse. Three flags sit between them: **A Cliff Park**, **B Fountain Square** and **C Walled Green**, joined by a loop road. It uses the 50v50 roster and domination rules.
+Choose **Lighthouse point** in the start menu or open `?map=headland`. This is an early graybox of a 300 × 170 m coastal headland, compressed from a friend's roughly 1,100 m layout sketch. France deploys by the mainland road in the west; Imperial Germany deploys on the eastern tip behind the lighthouse. Three flags sit between them: **A Cliff Park**, **B Fountain Square** and **C Walled Green**, joined by a loop road. It uses a 25v25 roster and domination rules.
 
 The coastline is an authored outline (`coast` on the map definition). Ground beyond it is sea bed one bank height below the land, under a flat sea plane, and is closed to movement, navigation and deployment about a meter back from the cliff edge. Open-sea terrain patches are not built.
 

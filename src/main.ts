@@ -180,9 +180,11 @@ const saveQuality = (value: string) => { try { localStorage.setItem(qualityStora
 let reviewFrames = 0;
 let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
-const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, headlandMap, industrialMap];
+// Maps offered in the briefing. Industrial is no longer offered, but ?map=industrial
+// still opens it for the CI combat and Armory browser checks.
+const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, headlandMap];
 const requestedMap = params.get("map");
-const map = battlefields.find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
+const map = [...battlefields, industrialMap].find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
 const training=map.id==="training"?new TrainingSession():undefined;
 root.classList.toggle("training-active",!!training);
 let trainingReset=false;
