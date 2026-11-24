@@ -50,6 +50,7 @@ import {
 } from "./crouch";
 import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
 import { sightLimit } from "./night";
+import { advanceFlares, botFlareTarget, createFlareState, requestFlare } from "./flares";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
 import { firstPersonView, viewMuzzle } from "./player-view";
 import {
@@ -131,6 +132,8 @@ export interface Command {
   mantle: boolean;
   grenade: boolean;
   artillery?: Vec & { area?: boolean };
+  // Night maps: send up a flare over this point (src/flares.ts).
+  flare?: Vec & { area?: boolean };
   smoke?: boolean;
   melee?: boolean;
   crouch?: boolean;
@@ -524,6 +527,7 @@ export type Event = { id: number; tick: number } & (
       phase: "acquired" | "lost" | "distracted";
       until: number;
     }
+  | { type: "flare"; phase: "call" | "burst"; flare: number; actor: number; team: Team; at: Vec; burstAt: number; endsAt: number }
   | {
       type: "artilleryCall";
       actor: number;
@@ -917,6 +921,7 @@ export class Game {
   projectiles: Projectile[] = [];
   grenades: Grenade[] = [];
   artillery = createArtilleryState();
+  flares = createFlareState();
   assaults = createAssaultState();
   smokeClouds: SmokeCloud[] = [];
   smokeSequence = 0;
@@ -1083,6 +1088,7 @@ export class Game {
       grenades: this.grenades,
       grenadeSequence: this.grenadeSequence,
       artillery: this.artillery,
+      flareState: this.flares,
       flames: this.flames,
       emplacements: [...this.emplacements.values()],
       artilleryAudit: this.artilleryAudit,
@@ -1271,6 +1277,7 @@ export class Game {
       p.meleeHeld = !!c.melee;
       const meleeSpeed = meleeMovement(this, p, c);
       if (c.artillery) requestArtillery(this, p, c.artillery);
+      if (c.flare) requestFlare(this, p, c.flare);
       if (
         !c.fire ||
         p.reloadAt ||
@@ -1422,6 +1429,7 @@ export class Game {
     this.advanceGrenades();
     advanceBoundary(this);
     advanceArtillery(this);
+    advanceFlares(this);
     for (const s of this.scoring !== "eliminations" ? this.sectors : []) {
       const occupants = this.players.filter((p) =>
           this.scoring === "domination"
@@ -2638,6 +2646,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   if (duck) return braceCommand(g, p, duck);
   const c = idle();
   c.artillery = botArtilleryTarget(g, p) ?? undefined;
+  c.flare = botFlareTarget(g, p) ?? undefined;
   c.reload =
     p.ammo < 1 ||
     (p.ammo < (p.weapon === "serviceRifle" ? 2 : 15) && p.target < 0);
@@ -2711,7 +2720,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       q.hp > 0 &&
       (canNotice(g, p, q) || (!!g.tactics && audible(g, p, q))) &&
       // At night an unlit soldier is only seen close up (src/night.ts).
-      dist(q, p) < Math.min(range, sightLimit(g.map, q)) &&
+      dist(q, p) < Math.min(range, sightLimit(g, q)) &&
       !smokeBlocks(
         g,
         { x: p.x, y: p.y + rifleHeight(g.map, p), z: p.z },

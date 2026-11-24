@@ -32,7 +32,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | --- | --- | --- |
 | Training grounds | Guided practice | Eight repeatable exercises covering movement, all weapons, artillery, destruction and squad combat |
 | Trench front | 50v50 | Four flags in opposing trench lines across no man's land |
-| Night raid | 24v24 | Trench front after dark. You see about 15 m; lamps light pools of trench, and white tape marks the lanes through the wire |
+| Night raid | 24v24 | Trench front after dark. You see about 15 m. Call flares from the tactical map (**F** switches it) to light the field; lamps mark the trenches and white tape the lanes through the wire |
 | Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |

@@ -158,6 +158,19 @@ try {
     await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
     await screenshot('detail-'+detail,true);
    }
+   if(map==='night-raid'&&!visualOnly){
+    // A flare over no-man's land lights the ground the darkness rule calls lit, and none beyond it.
+    const view=await client.evaluate(`window.sectorRenderReview.survey(true,'no-mans-land').frames`);
+    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${view+2}`));
+    const dark=await client.evaluate(`window.sectorRenderReview.light(-8,-10)`);
+    await client.evaluate(`window.sectorRenderReview.flare(-8,-10)`);
+    const burning=await client.evaluate(`window.sectorRenderReview.advance(30).frames`);
+    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${burning+2}`));
+    const lit=await client.evaluate(`window.sectorRenderReview.light(-8,-10)`),beyond=await client.evaluate(`window.sectorRenderReview.light(-8,50)`);
+    if(dark!==0||!(lit>0.8)||beyond!==0)throw Error('The flare did not light the ground as the rule expects: '+JSON.stringify({dark,lit,beyond}));
+    await screenshot('flare-over-no-mans-land',true);
+    console.log(JSON.stringify({map,flare:{dark,lit,beyond}}));
+   }
    await client.evaluate(`window.sectorRenderReview.survey(true)`);
   }
   console.log(JSON.stringify({map,mode,stage:'intact-rendered'}));

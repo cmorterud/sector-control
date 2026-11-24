@@ -21,7 +21,7 @@ import { headlandMap } from "./headland-map";
 import { fortVauxMap } from "./fort-vaux-map";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
-import { ArtilleryMap } from "./artillery-map";
+import { ArtilleryMap, mapCallKey } from "./artillery-map";
 import { Minimap } from "./minimap";
 import { flagContains } from "./domination";
 import { Renderer } from "./rendering";
@@ -50,6 +50,8 @@ import { boundaryCountdown } from "./boundary";
 import { dugouts, signboards } from "./trench-dressing";
 import { trenchMap } from "./trench-map";
 import { nightRaidMap } from "./night-map";
+import { lightAt } from "./night";
+import { flareRules } from "./flares";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -126,11 +128,12 @@ let difficulty: Difficulty = (difficulties as string[]).includes(new URLSearchPa
   : (difficulties as string[]).includes(storedDifficulty ?? "") ? storedDifficulty as Difficulty : "regular";
 // Short text callouts from nearby friendly soldiers and enemy grenade warnings.
 let callout = "", calloutUntil = 0;
-let pendingArtillery: Command["artillery"];
+let pendingArtillery: Command["artillery"], pendingFlare: Command["flare"];
 const tacticalMap = new ArtilleryMap(
   () => game,
-  (target) => {
-    pendingArtillery = target;
+  (target, kind) => {
+    if (kind === "flare") pendingFlare = target;
+    else pendingArtillery = target;
   },
   ()=>training?.station.target,
   ()=>combatFeedback.marker(game),
@@ -409,6 +412,11 @@ function handle(e: Event) {
   if (e.type === "smokeThrow" && e.actor === 0) sound(300, 0.12, 0.035);
   if (e.type === "smokeBloom" && dist(game.players[0], e.at) < 45)
     sound(200, 0.9, 0.025);
+  if (e.type === "flare" && e.phase === "call" && e.actor === 0) {
+    artilleryNotice = "FLARE AWAY · LIGHT IN 3s";
+    artilleryNoticeUntil = performance.now() + 3000;
+    sound(880, 0.2, 0.05);
+  }
   if (e.type === "artilleryCall" && e.actor === 0) {
     artilleryNotice = "FIRE MISSION CONFIRMED · FIRST IMPACT IN 4s";
     artilleryNoticeUntil = performance.now() + 3500;
@@ -530,8 +538,9 @@ function hud(now: number) {
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
   );
+  const flareIn = Math.max(0, Math.ceil((game.flares.readyAt[p.team] - game.tick) / 30));
   el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
-    ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}`}</small>`;
+    ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -639,7 +648,8 @@ function command(): Command {
   c.equip = pendingEquip; pendingEquip = undefined;
   fire = false;
   c.artillery = pendingArtillery;
-  pendingArtillery = undefined;
+  c.flare = pendingFlare;
+  pendingArtillery = pendingFlare = undefined;
   c.aim = aim && !tacticalMap.open;
   c.firstPerson = preferredFirstPerson;
   c.reload = reload;
@@ -688,6 +698,7 @@ window.addEventListener("keydown", (e) => {
     fire = aim = grenade = smoke = mantle = melee = placingGun = false;
     tacticalMap.toggle();
   }
+  if (tacticalMap.open && e.code === mapCallKey && !e.repeat) tacticalMap.toggleMode();
   if (tacticalMap.open && !isKey("reload", e.code)) return;
   const player = game.players[0];
   if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
@@ -943,6 +954,9 @@ try {
     manual:()=>{reviewManual=true;},
     training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
     advance:advanceReview,
+    // Night maps: put a flare over a point at once, and read the light the rule sees there.
+    flare:(x:number,z:number)=>{game.flares.flares.push({id:++game.flares.sequence,team:"blue",actor:0,x,z,heading:Math.PI/2,burstAt:game.tick,endsAt:game.tick+flareRules.burnTicks});},
+    light:(x:number,z:number)=>lightAt(game,{x,z}),
     combat:combatReview,
     survey:(firstPerson:boolean,detail?:string)=>{
       const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],"night-raid":[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-6.4,5.6,5,-3]};

@@ -18,6 +18,7 @@ import {
   boundaryArtilleryExplosionProfile,
 } from "./destruction";
 import { artillerySector } from "./artillery-sectors";
+import { sightLimit } from "./night";
 
 export const ambientArtilleryRules = {
   minInterval: 8 * 30,
@@ -223,7 +224,7 @@ function advanceAmbient(g: Game) {
     return;
   }
 }
-function teamHasHuman(g: Game, p: Soldier): boolean {
+export function teamHasHuman(g: Game, p: Soldier): boolean {
   return g.players.some(
     (q) => q.team === p.team && g.humanPlayerIds.includes(q.id),
   );
@@ -508,7 +509,9 @@ export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
           (q) => q.hp > 0 && q.team !== p.team && dist(q, a) < 10,
         ).length || dist(p, a) - dist(p, b),
   );
-  const target = targets.find((target) => !artilleryTargetReason(g, p, target));
+  // At night a spotter must be able to see what it calls fire onto: lit by a
+  // flare or a fire, or close. Darkness hides the rest (src/night.ts).
+  const target = targets.find((target) => dist(p, target) < sightLimit(g, target) && !artilleryTargetReason(g, p, target));
   return target ? { x: target.x, z: target.z } : null;
 }
 export function evadeArtillery(g: Game, p: Soldier): Command | null {

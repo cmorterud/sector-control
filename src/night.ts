@@ -6,6 +6,10 @@ import { groundHeight, type MapDefinition, type Vec } from "./map";
 import { brazierSites } from "./atmosphere";
 import { dugouts, trenchProps } from "./trench-dressing";
 import type { BackdropBox } from "./backdrop";
+import { flareLight, type FlareState } from "./flares";
+
+// Enough of a match to ask about light: its map, and when it has them, its flares.
+export type NightScene = { map: MapDefinition; tick?: number; flares?: FlareState };
 
 export type LampKind = "brazier" | "lantern" | "flag";
 // `reveals` is whether a soldier in this lamp's light can be seen from afar.
@@ -43,10 +47,11 @@ export function nightLamps(map: MapDefinition): Lamp[] {
 }
 
 // How brightly a point is lit for anyone watching from a distance, from 0
-// (dark) to 1: full at an open fire, fading to nothing at its radius. Flares
-// and bursts will add their light here.
-export function lightAt(map: MapDefinition, p: Vec): number {
-  let light = 0;
+// (dark) to 1: full at an open fire, fading to nothing at its radius, and
+// whatever a burning flare throws down. Bursts will add their light here.
+export function lightAt(scene: NightScene, p: Vec): number {
+  const { map } = scene;
+  let light = scene.flares ? flareLight({ tick: scene.tick ?? 0, flares: scene.flares }, p) : 0;
   for (const lamp of nightLamps(map)) {
     if (!lamp.reveals) continue;
     const d = Math.hypot(p.x - lamp.x, p.z - lamp.z);
@@ -56,9 +61,10 @@ export function lightAt(map: MapDefinition, p: Vec): number {
 }
 
 // The farthest a soldier standing at `target` can be seen from. No limit by day.
-export function sightLimit(map: MapDefinition, target: Vec): number {
+export function sightLimit(scene: NightScene, target: Vec): number {
+  const { map } = scene;
   if (!map.night) return Infinity;
-  return map.night.sight + (nightRules.litSight - map.night.sight) * lightAt(map, target);
+  return map.night.sight + (nightRules.litSight - map.night.sight) * lightAt(scene, target);
 }
 
 // Where each side left a lane through its own wire belt: the gaps between
