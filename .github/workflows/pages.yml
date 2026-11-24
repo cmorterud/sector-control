@@ -21,7 +21,13 @@ env:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    # Skip without taking a runner or the publication queue when:
+    # - CI was cancelled: a newer push superseded it, and that run publishes;
+    # - a PR was merged: main's own publication prunes its preview.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      !(github.event_name == 'pull_request_target' && github.event.pull_request.merged)
     runs-on: ubuntu-latest
     timeout-minutes: 12
     # Serialize snapshot writes and deployment, then release the queue while
@@ -117,11 +123,15 @@ jobs:
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
 
-  verify-assets:
+  # One job, so a preview waits for one free runner instead of four. CI has
+  # already played every map on these exact bytes (verify checks each asset
+  # hash), so the deployed browser check covers hosting: the base path, MIME
+  # types, caching and a real match, using Industrial's combat checks.
+  verify:
     needs: publish
     if: needs.publish.result == 'success' && needs.publish.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -145,44 +155,25 @@ jobs:
           REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
           EXPECTED_PR_NUMBER: ${{ needs.publish.outputs.pr }}
         run: node tools/pages-preview.mjs verify-cleanup
-
-  verify-browser:
-    name: Deployed browser (${{ matrix.map }})
-    needs: [publish, verify-assets]
-    if: needs.verify-assets.result == 'success' && needs.publish.outputs.cleanup != 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 13
-    # Deployed PR JavaScript runs only on read-only, secret-free runners.
-    strategy:
-      fail-fast: false
-      matrix:
-        map: [village, industrial, training]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "26"
-      - name: Play the deployed map in Chrome
+      # Deployed PR JavaScript runs only on this read-only, secret-free runner.
+      - name: Play the deployed build in Chrome
+        if: needs.publish.outputs.cleanup != 'true'
         env:
-          MAP: ${{ matrix.map }}
           REVIEW_BASE_URL: ${{ needs.publish.outputs.url }}
           EXPECTED_HEAD_SHA: ${{ needs.publish.outputs.head }}
           EXPECTED_CI_RUN: ${{ needs.publish.outputs.run }}
           EXPECTED_CI_ATTEMPT: ${{ needs.publish.outputs.attempt }}
-        run: node tools/render-review.mjs "$MAP" dist playtest-artifacts/deployed-browser
+        run: node tools/render-review.mjs industrial dist playtest-artifacts/deployed-browser
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && needs.publish.outputs.cleanup != 'true'
         with:
-          name: deployed-browser-${{ matrix.map }}
+          name: deployed-browser
           path: playtest-artifacts/deployed-browser/
           if-no-files-found: ignore
           retention-days: 14
 
   report:
-    needs: [publish, verify-assets, verify-browser]
+    needs: [publish, verify]
     if: always() && needs.publish.outputs.pr != ''
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -214,5 +205,5 @@ jobs:
           EXPECTED_CI_RUN: ${{ needs.publish.outputs.run }}
           EXPECTED_CI_ATTEMPT: ${{ needs.publish.outputs.attempt }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
-          VERIFY_RESULT: ${{ needs.verify-assets.result == 'success' && (needs.verify-browser.result == 'success' || (needs.publish.outputs.cleanup == 'true' && needs.verify-browser.result == 'skipped')) && 'success' || 'failure' }}
+          VERIFY_RESULT: ${{ needs.verify.result == 'success' && 'success' || 'failure' }}
         run: node tools/pages-preview.mjs report
