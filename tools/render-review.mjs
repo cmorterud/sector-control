@@ -120,7 +120,7 @@ try {
    await delay(5000);
   }
   if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
-   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)})`);
+   report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)},${!!published})`);
    if(map==='fort-vaux')await client.evaluate(`(()=>{
     const card=document.querySelector('[data-battlefield="fort-vaux"]');
     const brief=document.querySelector('#menu .panel > p');
