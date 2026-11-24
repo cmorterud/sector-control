@@ -14,10 +14,11 @@ import {resolve,join,extname,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 
 // view: camera for the shot. ticks: simulation steps before the capture.
-// survey: use the game's fixed review viewpoint instead of the player's spawn.
+// survey: stand at the game's fixed review viewpoint instead of the spawn;
+// a string names one of that map's detail viewpoints.
 export const previewShots={
  'fort-vaux':{view:'third',ticks:420},
- zeppelin:{view:'third',ticks:420},
+ zeppelin:{view:'third',ticks:420,survey:'top'},
  training:{view:'third',ticks:60,survey:true},
  verdun:{view:'third',ticks:540},
  trenches:{view:'third',ticks:540},
@@ -73,7 +74,7 @@ try{
   await until(`document.querySelector('#primary')?.textContent.trim().startsWith('Begin')`);
   await evaluate(`document.querySelector('#primary').click()`);
   await until(`window.sectorRenderReview?.state().frames>=2`);
-  if(shot.survey)await evaluate(`window.sectorRenderReview.survey(${shot.view==='first'})`);
+  if(shot.survey)await evaluate(`window.sectorRenderReview.survey(${shot.view==='first'}${typeof shot.survey==='string'?','+JSON.stringify(shot.survey):''})`);
   for(let left=shot.ticks;left>0;left-=300)await evaluate(`window.sectorRenderReview.advance(${Math.min(300,left)})`);
   const at=await frames();
   await until(`window.sectorRenderReview.state().frames>=${at+3}`);
