@@ -1,8 +1,11 @@
 // Runs in the real briefing before the existing battle scenarios start.
 export function checkBriefing(map, maps) {
-  const armoury = document.querySelector('#menu a.armoury-link');
+  // Published builds are checked with main's copy of this file, so it accepts the
+  // page under either spelling while the rename to "Armory" lands.
+  const armoury = document.querySelector('#menu a.armory-link, #menu a.armoury-link');
+  const spelling = armoury?.classList.contains('armory-link') ? 'Armory' : 'Armoury';
   const picker = document.querySelector('#menu .map-choice');
-  if (!armoury || armoury.textContent.trim() !== 'Armoury' || armoury.href !== new URL('armoury/', location.href).href ||
+  if (!armoury || armoury.textContent.trim() !== spelling || armoury.href !== new URL(spelling.toLowerCase() + '/', location.href).href ||
       !picker || !(armoury.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING))
     throw Error('The briefing needs an Armoury link above the map picker');
   const select = document.getElementById(map === 'training' ? 'training-loadout' : 'loadout');
