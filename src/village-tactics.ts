@@ -29,7 +29,8 @@ export interface VillagePlan {
   window?: number;
   building?: string;
 }
-type Post = Vec & { cover: number; capture: boolean; window?: number; building?: string; floor?: string };
+// A deck post aboard an airship is chosen like a ground post, at its own height.
+type Post = Vec & { cover: number; capture: boolean; window?: number; building?: string; floor?: string; deck?: boolean };
 const catalogs = new WeakMap<
   MapDefinition,
   Map<string, { until: number; posts: Post[] }>
@@ -39,7 +40,20 @@ const forward = (g: Game, p: Soldier) =>
   Math.sign(g.map.spawn[p.team === "blue" ? "red" : "blue"].x - g.map.spawn[p.team].x) || (p.team === "blue" ? 1 : -1);
 // Maps whose bots pick individual cover posts around a flag.
 export const usesVillageTactics = (map: { id: string }) =>
-  map.id === "village" || map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux";
+  map.id === "village" || map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux" || map.id === "zeppelin";
+
+// The next waypoint of a bot's lane aboard an airship: a third of each team
+// climbs to the gallery and a few go over the top to the bomb bay; the rest
+// take the keel, every route's shortest. A waypoint counts as passed once the
+// bot is on its level and level with it or beyond, toward the enemy.
+function laneWaypoint(g: Game, p: Soldier, flag: Vec & { id: string }): Vec | null {
+  const lanes = g.map.zeppelin?.lanes[p.team];
+  if (!lanes) return null;
+  const lane = p.teamIndex % 3 === 1 ? lanes.gallery : p.teamIndex % 3 === 2 && flag.id === "B" ? lanes.top : null;
+  const ahead = forward(g, p);
+  return lane?.find((w) => !(Math.abs(p.y - w.y!) < 1.2 && (p.x - w.x) * ahead > -1.5)) ?? null;
+}
+const reached = (p: Soldier, at: Vec) => dist(p, at) < 1.5 && (at.y === undefined || Math.abs(p.y - at.y) < 1.2);
 
 // Probe actual geometry toward the opposing approach, or a recently observed
 // threat. No hidden enemy position or future artillery plan is consulted.
@@ -66,8 +80,16 @@ function posts(g: Game, p: Soldier) {
   if (old && old.until > g.tick) return old.posts;
   const flag = g.sectors[p.objective],
     found: Post[] = [];
+  // Aboard an airship the posts are the deck anchors round the flag: its own
+  // floor to capture from, and the bridge or balcony above it for cover.
+  if (g.map.sky) for (const at of g.map.navigationPoints ?? []) {
+    if (at.y === undefined || dist(at, flag) > 10 || Math.abs(at.y - (flag.y ?? 0)) > 6) continue;
+    if (found.some((q) => dist(q, at) < 0.9 && Math.abs(q.y! - at.y!) < 1)) continue;
+    if (bodyBlocked(at.x, at.z, at.y, 0.6, g.map) || Math.abs(supportHeight(at.x, at.z, g.map, at.y + 0.02, 0.45) - at.y) > 0.1) continue;
+    found.push({ x: at.x, z: at.z, y: at.y, deck: true, capture: flagContains(g, { ...at, y: at.y }, flag), cover: villageCover(g, p, at) });
+  }
   // Offset positions include both capture space and a wider supporting perimeter.
-  for (let dx = -8.4; dx <= 8.5; dx += 2.1)
+  if (!g.map.sky) for (let dx = -8.4; dx <= 8.5; dx += 2.1)
     for (let dz = -8.4; dz <= 8.5; dz += 2.1) {
       const at = { x: flag.x + dx, z: flag.z + dz };
       if (dist(at, flag) > 10 || blocked(at.x, at.z, 0.7, g.map)) continue;
@@ -184,7 +206,7 @@ export function planVillageMove(
       p.weapon !== "machineGun" &&
       (flag.owner !== p.team || flag.contested) &&
       reserved.filter((q) => q.villagePlan!.capture).length < 3;
-    const manorPost = !!g.map.buildings && !capture && p.teamIndex%11===4;
+    const manorPost = !!g.map.buildings && !g.map.sky && !capture && p.teamIndex%11===4;
     const tactics = !!g.tactics && squadFeatures.windows;
     // Threat direction for window choice: a squad sighting, or the enemy side.
     const contact = tactics ? squadContact(g, p) : null;
@@ -192,8 +214,8 @@ export function planVillageMove(
     const anchor = tactics ? squadAnchor(g, p) : undefined;
     const taken = (at: Post) => allies.some((q) => q.villagePlan?.window !== undefined && dist(q.villagePlan.goal, at) < 0.6);
     const candidates = posts(g, p)
-      .filter((at) => manorPost || at.y === undefined || (tactics && !capture && at.window !== undefined))
-      .filter((at) => !tactics || (at.y === undefined && at.window === undefined) || (!weakened(g, at) && !(at.window !== undefined && taken(at))))
+      .filter((at) => manorPost || at.y === undefined || at.deck || (tactics && !capture && at.window !== undefined))
+      .filter((at) => !tactics || ((at.y === undefined || at.deck) && at.window === undefined) || (!weakened(g, at) && !(at.window !== undefined && taken(at))))
       .filter((at) => tactics || at.window === undefined)
       .map((at, index) => {
         const distance = dist(at, flag);
@@ -235,6 +257,8 @@ export function planVillageMove(
       const exit = { x: end.x + forward(g, p) * 9.3, z: end.z };
       if ((exit.x - p.x) * forward(g, p) > 3 && !blocked(exit.x,exit.z,.7,g.map)) approach = exit;
     }
+    const waypoint = !stalled && !unsafe && p.suppression < .28 ? laneWaypoint(g, p, flag) : null;
+    if (waypoint) approach = waypoint;
     if (g.map.fort && !stalled && !unsafe && p.suppression < .28) {
       // Reserve most soldiers for the short galleries. A few approaching the
       // center or opposite flag use a side route, then resume ordinary cover play.
@@ -252,7 +276,7 @@ export function planVillageMove(
       if (at.y !== undefined ? bodyBlocked(at.x,at.z,at.y,.65,g.map) : blocked(at.x, at.z, 0.65, g.map)) continue;
       if (
         capture &&
-        !flagContains(g, { ...at, y: groundHeight(at.x, at.z, g.map) }, flag)
+        !flagContains(g, { ...at, y: at.y ?? groundHeight(at.x, at.z, g.map) }, flag)
       )
         continue;
       const candidateRoute = route(approach ?? p, at);
@@ -304,8 +328,15 @@ export function planVillageMove(
     }
   } else if (old) {
     old.revision = g.map.destruction!.revision;
-    if (old.approach && dist(p, old.approach) < 1.5) {
-      old.approach = null;
+    // Aboard an airship, drop a lane waypoint as soon as it is passed: a bot
+    // that reached the gallery by another stair must not walk back to it.
+    if (old.approach && g.map.zeppelin) {
+      const next = laneWaypoint(g, p, g.sectors[old.objective]);
+      if (next !== old.approach) { old.approach = next; p.path = []; }
+    }
+    if (old.approach && reached(p, old.approach)) {
+      // Carry on to the lane's next waypoint, if it has one.
+      old.approach = laneWaypoint(g, p, g.sectors[old.objective]);
       p.path = [];
     }
     const destination = old.approach ?? old.goal;

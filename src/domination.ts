@@ -13,7 +13,8 @@ export const dominationRules = {
 // corridor behind solid earth must not capture it through the wall.
 export function flagContains(g: Game, p: Vec & { y: number }, s: Vec): boolean {
   if (dist(p, s) > dominationRules.radius + 1e-6) return false;
-  const y = groundHeight(s.x, s.z, g.map);
+  // A flag on a deck carries its own height; elsewhere it stands on the ground.
+  const y = s.y ?? groundHeight(s.x, s.z, g.map);
   return (
     Math.abs(p.y - y) <= dominationRules.heightTolerance &&
     g.collision.ray(
