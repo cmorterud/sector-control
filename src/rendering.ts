@@ -2249,7 +2249,7 @@ export class Renderer implements CollisionWorld {
   }
   private buildAtmosphere() {
     const atmosphere = this.look.atmosphere!, root = this.joint("atmosphere", this.mapRoot);
-    const banks = mistBanks(this.map), sites = brazierSites(this.map);
+    const banks = mistBanks(this.map, atmosphere.fieldWidth), sites = brazierSites(this.map);
     const cloth = clothGeometry(clothScraps(this.map)), clothMesh = new pc.Mesh(this.app.graphicsDevice);
     clothMesh.setPositions(cloth.positions);
     clothMesh.setNormals(cloth.normals);
