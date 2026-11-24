@@ -42,6 +42,16 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     vignette: 0.36, exposure: 1.1, ambient: 1.9, farClip: 420,
     atmosphere: { fieldMist: 0.2, trenchMist: 0.16 },
   },
+  // A moonless, overcast night. The sky gives almost nothing and the dark
+  // closes in at fifteen to twenty meters; lamps, flares and bursts do the rest.
+  "night-raid": {
+    sun: { color: "#a9c0ea", intensity: 1.0, elevation: 48, azimuth: -40, shadowStrength: 0 },
+    sky: { zenith: "#2e3c59", horizon: "#141b26", ground: "#10151c", clouds: 0.7, cloud: "#222c3e", glow: "#202a40" },
+    fog: { start: 3, end: 24 },
+    grade: { brightness: 0, contrast: 1.04, saturation: 0.55, tint: "#c8d8f6" },
+    vignette: 0.45, exposure: 1.4, ambient: 3.6, farClip: 420,
+    atmosphere: { fieldMist: 0.05, trenchMist: 0.05 },
+  },
   // Overcast late morning; green-grey haze between the trees.
   verdun: {
     sun: { color: "#e8ebe3", intensity: 0.9, elevation: 42, azimuth: -20, shadowStrength: 0.65 },

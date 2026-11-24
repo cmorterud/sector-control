@@ -1,4 +1,4 @@
-import { groundHeight, type MapDefinition, type Vec } from "./map";
+import { groundHeight, trenchGround, type MapDefinition, type Vec } from "./map";
 import { lookNoise, surfacePixels } from "./battlefield-look";
 import { woodlandDensity } from "./verdun-forest";
 import { villagePaving,villageYardSurface } from "./village-outdoors";
@@ -110,7 +110,7 @@ export function groundField(map: MapDefinition, x: number, z: number) {
   // The Trench front is churned: no-man's land between the front lines is
   // bare, wet earth, and the ground within a few metres of any trench is
   // trodden mud. Grass survives only on the rear ground.
-  const churn = map.id === "trenches" ? trenchChurn(map, x, z) : 0;
+  const churn = trenchGround(map) ? trenchChurn(map, x, z) : 0;
   if (churn > 0) {
     wet = Math.max(wet, churn * (0.4 + lookNoise(x * 0.13 + 5, z * 0.13 - 8) * 0.55));
     return { wet, dry: dry * (1 - churn * 0.8), grass: grass * (1 - churn), wear: Math.max(wear, churn * 0.55), litter, gravel, garden };
@@ -199,7 +199,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
         0.83 + dry * 0.18 - wet * 0.25 - wear * 0.12 + detail * 0.52;
       const i = (row * size + col) * 4;
       // Trench front grass is winter-dead straw rather than green.
-      const tint = map.id === "trenches" ? [0.05, 0.03, 0.17] : [0.15, -0.015, 0.105];
+      const tint = trenchGround(map) ? [0.05, 0.03, 0.17] : [0.15, -0.015, 0.105];
       diffuse.set(
         [
           clamp(shade - grass * tint[0]) * 255,

@@ -12,6 +12,7 @@ import { architecturePixels, architecturalTextures, cisternWaterNormals, type Ar
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
 import { brazierSites, clothGeometry, clothScraps, mistBanks, type MistBank } from "./atmosphere";
+import { nightLamps, tapeBoxes } from "./night";
 import { BillboardBuffer } from "./billboards";
 import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
@@ -350,7 +351,8 @@ export class Renderer implements CollisionWorld {
       intensity: look.sun.intensity,
       shadowIntensity: look.sun.shadowStrength,
       shadowType: pc.SHADOW_PCF3,
-      castShadows: true,
+      // A night sky casts no shadows, which also spares the shadow pass.
+      castShadows: look.sun.shadowStrength > 0,
       shadowBias: 0.25,
       normalOffsetBias: 0.05,
     });
@@ -504,6 +506,7 @@ export class Renderer implements CollisionWorld {
       this.buildNoMansLand();
     }
     if (this.look.atmosphere) this.buildAtmosphere();
+    if (map.night) this.buildNight();
     for (const [x, z, w, d] of map.coast || map.backdrop ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
@@ -2017,6 +2020,31 @@ export class Renderer implements CollisionWorld {
     return material;
   }
   // Parados sandbags, props, dugouts, signs and sump water along the lines.
+  // What burns after dark: a light at every lamp the darkness rule knows about
+  // (src/night.ts), a shaded lamp on each flagpole, and tape through the wire lanes.
+  private buildNight() {
+    const root = this.joint("night lamps", this.mapRoot);
+    const glow = { brazier: ["#ff8a3a", 2.0], lantern: ["#ffc878", 0.9], flag: ["#ffdca8", 0.8] } as const;
+    for (const lamp of nightLamps(this.map)) {
+      const [tint, intensity] = glow[lamp.kind];
+      // Useful light reaches the lamp's radius; the falloff runs on a little past it.
+      this.joint(`${lamp.kind} light`, root, lamp.x, lamp.y + 0.25, lamp.z)
+        .addComponent("light", { type: "omni", color: color(tint), intensity, range: lamp.radius * 1.35, castShadows: false });
+      if (lamp.kind === "flag") {
+        this.cube("flag lamp", lamp.x + 0.09, lamp.y, lamp.z, 0.1, 0.15, 0.1, "#000000", false, root).render!.material = this.glowMaterial("#ffd9a0");
+        this.cube("flag lamp cap", lamp.x + 0.09, lamp.y + 0.1, lamp.z, 0.13, 0.04, 0.13, "#2a2621", false, root);
+      }
+    }
+    const tape = backdropBoxMesh(tapeBoxes(this.map)), mesh = new pc.Mesh(this.app.graphicsDevice);
+    mesh.setPositions(tape.positions);
+    mesh.setNormals(tape.normals);
+    mesh.setColors(tape.colors);
+    mesh.setIndices(tape.indices);
+    mesh.update(pc.PRIMITIVE_TRIANGLES);
+    const lanes = this.joint("lane tape", root), instance = new pc.MeshInstance(mesh, this.paintedMaterial(), lanes);
+    instance.castShadow = false;
+    lanes.addComponent("render", { meshInstances: [instance], castShadows: false });
+  }
   private buildTrenchDressing() {
     const device = this.app.graphicsDevice, root = this.joint("trench dressing", this.mapRoot);
     const props = trenchProps(this.map, brazierSites(this.map));
