@@ -133,10 +133,25 @@ const contents: Box[] = [
   furnish("crate-yard-east", 4.2, 16.2, 2.1, 1.15, .9),
   { id: "fort-cistern-barricade", x: -.8, z: 1.45, w: 2.8, d: .48, h: 1.02, kind: "wood", maxHp: 76,
     architecture: { building: "fort", part: "detail", level: 0, feature: "barricade" } },
+  // Its twin across the flag. Everything added to the Cistern is point-symmetric
+  // about the room's center, like its two gallery doors.
+  { id: "fort-cistern-barricade-east", x: .8, z: -1.45, w: 2.8, d: .48, h: 1.02, kind: "wood", maxHp: 76,
+    architecture: { building: "fort", part: "detail", level: 0, feature: "barricade" } },
+  // Low cover off each end wall; the northern one stands on the walkway.
+  furnish("crate-cistern-south", -2.6, -5.6, 1.6, 1, 1.05),
+  { ...furnish("crate-cistern-north", 2.6, 5.6, 1.6, 1, 1.05), baseY: .18 },
 ];
+// Stone piers carry the Cistern's vault two paces inside each gallery door, on
+// the line between the two doors. Nobody walking in is in view of the far door,
+// and there is hard cover within a step. The room is point-symmetric about its
+// center, so each team gets the same pier.
+const cisternPiers = [{ x: -5.6, z: 2.2 }, { x: 5.6, z: -2.2 }].map(({ x, z }, i) => {
+  const room = rooms.find(r => r.id === "cistern")!, top = fortVaultHeight((z - room.z0) / (room.z1 - room.z0));
+  return box(`fort-pier-${i}`, { x0: x - .5, x1: x + .5, z0: z - .5, z1: z + .5 }, 0, top + .1);
+});
 const flags = [
   { id: "A", name: "Barracks", x: -29.5, z: 0, home: "blue" },
-  { id: "B", name: "Cistern", x: 1, z: -1 },
+  { id: "B", name: "Cistern", x: 0, z: 0 },
   { id: "C", name: "East Casemate", x: 29.5, z: 0, home: "red" },
 ] satisfies MapDefinition["sectors"];
 
@@ -158,5 +173,5 @@ export const fortVauxMap: MapDefinition = {
   })),
   buildings: rooms.map(room => ({ id: room.id, name: room.name, ...center(room), w: room.x1 - room.x0,
     d: room.z1 - room.z0, baseY: 0, stories: 1, posts: [] })),
-  boxes: [...solid, ...ceilings, ...vaultColliders, ...walkway, ...contents],
+  boxes: [...solid, ...ceilings, ...vaultColliders, ...walkway, ...cisternPiers, ...contents],
 };

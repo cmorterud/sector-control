@@ -94,7 +94,7 @@ it("does not issue damage feedback for zero damage or count redeploy as an enemy
 it("reports real bayonet and butt strikes with their correct cause",()=>{
   for(const bayonet of [true,false]) {
     const g=scene(),p=g.players[0],v=g.players[5];
-    Object.assign(p,{x:0,z:8,faction:"british"});if(bayonet)equipLoadout(p,"rifleman",false);
+    Object.assign(p,{x:0,z:8,faction:"british"});if(bayonet)equipLoadout(p,"rifleman");
     Object.assign(v,{x:0,z:6.9,hp:40});g.step({...idle(),melee:true});
     for(let n=0;n<12&&v.hp>0;n++)g.step(idle());
     expect(v.lastDeath?.kind).toBe("melee");expect(v.lastDeath?.weapon).toBe(bayonet?"Bayonet":"Rifle butt");

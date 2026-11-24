@@ -3,7 +3,7 @@ import { artilleryTargetReason, botArtilleryTarget } from "./artillery";
 import { footSurface } from "./battlefield";
 import { grenadeExplosionProfile } from "./destruction";
 import { flagContains } from "./domination";
-import { fortVauxMap, inFortRect } from "./fort-vaux-map";
+import { fortVauxMap, fortVaultHeight, inFortRect } from "./fort-vaux-map";
 import { bodyBlocked, supportHeight, walkSegment } from "./map";
 import { Game, TestCollision, botCommand, idle, pathfind, resolveTeamSize } from "./simulation";
 import { planVillageMove } from "./village-tactics";
@@ -138,5 +138,43 @@ it("sends service and yard flankers round the Cistern for both teams", () => {
       expect(p.path.length).toBeGreaterThan(0);
       expect(crossesCistern(p.path)).toBe(false);
     }
+  }
+});
+
+it("gives each gallery door of the Cistern a pier and matching cover", () => {
+  const room = fortVauxMap.fort!.rooms.find(r => r.id === "cistern")!;
+  const flag = fortVauxMap.sectors.find(s => s.id === "B")!;
+  expect(flag).toMatchObject({ x: 0, z: 0 });
+  const added = fortVauxMap.boxes.filter(b => /^fort-(pier-|cistern-barricade|crate-cistern-)/.test(b.id ?? ""));
+  expect(added.map(b => b.id).sort()).toEqual(["fort-cistern-barricade", "fort-cistern-barricade-east",
+    "fort-crate-cistern-north", "fort-crate-cistern-south", "fort-pier-0", "fort-pier-1"]);
+  // Whatever one team finds on its side, the other finds mirrored through the flag.
+  for (const b of added) {
+    expect(added.some(q => q !== b && Math.abs(q.x + b.x) < 1e-9 && Math.abs(q.z + b.z) < 1e-9 && q.w === b.w && q.d === b.d && q.h === b.h),
+      `${b.id} has a twin`).toBe(true);
+    expect(inFortRect(b, room)).toBe(true);
+  }
+  const piers = added.filter(b => b.id!.startsWith("fort-pier-"));
+  for (const pier of piers) {
+    // Stone from the floor into the vault, a step or two inside its door.
+    expect(pier.kind).toBe("bunker");
+    expect((pier.baseY ?? 0) + pier.h).toBeGreaterThanOrEqual(fortVaultHeight((pier.z - room.z0) / (room.z1 - room.z0)));
+    const door = { x: Math.sign(pier.x) * 8, z: Math.sign(pier.x) * -3 };
+    expect(Math.hypot(pier.x - door.x, pier.z - door.z)).toBeLessThan(3);
+  }
+  // Nobody stepping through one gallery door is in view of the other.
+  const collision = new TestCollision(fortVauxMap);
+  for (const y of [.6, 1.25, 1.7]) {
+    expect(collision.ray({ x: -8.5, y, z: 3 }, { x: 8.5, y, z: -3 })).toBeLessThan(1);
+  }
+  // The doors stay open: a soldier can walk in and round either side of the pier to the flag.
+  for (const side of [-1, 1]) {
+    const door = { x: side * 9.5, z: side * -3 };
+    for (const beside of [{ x: side * 5.6, z: side * -4.2 }, { x: side * 5.6, z: side * -.4 }]) {
+      const path = pathfind(door, beside, fortVauxMap);
+      expect(path.length, `past the pier at ${beside.x}, ${beside.z}`).toBeGreaterThan(0);
+      expect(path.every(q => Math.abs(q.x) < 12)).toBe(true);
+    }
+    expect(pathfind(door, flag, fortVauxMap).length).toBeGreaterThan(0);
   }
 });

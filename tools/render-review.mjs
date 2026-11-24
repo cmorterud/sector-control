@@ -164,6 +164,16 @@ try {
   if(visualOnly)continue;
   const advanced=await client.evaluate(`window.sectorRenderReview.advance(900)`);
   console.log(JSON.stringify({map,mode,stage:'battle-advanced',...advanced}));
+  // Each flag's cloth must wear its state's dye: one dye per state, and no two states alike.
+  // Builds from before the cloth flags have no such report and are skipped.
+  const flags=(await client.evaluate(`window.sectorRenderReview.flags?.()??[]`)).filter(flag=>flag.cloth);
+  const dyes=new Map();
+  for(const flag of flags){
+   if(dyes.has(flag.state)&&dyes.get(flag.state)!==flag.cloth)throw Error(`Flag ${flag.id} is ${flag.state} but dyed ${flag.cloth}, not ${dyes.get(flag.state)}`);
+   dyes.set(flag.state,flag.cloth);
+  }
+  if(new Set(dyes.values()).size!==dyes.size)throw Error('Flags in different states share a dye: '+JSON.stringify([...dyes]));
+  if(flags.length)console.log(JSON.stringify({map,mode,flags:[...dyes]}));
   const before=await client.evaluate(mode==='ground'?`window.sectorRenderReview.survey(false).frames`:`window.sectorRenderReview.state().frames`);
   await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   await client.evaluate(`window.sectorRenderReview.finish()`);

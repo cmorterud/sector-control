@@ -91,7 +91,7 @@ export class TrainingSession {
   }
   begin(g:Game){
     this.active.clear();this.shots.clear();this.previous=undefined;
-    const s=this.station,p=g.players[0];p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue");this.place(g,p,s);
+    const s=this.station,p=g.players[0];p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue"?"industrial":"service");this.place(g,p,s);
     const combat=this.lesson>=6;
     for(const q of g.players.slice(1)){q.hp=0;q.respawnAt=Infinity;}
     for(let n=0;n<(this.lesson===0||this.lesson===4||this.lesson===5?0:3);n++){
@@ -146,7 +146,7 @@ export class TrainingSession {
     this.views.add(!!input.firstPerson);if(this.views.size===2)done.add("view");
     for(const e of events){
       if(e.type==="respawn"&&this.active.has(e.actor)){const q=g.players[e.actor];this.place(g,q,this.active.get(e.actor)!,q.team==="red"?Math.PI:0);q.protectedUntil=0;}
-      if(e.type==="respawn"&&e.actor===0){p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue");this.place(g,p,this.station);}
+      if(e.type==="respawn"&&e.actor===0){p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue"?"industrial":"service");this.place(g,p,this.station);}
       if(e.type==="stance"&&e.actor===0&&e.crouched)done.add("crouch");
       if(e.type==="hop"&&e.actor===0&&e.phase==="land")done.add("hop");
       if(e.type==="mantle"&&e.actor===0&&e.phase==="end")done.add("mantle");

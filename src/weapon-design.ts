@@ -58,9 +58,10 @@ const rifleAction = (straight: boolean, knob: V): RiflePart[] => [
   part("bolt knob", "knob", knob, [.041, .041, .041]),
   round("cocking piece", [-.05, .005, .15], [.06, .075, .06]),
 ];
-function rifle(family: string): WeaponDesign {
+// A carbine is its rifle with 18 cm off the barrel and no cleaning rod under it.
+function rifle(family: string, carbine = false): WeaponDesign {
   const smle = family === "smle", berthier = family === "berthier", lebel = family === "lebel";
-  const muzzle = smle ? -.7 : berthier ? -.79 : lebel ? -.8 : -.78;
+  const muzzle = (smle ? -.7 : berthier ? -.79 : lebel ? -.8 : -.78) + (carbine ? .18 : 0);
   const grip: V = smle ? [.105, -.055, 0] : [.115, 0, 0];
   const receiver = round("receiver", [0, .025, .055], [smle ? .075 : .068, .29, .075]);
   const fit = furniture[family], rearBand = band(...fit.rear), frontBand = band(...fit.front);
@@ -71,7 +72,7 @@ function rifle(family: string): WeaponDesign {
     part("upper handguard", "handguard", [0, .025, smle ? -.3 : -.23], [smle ? .08 : .065, smle ? .49 : .37, .045], "walnut", [90, 0, 0]),
     guard(), ...rearBand, ...frontBand,
     box("ejection port", [.029, .058, .035], [.018, .018, .15], "dark"),
-    round("cleaning rod", [0, -.035, -.53], [.007, .36, .007]),
+    ...(carbine ? [] : [round("cleaning rod", [0, -.035, -.53], [.007, .36, .007])]),
     // The top of the loop is sunk 3 mm into the underside of the stock.
     part("sling swivel", "sling", [0, fit.swivel - .012, -.38], [.009, .03, .05]),
     part("buttplate", "buttplate", [0, -.09, .54], [.1, .015, .17], "steel", [90, 0, 0]),
@@ -123,12 +124,12 @@ function rifle(family: string): WeaponDesign {
     box("barrel band spring", [-frontBand[0].size[0] * .43, frontBand[0].at[1], frontBand[0].at[2] + .014], [.011, .022, .045]),
   ];
   return {
-    family, kind: "serviceRifle", parts, viewParts, actionParts: rifleAction(!smle, grip),
+    family: carbine ? `${family}Carbine` : family, kind: "serviceRifle", parts, viewParts, actionParts: rifleAction(!smle, grip),
     magazine: box("weapon magazine", [0, smle ? -.115 : berthier ? -.12 : -.08, .09], [smle ? .09 : .067, smle ? .13 : berthier ? .15 : .025, smle ? .18 : .13]),
     reload: lebel ? "tube" : "clip", muzzle, front: muzzle + .055, rear: smle ? -.17 : -.13,
     feed: lebel ? [-.045, .09, -.015] : [.015, .15, .035], grip: [-.035, -.06, -.17],
     actionOrigin: [.05, .045, .13], boltGrip: grip, lift: smle ? 55 : 75, travel: smle ? .1 : .14,
-    soundPitch: smle ? 1.12 : berthier ? 1.03 : lebel ? .9 : .97,
+    soundPitch: (smle ? 1.12 : berthier ? 1.03 : lebel ? .9 : .97) + (carbine ? .05 : 0),
   };
 }
 function support(family: string): WeaponDesign {
@@ -202,11 +203,13 @@ function pistol(family: string): WeaponDesign {
 }
 const designs = {
   smle: rifle("smle"), gewehr: rifle("gewehr"), berthier: rifle("berthier"), lebel: rifle("lebel"),
+  gewehrCarbine: rifle("gewehr", true), berthierCarbine: rifle("berthier", true),
   lewis: support("lewis"), mg08: support("mg08"), chauchat: support("chauchat"),
   webley: pistol("webley"), luger: pistol("luger"), ruby: pistol("ruby"),
 };
 const ids: Record<string, keyof typeof designs> = {
   "SMLE Mk III":"smle", "Scoped SMLE":"smle", "Gewehr 98":"gewehr", "Scoped Gewehr 98":"gewehr",
+  "Karabiner 98AZ":"gewehrCarbine", "Berthier Mle 1892 M16":"berthierCarbine",
   "Berthier Mle 1916":"berthier", "Scoped Lebel":"lebel", "Lewis Mk I":"lewis", "MG 08/15":"mg08", "Chauchat":"chauchat",
   "Webley Mk VI":"webley", "P08":"luger", "P08 Luger":"luger", "Ruby":"ruby",
 };
