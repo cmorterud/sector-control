@@ -697,6 +697,22 @@ a.armory-link:hover { background: #3f5856; }
   font-size: 18px;
   margin: 0 0 8px;
 }
+#tactical-map .map-mode {
+  align-self: flex-start;
+  margin: 0 0 0.5rem;
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+#tactical-map .map-mode[aria-pressed="true"] {
+  background: rgba(233, 244, 214, 0.22);
+  border-color: #e9f4d6;
+}
 #tactical-map p {
   font-size: 12px;
   margin: 8px 0 14px;

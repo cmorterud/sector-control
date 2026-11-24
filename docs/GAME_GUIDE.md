@@ -108,6 +108,25 @@ Choose **Night raid** in the start menu or open `?map=night-raid`. It is Trench 
 - **Steer by the lamps.** Lanterns hang at the dugouts and along the trench walls, and each flag has a lamp on its pole. They are shaded: enough to walk toward, too little to be shot by.
 - **Follow the tape.** Each side has pegged two lines of white tape through the lanes it left in its own wire.
 
+### Flares
+
+Open the tactical map and press **F** to switch it from a fire mission to a flare, then choose a sector as you would for artillery.
+
+- A flare bursts 42 m up three seconds after the call, sinks on its parachute for 25 seconds, and lights the ground for about 45 m around it. The wind carries it along the front.
+- It has its own 20-second cooldown. Calling a flare does not delay a fire mission, and a fire mission does not delay a flare. The HUD shows both.
+- Everyone under a flare can be seen from across the field: you, your side, and the enemy.
+- Bots send flares over enemies they hear firing in the dark, and now and then over the ground in front of their line.
+- At night a bot spotter can only call artillery onto ground it can see, so flares come before barrages.
+
+`src/flares.ts` holds the rules; its light feeds the same `sightLimit`.
+
+### Bursts and muzzle flash
+
+- **A burst shows the ground around it.** For under half a second a shell lights about 36 m and a grenade about 28 m. A barrage strobes no-man's land, and anyone caught in a flash can be glimpsed from across the field.
+- **Firing gives you away.** For a second after a shot, the shooter can be seen from up to 60 m.
+- **Craters glow.** A fresh crater's embers burn for twenty seconds. They mark where a shell fell; they do not light anyone.
+- Smoke and dust are dark at night unless something lights them.
+
 The rule lives in `src/night.ts`: `sightLimit(map, target)` is 15 m in the dark and rises to 90 m beside an open fire. The renderer places a light at every lamp the rule lists, so what you see and what a bot sees agree.
 
 ## Village front prototype

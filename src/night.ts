@@ -6,6 +6,13 @@ import { groundHeight, type MapDefinition, type Vec } from "./map";
 import { brazierSites } from "./atmosphere";
 import { dugouts, trenchProps } from "./trench-dressing";
 import type { BackdropBox } from "./backdrop";
+import { flareLight, type FlareState } from "./flares";
+
+// A shell or grenade that has just gone off, and how far its flash carries.
+export interface Burst extends Vec { tick: number; radius: number }
+// Enough of a match to ask about light: its map and, when it has them, its
+// flares and recent bursts.
+export type NightScene = { map: MapDefinition; tick?: number; flares?: FlareState; bursts?: Burst[] };
 
 export type LampKind = "brazier" | "lantern" | "flag";
 // `reveals` is whether a soldier in this lamp's light can be seen from afar.
@@ -18,6 +25,11 @@ export const nightRules = {
   reveals: { brazier: true, lantern: false, flag: false } as Record<LampKind, boolean>,
   // A fully lit soldier is seen from this far, which is past any rifle fight here.
   litSight: 90,
+  // A burst lights the ground around it for this long: a glimpse, not a view.
+  burstTicks: 12,
+  // Firing gives a soldier away for this long, out to this distance.
+  muzzleTicks: 30,
+  muzzleSight: 60,
 };
 
 const lampCache = new WeakMap<object, Lamp[]>();
@@ -43,10 +55,17 @@ export function nightLamps(map: MapDefinition): Lamp[] {
 }
 
 // How brightly a point is lit for anyone watching from a distance, from 0
-// (dark) to 1: full at an open fire, fading to nothing at its radius. Flares
-// and bursts will add their light here.
-export function lightAt(map: MapDefinition, p: Vec): number {
-  let light = 0;
+// (dark) to 1: full at an open fire, fading to nothing at its radius, and
+// whatever a burning flare throws down. Bursts will add their light here.
+export function lightAt(scene: NightScene, p: Vec): number {
+  const { map } = scene;
+  const tick = scene.tick ?? 0;
+  let light = scene.flares ? flareLight({ tick, flares: scene.flares }, p) : 0;
+  for (const burst of scene.bursts ?? []) {
+    const age = tick - burst.tick, d = Math.hypot(p.x - burst.x, p.z - burst.z);
+    if (age >= 0 && age < nightRules.burstTicks && d < burst.radius)
+      light = Math.max(light, (1 - age / nightRules.burstTicks) * (1 - (d / burst.radius) ** 2));
+  }
   for (const lamp of nightLamps(map)) {
     if (!lamp.reveals) continue;
     const d = Math.hypot(p.x - lamp.x, p.z - lamp.z);
@@ -56,10 +75,16 @@ export function lightAt(map: MapDefinition, p: Vec): number {
 }
 
 // The farthest a soldier standing at `target` can be seen from. No limit by day.
-export function sightLimit(map: MapDefinition, target: Vec): number {
+// A soldier who has just fired has shown where they are by their muzzle flash.
+export function sightLimit(scene: NightScene, target: Vec & { lastShotAt?: number }): number {
+  const { map } = scene;
   if (!map.night) return Infinity;
-  return map.night.sight + (nightRules.litSight - map.night.sight) * lightAt(map, target);
+  const lit = map.night.sight + (nightRules.litSight - map.night.sight) * lightAt(scene, target);
+  const fired = target.lastShotAt !== undefined && (scene.tick ?? 0) - target.lastShotAt < nightRules.muzzleTicks;
+  return fired ? Math.max(lit, nightRules.muzzleSight) : lit;
 }
+// How far a blast's flash carries, from the size of the blast.
+export const burstRadius = (blastRadius: number) => Math.max(14, Math.min(36, blastRadius * 4));
 
 // Where each side left a lane through its own wire belt: the gaps between
 // consecutive belt segments. Raiders marked such lanes with white tape.

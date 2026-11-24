@@ -17,6 +17,10 @@ export interface MapLook {
   farClip?: number;
   // Ground mist, brazier and crater smoke, cloth on the wire (src/atmosphere.ts).
   atmosphere?: Atmosphere;
+  // Night maps: what the eye makes out unaided. A soft light that travels with
+  // the viewer and reaches about as far as the map's sight rule, so distant
+  // ground is dark until a lamp, a flare or a burst lights it.
+  nightVision?: { color: string; intensity: number; range: number };
 }
 
 export const mapLooks: Record<MapDefinition["id"], MapLook> = {
@@ -42,15 +46,17 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     vignette: 0.36, exposure: 1.1, ambient: 1.9, farClip: 420,
     atmosphere: { fieldMist: 0.2, trenchMist: 0.16 },
   },
-  // A moonless, overcast night. The sky gives almost nothing and the dark
-  // closes in at fifteen to twenty meters; lamps, flares and bursts do the rest.
+  // A moonless, overcast night. The sky gives almost nothing: unlit ground is
+  // black beyond what the eye makes out at about fifteen meters. Fog stays
+  // far, so ground lit by a lamp, a flare or a burst shows at any distance.
   "night-raid": {
-    sun: { color: "#a9c0ea", intensity: 1.0, elevation: 48, azimuth: -40, shadowStrength: 0 },
-    sky: { zenith: "#2e3c59", horizon: "#141b26", ground: "#10151c", clouds: 0.7, cloud: "#222c3e", glow: "#202a40" },
-    fog: { start: 3, end: 24 },
-    grade: { brightness: 0, contrast: 1.04, saturation: 0.55, tint: "#c8d8f6" },
-    vignette: 0.45, exposure: 1.4, ambient: 3.6, farClip: 420,
-    atmosphere: { fieldMist: 0.05, trenchMist: 0.05 },
+    sun: { color: "#a9c0ea", intensity: 0.16, elevation: 48, azimuth: -40, shadowStrength: 0 },
+    sky: { zenith: "#1c2536", horizon: "#0b0f15", ground: "#07090c", clouds: 0.7, cloud: "#161d2a", glow: "#141b28" },
+    fog: { start: 60, end: 260 },
+    grade: { brightness: 0, contrast: 1.04, saturation: 0.6, tint: "#c8d8f6" },
+    vignette: 0.45, exposure: 1.4, ambient: 1.0, farClip: 420,
+    atmosphere: { fieldMist: 0.03, trenchMist: 0.03 },
+    nightVision: { color: "#a9bfe6", intensity: 1.5, range: 21 },
   },
   // Overcast late morning; green-grey haze between the trees.
   verdun: {

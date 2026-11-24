@@ -12,7 +12,12 @@ import { architecturePixels, architecturalTextures, cisternWaterNormals, type Ar
 import { coastalGeometry, coastalGrass, coastalWaterNormals, coastalRules } from "./coastal-scenery";
 import { boundaryWireGeometry } from "./boundary-wire";
 import { brazierSites, clothGeometry, clothScraps, mistBanks, type MistBank } from "./atmosphere";
-import { nightLamps, tapeBoxes } from "./night";
+import { burstRadius, nightLamps, nightRules, tapeBoxes } from "./night";
+import { flareBrightness, flarePosition as starShellPosition, flareRules } from "./flares";
+
+// How bright a fresh flare's light is; tuned on a real GPU.
+const flareLightIntensity = 9;
+const burstLightIntensity = 16;
 import { BillboardBuffer } from "./billboards";
 import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
@@ -80,6 +85,8 @@ import {
   runtimeMap,
   type Destructible,
   type DestructionChange,
+  artilleryExplosionProfile,
+  grenadeExplosionProfile,
 } from "./destruction";
 import { TerrainGeometryCache, terrainPatchKeys, type TerrainGeometry } from "./terrain-geometry";
 import { scarRubble } from "./terrain-relief";
@@ -1887,11 +1894,11 @@ export class Renderer implements CollisionWorld {
     });
     const smoke = this.billboards("distant smoke", life, backdropSmoke.length * 12, "#86888a", 0.42);
     const flashes = Array.from({ length: 3 }, () => {
-      const glowMaterial = this.dustMaterial("#ffd08a"), plumeMaterial = this.dustMaterial("#4d4740");
+      const glowMaterial = this.dustMaterial("#ffd08a", true), plumeMaterial = this.dustMaterial("#4d4740");
       return { glow: shape("distant burst", life, "plane", glowMaterial, [1, 1, 1]), plume: shape("distant burst plume", life, "plane", plumeMaterial, [1, 1, 1]), glowMaterial, plumeMaterial };
     });
     const flares = Array.from({ length: 2 }, () => {
-      const material = this.dustMaterial("#f2ffe6");
+      const material = this.dustMaterial("#f2ffe6", true);
       return { glow: shape("distant flare", life, "plane", material, [1, 1, 1]), material };
     });
     this.backdrop = { life, balloons, smoke, flashes, flares };
@@ -2022,8 +2029,43 @@ export class Renderer implements CollisionWorld {
   // Parados sandbags, props, dugouts, signs and sump water along the lines.
   // What burns after dark: a light at every lamp the darkness rule knows about
   // (src/night.ts), a shaded lamp on each flagpole, and tape through the wire lanes.
+  private nightVision?: pc.Entity;
+  private flareRigs: { light: pc.Entity; core: pc.Entity; halo: pc.Entity }[] = [];
+  // The flash of the last few bursts, and the embers they leave in their craters.
+  private burstLights: { light: pc.Entity; bornAt: number; radius: number }[] = [];
+  private craterGlows: pc.Entity[] = [];
   private buildNight() {
     const root = this.joint("night lamps", this.mapRoot);
+    const vision = this.look.nightVision;
+    if (vision) {
+      this.nightVision = this.joint("night vision", this.app.root);
+      this.nightVision.addComponent("light", { type: "omni", color: color(vision.color), intensity: vision.intensity, range: vision.range, castShadows: false });
+    }
+    // Up to three flares burn as lights at once; any more are left dark.
+    this.flareRigs = Array.from({ length: 3 }, () => {
+      const light = this.joint("flare light", root);
+      light.addComponent("light", { type: "omni", color: color("#eaf4d6"), intensity: 0, range: 70, castShadows: false });
+      const quad = (name: string, hex: string) => {
+        const e = this.joint(name, root);
+        e.addComponent("render", { type: "plane", material: this.dustMaterial(hex, true), castShadows: false, receiveShadows: false });
+        return e;
+      };
+      const rig = { light, core: quad("flare", "#ffffff"), halo: quad("flare halo", "#dcefc6") };
+      rig.light.enabled = rig.core.enabled = rig.halo.enabled = false;
+      return rig;
+    });
+    this.burstLights = Array.from({ length: 3 }, () => {
+      const light = this.joint("burst light", root);
+      light.addComponent("light", { type: "omni", color: color("#ffd9a0"), intensity: 0, range: 40, castShadows: false });
+      light.enabled = false;
+      return { light, bornAt: -1e9, radius: 0 };
+    });
+    this.craterGlows = Array.from({ length: 6 }, () => {
+      const glow = this.joint("crater embers", root);
+      glow.addComponent("render", { type: "plane", material: this.dustMaterial("#ff6a20", true), castShadows: false, receiveShadows: false });
+      glow.enabled = false;
+      return glow;
+    });
     const glow = { brazier: ["#ff8a3a", 2.0], lantern: ["#ffc878", 0.9], flag: ["#ffdca8", 0.8] } as const;
     for (const lamp of nightLamps(this.map)) {
       const [tint, intensity] = glow[lamp.kind];
@@ -2211,6 +2253,49 @@ export class Renderer implements CollisionWorld {
     a.clothMesh.setPositions(a.cloth.positions);
     a.clothMesh.setNormals(a.cloth.normals);
     a.clothMesh.update(pc.PRIMITIVE_TRIANGLES, false);
+  }
+  // The viewer's own night sight follows the camera, and each burning flare
+  // carries a light down with it (src/flares.ts gives its place and strength).
+  private drawNight(g: Game, alpha: number) {
+    const eye = this.camera.getPosition(), tick = g.tick + alpha;
+    this.nightVision?.setPosition(eye.x, eye.y + 1.4, eye.z);
+    const burning = g.flares.flares
+      .map((flare) => ({ at: starShellPosition(flare, tick), strength: flareBrightness(flare, tick) }))
+      .filter((f): f is { at: NonNullable<ReturnType<typeof starShellPosition>>; strength: number } => !!f.at)
+      .sort((a, b) => Math.hypot(a.at.x - eye.x, a.at.z - eye.z) - Math.hypot(b.at.x - eye.x, b.at.z - eye.z));
+    this.flareRigs.forEach((rig, i) => {
+      const flare = burning[i];
+      rig.light.enabled = rig.core.enabled = rig.halo.enabled = !!flare;
+      if (!flare) return;
+      const { at, strength } = flare;
+      rig.light.setPosition(at.x, at.y, at.z);
+      rig.light.light!.intensity = flareLightIntensity * strength;
+      // Reach the edge of the lit circle from wherever it hangs, and no farther,
+      // so the ground a player sees lit is the ground the rule calls lit.
+      rig.light.light!.range = Math.hypot(at.y, flareRules.radius) + 6;
+      for (const [quad, size, opacity] of [[rig.core, 2.2, 1], [rig.halo, 15, 0.3]] as const) {
+        quad.setPosition(at.x, at.y, at.z);
+        this.faceCamera(quad);
+        quad.setLocalScale(size, 1, size);
+        quad.render!.meshInstances[0].setParameter("material_opacity", opacity * strength);
+      }
+    });
+    // A burst's flash lasts as long as the rule says it shows the ground.
+    for (const burst of this.burstLights) {
+      const age = tick - burst.bornAt;
+      burst.light.enabled = age >= 0 && age < nightRules.burstTicks;
+      if (burst.light.enabled) burst.light.light!.intensity = burstLightIntensity * (1 - age / nightRules.burstTicks) ** 2;
+    }
+    // Fresh craters glow for twenty seconds, sharing the slots of their smoke.
+    this.craterGlows.forEach((glow, i) => {
+      const slot = this.atmosphere?.smoulders[i], age = slot?.at ? (tick - slot.bornAt) / 30 : Infinity;
+      glow.enabled = age < 20;
+      if (!slot?.at || age >= 20) return;
+      glow.setPosition(slot.at.x, slot.at.y + 0.25, slot.at.z);
+      this.faceCamera(glow);
+      glow.setLocalScale(2.4, 1, 1.2);
+      glow.render!.meshInstances[0].setParameter("material_opacity", 0.55 * (1 - age / 20) * (0.85 + 0.15 * Math.sin(tick * 0.4 + i)));
+    });
   }
   private drawBackdrop(g: Game, alpha: number) {
     const b = this.backdrop;
@@ -2526,10 +2611,13 @@ export class Renderer implements CollisionWorld {
     }
     frame.update();
   }
-  private dustMaterial(hex: string) {
+  // Smoke and dust are drawn unlit. At night that would make them glow, so
+  // unless a cloud is itself a light (`glow`), it is dimmed to the dark.
+  private dustMaterial(hex: string, glow = false) {
     const m = new pc.StandardMaterial();
     m.diffuse = color("#000000");
     m.emissive = color(hex);
+    if (this.map.night && !glow) m.emissiveIntensity = 0.14;
     const texture = this.texture("dust", 128, 128, () => dustPixels(), false);
     m.emissiveMap = texture;
     m.opacityMap = texture;
@@ -4628,6 +4716,7 @@ export class Renderer implements CollisionWorld {
     this.drawEnvironmentEffects(dt);
     this.drawBackdrop(g, alpha);
     this.drawAtmosphere(g, alpha);
+    if (this.map.night) this.drawNight(g, alpha);
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {
       fx.life -= dt;
@@ -5064,6 +5153,17 @@ export class Renderer implements CollisionWorld {
       }
     }
     if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") this.blastCasualties(e);
+    // Burst lights are built only on night maps.
+    if (this.burstLights?.length && (e.type === "grenadeExplosion" || e.type === "artilleryImpact")) {
+      // Light the flash from the slot that has been dark longest.
+      const burst = this.burstLights.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b));
+      {
+        burst.bornAt = e.tick;
+        burst.radius = burstRadius(e.type === "artilleryImpact" ? artilleryExplosionProfile.radius : grenadeExplosionProfile.radius);
+        burst.light.setPosition(e.at.x, e.at.y + 2.5, e.at.z);
+        burst.light.light!.range = burst.radius * 1.25;
+      }
+    }
     if (e.type === "destruction") {
       for (const [i, id] of (e.change.collapses ?? []).slice(0, 4).entries()) {
         const b = this.map.destruction!.objects[id].original;
