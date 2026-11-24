@@ -19,6 +19,7 @@ import {
 } from "./destruction";
 import { artillerySector } from "./artillery-sectors";
 import { sightLimit } from "./night";
+import { gasThreatens } from "./gas";
 
 export const ambientArtilleryRules = {
   minInterval: 8 * 30,
@@ -544,6 +545,8 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
     const safe = candidates.filter(
       (v) =>
         beyondPlayArea(v.x, v.z, g.map) < -1.5 &&
+        // Nor into gas.
+        !gasThreatens(g, v, 2) &&
         !blocked(v.x, v.z, 0.6, g.map) &&
         (dist(v, threat!.at) >= 10 ||
           groundHeight(v.x, v.z, g.map) < groundHeight(p.x, p.z, g.map) - 0.3 ||

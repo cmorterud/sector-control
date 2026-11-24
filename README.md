@@ -15,6 +15,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Lived-in trenches.** On Trench front, sandbags line the parados, British stretches mix timber, corrugated iron and sandbag revetments while German ones use timber and wicker, and dugout entrances glow with lanterns. Painted boards name each trench and point to its flag; crates, rifle racks, stretchers, braziers, periscopes, field telephone cable and standing water fill the lines. All of it stays off the firing steps and adds no cover. Verdun's narrower trenches get the same treatment, with French stretches revetted mostly in woven hurdles and boards naming trenches such as TR. DES SAPINS and BOYAU DU RAVIN.
 - **Wired no-man's land.** On Trench front, each side has a barbed-wire belt in front of its parapet, with gaps at its flags and the center. Your own side knows the lanes through its wire; the enemy's slows you to a walk and rattles as you push through. Shells and grenades cut it. The old craters hold standing water, and the debris of earlier fighting lies between the lines. The ground there is churned to bare, wet earth; grass, winter-dead and straw-colored, survives only behind the lines. Verdun's front lines are wired too, with gaps wherever a sap, route or exit leaves them; water stands in its shell scars, and the open ground and trench floors are churned to mud while leaf litter survives under the trees.
 - **A wired battlefield edge.** On Trench front and Verdun sector, a belt of barbed wire marks the edge of the sector and slows you to a walk. Stay beyond it for five seconds and the guns walk a salvo onto you. On Trench front the trenches run on past the wire behind sandbag blocks, and the front continues to the horizon: parapets and wire, broken woods, a shelled village and château, observation balloons, smoke columns, and distant shellfire and flares. On Verdun the woods carry on past the wire and out over hill country, with a ruined village behind the French line and a fort on the ridge behind the German one.
+- **Creeping gas (optional).** On Trench front and Verdun sector, tick **Creeping gas** in the briefing (or add `?gas=1`). From 1:30, gas rolls in from the sector edges in three stages, each announced 30 seconds ahead with a gong and the next safe line on the minimap and tactical map, until a final area around the flags remains. Gas burns 8 HP a second, credited to no one. Press **M** to pull on your gas mask (a second, both hands): masked, it burns only 1.5 HP a second, you see through two eyepieces and hear yourself breathe. Once the gas reaches a spawn, that side deploys at the rear of its own safe ground instead. Bots mask up, walk out of the gas and route around it. The tactical map adds gas shells: a low cloud that lingers 25 seconds and drifts along the front, on its own cooldown. Off by default.
 - **Destructible battlefields.** Grenades and artillery crater the ground, breach trench banks, fell trees and knock holes in walls, floors and roofs. Buildings collapse when they lose enough support, and bots reroute around the damage.
 - **Furnished village interiors.** Limewashed walls, shutters, lanterns, signs, finished ceilings, exposed joists and distinct rooms give the manor, school, inn, farmhouse and workshops their own character. Dining chairs and tableware add domestic detail. Damage reveals brick and splintered timber; collapsed houses leave irregular low rubble.
 - **Village outdoor spaces.** Cobbled courts, gravel workyards, vegetable gardens and an orchard connect the houses. Low destructible furniture, barrel clusters, carts and supply positions break up the approaches while roads and doorways stay open.
@@ -63,7 +64,8 @@ All keys can be remapped from **Controls** in the briefing or pause menu.
 | Melee or bayonet | V |
 | Interact (mount / dismount or pick up a flame kit) | E |
 | Preview or pack an emplacement | B |
-| Tactical map and artillery | Q |
+| Tactical map and artillery (F on the map switches to flares or gas shells where offered) | Q |
+| Gas mask on / off (gas matches) | M |
 | Switch first / third person | T |
 | Scoreboard | Hold Tab |
 | Pause | Escape |
@@ -85,7 +87,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
+The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality, `duration=30` shortens the match to thirty seconds and `gas=1` turns on creeping gas on Trench front and Verdun sector.
 
 ## Continuous integration and publishing
 

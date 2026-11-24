@@ -21,6 +21,8 @@ import { flareBrightness, flarePosition as starShellPosition, flareRules } from 
 const flareLightIntensity = 9;
 const burstLightIntensity = 16;
 import { BillboardBuffer } from "./billboards";
+import { GasView } from "./gas-view";
+import { maskProgress } from "./gas";
 import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
 import { backdropBoxMesh, backdropGround, backdropHeight, backdropLife, backdropScenery, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
@@ -161,6 +163,9 @@ type SoldierRig = {
   weight?: MovementWeight;
   feet?: (FootContact|undefined)[];
   design?: ReturnType<typeof weaponDesign>;
+  // Shown, and pulled up over the face, while a gas mask goes on (src/gas.ts).
+  gasMask?: pc.Entity;
+  maskShown?: number;
   body: pc.Entity;
   hips: pc.Entity;
   upper: pc.Entity;
@@ -313,6 +318,8 @@ export class Renderer implements CollisionWorld {
     materials: pc.StandardMaterial[];
   }[] = [];
   private mapRoot!: pc.Entity;
+  // Built the first time a match with gas is drawn.
+  private gasView?: GasView;
   private fortRoof?: pc.Entity;
   private worldParent?: pc.Entity;
   private terrainPhysics = new TerrainPhysics();
@@ -2921,6 +2928,24 @@ export class Renderer implements CollisionWorld {
     e.tags.add(`model-near:hand-${side}-world`,`model-far:hand-${side}-far`,`hand-side:${side}`);
     return e;
   }
+  // Up from the chest over the face as it goes on; gone while it is off.
+  private poseGasMask(rig: SoldierRig, on: number) {
+    if (!rig.gasMask || rig.maskShown === on) return;
+    rig.maskShown = on;
+    const scale = on > 0 ? 0.75 + 0.25 * on : 0;
+    rig.gasMask.setLocalScale(scale, scale, scale);
+    rig.gasMask.setLocalPosition(0, -0.4 * (1 - on), -0.1 * (1 - on));
+  }
+  private createGasView() {
+    const root = this.joint("gas", this.mapRoot);
+    return new GasView({
+      map: this.map,
+      billboards: (name, capacity, hex, opacity) => this.billboards(name, root, capacity, hex, opacity),
+      begin: (batch) => this.beginBillboards(batch),
+      end: (batch) => this.endBillboards(batch as { buffer: BillboardBuffer; mesh: pc.Mesh }),
+      enable: (on) => { if (root.enabled !== on) root.enabled = on; },
+    });
+  }
   private applyModelDetail(p:Soldier,rig:SoldierRig) {
     const distance=this.people[p.id].getPosition().distance(this.camera.getPosition());
     const far=p.id!==0 && distance>(rig.farDetail?32:42);
@@ -3513,8 +3538,19 @@ export class Renderer implements CollisionWorld {
     if(refined)this.gripHand("left hand",supportHand,"left");
     else part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
     if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p);
+    // The gas mask: rubberised facepiece, two eyepieces and a filter tin under
+    // the chin. A joint of its own, scaled away while it is not worn, so
+    // masking never rebuilds the soldier's batched kit.
+    const gasMask = this.joint("gas mask", upper);
+    part("mask facepiece", 0, .635, -.07, .25, .275, .2, "#5c624b", gasMask, "head");
+    for (const side of [-1, 1])
+      part("mask eyepiece", side * .056, .69, -.168, .072, .026, .072, "#aab6ae", gasMask, "disc").setLocalEulerAngles(90, 0, 0);
+    part("mask filter tin", 0, .535, -.2, .088, .12, .088, "#474c3c", gasMask, "limb").setLocalEulerAngles(32, 0, 0);
+    gasMask.setLocalScale(0, 0, 0);
     this.people.push(root);
     this.soldiers.push({
+      gasMask,
+      maskShown: 0,
       body,
       design,
       hips,
@@ -4869,6 +4905,7 @@ export class Renderer implements CollisionWorld {
         this.animateSoldier(visible, x, z, owed, tick);
         rig.rifle.enabled = p.mountedGun === undefined;
         this.applyModelDetail(p,rig);
+        this.poseGasMask(rig, maskProgress(p, tick));
       } else {
         if (rig.deathAt === null) {
           rig.deathAt = tick;
@@ -4999,6 +5036,7 @@ export class Renderer implements CollisionWorld {
     this.drawEnvironmentEffects(dt);
     this.drawBackdrop(g, alpha);
     this.drawAtmosphere(g, alpha);
+    if (g.gas || this.gasView) (this.gasView ??= this.createGasView()).draw(g, alpha, this.camera.getPosition(), this.quality);
     if (this.map.night) this.drawNight(g, alpha);
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {

@@ -53,6 +53,8 @@ import { trenchMap } from "./trench-map";
 import { nightRaidMap } from "./night-map";
 import { lightAt } from "./night";
 import { flareRules } from "./flares";
+import { gasAvailable, masked } from "./gas";
+import { GasAudio, GasOverlay, GasScreen, gasBriefing, gasNotice, gasParameter, gasStatus } from "./gas-ui";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -68,7 +70,14 @@ killNotice.setAttribute("role", "status");
 const boundaryNotice = document.createElement("div");
 boundaryNotice.className = "boundary-warning";
 boundaryNotice.setAttribute("role", "alert");
-el("hud").append(battleSidebar, killNotice, boundaryNotice);
+const gasWarning = document.createElement("div");
+gasWarning.className = "gas-warning";
+gasWarning.setAttribute("role", "status");
+el("hud").append(battleSidebar, killNotice, boundaryNotice, gasWarning);
+const gasScreen = new GasScreen(el("hud")), minimapGas = new GasOverlay(), tacticalGas = new GasOverlay();
+const gasAudio = new GasAudio(() => audio);
+// A gas event's banner, shown for a few seconds over the standing notice.
+let gasBanner = "", gasBannerUntil = 0;
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
 let displayedScoreboard = "";
@@ -139,11 +148,13 @@ let difficulty: Difficulty = (difficulties as string[]).includes(new URLSearchPa
   : (difficulties as string[]).includes(storedDifficulty ?? "") ? storedDifficulty as Difficulty : "regular";
 // Short text callouts from nearby friendly soldiers and enemy grenade warnings.
 let callout = "", calloutUntil = 0;
-let pendingArtillery: Command["artillery"], pendingFlare: Command["flare"];
+let pendingArtillery: Command["artillery"], pendingFlare: Command["flare"], pendingGas: Command["gasStrike"];
+let pendingMask = false;
 const tacticalMap = new ArtilleryMap(
   () => game,
   (target, kind) => {
     if (kind === "flare") pendingFlare = target;
+    else if (kind === "gas") pendingGas = target;
     else pendingArtillery = target;
   },
   ()=>training?.station.target,
@@ -157,10 +168,13 @@ let audioVolume = 0.65;
 let cameraReactions = true;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
+tacticalMap.decorate = (grid) => tacticalGas.update(game, grid);
 const params = new URLSearchParams(location.search),
   bots = params.get("bots") !== "0",
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
+// Creeping gas is off unless the briefing or ?gas=1 turns it on.
+let gasEnabled = gasParameter(params);
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
 const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
 // Graphics quality: ?quality= wins, then the stored choice, then Auto. Auto
@@ -230,7 +244,8 @@ function clear() {
   grenade = false;
   smoke = false;
   melee = false;
-  pendingArtillery = undefined;
+  pendingArtillery = pendingGas = undefined;
+  pendingMask = false;
   pendingEquip = undefined;
   kitCommand = undefined;
   placingGun = pendingInteract = false;
@@ -263,6 +278,7 @@ function menu(
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
+  if (gasAvailable(map)) el("controls-settings").before(gasBriefing(gasEnabled, started, (on) => { gasEnabled = on; }));
   if (bots) {
     const skill = document.createElement("div"); skill.className = "loadout-choice";
     skill.innerHTML = `<label>Bot difficulty <select id="difficulty"><option value="recruit">Recruit · slower, looser, fewer grenades</option><option value="regular">Regular</option><option value="veteran">Veteran · quicker, sharper, more grenades</option></select></label><small>Both teams' soldiers: reaction, aim, grenades and squad coordination</small>`;
@@ -347,7 +363,7 @@ function start() {
     ),
     12345,
     training ? undefined : { difficulty },
-    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined },
+    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined, gas:!training&&gasEnabled },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
   training?.begin(game);
@@ -477,7 +493,25 @@ function handle(e: Event) {
   }
   if (e.type === "damage" && e.actor === 0) {
     damageUntil = performance.now() + 250;
-    sound(60, 0.2, 0.12);
+    // Gas burns every half second; a thud each time would drown everything.
+    if (e.kind !== "gas") sound(60, 0.2, 0.12);
+  }
+  if (e.type === "gas" && e.phase !== "settled") {
+    const final = e.final ? "FINAL " : "";
+    gasBanner = e.phase === "warning" ? `GAS ALARM · ${final}ADVANCE IN ${Math.round((e.startAt - e.tick) / 30)}s · NEW LINE ON THE MAP` : `GAS ADVANCING · ${final}LINE CLOSING`;
+    gasBannerUntil = performance.now() + 3500;
+    if (e.phase === "warning") gasAudio.gong();
+  }
+  if (e.type === "gasMask" && e.actor === 0) gasAudio.seal();
+  if (e.type === "gasStrike" && e.phase === "call" && e.actor === 0) {
+    artilleryNotice = "GAS SHELLS AWAY · CLOUD IN 3s";
+    artilleryNoticeUntil = performance.now() + 3000;
+    sound(520, 0.25, 0.06);
+  }
+  // Soft pops rather than blasts; close by, someone shouts it.
+  if (e.type === "gasStrike" && e.phase === "land" && game.players[0].hp > 0 && dist(game.players[0], e.at) < 40) {
+    sound(140, 0.25, 0.05);
+    if (dist(game.players[0], e.at) < 25) { callout = "GAS! GAS!"; calloutUntil = performance.now() + 2500; gasAudio.gong(0.5); }
   }
   if (
     e.type === "reload" &&
@@ -514,6 +548,7 @@ function hud(now: number) {
   battleSidebar.hidden = !clearHUD || aimingScope;
   if (!battleSidebar.hidden) {
     minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
+    minimapGas.update(game, el("minimap"));
     const feed = combatFeedback.killFeed(game);
     if (feed !== displayedFeed) {
       killFeed.innerHTML = displayedFeed = feed;
@@ -525,6 +560,11 @@ function hud(now: number) {
     outside = !paused && p.hp > 0 && countdown !== null && beyondPlayArea(p.x, p.z, game.map) > 0,
     boundaryText = outside ? `OUT OF BOUNDS · RETURN TO THE LINE · ${countdown ? `ARTILLERY IN ${countdown}` : "ARTILLERY INBOUND"}` : "";
   if (boundaryNotice.textContent !== boundaryText) boundaryNotice.textContent = boundaryText;
+  const gasLine = paused ? { text: "", danger: false } : gasNotice(game, p, keyLabel(settings.bindings.mask));
+  const gasText = !paused && game.gas && now < gasBannerUntil && !gasLine.danger ? gasBanner : gasLine.text;
+  if (gasWarning.textContent !== gasText) gasWarning.textContent = gasText;
+  gasWarning.classList.toggle("danger", gasLine.danger);
+  gasScreen.update(game, p, preferredFirstPerson && !renderer.deathView, !paused && !tacticalMap.open);
   root.classList.toggle("out-of-bounds", outside);
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
@@ -563,6 +603,7 @@ function hud(now: number) {
   const flareIn = Math.max(0, Math.ceil((game.flares.readyAt[p.team] - game.tick) / 30));
   el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
     ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
+  if (game.gas) el("ammo").innerHTML += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -671,7 +712,10 @@ function command(): Command {
   fire = false;
   c.artillery = pendingArtillery;
   c.flare = pendingFlare;
-  pendingArtillery = pendingFlare = undefined;
+  c.gasStrike = pendingGas;
+  c.gasMask = pendingMask;
+  pendingArtillery = pendingFlare = pendingGas = undefined;
+  pendingMask = false;
   c.aim = aim && !tacticalMap.open;
   c.firstPerson = preferredFirstPerson;
   c.reload = reload;
@@ -721,6 +765,8 @@ window.addEventListener("keydown", (e) => {
     tacticalMap.toggle();
   }
   if (tacticalMap.open && e.code === mapCallKey && !e.repeat) tacticalMap.toggleMode();
+  // The mask works with the map open too: gas does not wait.
+  if (isKey("mask", e.code) && !e.repeat && game.gas && game.players[0].hp > 0) pendingMask = true;
   if (tacticalMap.open && !isKey("reload", e.code)) return;
   const player = game.players[0];
   if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
@@ -905,6 +951,8 @@ function frame(now: number) {
         combatFeedback.camera(game,game.tick,view)?.pitch??view.pitch,
       );
       audio?.muffle(battlefield.state(game.tick).muffle);
+      gasAudio.volume(audioVolume);
+      gasAudio.update(!!game.gas && game.players[0].hp > 0 && masked(game.players[0], game.tick));
       accumulator += dt;
       let steps = 0;
       // All of this frame's ticks share one navigation rebuild budget.
@@ -1028,6 +1076,18 @@ try {
       const weapon=renderer.app.root.findByName("first-person weapon and arms") as Entity|null;
       for(const component of weapon?.findComponents("render")??[])component.enabled=!detail;
       return {tick:game.tick,frames:reviewFrames};
+    },
+    // Gas matches: skip ahead to a moment in the gas schedule and stand the
+    // player at a point looking at another, masked or not.
+    gas:(tick:number,x:number,z:number,tx:number,tz:number,mask:boolean,firstPerson=true,cloud?:{x:number;z:number})=>{
+      if(!game.gas)throw Error("Not a gas match");
+      reviewManual=true;game.tick=Math.max(game.tick,Math.round(tick));const p=game.players[0];
+      game.respawn(p);Object.assign(p,{x,z,y:groundHeight(x,z,game.map),yaw:Math.atan2(tx-x,-(tz-z)),pitch:-.04,protectedUntil:Infinity,vx:0,vz:0});
+      p.gasMask=mask?{worn:true,since:game.tick-60,from:1}:null;
+      if(cloud)game.gas.clouds.push({id:++game.gas.sequence,team:"red",actor:game.teamSize,...cloud,heading:Math.PI/2,landAt:game.tick-120,endsAt:game.tick+630});
+      yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
+      renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
+      return {tick:game.tick,hp:p.hp,masked:masked(p,game.tick)};
     },
     finish:()=>recording?.stop(),
   }});

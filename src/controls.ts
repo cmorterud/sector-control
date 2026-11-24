@@ -3,6 +3,7 @@ export const defaultBindings = {
   sprint: "ShiftLeft", crouch: "KeyC", reload: "KeyR", melee: "KeyV",
   grenade: "KeyG", smoke: "KeyF", mantle: "Space", tactical: "KeyQ",
   view: "KeyT", scoreboard: "Tab", primary: "Digit1", sidearm: "Digit2", interact: "KeyE", emplace: "KeyB",
+  mask: "KeyM",
 };
 export type ControlAction = keyof typeof defaultBindings;
 export interface ControlSettings {
@@ -17,6 +18,7 @@ export const controlLabels: Record<ControlAction, string> = {
   sprint: "Sprint", crouch: "Toggle crouch", reload: "Reload", melee: "Melee",
   grenade: "Grenade", smoke: "Smoke", mantle: "Hop / mantle", tactical: "Tactical map",
   view: "Change view", scoreboard: "Scoreboard", primary: "Primary weapon", sidearm: "Sidearm", interact: "Interact with equipment", emplace: "Set up / pack machine gun",
+  mask: "Gas mask on / off",
 };
 export function freshControls(): ControlSettings {
   return { bindings: { ...defaultBindings }, toggleSprint: false, firstPerson: true };
@@ -29,9 +31,12 @@ export function loadControls(storage?: Pick<Storage, "getItem">): ControlSetting
     if (typeof saved.firstPerson === "boolean") settings.firstPerson = saved.firstPerson;
     if (typeof saved.toggleSprint === "boolean") settings.toggleSprint = saved.toggleSprint;
     const bindings = saved.bindings ? { ...saved.bindings } : undefined;
-    if (bindings && bindings.emplace === undefined) {
+    // Actions added since a layout was saved take their default key, or the
+    // first free one, so an older custom layout survives.
+    const added: [ControlAction, string[]][] = [["emplace", ["KeyB", "KeyN", "KeyJ"]], ["mask", ["KeyM", "KeyX", "KeyZ"]]];
+    for (const [action, preferred] of added) if (bindings && bindings[action] === undefined) {
       const used = new Set(Object.values(bindings));
-      bindings.emplace = ["KeyB", "KeyN", "KeyJ", ...Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", c => "Key" + c)]
+      bindings[action] = [...preferred, ...Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", c => "Key" + c)]
         .find(code => !used.has(code));
     }
     if (bindings && Object.keys(defaultBindings).every(action =>

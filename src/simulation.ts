@@ -5,6 +5,7 @@ import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
 import { advanceBoundary, boundaryRules, type BoundaryWarning } from "./boundary";
+import { advanceGas, createGasState, escapeGas, gasAvailable, gasDeployment, gasThreatens, type GasEscape, type GasEvent, type GasMask, type GasState } from "./gas";
 import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction, type CombatCover } from "./combat-reaction";
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
@@ -144,6 +145,9 @@ export interface Command {
   deployGun?: boolean;
   packGun?: boolean;
   redeploy?: boolean;
+  // Pressed this tick: put the gas mask on or take it off; call gas shells.
+  gasMask?: boolean;
+  gasStrike?: Vec & { area?: boolean };
   // Bots only: launch speed for a planned short or lobbed frag.
   throwSpeed?: number;
 }
@@ -204,7 +208,7 @@ export const exposedAimHeight = (map: MapDefinition, p?: Soldier) =>
   (map.terrain ? 1.65 : 1.25) - stanceDrop(p);
 export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
-    (position) => position.team === p.team,
+    (position) => position.team === p.team && !gasThreatens(g, position, 2),
   );
   const original = positions?.[p.teamIndex % positions.length];
   const flagPost = dominationPost(g, p, original);
@@ -441,6 +445,10 @@ export interface Soldier extends Vec {
   distractedUntil: number;
   mode: string;
   artilleryEvade: ArtilleryEvade | null;
+  gasMask?: GasMask | null;
+  gasEscape?: GasEscape | null;
+  gasClearSince?: number;
+  gasNoticed?: number;
 }
 export interface Sector extends Vec {
   name?: string;
@@ -673,6 +681,7 @@ export type Event = { id: number; tick: number } & (
   | { type: "respawn" | "reload"; actor: number }
   | { type: "hop"; actor: number; phase: "start" | "land"; at: V3 }
   | { type: "boundary"; actor: number; phase: "warning" | "clear" | "salvo"; deadline?: number }
+  | GasEvent
   | { type: "mantle"; actor: number; phase: "start" | "end"; from: V3; to: V3 }
   | { type: "capture"; sector: string; team: Team }
   | { type: "neutralized"; sector: string; previous: Team; team: Team }
@@ -935,6 +944,8 @@ export class Game {
   bursts: Burst[] = [];
   assaults = createAssaultState();
   smokeClouds: SmokeCloud[] = [];
+  // Creeping gas, masks and gas shells; null unless the match turned it on.
+  gas: GasState | null = null;
   smokeSequence = 0;
   grenadeSequence = 0;
   projectileSequence = 0;
@@ -964,6 +975,7 @@ export class Game {
       humanPlayerIds?: readonly number[];
       assaults?: boolean;
       ambientArtillery?: boolean;
+      gas?: boolean;
     } = {},
   ) {
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
@@ -993,6 +1005,7 @@ export class Game {
       contested: false,
     }));
     this.duration = this.map.id === "training" ? Number.MAX_SAFE_INTEGER : duration;
+    if (options.gas && gasAvailable(this.map)) this.gas = createGasState(this.map, this.duration);
     this.seed = seed;
     for (let i = 0; i < (bots ? this.teamSize * 2 : 1); i++) {
       const team: Team = i < this.teamSize ? "blue" : "red";
@@ -1107,6 +1120,7 @@ export class Game {
       assaults: this.assaults,
       smokeClouds: this.smokeClouds,
       smokeSequence: this.smokeSequence,
+      gas: this.gas,
       sectors: this.sectors,
       sequence: this.sequence,
       seed: this.seed,
@@ -1152,6 +1166,11 @@ export class Game {
       p.z = deployment.z;
     }
     if (usesVillageTactics(this.map)) p.villagePlan = null;
+    const forward = gasDeployment(this, p);
+    if (forward) {
+      p.x = forward.x;
+      p.z = forward.z;
+    }
     const sky = this.map.sky;
     if (sky) {
       // The airship is the same both ways round, so the team at the other end
@@ -1454,6 +1473,7 @@ export class Game {
     this.advanceProjectiles();
     this.advanceGrenades();
     advanceBoundary(this);
+    advanceGas(this, (p, n, source, team, weapon) => this.damage(p, n, source, team, { kind: "gas", weapon }));
     advanceArtillery(this);
     advanceFlares(this);
     for (const s of this.scoring !== "eliminations" ? this.sectors : []) {
@@ -2683,6 +2703,8 @@ export function botCommand(g: Game, p: Soldier): Command {
 function chooseBotCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
   if (evasion) return evasion;
+  const gasEscape = escapeGas(g, p);
+  if (gasEscape) return gasEscape;
   const escape = collapseEscape(g, p);
   if (escape) return escape;
   const coverReaction = reactionCoverCommand(g, p);
