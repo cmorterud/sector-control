@@ -136,6 +136,19 @@ it("gives service rifles a deeper report and uses short unpitched bolt and clip 
   expect(c.nodes.some((n) => n.frequency.value === 1800)).toBe(true);
   expect(c.nodes.some((n) => n.frequency.value === 2800)).toBe(true);
 });
+it("keeps the ever-present mud footstep soft and dull next to harder surfaces", () => {
+  const peak = (kind: "mud" | "concrete") => {
+    const { a, c } = setup();
+    a.play({ ...cue, kind, volume: 0.11, local: true });
+    const envelope = c.nodes.find((n) => n.gain.ramps.length > 1)!;
+    const top = envelope.gain.ramps.reduce((m, r) => (r.value > m.value ? r : m));
+    return { top, cutoff: Math.min(...c.nodes.filter((n) => n.frequency.value > 0).map((n) => n.frequency.value)) };
+  };
+  const mud = peak("mud"), concrete = peak("concrete");
+  expect(mud.top.value).toBeLessThanOrEqual(concrete.top.value * 0.5);
+  expect(mud.top.time).toBeGreaterThan(concrete.top.time);
+  expect(mud.cutoff).toBeLessThan(500);
+});
 it("gives falling timber a delayed landing thud without a pitched oscillator", () => {
   const { a, c } = setup();
   a.play({ ...cue, kind: "timber", local: true });
