@@ -10,7 +10,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
-- **Eight maps.** Trench front, Night raid, Verdun sector, Village front, 5v5 Industrial, Lighthouse point, indoor Fort Vaux, and a guided training camp.
+- **Nine maps.** Trench front, Night raid, Verdun sector, Village front, 5v5 Industrial, Lighthouse point, indoor Fort Vaux, the Zeppelin above the clouds, and a guided training camp.
 - **Per-map light and atmosphere.** Each map has its own sun, generated sky, fog and color grade, from Trench front's gray dawn to Village front's late afternoon. On Trench front a low sun burns through a heavy cloud deck; mist lies across no-man's land and pools in the trenches, brazier smoke drifts from the shelter bays, fresh craters smoulder, and you hear wind keening in the wire, a machine gun far up the line and crows. Rooms darken away from their windows. Graphics quality is Auto, Low, Medium or High in the briefing; Auto picks from real frame times.
 - **Lived-in trenches.** On Trench front, sandbags line the parados, British stretches mix timber, corrugated iron and sandbag revetments while German ones use timber and wicker, and dugout entrances glow with lanterns. Painted boards name each trench and point to its flag; crates, rifle racks, stretchers, braziers, periscopes, field telephone cable and standing water fill the lines. All of it stays off the firing steps and adds no cover.
 - **Wired no-man's land.** On Trench front, each side has a barbed-wire belt in front of its parapet, with gaps at its flags and the center. Your own side knows the lanes through its wire; the enemy's slows you to a walk and rattles as you push through. Shells and grenades cut it. The old craters hold standing water, and the debris of earlier fighting lies between the lines. The ground there is churned to bare, wet earth; grass, winter-dead and straw-colored, survives only behind the lines.
@@ -37,6 +37,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 50v50 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Fort Vaux | 6v6 | France and Imperial Germany fight through vaulted galleries and the open-air Sunken Yard for three flags. Riflemen carry carbines: shorter, and quicker between shots. **Q** opens the floor plan. No artillery |
+| Zeppelin | 6v6 | Aboard a German airship adrift above the clouds at dusk: French boarders hold the stern, the crew the bow. Three lanes run its length one above another, the keel, a gallery through the gas cells and the walk along the top, and meet at both engine stations and the bomb bay. Carbines, as in Fort Vaux. **Q** opens the floor plan. No artillery |
 | Industrial | 5v5 | Three sectors among warehouse cover |
 
 On the combat flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
@@ -85,7 +86,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-The briefing opens on Fort Vaux. Use `?map=industrial`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
+The briefing opens on Fort Vaux. Use `?map=zeppelin`, `industrial`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 

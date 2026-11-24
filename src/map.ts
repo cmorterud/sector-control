@@ -3,6 +3,7 @@ import type { Woodland } from "./verdun-forest";
 import type { Landmark } from "./landmarks";
 import type { DestructionState } from "./destruction";
 import type { FortLayout } from "./fort-vaux-map";
+import type { ZeppelinLayout } from "./zeppelin-map";
 export const terrainResolution = 0.25;
 export const terrainPatchSize = 8;
 export type Vec = { x: number; z: number; y?: number };
@@ -163,7 +164,7 @@ export interface KitRuntime {
   fallen: Record<string, number[]>;
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux";
+  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux" | "zeppelin";
   // A night map (src/night.ts): an unlit soldier is seen only within `sight`
   // metres. Light from lamps, flares and bursts restores the usual range.
   night?: { sight: number };
@@ -174,6 +175,15 @@ export interface MapDefinition {
   defaultTeamSize?: number;
   artillery?: false;
   fort?: FortLayout;
+  // A battlefield in the air. There is no ground: every height query off the
+  // decks returns `floor`, far below, and a soldier who falls past `fallLimit`
+  // dies. Each team spawns inside its own area, however large the roster.
+  sky?: {
+    floor: number;
+    fallLimit: number;
+    spawnAreas: Record<"blue" | "red", { x0: number; x1: number; z0: number; z1: number }>;
+  };
+  zeppelin?: ZeppelinLayout;
   navigationPoints?: Vec[];
   buildings?: {
     id: string; name: string; x: number; z: number; w: number; d: number;
@@ -294,6 +304,7 @@ export function baseGroundHeight(
   z: number,
   map: MapDefinition = industrialMap,
 ): number {
+  if (map.sky) return map.sky.floor;
   return authoredMapHeight(x, z, map) - authoredTerrainCut(x, z, map);
 }
 // The same diagonal as terrainGeometry's two-meter surface quads. Interpolating
@@ -346,6 +357,7 @@ export function groundHeight(
   z: number,
   map: MapDefinition = industrialMap,
 ): number {
+  if (map.sky) return map.sky.floor;
   return Math.max(-0.9, baseGroundHeight(x, z, map) - terrainCut(x, z, map));
 }
 // Numeric lookup keeps repeated movement/ray queries cheap after large barrages.

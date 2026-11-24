@@ -103,6 +103,8 @@ export function footSurface(
     if ((p.y ?? 0) < map.fort.waterHeight && inFortRect(p, map.fort.water)) return "splash";
     if (map.fort.rooms.some(room => room.id === "barracks" && inFortRect(p, room))) return "wood";
   }
+  // An airship's keel, catwalks and decks are all planked.
+  if (map.sky) return "wood";
   if (!map.terrain) return "concrete";
   if(map.buildings && p.y !== undefined) {
     const floor=map.boxes.find(b=>b.walkable && Math.abs((b.baseY??0)+b.h-p.y!)<.12 && Math.abs(p.x-b.x)<=b.w/2 && Math.abs(p.z-b.z)<=b.d/2);

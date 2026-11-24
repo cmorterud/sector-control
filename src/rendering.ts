@@ -2,6 +2,8 @@ import { emplacementRules, emplacementView, mountedGun, type Placement } from ".
 import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
+import { hullSkin, ringBands } from "./zeppelin-geometry";
+import { hullRadius } from "./zeppelin-map";
 import { qualityProfiles, type Quality } from "./graphics-quality";
 import { lookFor, type MapLook } from "./map-look";
 import { fortVault, fortVaultHeight, inFortRect, type FortRect } from "./fort-vaux-map";
@@ -412,6 +414,7 @@ export class Renderer implements CollisionWorld {
     if (map.terrain) this.buildTrenchTerrain();
     this.fortRoof = undefined;
     if (map.fort) this.buildFort();
+    if (map.zeppelin) this.buildZeppelin();
     for (const b of map.boxes) {
       if (map.destruction?.objects[b.id!]) continue;
       const c =
@@ -439,7 +442,7 @@ export class Renderer implements CollisionWorld {
       if (map.fort) {
         if (b.id?.startsWith("fort-roof-") || b.id?.startsWith("fort-vault-")) obstacle.render!.enabled = false;
         else this.fortStone(obstacle, b.w, b.h, b.d, b.walkable ? "#939081" : "#858073");
-      }
+      } else if (map.zeppelin) this.zeppelinSurface(obstacle, b);
       const modelled = this.map.boxes.some((q) => q.model) && b.kind === "building";
       if (modelled) {
         // The box stays as the collider; the loaded model replaces its look.
@@ -543,7 +546,7 @@ export class Renderer implements CollisionWorld {
     }
     if (this.look.atmosphere) this.buildAtmosphere();
     if (map.night) this.buildNight();
-    for (const [x, z, w, d] of map.coast || map.backdrop ? [] : [
+    for (const [x, z, w, d] of map.coast || map.backdrop || map.sky ? [] : [
       [0, -map.depth / 2, map.width + 1, 1],
       [0, map.depth / 2, map.width + 1, 1],
       [-map.width / 2, 0, 1, map.depth],
@@ -1600,6 +1603,111 @@ export class Renderer implements CollisionWorld {
       return { positions: box.positions!, indices: box.indices!, normals: box.normals!, uvs };
     });
     entity.render!.meshInstances = [new pc.MeshInstance(mesh, this.surfaceMaterial(surface, tint), entity)];
+  }
+  // Zeppelin: each box keeps its collider and takes the look of what it is.
+  // The hull's fill shows only from inside, as girder sides along the keel
+  // and gas-cell linen above it.
+  private zeppelinSurface(e: pc.Entity, b: Box) {
+    const id = b.id!.replace(/^zep-(bow-)?/, "");
+    const [surface, tint]: [ArchitectureSurface, string] = id.startsWith("hull-")
+      ? (b.baseY ?? 0) >= 2.7 ? ["fabric", "#e0d5bb"] : (b.baseY ?? 0) >= -0.5 ? ["fabric", "#bfb59c"] : ["iron", "#6f746d"]
+      : b.walkable ? ["floorboards", "#a58d6c"]
+      : id.startsWith("rail-") || id.startsWith("car-") ? ["iron", "#454a47"]
+      : /tank|valve|vent/.test(id) ? ["plaster", "#aeb3ab"]
+      : ["plaster", "#aaa595"];
+    this.fortStone(e, b.w, b.h, b.d, tint, surface);
+    // Fuel tanks are aluminium drums standing in the keel.
+    if (id.startsWith("tank-")) {
+      const drum = this.modelMesh("zeppelin:tank", () => {
+        const g = new pc.CylinderGeometry({ radius: 0.5, height: 1, heightSegments: 1, capSegments: 20 });
+        return { positions: g.positions!, normals: g.normals!, uvs: g.uvs!, indices: g.indices! };
+      });
+      e.render!.meshInstances = [new pc.MeshInstance(drum, this.surfaceMaterial(surface, tint), e)];
+    }
+  }
+  // The airship outside its walkways: doped-linen skin over the main rings,
+  // tail fins, the gondolas under bow and stern and an engine and propeller
+  // behind each engine car. Presentation only; nothing here collides.
+  private buildZeppelin() {
+    const layout = this.map.zeppelin!, { axis } = layout.hull, previous = this.batchGroup, parent = this.mapRoot;
+    this.batchGroup = this.mapBatch;
+    const shell = (name: string, key: string, build: () => ReturnType<typeof hullSkin>, surface: ArchitectureSurface, tint: string) => {
+      const e = this.cube(name, 0, 0, 0, 1, 1, 1, tint, false, parent);
+      e.render!.meshInstances = [new pc.MeshInstance(this.modelMesh(key, build), this.surfaceMaterial(surface, tint), e)];
+    };
+    shell("airship skin", "zeppelin:skin", () => hullSkin(layout), "fabric", "#b9bab1");
+    shell("airship ring bands", "zeppelin:rings", () => ringBands(layout), "iron", "#8c8e86");
+    const part = (name: string, x: number, y: number, z: number, w: number, h: number, d: number, tint: string) =>
+      this.cube(name, x, y, z, w, h, d, tint, false, parent);
+    // Cruciform tail: fixed fins with darker rudders and elevators behind.
+    const finX = -67.5, finR = hullRadius(finX);
+    part("upper fin", finX, axis + finR + 2, 0, 12, 5, 0.3, "#a9aaa2");
+    part("lower fin", finX, axis - finR - 2, 0, 12, 5, 0.3, "#a9aaa2");
+    for (const s of [-1, 1]) part("tail plane", finX, axis, s * (finR + 2), 12, 0.3, 5, "#a9aaa2");
+    part("upper rudder", -74.4, axis + finR + 2.2, 0, 2.2, 4.4, 0.24, "#8f9089");
+    part("lower rudder", -74.4, axis - finR - 2.2, 0, 2.2, 4.4, 0.24, "#8f9089");
+    for (const s of [-1, 1]) part("elevator", -74.4, axis, s * (finR + 2.2), 2.2, 0.24, 4.4, "#8f9089");
+    // Gondolas on struts under the hull: the control car forward, an engine car aft.
+    const bottom = (x: number) => axis - hullRadius(x);
+    const gondola = (x: number, length: number, name: string) => {
+      const top = bottom(x) - 0.75;
+      part(name, x, top - 1.1, 0, length, 2.2, 2.8, "#5d6059");
+      part(`${name} windows`, x, top - 0.8, 0, length - 0.6, 0.5, 2.84, "#27343b");
+      for (const dx of [-length / 2 + 0.8, length / 2 - 0.8]) for (const z of [-1, 1])
+        part(`${name} strut`, x + dx, (top + bottom(x + dx)) / 2, z, 0.12, bottom(x + dx) - top + 0.1, 0.12, "#3d413e");
+      return top - 1.1;
+    };
+    gondola(51, 9, "control car");
+    part("control car nose", 56.2, bottom(51) - 1.85, 0, 1.4, 1.7, 2.2, "#5d6059");
+    const aft = gondola(-51, 7, "aft engine car");
+    const propeller = (x: number, y: number, z: number) => {
+      part("propeller hub", x, y, z, 0.3, 0.3, 0.3, "#2f3230");
+      part("propeller blade", x - 0.05, y, z, 0.07, 3.4, 0.24, "#5a4632");
+      part("propeller blade", x - 0.05, y, z, 0.07, 0.24, 3.4, "#5a4632");
+    };
+    propeller(-55, aft, 0);
+    // Rails are bars on posts.
+    for (const b of this.map.boxes) {
+      if (!/^zep-(bow-)?rail-/.test(b.id ?? "")) continue;
+      const long = b.w >= b.d, length = long ? b.w : b.d, floor = (b.baseY ?? 0) - 0.95;
+      for (let s = -length / 2; s <= length / 2 + 1e-6; s += Math.max(0.6, length / Math.ceil(length / 1.6)))
+        part("rail post", long ? b.x + s : b.x, floor + 0.5, long ? b.z : b.z + s, 0.06, 1.0, 0.06, "#454a47");
+    }
+    // Duralumin frames: a post up each keel wall and a beam across every 2.5 m;
+    // in the gallery, a post up each gas-cell wall every 5 m, with stringers
+    // along them. Warm lamps hang between.
+    const duralumin = "#9aa098", { gallery, keel } = layout.levels;
+    const open = (x: number) => Math.abs(x) < 10.5 || Math.abs(Math.abs(x) - 30) < 6.5 || Math.abs(x) > 48.8;
+    for (let x = -48.75; x <= 48.75; x += 2.5) {
+      if (open(x)) continue;
+      for (const z of [-1.95, 1.95]) part("keel post", x, keel + 1.4, z, 0.1, 2.8, 0.1, duralumin);
+      part("keel beam", x, keel + 2.74, 0, 0.1, 0.1, 4, duralumin);
+    }
+    for (let x = -50; x <= 50; x += 5) {
+      if (open(x) && Math.abs(x) <= 48.8) continue;
+      for (const z of [-1.45, 1.45]) part("gallery post", x, (gallery + 12.5) / 2, z, 0.1, 12.5 - gallery, 0.1, duralumin);
+      part("gallery beam", x, 9.3, 0, 0.1, 0.1, 3, duralumin);
+    }
+    for (const [x0, x1] of [[-51, -36], [-24, -10], [10, 24], [36, 51]])
+      for (const y of [7.2, 9.6, 11.6]) for (const z of [-1.47, 1.47])
+        part("gallery stringer", (x0 + x1) / 2, y, z, x1 - x0, 0.08, 0.06, duralumin);
+    const lamp = (x: number, y: number, z: number) => {
+      const glass = part("airship lamp", x, y, z, 0.2, 0.14, 0.2, "#ffd9a0");
+      let glow = this.materials.get("zeppelin lamp");
+      if (!glow) { glow = new pc.StandardMaterial(); glow.useLighting = false; glow.emissive = color("#ffd9a0"); glow.update(); this.materials.set("zeppelin lamp", glow); }
+      glass.render!.material = glow;
+      glass.render!.castShadows = false;
+    };
+    for (const x of [-46.25, -38.75, -21.25, -13.75, 13.75, 21.25, 38.75, 46.25]) { lamp(x, keel + 2.6, 0); lamp(x + 1.25, gallery + 2.4, x > 0 ? -1.4 : 1.4); }
+    for (const x of [-30, 0, 30]) for (const z of [-3.5, 3.5]) lamp(x + z, 9.4, z);
+    // Each walkable engine car carries its engine and propeller at its after end.
+    for (const c of layout.engineCars) {
+      const z = (c.z0 + c.z1) / 2, side = Math.sign(z), inner = side > 0 ? c.z0 : c.z1;
+      part("engine", c.x0 - 0.75, 1.1, z, 1.5, 1.6, 1.9, "#4c504b");
+      propeller(c.x0 - 1.65, 1.1, z);
+      for (const x of [c.x0 + 0.5, c.x1 - 0.5]) part("engine car strut", x, 3.6, inner + side * 0.15, 0.12, 2.1, 0.12, "#3d413e");
+    }
+    this.batchGroup = previous;
   }
   private buildFort() {
     const fort = this.map.fort!;
@@ -4465,7 +4573,7 @@ export class Renderer implements CollisionWorld {
     for (const s of g.scoring !== "eliminations" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
-      ring.setPosition(s.x, groundHeight(s.x, s.z, this.map) + (this.map.fort?.waterHeight ?? 0) + .04, s.z);
+      ring.setPosition(s.x, (s.y ?? groundHeight(s.x, s.z, this.map)) + (this.map.fort?.waterHeight ?? 0) + .04, s.z);
       const segments = this.map.fort ? 40 : 64;
       for (let i = 0; i < segments; i++) {
         const a = (i / segments) * Math.PI * 2;
@@ -4767,7 +4875,7 @@ export class Renderer implements CollisionWorld {
       const root = this.rings[i];
       if (g.scoring === "domination" && positionObjectives) {
         const water = this.map.fort && inFortRect(s, this.map.fort.water) ? this.map.fort.waterHeight : 0;
-        root.setPosition(s.x, groundHeight(s.x, s.z, this.map) + water + .04, s.z);
+        root.setPosition(s.x, (s.y ?? groundHeight(s.x, s.z, this.map)) + water + .04, s.z);
       }
       for (const child of root.children) {
         const e = child as pc.Entity;
@@ -4784,7 +4892,10 @@ export class Renderer implements CollisionWorld {
           const point = {
             x: s.x + local.x,
             z: s.z + local.z,
-            y: groundHeight(s.x + local.x, s.z + local.z, g.map),
+            // A deck flag's ring lies on the deck around it, and gaps over open drops.
+            y: s.y !== undefined
+              ? supportHeight(s.x + local.x, s.z + local.z, g.map, s.y + 0.23, 0.45)
+              : groundHeight(s.x + local.x, s.z + local.z, g.map),
           };
           const surface = this.map.fort ? Math.max(supportHeight(point.x, point.z, this.map, .23),
             inFortRect(point, this.map.fort.water) ? this.map.fort.waterHeight : 0) : point.y;

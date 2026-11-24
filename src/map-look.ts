@@ -21,6 +21,9 @@ export interface MapLook {
   // the viewer and reaches about as far as the map's sight rule, so distant
   // ground is dark until a lamp, a flare or a burst lights it.
   nightVision?: { color: string; intensity: number; range: number };
+  // A map in the sky looks down on a sea of cloud instead of ground: sunlit
+  // tops over shaded hollows, `scale` puffs per unit of view slope.
+  cloudSea?: { top: string; shade: string; scale: number };
 }
 
 export const mapLooks: Record<MapDefinition["id"], MapLook> = {
@@ -83,6 +86,15 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     vignette: 0.25, exposure: 1, ambient: 1.35,
   },
   // Plain daylight for practice.
+  // Dusk above a sea of cloud: a low sun warms the hull, the sky deepens overhead.
+  zeppelin: {
+    sun: { color: "#ffc48a", intensity: 1.25, elevation: 9, azimuth: -68, shadowStrength: 0.8 },
+    sky: { zenith: "#3c4a74", horizon: "#e8a77e", ground: "#b98f87", clouds: 0.35, cloud: "#f2c3a1", glow: "#ffd29a" },
+    fog: { start: 110, end: 420 },
+    grade: { brightness: 0, contrast: 1.06, saturation: 1.05, tint: "#fff1e2" },
+    vignette: 0.26, exposure: 1.02, ambient: 1.1, farClip: 520,
+    cloudSea: { top: "#f6d6bb", shade: "#9a7f88", scale: 2.4 },
+  },
   "fort-vaux": {
     sun: { color: "#d5e5ed", intensity: 0.8, elevation: 55, azimuth: -42, shadowStrength: 0.9 },
     sky: { zenith: "#677b86", horizon: "#939e9d", ground: "#57554b", clouds: 0.8, cloud: "#b3c0c2", glow: "#d8ded7" },

@@ -20,7 +20,7 @@ export const factions = {
   trainingRed: { name: "Red training", shirt: "#9f685a", trousers: "#62594b", helmet: "#796d57", rifle: "AR-01", carbine: undefined, scoped: "Scoped training rifle", support: "Training LMG", pistol: "Training pistol" },
 };
 export function factionFor(map: {id:string}, team: "blue"|"red"): FactionId {
-  return map.id === "industrial" ? team === "blue" ? "trainingBlue" : "trainingRed" : team === "red" ? "german" : map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux" ? "french" : "british";
+  return map.id === "industrial" ? team === "blue" ? "trainingBlue" : "trainingRed" : team === "red" ? "german" : map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux" || map.id === "zeppelin" ? "french" : "british";
 }
 export function rosterLoadout(index:number, size:number, kind:WeaponKind): Loadout {
   if (kind === "machineGun") return "support";
@@ -29,8 +29,8 @@ export function rosterLoadout(index:number, size:number, kind:WeaponKind): Loado
 // What a map issues its riflemen: the service rifle, Industrial's semi-automatic
 // trainer, or a carbine for fighting inside a fort.
 export type Kit = "service" | "industrial" | "carbine";
-export const kitFor = (map: { id: string; fort?: unknown }): Kit =>
-  map.id === "industrial" ? "industrial" : map.fort ? "carbine" : "service";
+export const kitFor = (map: { id: string; fort?: unknown; sky?: unknown }): Kit =>
+  map.id === "industrial" ? "industrial" : map.fort || map.sky ? "carbine" : "service";
 export const riflemanWeapon = (faction: FactionId, kit: Kit) =>
   (kit === "carbine" && factions[faction].carbine) || factions[faction].rifle;
 export function equipLoadout(p: Soldier, loadout: Loadout, kit: Kit = "service") {

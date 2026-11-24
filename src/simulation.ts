@@ -754,7 +754,8 @@ export class TestCollision implements CollisionWorld {
     return boxes;
   }
   move(p: Vec, d: Vec): Vec {
-    if (this.map.terrain) return moveOnMap(p, d, this.map);
+    // Decks stacked in the air need the support-aware walk the renderer uses.
+    if (this.map.terrain || this.map.sky) return moveOnMap(p, d, this.map);
     let x = p.x,
       z = p.z;
     if (!blocked(x + d.x, z, 0.5, this.map)) x += d.x;
@@ -848,6 +849,13 @@ export class TestCollision implements CollisionWorld {
     }
     return nearest;
   }
+}
+// A team's flags from its own spawn outward. Aboard the airship each side's
+// soldiers start on flags in this order, so the team at the other end is
+// sent soldier for soldier to the same places, turned about.
+function nearestFlags(map: MapDefinition, team: Team) {
+  const s = map.spawn[team];
+  return map.sectors.map((f, i) => ({ i, d: dist(f, s) })).sort((a, b) => a.d - b.d || a.i - b.i).map((f) => f.i);
 }
 export const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
@@ -1055,7 +1063,7 @@ export class Game {
         deaths: 0,
         captures: 0,
         command: idle(),
-        objective: i % Math.max(1, this.sectors.length),
+        objective: this.map.sky ? nearestFlags(this.map, team)[(i % this.teamSize) % Math.max(1, this.sectors.length)] : i % Math.max(1, this.sectors.length),
         path: [],
         nextThink: 0,
         target: -1,
@@ -1144,7 +1152,18 @@ export class Game {
       p.z = deployment.z;
     }
     if (usesVillageTactics(this.map)) p.villagePlan = null;
-    p.y = groundHeight(p.x, p.z, this.map);
+    const sky = this.map.sky;
+    if (sky) {
+      // The airship is the same both ways round, so the team at the other end
+      // stands in the same places turned about: soldier for soldier, each
+      // starts as far from its stair tower as its opposite number.
+      if (p.team === "red") { p.x = 2 * s.x - p.x; p.z = 2 * s.z - p.z; }
+      // Off the deck is a long fall: keep every slot inside the spawn area.
+      const area = sky.spawnAreas[p.team];
+      p.x = clamp(p.x, area.x0 + 0.5, area.x1 - 0.5);
+      p.z = clamp(p.z, area.z0 + 0.5, area.z1 - 0.5);
+      p.y = supportHeight(p.x, p.z, this.map, (s.y ?? 0) + 0.23, 0.45);
+    } else p.y = groundHeight(p.x, p.z, this.map);
     p.yaw =
       this.map.id !== "industrial"
         ? p.team === "blue"
@@ -1376,6 +1395,9 @@ export class Game {
           if (p.fall) this.advanceFall(p);
           else p.y = ground;
         }
+        // Under an airship's decks there is only sky.
+        if (this.map.sky && p.y < this.map.sky.fallLimit)
+          this.damage(p, p.hp, -1, null, { kind: "fall", weapon: "Fell from the airship" });
       }
       const profile = weaponProfile(p);
       if (p.reloadAt && this.tick >= p.reloadAt) {
@@ -2400,6 +2422,8 @@ function* navigationNodeWork(map: MapDefinition): Generator<boolean, { nodes: Ve
     // Match soldiers' support footprint on narrow treads. A point sample can
     // leave an otherwise valid stair anchor embedded in the next riser.
     if(map.buildings) y = supportHeight(x,z,map,(y??groundHeight(x,z,map))+.23,.45);
+    // In the sky, a point with no deck under it is open air, not a route.
+    if (map.sky && y! < map.sky.fallLimit) return;
     const key = `${x},${z}${y === undefined ? "" : ","+y}`;
     if (!unique.has(key) && !(map.buildings ? bodyBlocked(x,z,y!,.6,map) || Math.abs(supportHeight(x,z,map,y!+.02,.45)-y!)>.1 : blocked(x, z, 0.7, map))) {
       unique.add(key);
@@ -2518,7 +2542,19 @@ export function pathfind(
   const closest = (p: Vec) => {
     const key = p.x.toFixed(2) + "," + p.z.toFixed(2) + "," + (p.y === undefined ? "" : p.y.toFixed(2));
     if (memo!.found.has(key)) return memo!.found.get(key);
-    const i = nearestCandidates(nodes, p).find(({ i }) => walkSegment(p, nodes[i], map))?.i;
+    const candidates = nearestCandidates(nodes, p);
+    let i = candidates.find(({ i }) => walkSegment(p, nodes[i], map))?.i;
+    // A soldier can stand nearer a wall than the planner's clearance allows,
+    // and then no route leaves its feet. Plan from the nearest clear spot
+    // beside it instead; it walks there on the way to the first node. Only
+    // the airship's narrow stairs and catwalks need this so far.
+    for (const reach of map.sky && i === undefined ? [0.2, 0.4] : []) {
+      for (let k = 0; k < 8 && i === undefined; k++) {
+        const q = { ...p, x: p.x + Math.cos(k * Math.PI / 4) * reach, z: p.z + Math.sin(k * Math.PI / 4) * reach };
+        i = candidates.find(({ i }) => walkSegment(q, nodes[i], map))?.i;
+      }
+      if (i !== undefined) break;
+    }
     memo!.found.set(key, i);
     return i;
   };

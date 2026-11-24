@@ -79,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        map: [industrial, trenches, night-raid, verdun, village, headland, training, fort-vaux]
+        map: [industrial, trenches, night-raid, verdun, village, headland, training, fort-vaux, zeppelin]
     steps:
       - name: Check out source
         uses: actions/checkout@v6
