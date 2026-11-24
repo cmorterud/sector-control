@@ -80,7 +80,7 @@ function crossSection(part: RiflePart, z: number, detail: "view" | "world" | "fa
   }
   return points;
 }
-const serviceRifles = ["SMLE Mk III", "Gewehr 98", "Berthier Mle 1916", "Scoped Lebel"];
+const serviceRifles = ["SMLE Mk III", "Gewehr 98", "Berthier Mle 1916", "Scoped Lebel", "Karabiner 98AZ", "Berthier Mle 1892 M16"];
 const bandable = new Set(["wooden stock", "barrel", "upper handguard", "cleaning rod",
   "SMLE full wooden fore-end", "Berthier long nose ferrule", "Lebel tubular magazine"]);
 
@@ -158,4 +158,28 @@ test("closes the Berthier nose ferrule over the tip of its stock", () => {
   const ys = steel.map(([, y]) => y), a = Math.max(...steel.map(([x]) => x)), y = (Math.min(...ys) + Math.max(...ys)) / 2, b = (Math.max(...ys) - Math.min(...ys)) / 2;
   expect(wood.length).toBeGreaterThan(0);
   for (const [wx, wy] of wood) expect((wx / a) ** 2 + ((wy - y) / b) ** 2).toBeLessThan(1);
+});
+
+test.each([["Karabiner 98AZ", "Gewehr 98"], ["Berthier Mle 1892 M16", "Berthier Mle 1916"]])("builds the %s as a shortened %s", (carbineId, rifleId) => {
+  const carbine = weaponDesign({ weapon: "serviceRifle", weaponId: carbineId })!, rifle = weaponDesign({ weapon: "serviceRifle", weaponId: rifleId })!;
+  expect(carbine.kind).toBe("serviceRifle");
+  // 18 cm off the barrel; the muzzle anchor used for shots and flashes follows.
+  expect(carbine.muzzle - rifle.muzzle).toBeCloseTo(.18, 6);
+  expect(barrelEnd("serviceRifle", carbineId)).toBe(carbine.muzzle);
+  const barrel = carbine.parts.find((part) => part.name === "barrel")!;
+  expect(barrel.at[2] - barrel.size[1] / 2).toBeCloseTo(carbine.muzzle, 6);
+  // Same butt, action and sights, so hands and aiming are unchanged.
+  for (const name of ["wooden stock", "receiver", "open trigger guard", "buttplate"]) {
+    expect(carbine.parts.find((part) => part.name === name)).toEqual(rifle.parts.find((part) => part.name === name));
+  }
+  expect(carbine.rear).toBe(rifle.rear);
+  expect(carbine.grip).toEqual(rifle.grip);
+  // Nothing is left hanging out past the shorter muzzle.
+  expect(carbine.parts.some((part) => part.name === "cleaning rod")).toBe(false);
+  for (const part of [...carbine.parts, ...(carbine.viewParts ?? [])]) {
+    const front = part.at[2] - (part.rotation?.[0] === 90 ? part.size[1] : part.size[2]) / 2;
+    expect(front, part.name).toBeGreaterThanOrEqual(carbine.muzzle - 1e-9);
+  }
+  // The front sight stands behind the crown.
+  expect(carbine.front).toBeGreaterThan(carbine.muzzle);
 });

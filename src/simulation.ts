@@ -10,7 +10,7 @@ import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
-import { equipLoadout, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
+import { equipLoadout, kitFor, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
   villageSpawn,
@@ -1100,7 +1100,7 @@ export class Game {
   selectLoadout(p: Soldier, loadout: Loadout) {
     if (!["rifleman", "marksman", "support", "emplacement"].includes(loadout)) return;
     p.pendingLoadout = loadout;
-    if (this.tick === 0) equipLoadout(p, loadout, this.map.id === "industrial");
+    if (this.tick === 0) equipLoadout(p, loadout, kitFor(this.map));
   }
   respawn(p: Soldier) {
     dismount(this, p, false);
@@ -1110,7 +1110,7 @@ export class Game {
     const retainedPrimary = p.pendingLoadout === p.loadout ? p.inventory?.primary : undefined;
     const legacyWeapon = p.inventory && p.inventory[p.equippedSlot ?? "primary"].kind !== p.weapon ? p.weapon : undefined;
     p.faction = factionFor(this.map, p.team);
-    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon)), this.map.id === "industrial");
+    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon)), kitFor(this.map));
     const retainedKind = legacyWeapon ?? (retainedPrimary?.kind !== "flamethrower" ? retainedPrimary?.kind : undefined);
     if (retainedKind && p.inventory && p.loadout !== "emplacement") {
       p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;

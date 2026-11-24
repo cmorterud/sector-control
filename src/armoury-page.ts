@@ -98,7 +98,7 @@ function render(tab: Tab) {
   root.innerHTML = `<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
       <div class="eyebrow">SECTOR CONTROL</div><h1>Armoury</h1>
-      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles. Support can carry a light machine gun or take an emplacement kit on any map. Each role has a pistol.</p>
+      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun or take an emplacement kit on any map. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${tabs.map(([id, label]) => `<button role="tab" aria-selected="${id === tab}" data-tab="${id}">${escape(label)}</button>`).join("")}</nav>
     <section>${content}</section>

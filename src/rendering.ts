@@ -3441,7 +3441,9 @@ export class Renderer implements CollisionWorld {
     const muzzle = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(p.weapon,p.weaponId)));
     let needed = weaponPullback(eye, muzzle, this.camera.forward, (a, b) => this.ray(a, b));
     if (p.weapon === "serviceRifle") {
-      const tip = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, -0.05, -0.98));
+      // The real point of this rifle's bayonet, wherever its muzzle puts it.
+      const { blade } = bayonetMount(weaponDesign(p)?.muzzle ?? -0.7);
+      const tip = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, blade.at[1], blade.at[2] - blade.size[1] / 2));
       needed = Math.max(needed, weaponPullback(eye, tip, this.camera.forward, (a, b) => this.ray(a, b)));
     }
     // Respond immediately toward cover, settle smoothly away; no clipping lag.
