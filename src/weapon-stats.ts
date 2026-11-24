@@ -16,9 +16,10 @@ export const soldierHealth = 100;
 // the game's current 192 m/s.
 export const bulletSpeedScale = 192 / 744;
 
-export type WeaponRole = "rifle" | "scoped" | "pistol" | "machineGun" | "emplaced";
+export type WeaponRole = "rifle" | "carbine" | "scoped" | "pistol" | "machineGun" | "emplaced";
 export const roleLabels: Record<WeaponRole, string> = {
   rifle: "Bolt-action rifle",
+  carbine: "Bolt-action carbine",
   scoped: "Scoped rifle",
   pistol: "Pistol",
   machineGun: "Light machine gun",
@@ -45,7 +46,7 @@ export interface WeaponStats {
   reserve: number;
   reloadSeconds: number;
   damage: Record<HitZone, number>;
-  // Pistols lose damage past this range (metres).
+  // Pistols and carbines lose damage past this range (metres).
   falloff?: { start: number; end: number; minimum: number };
   summary: string;
 }
@@ -55,6 +56,11 @@ const rifleDamage = { head: 150, chest: 85, stomach: 65, arms: 35, legs: 40 };
 const scopedDamage = { head: 150, chest: 120, stomach: 80, arms: 45, legs: 50 };
 const machineGunDamage = { head: 70, chest: 38, stomach: 34, arms: 20, legs: 22 };
 const pistolFalloff = { start: 25, end: 50, minimum: 0.6 };
+// A short barrel: full damage across any room or corridor, less across open ground.
+const carbineFalloff = { start: 25, end: 60, minimum: 0.7 };
+// Carbines are issued for close quarters (Fort Vaux): the same round and
+// magazine as the rifle, worked faster, from a shorter weapon.
+const carbineRoundsPerMinute = 70;
 
 export const weaponStats: WeaponStats[] = [
   {
@@ -88,6 +94,12 @@ export const weaponStats: WeaponStats[] = [
     summary: "Fastest bullet and the hardest stomach hit; five rounds a clip.",
   },
   {
+    id: "kar98az", name: "Karabiner 98AZ", faction: "german", role: "carbine", round: "7.92×57 mm",
+    historical: { muzzleVelocity: 870, rate: [12, 15], note: "Short carbine carried by pioneers and assault troops." },
+    roundsPerMinute: carbineRoundsPerMinute, magazine: 5, reserve: 60, reloadSeconds: 1.6, damage: { ...rifleDamage, stomach: 70 }, falloff: carbineFalloff,
+    summary: "Short and quick to work in corridors; loses damage across open ground.",
+  },
+  {
     id: "gewehr98-scoped", name: "Scoped Gewehr 98", faction: "german", role: "scoped", round: "7.92×57 mm",
     historical: { muzzleVelocity: 878, rate: [10, 12], note: "Selected rifles fitted with commercial telescopic sights." },
     roundsPerMinute: 40, magazine: 5, reserve: 40, reloadSeconds: 1.8, damage: scopedDamage,
@@ -110,6 +122,12 @@ export const weaponStats: WeaponStats[] = [
     historical: { muzzleVelocity: 700, rate: [12, 15], note: "Five-round en-bloc clip." },
     roundsPerMinute: 55, magazine: 5, reserve: 60, reloadSeconds: 1.6, damage: rifleDamage,
     summary: "Standard French rifle; the slowest rifle bullet.",
+  },
+  {
+    id: "berthier-carbine", name: "Berthier Mle 1892 M16", faction: "french", role: "carbine", round: "8 mm Lebel",
+    historical: { muzzleVelocity: 637, rate: [12, 15], note: "Short carbine of the cavalry and artillery; five-round clip from 1916." },
+    roundsPerMinute: carbineRoundsPerMinute, magazine: 5, reserve: 60, reloadSeconds: 1.6, damage: rifleDamage, falloff: carbineFalloff,
+    summary: "Short and quick to work in corridors; loses damage across open ground.",
   },
   {
     id: "lebel-scoped", name: "Scoped Lebel", faction: "french", role: "scoped", round: "8 mm Lebel",

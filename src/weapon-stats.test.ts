@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
-import { equipLoadout, factions, switchWeapon } from "./loadouts";
+import { equipLoadout, factions, kitFor, riflemanWeapon, switchWeapon } from "./loadouts";
+import { fortVauxMap } from "./fort-vaux-map";
+import { trenchMap } from "./trench-map";
 import { armoryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
 
 import { Game, TestCollision, idle } from "./simulation";
@@ -8,7 +10,9 @@ import { industrialMap } from "./map";
 it("gives every Armory faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
   for (const f of armoryFactions) {
     expect(factions[f].name).toBeTruthy();
-    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual(["emplaced", "machineGun", "pistol", "rifle", "scoped"]);
+    // The two armies that fight inside Fort Vaux also have a carbine.
+    const carbine = f === "french" || f === "german" ? ["carbine"] : [];
+    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual([...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
   }
   expect(new Set(weaponStats.map(w => w.id)).size).toBe(weaponStats.length);
 });
@@ -20,8 +24,8 @@ it("follows the damage design rules", () => {
     expect(w.damage.arms).toBeLessThan(w.damage.stomach);
     expect(w.damage.legs).toBeLessThan(w.damage.stomach);
     expect(w.damage.stomach).toBeLessThanOrEqual(w.damage.chest);
-    if (w.role === "rifle") {
-      // A rifle kills with one hit to the head and two to the chest or stomach.
+    if (w.role === "rifle" || w.role === "carbine") {
+      // A rifle or carbine kills with one hit to the head and two to the chest or stomach.
       expect(shotsToKill(w, "head")).toBe(1);
       expect(shotsToKill(w, "chest")).toBe(2);
       expect(shotsToKill(w, "stomach")).toBe(2);
@@ -62,7 +66,7 @@ function weaponRange() {
 it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armory profile when equipping, firing and reloading", w => {
   const { g, shooter } = weaponRange();
   shooter.faction = w.faction;
-  equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : "rifleman");
+  equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : "rifleman", w.role === "carbine" ? "carbine" : "service");
   if (w.role === "pistol") {
     expect(switchWeapon(shooter, "sidearm", g.tick)).toBe(true);
     for (let i = 0; i < 10; i++) g.step(idle());
@@ -103,7 +107,7 @@ it.each([
   expect(target.hp).toBe(Math.max(0, soldierHealth - w.damage[zone]));
 });
 
-it.each(weaponStats.filter(w => w.role === "rifle"))("takes two $name chest rounds or one head round to kill a full-health soldier", w => {
+it.each(weaponStats.filter(w => w.role === "rifle" || w.role === "carbine"))("takes two $name chest rounds or one head round to kill a full-health soldier", w => {
   const hit = (g: Game, shooterId: number, team: typeof g.players[0]["team"], y: number) => {
     g.projectiles.push({
       actor: shooterId, team, id: g.projectiles.length + 1, weapon: "serviceRifle", weaponId: w.name,
@@ -143,4 +147,52 @@ it("applies pistol falloff on a projectile beyond the old 25 metre limit", () =>
   const travel = Math.hypot(impact.at.x - origin.x, impact.at.y - origin.y, impact.at.z - origin.z);
   expect(travel).toBeGreaterThan(25);
   expect(target.hp).toBeCloseTo(soldierHealth - damageAt(weapon, "chest", travel));
+});
+
+it("makes each carbine its rifle worked faster, with the same hit up close and less at range", () => {
+  const carbines = weaponStats.filter(w => w.role === "carbine");
+  expect(carbines.map(w => w.faction).sort()).toEqual(["french", "german"]);
+  for (const carbine of carbines) {
+    const rifle = weaponStats.find(w => w.faction === carbine.faction && w.role === "rifle")!;
+    expect(carbine.round).toBe(rifle.round);
+    expect(carbine.magazine).toBe(rifle.magazine);
+    expect(carbine.damage).toEqual(rifle.damage);
+    // Quicker between shots, so two chest hits land sooner in a corridor.
+    expect(shotInterval(carbine)).toBeLessThan(shotInterval(rifle));
+    expect(timeToKill(carbine, "chest", 5)).toBeLessThan(timeToKill(rifle, "chest", 5) - .15);
+    expect(timeToKill(carbine, "chest", 5)).toBeLessThan(.9);
+    // The short barrel gives up velocity and, past a room's length, damage.
+    expect(gameMuzzleVelocity(carbine)).toBeLessThan(gameMuzzleVelocity(rifle));
+    for (const zone of hitZones) {
+      expect(damageAt(carbine, zone.id, 20)).toBe(rifle.damage[zone.id]);
+      expect(damageAt(carbine, zone.id, 70)).toBeLessThan(damageAt(rifle, zone.id, 70));
+    }
+    // It still takes two chest hits at any range, never three.
+    expect(shotsToKill(carbine, "chest", 200)).toBe(2);
+    expect(shotsToKill(carbine, "head", 200)).toBe(1);
+  }
+});
+
+it("issues carbines to riflemen in Fort Vaux and rifles everywhere else", () => {
+  expect(kitFor(fortVauxMap)).toBe("carbine");
+  expect(kitFor(trenchMap)).toBe("service");
+  expect(kitFor(industrialMap)).toBe("industrial");
+  expect(riflemanWeapon("french", "carbine")).toBe("Berthier Mle 1892 M16");
+  expect(riflemanWeapon("german", "carbine")).toBe("Karabiner 98AZ");
+  // An army without a carbine keeps its rifle.
+  expect(riflemanWeapon("british", "carbine")).toBe("SMLE Mk III");
+  expect(riflemanWeapon("french", "service")).toBe("Berthier Mle 1916");
+  const fort = new Game(new TestCollision(fortVauxMap), true, 600, 12345, undefined, { map: fortVauxMap, humanPlayerIds: [] });
+  for (const p of fort.players) {
+    expect(p.weapon).toBe("serviceRifle");
+    expect(p.weaponId, `${p.team} ${p.loadout}`).toBe(p.team === "blue" ? "Berthier Mle 1892 M16" : "Karabiner 98AZ");
+    // Marksmen and machine gunners are unchanged where the roster has them.
+    expect(p.inventory!.sidearm.id).toBe(p.team === "blue" ? "Ruby" : "P08 Luger");
+  }
+  const trench = new Game(new TestCollision(trenchMap), true, 600, 12345, undefined, { map: trenchMap, teamSize: 6, humanPlayerIds: [] });
+  expect(trench.players.some(p => /Mle 1892|98AZ/.test(p.weaponId ?? ""))).toBe(false);
+  // A respawn in the fort reissues the carbine.
+  const p = fort.players[0];
+  fort.respawn(p);
+  expect(p.weaponId).toBe("Berthier Mle 1892 M16");
 });
