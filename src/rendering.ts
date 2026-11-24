@@ -1894,11 +1894,11 @@ export class Renderer implements CollisionWorld {
     });
     const smoke = this.billboards("distant smoke", life, backdropSmoke.length * 12, "#86888a", 0.42);
     const flashes = Array.from({ length: 3 }, () => {
-      const glowMaterial = this.dustMaterial("#ffd08a"), plumeMaterial = this.dustMaterial("#4d4740");
+      const glowMaterial = this.dustMaterial("#ffd08a", true), plumeMaterial = this.dustMaterial("#4d4740");
       return { glow: shape("distant burst", life, "plane", glowMaterial, [1, 1, 1]), plume: shape("distant burst plume", life, "plane", plumeMaterial, [1, 1, 1]), glowMaterial, plumeMaterial };
     });
     const flares = Array.from({ length: 2 }, () => {
-      const material = this.dustMaterial("#f2ffe6");
+      const material = this.dustMaterial("#f2ffe6", true);
       return { glow: shape("distant flare", life, "plane", material, [1, 1, 1]), material };
     });
     this.backdrop = { life, balloons, smoke, flashes, flares };
@@ -2047,7 +2047,7 @@ export class Renderer implements CollisionWorld {
       light.addComponent("light", { type: "omni", color: color("#eaf4d6"), intensity: 0, range: 70, castShadows: false });
       const quad = (name: string, hex: string) => {
         const e = this.joint(name, root);
-        e.addComponent("render", { type: "plane", material: this.dustMaterial(hex), castShadows: false, receiveShadows: false });
+        e.addComponent("render", { type: "plane", material: this.dustMaterial(hex, true), castShadows: false, receiveShadows: false });
         return e;
       };
       const rig = { light, core: quad("flare", "#ffffff"), halo: quad("flare halo", "#dcefc6") };
@@ -2062,7 +2062,7 @@ export class Renderer implements CollisionWorld {
     });
     this.craterGlows = Array.from({ length: 6 }, () => {
       const glow = this.joint("crater embers", root);
-      glow.addComponent("render", { type: "plane", material: this.dustMaterial("#ff6a20"), castShadows: false, receiveShadows: false });
+      glow.addComponent("render", { type: "plane", material: this.dustMaterial("#ff6a20", true), castShadows: false, receiveShadows: false });
       glow.enabled = false;
       return glow;
     });
@@ -2611,10 +2611,13 @@ export class Renderer implements CollisionWorld {
     }
     frame.update();
   }
-  private dustMaterial(hex: string) {
+  // Smoke and dust are drawn unlit. At night that would make them glow, so
+  // unless a cloud is itself a light (`glow`), it is dimmed to the dark.
+  private dustMaterial(hex: string, glow = false) {
     const m = new pc.StandardMaterial();
     m.diffuse = color("#000000");
     m.emissive = color(hex);
+    if (this.map.night && !glow) m.emissiveIntensity = 0.14;
     const texture = this.texture("dust", 128, 128, () => dustPixels(), false);
     m.emissiveMap = texture;
     m.opacityMap = texture;
