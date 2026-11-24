@@ -173,8 +173,11 @@ test('trusted publisher carries production and siblings through a PR update, pru
     const cwd = process.cwd(), oldFetch = globalThis.fetch;
     const envKeys = ['GITHUB_REPOSITORY', 'GH_TOKEN', 'GITHUB_STEP_SUMMARY'];
     const env = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+    // PR 42's current build lists kept.js; old.js was already retained once from the build before it.
     const existing = new Map([['index.html', Buffer.from('production')], ['assets/main.js', Buffer.from('production JS')],
       ['pr-preview/pr-41/index.html', Buffer.from('closed preview')], ['pr-preview/pr-42/assets/old.js', Buffer.from('obsolete')],
+      ['pr-preview/pr-42/assets/kept.js', Buffer.from('previous build JS')],
+      ['pr-preview/pr-42/revision.json', Buffer.from(JSON.stringify({files: {'index.html': 'x', 'assets/kept.js': 'y'}}))],
       ['pr-preview/pr-43/index.html', Buffer.from('sibling')]]);
     const blobs = new Map([...existing.values()].map(bytes => [gitHash(bytes), bytes]));
     const writes = [];
@@ -208,6 +211,9 @@ test('trusted publisher carries production and siblings through a PR update, pru
       assert.equal(await readFile('playtest-artifacts/pages-site/pr-preview/pr-43/index.html', 'utf8'), 'sibling');
       await assert.rejects(readFile('playtest-artifacts/pages-site/pr-preview/pr-41/index.html'), /ENOENT/);
       await assert.rejects(readFile('playtest-artifacts/pages-site/pr-preview/pr-42/assets/old.js'), /ENOENT/);
+      // A page cached from the replaced build still finds its bundle for one more deployment.
+      assert.equal(await readFile('playtest-artifacts/pages-site/pr-preview/pr-42/assets/kept.js', 'utf8'), 'previous build JS');
+      assert.deepEqual(JSON.parse(await readFile('playtest-artifacts/pages-site/pr-preview/pr-42/revision.json', 'utf8')).files, build.files);
       assert.equal(await readFile('playtest-artifacts/pages-site/pr-preview/pr-42/assets/new.js', 'utf8'), 'throw Error("static data only")');
       const tree = writes.find(w => w.path === 'git/trees').body.tree;
       assert.ok(tree.some(entry => entry.path === 'assets/main.js'));
@@ -280,4 +286,25 @@ test('the publisher deploys one artifact name per attempt and retries only a fai
   for (const step of steps) assert.match(step, /steps\.context\.outputs\.publish == 'true'/);
   assert.ok(workflow.indexOf('upload-pages-artifact@') < workflow.indexOf('deploy-pages@'));
   assert.match(workflow, /url: \$\{\{ steps\.deploy\.outputs\.page_url \|\| steps\.deploy_retry\.outputs\.page_url \|\| steps\.deploy_final\.outputs\.page_url \}\}/);
+});
+
+test('a replaced build keeps only its own hashed bundle files, for one deployment', () => {
+  const file = name => ({sha: name});
+  const existing = new Map([['index.html', file('old html')], ['assets/main-OLD.js', file('old js')], ['assets/main-OLDER.js', file('older js')],
+    ['previews/map.jpg', file('old image')], ['pr-preview/pr-7/assets/app-OLD.js', file('pr js')], ['pr-preview/pr-7/index.html', file('pr html')]]);
+  const incoming = new Map([['index.html', file('new html')], ['assets/main-NEW.js', file('new js')]]);
+  // The replaced production build listed main-OLD.js; main-OLDER.js was a leftover from the build before.
+  const listed = ['index.html', 'assets/main-OLD.js', 'previews/map.jpg', 'assets/../index.html', 'assets/nested/x.js', 'assets/missing.js', 7];
+  const next = replaceBuild(existing, incoming, 0, listed);
+  assert.deepEqual([...next.keys()].sort(), ['assets/main-NEW.js', 'assets/main-OLD.js', 'index.html', 'pr-preview/pr-7/assets/app-OLD.js', 'pr-preview/pr-7/index.html']);
+  assert.equal(next.get('index.html').sha, 'new html');
+  // The next production publish lists only main-NEW.js as the replaced build's file, so main-OLD.js goes.
+  const after = replaceBuild(next, new Map([['index.html', file('newest html')], ['assets/main-NEWEST.js', file('newest js')]]), 0, ['index.html', 'assets/main-NEW.js']);
+  assert.deepEqual([...after.keys()].filter(path => !path.startsWith('pr-preview/')).sort(), ['assets/main-NEW.js', 'assets/main-NEWEST.js', 'index.html']);
+  // A preview keeps its own replaced bundle and never touches production or siblings.
+  const preview = replaceBuild(existing, new Map([['index.html', file('pr new')], ['assets/app-NEW.js', file('pr new js')]]), 7, ['assets/app-OLD.js', 'assets/main-OLD.js']);
+  assert.deepEqual([...preview.keys()].filter(path => path.startsWith('pr-preview/pr-7/')).sort(), ['pr-preview/pr-7/assets/app-NEW.js', 'pr-preview/pr-7/assets/app-OLD.js', 'pr-preview/pr-7/index.html']);
+  assert.equal(preview.get('assets/main-OLD.js').sha, 'old js');
+  // An incoming file of the same name always wins over the retained one.
+  assert.equal(replaceBuild(existing, new Map([['index.html', file('h')], ['assets/main-OLD.js', file('rebuilt')]]), 0, ['assets/main-OLD.js']).get('assets/main-OLD.js').sha, 'rebuilt');
 });

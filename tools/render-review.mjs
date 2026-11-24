@@ -35,7 +35,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=process.env.REVIEW_BASE_URL??`http://127.0.0.1:${server.address().port}${sitePath}`;
 if(!base.endsWith('/')||!['https:','http:'].includes(new URL(base).protocol))throw Error('Invalid review URL');
-let browser,client,chromeLog='',armouryURL;
+let browser,client,chromeLog='',armouryURL,published;
 const report={map,source:process.env.REVIEW_SOURCE_SHA??process.env.GITHUB_SHA??'local',scenarios:[],errors:[],note:visualOnly?'Fixed viewpoints at the start of the seeded match.':'Controlled snapshots advance 900 real simulation/presentation steps; software GPU displays checkpoints. Not a real-time FPS benchmark.'};
 // Inspect the clean overview itself, so a black/flat canvas cannot pass merely
 // because the HUD and simulation continue running. Chrome emits 8-bit RGB(A).
@@ -76,7 +76,7 @@ try {
  if(process.env.REVIEW_BASE_URL){
   const expected=expectedCI();
   if(process.env.EXPECTED_HEAD_SHA)expected.head=process.env.EXPECTED_HEAD_SHA;
-  const revision=await readPublishedManifest(base,expected);
+  const revision=published=await readPublishedManifest(base,expected);
   report.checkerSource=report.source;report.source=revision.source;report.head=revision.head;report.deployment=base;
   report.ciRun=revision.run;report.ciAttempt=revision.attempt;
  }
@@ -97,10 +97,20 @@ try {
  for(const mode of ['overview','ground']) {
   const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'||map==='fort-vaux'?'600':'120',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
   if(map==='fort-vaux'&&mode==='overview'&&!visualOnly&&!process.env.REVIEW_BASE_URL)query.delete('map');
+  // Pages caches a page for up to ten minutes. Like the manifest request, ask
+  // for a URL unique to this revision so an earlier deployment's HTML cannot answer.
+  if(published){query.set('revision',published.head);query.set('run',published.run);}
   const destination=base+'?'+query;
   console.log(JSON.stringify({map,mode,stage:'loading'}));
   await client.send('Page.navigate',{url:destination});
   await until(()=>client.evaluate(`(()=>{if(location.href!==${JSON.stringify(destination)}||document.readyState!=='complete'||!document.body)return false;if(document.body.innerText.includes('Unable to initialize'))throw Error(document.body.innerText);return document.querySelector('#menu')?.classList.contains('hidden')===false&&document.querySelector('#primary')?.textContent.trim().startsWith('Begin operation');})()`));
+  if(published){
+   // The page under test must be the published build, not a cached predecessor.
+   const root=new URL(base).pathname;
+   const loaded=await client.evaluate(`[...document.querySelectorAll('script[src],link[rel="stylesheet"][href]')].map(e=>new URL(e.src||e.href,location.href).pathname)`);
+   const foreign=loaded.filter(path=>path.startsWith(root)&&!Object.hasOwn(published.files,path.slice(root.length)));
+   if(!loaded.some(path=>path.startsWith(root+'assets/'))||foreign.length)throw Error('The deployed page is not build '+published.head+': it loads '+(foreign.join(', ')||'no bundle'));
+  }
   if(!visualOnly&&!process.env.REVIEW_BASE_URL&&mode==='overview') {
    report.briefing=await client.evaluate(`(${checkBriefing})(${JSON.stringify(map)},${JSON.stringify(maps)})`);
    if(map==='fort-vaux')await client.evaluate(`(()=>{
