@@ -163,7 +163,10 @@ export interface KitRuntime {
   fallen: Record<string, number[]>;
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "village" | "verdun" | "headland" | "training" | "fort-vaux";
+  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux";
+  // A night map (src/night.ts): an unlit soldier is seen only within `sight`
+  // metres. Light from lamps, flares and bursts restores the usual range.
+  night?: { sight: number };
   name: string;
   width: number;
   depth: number;
@@ -849,3 +852,6 @@ export function mantleLanding(
 ): Vec | null {
   return mantleRoute(p, direction, map)?.landing ?? null;
 }
+
+// Trench front's ground, by day or by night: the same trenches, wire and churned mud.
+export const trenchGround = (map: Pick<MapDefinition, "id">) => map.id === "trenches" || map.id === "night-raid";

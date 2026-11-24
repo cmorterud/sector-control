@@ -45,10 +45,11 @@ import { weaponAim } from "./recoil";
 import { CrouchToggle, eyeHeightOf } from "./crouch";
 import { PlaytestRecorder } from "./playtest";
 import { AutoQuality, parseQuality, qualityStorageKey, type Quality, type QualityChoice } from "./graphics-quality";
-import { mantleLanding, dist, groundHeight, industrialMap, blocked, beyondPlayArea } from "./map";
+import { mantleLanding, dist, groundHeight, industrialMap, blocked, beyondPlayArea, trenchGround } from "./map";
 import { boundaryCountdown } from "./boundary";
 import { dugouts, signboards } from "./trench-dressing";
 import { trenchMap } from "./trench-map";
+import { nightRaidMap } from "./night-map";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -165,7 +166,7 @@ const saveQuality = (value: string) => { try { localStorage.setItem(qualityStora
 let reviewFrames = 0;
 let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
-const battlefields = [fortVauxMap, trainingMap, trenchMap, villageMap, verdunMap, headlandMap, industrialMap];
+const battlefields = [fortVauxMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, headlandMap, industrialMap];
 const requestedMap = params.get("map");
 const map = battlefields.find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
 const training=map.id==="training"?new TrainingSession():undefined;
@@ -944,7 +945,7 @@ try {
     advance:advanceReview,
     combat:combatReview,
     survey:(firstPerson:boolean,detail?:string)=>{
-      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-7.4,3,6,-2.2]};
+      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],"night-raid":[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-7.4,3,6,-2.2]};
       const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-3.3,-2.4,-6.8,-5.6]};
       const fortDetails:Record<string,[number,number,number,number]>={cistern:poses["fort-vaux"],barracks:[-35.4,2,-23,-1],casemate:[34.5,1,23,-1],yard:[-6,19,7,18]};
       if (map.fort) {
@@ -963,7 +964,7 @@ try {
       if(step)trenchDetails["firing-step"]=[step.x-2.6,step.z+0.6,step.x+40,step.z+0.6];
       if(dugout)trenchDetails["trench-dugout"]=[dugout.x-dugout.rear*1.2,dugout.z+4.5,dugout.x,dugout.z];
       if(sign)trenchDetails["trench-sign"]=[sign.x+sign.facing*1.6,sign.z+1.6,sign.x,sign.z];
-      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "trenches" ? trenchDetails[detail] : undefined) : poses[map.id];
+      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0];
       let at={x,z};
@@ -992,6 +993,8 @@ try {
       ? `France and Imperial Germany fight for the flooded cistern under Fort Vaux. The service passage and Sunken Yard connect the barracks and east casemate. ${teamSize}v${teamSize} · three-flag domination · no artillery.`
       : map.id === "village"
       ? `Fight through orchard gardens, workyards and paved courtyards to hold Saint-Martin Manor. Use low destructible cover between the houses; smoke screens the streets and artillery opens new routes. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
+      : map.id === "night-raid"
+        ? `Trench front after dark. You can see about fifteen meters; beyond that, only what a lamp, a flare or a shell burst shows. Capture flags A–D and hold them to score. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "trenches"
         ? `Capture flags A–D in the front trenches and hold them to score. Use smoke and advancing squads to take enemy flags. Step down when pinned. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
