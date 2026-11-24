@@ -10,7 +10,8 @@ test("Verdun initializes French and German rosters with five reachable open obje
  const g=new Game(new TestCollision(verdunMap),true,100,41,undefined,{map:verdunMap,ambientArtillery:false});
  expect(g.players).toHaveLength(100); expect(g.players[0].faction).toBe("french"); expect(g.players[50].faction).toBe("german");
  expect(g.sectors.map(s=>s.id)).toEqual(["A","B","C","D","E"]);
- expect(g.map.width).toBe(208);
+ expect(g.map.playArea).toEqual({width:208,depth:128});
+ expect([g.map.width,g.map.depth]).toEqual([240,160]);
  expect(g.sectors.filter(s=>s.home==="blue")).toHaveLength(2);
  expect(g.sectors.filter(s=>s.home==="red")).toHaveLength(2);
  for(const flag of g.sectors) {

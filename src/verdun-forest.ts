@@ -1,4 +1,4 @@
-import { dist, groundHeight, type Box, type MapDefinition, type Vec } from "./map";
+import { dist, groundHeight, playArea, type Box, type MapDefinition, type Vec } from "./map";
 
 export interface Woodland {
   belts: (Vec & { radiusX: number; radiusZ: number })[];
@@ -76,6 +76,8 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   // Separate streams retain reproducible flanks and central grove placement.
   const woodland = map.woodland ?? verdunWoodland;
   const flanks = { ...woodland, groves: undefined };
+  // Scatter across the play area only: the dead zone beyond the wire stays clear.
+  const span = playArea(map).width;
   let seed = 0x7e4d1917;
   const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
   const place = (b: Box, clearance: number): boolean => {
@@ -98,7 +100,7 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   };
   let trees = 0;
   for (let attempt = 0; attempt < 2400 && trees < 124; attempt++) {
-    const x = (random() - .5) * (map.width - 12), z = (random() - .5) * 116;
+    const x = (random() - .5) * (span - 12), z = (random() - .5) * 116;
     const density = woodlandDensity(flanks, x, z);
     if (random() > density || (Math.abs(x) < 24 && Math.abs(z) < 28)) continue;
     if (parts.some((b) => dist(b, { x, z }) < 3.8 + random() * .8)) continue;
@@ -112,7 +114,7 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   // ground texture, never a hedge that hides an entire flank.
   let brush = 0, logs = 0, stumps = 0;
   for (let attempt = 0; attempt < 1200 && (brush < 42 || logs < 14 || stumps < 12); attempt++) {
-    const x = (random() - .5) * (map.width - 16), z = (random() - .5) * 114;
+    const x = (random() - .5) * (span - 16), z = (random() - .5) * 114;
     if (woodlandDensity(flanks, x, z) < .45) continue;
     const kind = attempt % 5 === 0 && logs < 14 ? "log" : attempt % 4 === 0 && stumps < 12 ? "stump" : "brush";
     if (kind === "brush" && brush >= 42) continue;

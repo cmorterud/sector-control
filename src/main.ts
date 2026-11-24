@@ -984,7 +984,9 @@ try {
       if(step)trenchDetails["firing-step"]=[step.x-2.6,step.z+0.6,step.x+40,step.z+0.6];
       if(dugout)trenchDetails["trench-dugout"]=[dugout.x-dugout.rear*1.2,dugout.z+4.5,dugout.x,dugout.z];
       if(sign)trenchDetails["trench-sign"]=[sign.x+sign.facing*1.6,sign.z+1.6,sign.x,sign.z];
-      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : poses[map.id];
+      // Verdun: across the boundary wire behind Blue's spawn, and a walk out through it.
+      const verdunDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-99,22,-108,32],"boundary-walk":[-100,6,-116,6]};
+      const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0];
       let at={x,z};
