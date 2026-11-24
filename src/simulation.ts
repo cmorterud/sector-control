@@ -81,6 +81,8 @@ import {
   walkSegment,
   terrainPatchSize,
   playArea,
+  inBoundaryWire,
+  inEnemyBelt,
   inWire,
   type Vec,
   type Box,
@@ -1349,9 +1351,11 @@ export class Game {
         !p.fall &&
         this.tick >= p.nextMantle &&
         this.tick >= p.nextHop &&
-        !inWire(p.x, p.z, this.map, p.team)
+        !inEnemyBelt(p.x, p.z, this.map, p.team)
       ) {
-        if (!this.startMantle(p, c)) this.startHop(p);
+        // In the boundary wire there is no hop; mantleRoute only offers a
+        // climb that does not lead further out, so no one is trapped there.
+        if (!this.startMantle(p, c) && !inBoundaryWire(p.x, p.z, this.map)) this.startHop(p);
       }
       if (p.mantle) {
         const m = p.mantle;

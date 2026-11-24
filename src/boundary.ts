@@ -6,7 +6,8 @@ import type { Game, Soldier } from "./simulation";
 // walks along the boundary onto the soldier, repeating until they return or
 // die. A short pause inside clears it, so stepping in and out does not reset it.
 export const boundaryRules = {
-  // Walking pace through the wire: no sprint, hop or mantle.
+  // Walking pace through the wire: no sprint or hop, and only mantles that
+  // lead sideways or back in (see boundaryAllowsMantle).
   wireSpeed: 1.8,
   clearTicks: 30,
   repeatTicks: 45,

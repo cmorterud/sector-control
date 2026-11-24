@@ -18,7 +18,7 @@ A six-phase pass on Trench front for immersion and look, plus an out-of-bounds r
 
 - **Terrain:** 192 × 160 m, with `playArea` 160 × 128 m. Bots, artillery targeting, ambient shells, the minimap and the tactical map all use `playArea(map)`.
 - **Out of bounds:** leaving the play area starts a 150-tick countdown. At zero, three shells land along the wire at +0, +6 and +12 ticks, the last on the soldier, repeating every 45 ticks. A full second back inside clears it. It credits no one.
-- **Boundary wire:** a 3 m belt just outside the play area. Inside it soldiers move at 1.8 m/s and cannot hop or mantle.
+- **Boundary wire:** a 3 m belt just outside the play area. Inside it soldiers move at 1.8 m/s and cannot hop; they can mantle only sideways or back toward the line. From inside the sector no mantle lands beyond the play area, so the trench blocks cannot be vaulted outward.
 - **No-man's land belts:** 4 m segments, 9.5 m in front of each front line's centre, with gaps within 4 m of z −33, 35 and −1 (Blue) and −27, 31 and −1 (Red). Only the enemy is slowed. A shell cuts segments within 2.4 m, a grenade within 1.4 m.
 - **Distant bursts:** one per 150-tick slot at 150–260 m, on a fixed timetable from the match tick. The rumble is delayed by distance at 343 m/s.
 

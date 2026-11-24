@@ -634,7 +634,10 @@ export function inBoundaryWire(x: number, z: number, map: MapDefinition) {
 export type WireSegment = { id: string; team: "blue" | "red"; x: number; z: number; w: number; d: number };
 // Inside the boundary belt, or an intact segment of the enemy's belt.
 export function inWire(x: number, z: number, map: MapDefinition, team?: "blue" | "red") {
-  if (inBoundaryWire(x, z, map)) return true;
+  return inBoundaryWire(x, z, map) || inEnemyBelt(x, z, map, team);
+}
+// An intact segment of the enemy's no-man's-land belt.
+export function inEnemyBelt(x: number, z: number, map: MapDefinition, team?: "blue" | "red") {
   const cut = map.destruction?.wire;
   return !!map.wireBelts?.some((b) => b.team !== team && !cut?.[b.id] && Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
 }
@@ -827,14 +830,33 @@ function coverVaultRoute(p:Vec,direction:Vec,map:MapDefinition):{landing:Vec;edg
   return null;
 }
 
-// Preserve the terrain ledge route, with a separate checked route for low cover.
+// At a wired sector edge a mantle never carries a soldier further out: from
+// inside, it cannot land beyond the play area (over a trench block, say), and
+// from outside it may climb sideways or back toward the line. The boundary
+// wire is crossed on foot.
+export function boundaryAllowsMantle(from: Vec, landing: Vec, map: MapDefinition): boolean {
+  if (!map.boundary) return true;
+  const after = beyondPlayArea(landing.x, landing.z, map);
+  if (after <= 0) return true;
+  const before = beyondPlayArea(from.x, from.z, map);
+  return before > 0 && after <= before + 0.05;
+}
+
 export function mantleRoute(
   p: Vec,
   direction: Vec,
   map: MapDefinition,
 ): { landing: Vec; edge: Vec; vault?: boolean } | null {
-  const cover=coverVaultRoute(p,direction,map);
-  if(cover)return cover;
+  const route = coverVaultRoute(p, direction, map) ?? ledgeRoute(p, direction, map);
+  return route && boundaryAllowsMantle(p, route.landing, map) ? route : null;
+}
+
+// Preserve the terrain ledge route, with a separate checked route for low cover.
+function ledgeRoute(
+  p: Vec,
+  direction: Vec,
+  map: MapDefinition,
+): { landing: Vec; edge: Vec } | null {
   if (!map.terrain || (p.y!==undefined && Math.abs(p.y-groundHeight(p.x,p.z,map))>.24)) return null;
   const length = Math.hypot(direction.x, direction.z);
   if (length < 0.1) return null;

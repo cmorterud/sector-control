@@ -121,6 +121,36 @@ it("slows soldiers in the wire to a walk and stops them hopping or mantling", ()
   expect(hops.some((e) => e.type === "hop" || e.type === "mantle")).toBe(false);
 });
 
+it("never mantles a soldier out over a trench block, and lets one behind it climb back", () => {
+  const blocks = trenchMap.boxes.filter((b) => b.id?.startsWith("trench-block-"));
+  for (const block of blocks) {
+    const north = Math.sign(block.z);
+    // In the trench just inside the block, facing out past the wire: the block
+    // offers no vault and Space does not carry anyone over it.
+    {
+      const { g, p } = solo();
+      place(g, block.x, block.z - north * 1.2);
+      const yaw = north > 0 ? Math.PI : 0;
+      const events = run(g, 50, { mantle: true, yaw });
+      expect(events.some((e) => e.type === "mantle")).toBe(false);
+      expect(beyondPlayArea(p.x, p.z, trenchMap)).toBeLessThan(0);
+    }
+    // Dropped in behind it, in the boundary wire: facing the block, Space
+    // climbs back over to the line before the salvo arrives.
+    {
+      const { g, p } = solo();
+      place(g, block.x, block.z + north * 1.2);
+      expect(inBoundaryWire(p.x, p.z, trenchMap)).toBe(true);
+      const yaw = north > 0 ? 0 : Math.PI;
+      const events = run(g, 50, { mantle: true, yaw });
+      expect(events.some((e) => e.type === "mantle" && e.phase === "end")).toBe(true);
+      expect(beyondPlayArea(p.x, p.z, trenchMap)).toBeLessThan(0);
+      run(g, 200);
+      expect(p.hp).toBe(100);
+    }
+  }
+});
+
 it("aims each salvo along the edge the soldier crossed", () => {
   for (const [x, z] of [[-82, 10], [30, 66]]) {
     const targets = salvoTargets(trenchMap, { x, z });
