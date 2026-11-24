@@ -74,8 +74,9 @@ try{
   await until(`document.querySelector('#primary')?.textContent.trim().startsWith('Begin')`);
   await evaluate(`document.querySelector('#primary').click()`);
   await until(`window.sectorRenderReview?.state().frames>=2`);
-  if(shot.survey)await evaluate(`window.sectorRenderReview.survey(${shot.view==='first'}${typeof shot.survey==='string'?','+JSON.stringify(shot.survey):''})`);
   for(let left=shot.ticks;left>0;left-=300)await evaluate(`window.sectorRenderReview.advance(${Math.min(300,left)})`);
+  // Autoplay would walk the player off the viewpoint, so hold it still first.
+  if(shot.survey)await evaluate(`(window.sectorRenderReview.manual(),window.sectorRenderReview.survey(${shot.view==='first'}${typeof shot.survey==='string'?','+JSON.stringify(shot.survey):''}))`);
   const at=await frames();
   await until(`window.sectorRenderReview.state().frames>=${at+3}`);
   await evaluate(`(()=>{const s=document.createElement('style');s.textContent='#ui,.playtest{visibility:hidden!important}';document.head.append(s);})()`);
