@@ -28,6 +28,7 @@ import { SceneryBatches } from "./scenery-batches";
 import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { weaponDesign } from "./weapon-design";
+import { flagCloth, flagColor, flagRingColor, type FlagState } from "./flag";
 import { factions, scoped } from "./loadouts";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
@@ -112,6 +113,8 @@ import {
   rifleHeight,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
+// Objective beacons outside Domination keep their bright signal colours.
+const beaconColors: Record<FlagState, string> = { neutral: "#d4c699", blue: "#46a9d8", red: "#de6e5f", contested: "#edc76d" };
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
@@ -4280,22 +4283,31 @@ export class Renderer implements CollisionWorld {
           false,
           ring,
         );
-        this.cube(
-          "flag cloth",
-          0.7,
-          3.1 * flagScale,
-          0,
-          1.3,
-          0.75 * flagScale,
-          0.045,
-          "#d4c699",
-          false,
-          ring,
-        );
+        // A hanging cloth instead of a board: limp under the fort's vaults,
+        // lifted a little by the wind outdoors.
+        const cloth = flagCloth(1.3, 0.75 * flagScale, this.map.fort ? 56 : 34), clothMesh = new pc.Mesh(this.app.graphicsDevice);
+        clothMesh.setPositions(cloth.positions);
+        clothMesh.setNormals(cloth.normals);
+        clothMesh.setIndices(cloth.indices);
+        clothMesh.update(pc.PRIMITIVE_TRIANGLES);
+        const flag = new pc.Entity("flag cloth");
+        flag.addComponent("render", {
+          meshInstances: [new pc.MeshInstance(clothMesh, this.material(flagColor("neutral", this.map)), flag)],
+          castShadows: false,
+        });
+        ring.addChild(flag);
+        flag.setLocalPosition(0.035, 3.475 * flagScale, 0);
       } else
         this.cube("beacon", 0, 1, 0, 0.25, 2, 0.25, "#d4c699", false, ring);
       this.rings.push(ring);
     }
+  }
+  // The dye currently on each flag's cloth, for the render review.
+  flagDyes() {
+    return this.rings.map((ring) => {
+      const cloth = (ring.findByName("flag cloth") as pc.Entity | null)?.render?.meshInstances[0]?.material;
+      return [...this.materials].find(([, material]) => material === cloth)?.[0] ?? null;
+    });
   }
   remember(g: Game) {
     this.previousShells = new Map(
@@ -4505,13 +4517,11 @@ export class Renderer implements CollisionWorld {
       this.objectiveTerrainRevision !== objectiveRevision;
     for (let i = 0; i < this.rings.length; i++) {
       const s = g.sectors[i],
-        c = s.contested
-          ? "#edc76d"
-          : s.owner === "blue"
-            ? "#46a9d8"
-            : s.owner === "red"
-              ? "#de6e5f"
-              : "#d4c699";
+        state: FlagState = s.contested ? "contested" : (s.owner ?? "neutral"),
+        // Domination flags are dyed cloth over a worn painted ring; other modes keep a bright beacon.
+        flags = g.scoring === "domination",
+        c = flags ? flagColor(state, this.map) : beaconColors[state],
+        ringColor = flags ? flagRingColor(state, this.map) : c;
       const root = this.rings[i];
       if (g.scoring === "domination" && positionObjectives) {
         const water = this.map.fort && inFortRect(s, this.map.fort.water) ? this.map.fort.waterHeight : 0;
@@ -4519,7 +4529,10 @@ export class Renderer implements CollisionWorld {
       }
       for (const child of root.children) {
         const e = child as pc.Entity;
-        if (e.name !== "flagpole") e.render!.material = this.material(c);
+        // A render component built from its own mesh instances ignores `material`,
+        // so the cloth's instance is dyed directly.
+        if (e.name === "flag cloth") e.render!.meshInstances[0].material = this.material(c);
+        else if (e.name !== "flagpole") e.render!.material = this.material(e.name === "boundary" ? ringColor : c);
         if (
           g.scoring === "domination" &&
           positionObjectives &&
