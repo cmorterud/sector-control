@@ -80,7 +80,7 @@ for(const r of terrain.rectangles) for(let row=0;row<depth;row++) for(let col=0;
 
 export const verdunMap:MapDefinition={
  id:"verdun", name:"Verdun sector",width,depth,navSpacing:4,scoring:"domination",
- playArea:{width:playWidth,depth:playDepth}, boundary:{warningTicks:5*30,wireDepth:3},
+ playArea:{width:playWidth,depth:playDepth}, boundary:{warningTicks:5*30,wireDepth:3}, backdrop:true,
  navigationPoints:[],
  spawn:{blue:{x:-93,z:0},red:{x:93,z:0}}, boxes,vegetation,terrain,woodland:verdunWoodland,
  sectors:[

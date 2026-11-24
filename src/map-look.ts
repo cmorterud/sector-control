@@ -62,9 +62,10 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
   verdun: {
     sun: { color: "#e8ebe3", intensity: 0.9, elevation: 42, azimuth: -20, shadowStrength: 0.65 },
     sky: { zenith: "#8c989e", horizon: "#adb5ae", ground: "#4a5143", clouds: 0.85, cloud: "#b4b9b5", glow: "#e1e3d9" },
-    fog: { start: 45, end: 170 },
+    // Long enough to fold the far hills, woods and the fort's ridge into the haze.
+    fog: { start: 45, end: 260 },
     grade: { brightness: 0, contrast: 1.06, saturation: 0.88, tint: "#eef5ec" },
-    vignette: 0.35, exposure: 1.1, ambient: 1.35,
+    vignette: 0.35, exposure: 1.1, ambient: 1.35, farClip: 400,
   },
   // Warm late afternoon; long shadows down the streets.
   village: {

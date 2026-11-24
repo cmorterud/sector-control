@@ -18,6 +18,9 @@ export const backdropRules = {
 export type BackdropBox = {
   x: number; y: number; z: number; w: number; h: number; d: number;
   yaw?: number; lean?: number; color: string;
+  // A box by default. "crown" is a squat eight-faced blob for a broadleaf
+  // crown or a turret dome; "spire" a four-sided point for a pine.
+  shape?: "box" | "crown" | "spire";
 };
 export type BackdropMesh = {
   positions: Float32Array; normals: Float32Array; uvs?: Float32Array; colors: Float32Array; indices: Uint32Array;
@@ -40,14 +43,29 @@ const linear = (hex: string, scale = 1) =>
 const beyondEdge = (map: MapDefinition, x: number, z: number) =>
   Math.max(0, Math.abs(x) - map.width / 2, Math.abs(z) - map.depth / 2);
 
+// How the land beyond each map's edge rolls, how far it climbs toward the
+// horizon and from where, and any single hills. Verdun's is the hill country
+// above the river: deeper folds, a long climb and a ridge for its fort.
+export type BackdropRelief = { roll: number; rise: number; riseFrom: number; hills: { x: number; z: number; radius: number; height: number }[] };
+const reliefs: Partial<Record<MapDefinition["id"], BackdropRelief>> = {
+  verdun: { roll: 3.4, rise: 15, riseFrom: 70, hills: [{ x: 222, z: -46, radius: 75, height: 9 }] },
+};
+export const backdropRelief = (map: Pick<MapDefinition, "id">): BackdropRelief =>
+  reliefs[map.id] ?? { roll: 2.4, rise: 7, riseFrom: 130, hills: [] };
+
 export function backdropHeight(map: MapDefinition, x: number, z: number) {
-  const bank = map.terrain?.bankHeight ?? 0, d = beyondEdge(map, x, z);
+  const bank = map.terrain?.bankHeight ?? 0, d = beyondEdge(map, x, z), relief = backdropRelief(map);
   const rolling =
     0.9 * Math.sin(x * 0.021 + z * 0.013 + 1.3) +
     0.6 * Math.sin(z * 0.027 - x * 0.011 + 4.2) +
     0.35 * Math.sin(x * 0.053 + z * 0.047);
-  return bank + rolling * 2.4 * smooth(backdropRules.flatBand, backdropRules.flatBand + 70, d) +
-    7 * smooth(130, backdropRules.radius, d);
+  let hills = 0;
+  for (const hill of relief.hills) {
+    const r = Math.hypot(x - hill.x, z - hill.z) / hill.radius;
+    if (r < 1) hills += hill.height * (1 - r * r) ** 2;
+  }
+  const away = smooth(backdropRules.flatBand, backdropRules.flatBand + 70, d);
+  return bank + (rolling * relief.roll + hills) * away + relief.rise * smooth(relief.riseFrom, backdropRules.radius, d);
 }
 
 // The ground material paints the whole map onto one clamped texture, so a
@@ -129,11 +147,25 @@ export function backdropTrenches(map: MapDefinition) {
 
 // Every solid silhouette: parapets, wire pickets, end caps, woods, ruins and poles.
 export function backdropScenery(map: MapDefinition): { boxes: BackdropBox[]; lines: number[] } {
-  const boxes: BackdropBox[] = [], lines: number[] = [], ground = (x: number, z: number) => backdropHeight(map, x, z);
-  const bank = map.terrain?.bankHeight ?? 0, hx = map.width / 2, hz = map.depth / 2;
-  for (const trench of backdropTrenches(map)) {
-    // An earth face closes the carved trench where the terrain ends.
-    boxes.push({ x: trench.x, y: -0.2, z: trench.north * (hz + 0.15), w: trench.width + 2.2, h: bank + 0.2, d: 0.3, color: "#6b5d47" });
+  const boxes: BackdropBox[] = [], lines: number[] = [];
+  continuingFront(map, backdropTrenches(map), boxes, lines, true);
+  trenchFrontScenery(map, boxes, lines);
+  return { boxes, lines };
+}
+
+// Sandbag parapets either side of each continuing trench, and a wire belt on the
+// no-man's-land side of front lines. Where a carved trench meets the terrain
+// edge, an earth face closes it.
+export function continuingFront(
+  map: MapDefinition,
+  trenches: { x: number; north: 1 | -1; width: number; front: boolean; team: "blue" | "red"; points: { x: number; z: number }[] }[],
+  boxes: BackdropBox[], lines: number[], earthFaces: boolean,
+) {
+  const ground = (x: number, z: number) => backdropHeight(map, x, z);
+  const bank = map.terrain?.bankHeight ?? 0, hz = map.depth / 2;
+  for (const trench of trenches) {
+    if (earthFaces)
+      boxes.push({ x: trench.x, y: -0.2, z: trench.north * (hz + 0.15), w: trench.width + 2.2, h: bank + 0.2, d: 0.3, color: "#6b5d47" });
     for (let i = 1; i < trench.points.length; i++) {
       const a = trench.points[i - 1], b = trench.points[i], length = Math.hypot(b.x - a.x, b.z - a.z);
       if (length < 0.5) continue;
@@ -160,6 +192,11 @@ export function backdropScenery(map: MapDefinition): { boxes: BackdropBox[]; lin
       }
     }
   }
+}
+
+// Every solid silhouette: parapets, wire pickets, end caps, woods, ruins and poles.
+function trenchFrontScenery(map: MapDefinition, boxes: BackdropBox[], lines: number[]) {
+  const ground = (x: number, z: number) => backdropHeight(map, x, z), hx = map.width / 2;
   // Shattered woods: splintered, leaning trunks with a few broken limbs.
   const wood = (cx: number, cz: number, count: number, spread: number, seed: number) => {
     for (let i = 0; i < count; i++) {
@@ -215,8 +252,36 @@ export function backdropScenery(map: MapDefinition): { boxes: BackdropBox[]; lin
       previous = top;
     }
   }
-  return { boxes, lines };
 }
+
+// Unit shapes in the box's local frame (x and z across [-0.5, 0.5], y up [0, 1]),
+// as triangles wound outward from the shape's centre.
+const outward = (triangles: number[][][], centre: number[]) => triangles.map(([a, b, c]) => {
+  const u = [0, 1, 2].map((k) => b[k] - a[k]), v = [0, 1, 2].map((k) => c[k] - a[k]);
+  const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const out = [0, 1, 2].map((k) => (a[k] + b[k] + c[k]) / 3 - centre[k]);
+  return n[0] * out[0] + n[1] * out[1] + n[2] * out[2] >= 0 ? [a, b, c] : [a, c, b];
+});
+const ring = (sides: number, y: number, radius: number, turn = 0) =>
+  Array.from({ length: sides }, (_, i) => {
+    const a = ((i + turn) / sides) * Math.PI * 2;
+    return [Math.cos(a) * radius, y, Math.sin(a) * radius];
+  });
+// A faceted, rounded crown: apex, two staggered rings of eight, a blunt base.
+const crownTriangles = (() => {
+  const top = [0, 1, 0], bottom = [0, 0.04, 0], upper = ring(8, 0.7, 0.4), lower = ring(8, 0.32, 0.5, 0.5);
+  const triangles: number[][][] = [];
+  for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8;
+    triangles.push([upper[i], top, upper[j]], [upper[i], upper[j], lower[i]], [upper[j], lower[j], lower[i]], [lower[i], lower[j], bottom]);
+  }
+  return outward(triangles, [0, 0.5, 0]);
+})();
+// A six-sided point: a pine tier, or a tapering trunk.
+const spireTriangles = (() => {
+  const apex = [0, 1, 0], base = ring(6, 0, 0.5);
+  return outward(base.map((a, i) => [a, base[(i + 1) % 6], apex]), [0, 0.3, 0]);
+})();
 
 export function backdropBoxMesh(boxes: BackdropBox[]): BackdropMesh {
   const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
@@ -233,6 +298,22 @@ export function backdropBoxMesh(boxes: BackdropBox[]): BackdropMesh {
       return [lx * cy + lz * sy, ly, -lx * sy + lz * cy];
     };
     const tint = linear(b.color);
+    if (b.shape === "crown" || b.shape === "spire") {
+      for (const triangle of b.shape === "crown" ? crownTriangles : spireTriangles) {
+        const first = positions.length / 3;
+        const world = triangle.map((p) => transform([p[0] * b.w, p[1] * b.h, p[2] * b.d]));
+        // Flat shading: the face normal, from the scaled and turned corners.
+        const u = [0, 1, 2].map((k) => world[1][k] - world[0][k]), v = [0, 1, 2].map((k) => world[2][k] - world[0][k]);
+        const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], length = Math.hypot(...n) || 1;
+        for (const p of world) {
+          positions.push(b.x + p[0], b.y + p[1], b.z + p[2]);
+          normals.push(n[0] / length, n[1] / length, n[2] / length);
+          colors.push(...tint.map((c) => c * (n[1] < 0 ? 0.6 : 1)), 1);
+        }
+        indices.push(first, first + 1, first + 2);
+      }
+      continue;
+    }
     for (const [n, u, v] of faces) {
       const first = positions.length / 3, normal = transform(n);
       for (const [p, q] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
@@ -258,6 +339,20 @@ export const backdropSmoke = [
   { x: 180, z: 105, scale: 1.3 },
   { x: 40, z: -215, scale: 0.9 },
 ];
+// Verdun's balloons hang behind each side's rear, clear of the village and the fort.
+const verdunLife = {
+  balloons: [
+    { x: -238, z: -30, y: 60, yaw: 0.5 },
+    { x: 246, z: 40, y: 64, yaw: 2.7 },
+  ],
+  smoke: [
+    { x: -190, z: -140, scale: 1.1 },
+    { x: 196, z: 128, scale: 1.2 },
+    { x: -40, z: 220, scale: 0.9 },
+  ],
+};
+export const backdropLife = (map: Pick<MapDefinition, "id">) =>
+  map.id === "verdun" ? verdunLife : { balloons: backdropBalloons, smoke: backdropSmoke };
 
 // Distant shell bursts and flares follow a fixed timetable from the match tick,
 // so the flash and its delayed rumble can be produced independently and agree.

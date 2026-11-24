@@ -21,7 +21,8 @@ const burstLightIntensity = 16;
 import { BillboardBuffer } from "./billboards";
 import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
-import { backdropBalloons, backdropBoxMesh, backdropGround, backdropScenery, backdropSmoke, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
+import { backdropBoxMesh, backdropGround, backdropHeight, backdropLife, backdropScenery, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
+import { verdunBackdropScenery, verdunDeadZoneTrees } from "./verdun-backdrop";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
@@ -96,6 +97,7 @@ import { forestFloorProps } from "./forest-floor";
 import { forestGeometry, forestVariant, type ForestShape } from "./forest-geometry";
 import {
   playArea,
+  trenchGround,
   industrialMap,
   invalidateCoverLookup,
   groundHeight,
@@ -538,8 +540,11 @@ export class Renderer implements CollisionWorld {
     if (map.boundary) this.buildBoundaryWire();
     if (map.backdrop) {
       this.buildBackdrop();
-      this.buildTrenchDressing();
-      this.buildNoMansLand();
+      if (map.woodland) this.buildDeadZoneForest();
+      if (trenchGround(map)) {
+        this.buildTrenchDressing();
+        this.buildNoMansLand();
+      }
     }
     if (this.look.atmosphere) this.buildAtmosphere();
     if (map.night) this.buildNight();
@@ -1468,7 +1473,7 @@ export class Renderer implements CollisionWorld {
       root,
     );
     // Intact trench revetments on refreshed maps show their faction finish.
-    const style = object.lining && this.map.backdrop && object.stage === 0 ? revetmentStyle(Number(object.id.split("-")[1]), b.x) : "timber";
+    const style = object.lining && this.map.backdrop && trenchGround(this.map) && object.stage === 0 ? revetmentStyle(Number(object.id.split("-")[1]), b.x) : "timber";
     if (style !== "timber") panel.render!.material = this.revetmentMaterial(style);
     if (b.kind === "wood" && style !== "sandbag") {
       const wear = [...object.id].reduce((n, c) => n + c.charCodeAt(0), 0);
@@ -1892,7 +1897,8 @@ export class Renderer implements CollisionWorld {
     const soil = this.surfaceMaterial("mud", "#ffffff");
     soil.diffuseVertexColor = true;
     soil.update();
-    const scenery = backdropScenery(this.map), solids = backdropBoxMesh(scenery.boxes), shapes = new pc.Mesh(device);
+    const scenery = this.map.id === "verdun" ? verdunBackdropScenery(this.map) : backdropScenery(this.map);
+    const solids = backdropBoxMesh(scenery.boxes), shapes = new pc.Mesh(device);
     shapes.setPositions(solids.positions);
     shapes.setNormals(solids.normals);
     shapes.setColors(solids.colors);
@@ -1913,7 +1919,8 @@ export class Renderer implements CollisionWorld {
       e.setLocalScale(...scale);
       return e;
     };
-    const balloons = backdropBalloons.map((b) => {
+    const { balloons: balloonSpecs, smoke: smokeColumns } = backdropLife(this.map);
+    const balloons = balloonSpecs.map((b) => {
       const balloon = this.joint("observation balloon", life, b.x, b.y, b.z);
       const canvas = this.material("#9d9784");
       shape("balloon envelope", balloon, "sphere", canvas, [6.5, 6.5, 17]);
@@ -1923,7 +1930,7 @@ export class Renderer implements CollisionWorld {
       shape("balloon tether", balloon, "box", this.material("#2b2824"), [0.05, b.y, 0.05], [0, -b.y / 2 - 5, 1]);
       return balloon;
     });
-    const smoke = this.billboards("distant smoke", life, backdropSmoke.length * 12, "#86888a", 0.42);
+    const smoke = this.billboards("distant smoke", life, smokeColumns.length * 12, "#86888a", 0.42);
     const flashes = Array.from({ length: 3 }, () => {
       const glowMaterial = this.dustMaterial("#ffd08a", true), plumeMaterial = this.dustMaterial("#4d4740");
       return { glow: shape("distant burst", life, "plane", glowMaterial, [1, 1, 1]), plume: shape("distant burst plume", life, "plane", plumeMaterial, [1, 1, 1]), glowMaterial, plumeMaterial };
@@ -1934,6 +1941,25 @@ export class Renderer implements CollisionWorld {
     });
     this.backdrop = { life, balloons, smoke, flashes, flares };
     life.enabled = this.quality !== "low";
+  }
+  // Woods carried on past Verdun's boundary wire, from the field's own tree
+  // models. Presentation only: no collision, no shadows, batched by 32 m cell.
+  private buildDeadZoneForest() {
+    const root = this.joint("dead zone forest", this.mapRoot), previous = this.batchGroup;
+    for (const tree of verdunDeadZoneTrees(this.map)) {
+      this.batchGroup = this.worldBatch(this.mapBatch, tree.x, tree.z);
+      const holder = this.joint(tree.id, root, tree.x, groundHeight(tree.x, tree.z, this.map) - 0.05, tree.z);
+      holder.setLocalEulerAngles(0, tree.yaw, 0);
+      const crowned = tree.treeStyle !== "bare" && tree.treeStyle !== "snapped", variant = forestVariant(tree.id);
+      const parts = [
+        this.forestPart("tapered bark trunk", "trunk", variant, 0, 0, 0, tree.w, tree.h, tree.w, tree.treeStyle === "snapped" ? "#4f463a" : "#665746", holder),
+        this.forestPart("fine branching limbs", crowned ? "limbs" : "deadLimbs", variant, 0, 0, 0, tree.h, tree.h, tree.h, "#62513f", holder),
+      ];
+      if (crowned)
+        parts.push(this.forestPart("ragged woodland crown", tree.treeStyle === "pine" ? "pine" : "crown", variant, 0, 0, 0, tree.h, tree.h, tree.h, tree.treeStyle === "pine" ? "#536047" : "#626d4f", holder));
+      for (const part of parts) part.render!.castShadows = false;
+    }
+    this.batchGroup = previous;
   }
   // Mesh instances the scene would submit before culling: the total, and the
   // share under each named presentation root. Renderer-independent, so it can be
@@ -2332,17 +2358,21 @@ export class Renderer implements CollisionWorld {
     const b = this.backdrop;
     if (!b?.life.enabled) return;
     const tick = g.tick + alpha, t = tick / 30;
+    const { balloons, smoke: columns } = backdropLife(this.map);
     b.balloons.forEach((balloon, i) => {
-      const spec = backdropBalloons[i];
+      const spec = balloons[i];
       balloon.setPosition(spec.x, spec.y + Math.sin(t * 0.31 + i * 2) * 1.4, spec.z);
       balloon.setEulerAngles(Math.sin(t * 0.23 + i) * 2, (spec.yaw * 180) / Math.PI + Math.sin(t * 0.07 + i) * 6, 0);
     });
-    const smoke = this.beginBillboards(b.smoke), base = this.map.terrain?.bankHeight ?? 0;
-    for (const column of backdropSmoke)
+    const smoke = this.beginBillboards(b.smoke);
+    for (const column of columns) {
+      // Rise from the land the fire is on, which climbs toward the horizon.
+      const base = backdropHeight(this.map, column.x, column.z);
       for (let i = 0; i < 12; i++) {
         const rise = (t * 0.035 + i / 12) % 1, size = (4 + rise * 16) * column.scale;
         smoke.add(column.x + rise ** 1.4 * 16 * column.scale, base + rise * 40 * column.scale, column.z + Math.sin(i * 2.1) * 2, size, size * 1.1, i * 37);
       }
+    }
     this.endBillboards(b.smoke);
     const bursts = distantFlashes(this.map, g.tick - 45, g.tick + 1);
     b.flashes.forEach((slot, i) => {
