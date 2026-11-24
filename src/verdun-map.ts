@@ -30,7 +30,8 @@ for(const team of ["blue","red"] as const) {
  for(const role of ["rear","front"] as const) {
   const x=side*(role==="rear"?55:43);
   const sections=[{x,z:-38,length:26},{x:x-side*4,z:-8,length:34},{x:x+side*2,z:29,length:40}];
-  terrain.trenchLines!.push({team,role,sections});
+  // Every Verdun trench is a 2 m cut centred on its line, front and rear alike.
+  terrain.trenchLines!.push({team,role,sections,floor:{offset:0,half:1}});
   sections.forEach((s,i)=>{dig(s.x,s.z,2,s.length);if(i){const prev=sections[i-1],z=s.z-s.length/2;dig((prev.x+s.x)/2,z,Math.abs(prev.x-s.x)+2,2);}});
  }
  for(const [i,z] of [-36,0,34].entries()) {

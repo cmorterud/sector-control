@@ -135,6 +135,10 @@ export interface TrenchLine {
   team: "blue" | "red";
   role: "front" | "rear";
   sections: (Vec & { length: number; stepZ?: number })[];
+  // The floor's centre, as an offset from each section's x toward the enemy,
+  // and its half width. By default front lines are Trench front's firing-step
+  // lines (1 m toward the enemy, 2 m half width) and rear lines are centred, 1 m.
+  floor?: { offset: number; half: number };
 }
 export interface CommunicationRoute {
   team: "blue" | "red";
