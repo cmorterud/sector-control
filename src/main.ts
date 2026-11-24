@@ -988,7 +988,9 @@ try {
       // north out of the woods past the wire; west to the village, east to the fort's
       // ridge; and south along the continuing front.
       const verdunDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-99,22,-108,32],"boundary-walk":[-100,6,-116,6],
-        "dead-zone-woods":[-40,-56,-46,-96],"west-horizon":[-97,30,-186,46],"east-horizon":[97,-36,222,-46],"south-front":[58,56,68,140]};
+        "dead-zone-woods":[-40,-56,-46,-96],"west-horizon":[-97,30,-186,46],"east-horizon":[97,-36,222,-46],"south-front":[58,56,68,140],
+        // Through the woods to Shattered Wood (B), across Broken Relay (C), and along Blue's front trench.
+        "woods":[-36,-53,-54,-36],"relay":[-15,5,0,0],"front-trench":[-67,-28,-67,-48]};
       const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0];

@@ -3,6 +3,7 @@ import { brazierSites, clothScraps, mistBanks } from "./atmosphere";
 import { mapLooks } from "./map-look";
 import { beyondPlayArea, groundHeight, inBoundaryWire } from "./map";
 import { trenchMap } from "./trench-map";
+import { verdunMap } from "./verdun-map";
 
 const atmosphere = mapLooks.trenches.atmosphere!;
 
@@ -39,4 +40,22 @@ it("snags every scrap of cloth in the boundary wire", () => {
   const scraps = clothScraps(trenchMap);
   expect(scraps.length).toBeGreaterThan(20);
   for (const s of scraps) expect(inBoundaryWire(s.x, s.z, trenchMap)).toBe(true);
+});
+
+it("spreads Verdun's mist across its whole wooded field at the same density, and pools it in its trenches", () => {
+  const look = mapLooks.verdun.atmosphere!, banks = mistBanks(verdunMap, look.fieldWidth);
+  const field = banks.filter((b) => !b.trench), trench = banks.filter((b) => b.trench);
+  expect(look.fieldWidth).toBe(132);
+  // About twice Trench front's no-man's land, so about twice its sixty banks.
+  expect(field).toHaveLength(Math.round((60 * 132) / 64));
+  for (const b of field) expect(Math.abs(b.x)).toBeLessThanOrEqual(66);
+  expect(field.some((b) => b.x < -45) && field.some((b) => b.x > 45)).toBe(true);
+  // Every other one of its twelve trench sections.
+  expect(trench).toHaveLength(6);
+  for (const b of trench) expect(groundHeight(b.x, b.z, verdunMap)).toBeLessThan(1);
+  for (const site of brazierSites(verdunMap)) expect(beyondPlayArea(site.x, site.z, verdunMap)).toBeLessThan(-4);
+  const scraps = clothScraps(verdunMap);
+  expect(scraps.length).toBeGreaterThan(20);
+  for (const s of scraps) expect(inBoundaryWire(s.x, s.z, verdunMap)).toBe(true);
+  expect(look.fieldMist).toBeLessThan(0.3);
 });
