@@ -149,6 +149,7 @@ export class Ragdoll {
 // Shares the existing native terrain world, whose triangle patches already
 // follow excavation. Local cover proxies use a separate collision group and
 // are excluded from authoritative gameplay rays.
+export const ragdollMaxSubsteps = 2;
 export class RagdollPhysics {
   readonly ragdolls = new Set<Ragdoll>();
   private shapes = new Map<string, object>();
@@ -227,7 +228,10 @@ export class RagdollPhysics {
       this.revision = revision;
     }
     const start = battlePerformance.begin();
-    if ([...this.ragdolls].some(d => !d.frozen)) this.world.step(Math.min(dt, 0.1), 6, 1 / 60);
+    // At most two physics steps a frame. After a slow frame the bodies fall a
+    // little behind real time instead of running six steps at once, which
+    // would make the next frame slow too.
+    if ([...this.ragdolls].some(d => !d.frozen)) this.world.step(Math.min(dt, 0.1), ragdollMaxSubsteps, 1 / 60);
     battlePerformance.end("ragdollPhysics",start);
     let frozen = 0;
     for (const doll of this.ragdolls) if (doll.readyToFreeze(Math.min(dt, .1)) && frozen < 2) {

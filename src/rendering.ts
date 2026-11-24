@@ -121,12 +121,36 @@ import {
   rifleHeight,
 } from "./simulation";
 const color = (hex: string) => new pc.Color().fromString(hex);
+// Whether a shadow cascade is redrawn on a given frame: the first always, the
+// second on odd frames, the third on every fourth, later ones every eighth.
+export const shadowCascadeDue = (cascade: number, frame: number) =>
+  cascade === 0 || (cascade === 1 ? frame % 2 === 1 : cascade === 2 ? frame % 4 === 0 : frame % 8 === 2);
+// How often a soldier's limbs are posed, in frames, and whether it is in view.
+// Near soldiers are posed every frame. In view, one beyond 30 m is posed every
+// other frame and one beyond 75 m every third: at those ranges a limb moves
+// less than a pixel between frames. A soldier the camera cannot see is posed
+// one frame in four. Through a scope everything in view is posed every frame.
+// (dx, dy, dz) is the soldier relative to the eye; `look` is the view direction.
+export function soldierCadence(always: boolean, dx: number, dy: number, dz: number, look: { x: number; y: number; z: number }, zoomed = false) {
+  if (always) return { every: 1, inView: true };
+  const distance = Math.hypot(dx, dy, dz);
+  if (distance < 12) return { every: 1, inView: true };
+  // Within about 72 degrees of the view direction: wider than the screen, so
+  // nothing at its edge is ever caught mid-skip.
+  if (dx * look.x + dy * look.y + dz * look.z < distance * 0.3) return { every: 4, inView: false };
+  return { every: zoomed ? 1 : distance > 75 ? 3 : distance > 30 ? 2 : 1, inView: true };
+}
 // Objective beacons outside Domination keep their bright signal colours.
 const beaconColors: Record<FlagState, string> = { neutral: "#d4c699", blue: "#46a9d8", red: "#de6e5f", contested: "#edc76d" };
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
 type SoldierRig = {
+  // One world-space box for all of this soldier's batched parts (boundSoldiers).
+  bounds?: pc.BoundingBox;
+  // Where the model was last placed, and animation time owed from skipped frames.
+  placed?: { x: number; y: number; z: number; yaw: number };
+  owedSeconds?: number;
   farDetail?: boolean;
   shoulderReady?: number;
   feetActive?: boolean;
@@ -253,6 +277,11 @@ export class Renderer implements CollisionWorld {
   };
   private mapBatch = -1;
   private actorBatch = -1;
+  private drawCount = 0;
+  // Set when the simulation changed the world since the last frame was drawn,
+  // and whether the last frame rebuilt terrain (so this one owes visual work).
+  private worldChanged = false;
+  private visualTurn = false;
   private coverBatch = -1;
   private batchGroup = -1;
   private sceneryBatches?: SceneryBatches;
@@ -768,9 +797,10 @@ export class Renderer implements CollisionWorld {
     } else this.uploadTerrainPatch(key, data);
   }
   // Rebuilds queued terrain patches, nearest the camera first: always one,
-  // then more while the frame's budget lasts. A patch's geometry, collider and
-  // mesh change together, so bullets and sight lines meet the old ground for
-  // the frame or two before a distant patch is rebuilt.
+  // then more while the frame's budget lasts. A patch's geometry and collider
+  // change here; its mesh is uploaded as visual work on a following frame, so
+  // no single frame carries both halves. Bullets and sight lines meet the old
+  // ground for the frame or two before a distant patch is rebuilt.
   private flushTerrainWork(budgetMs = 4, now = () => performance.now()) {
     if (!this.terrainWork.size) return 0;
     const start = now(), eye = this.camera?.getPosition();
@@ -787,7 +817,7 @@ export class Renderer implements CollisionWorld {
     for (const key of keys) {
       if (done && now() - start >= budgetMs) break;
       this.terrainWork.delete(key);
-      this.rebuildTerrainPatch(key);
+      this.rebuildTerrainPatch(key, true);
       done++;
     }
     return done;
@@ -1493,6 +1523,7 @@ export class Renderer implements CollisionWorld {
     return true;
   }
   updateWorld(change: DestructionChange) {
+    this.worldChanged = true;
     if (change.geometry !== false) invalidateCoverLookup(this.map);
     const start = battlePerformance.begin();
     try { this.applyWorldChange(change); } finally { battlePerformance.end("worldRebuild",start); }
@@ -3374,6 +3405,92 @@ export class Renderer implements CollisionWorld {
       crouch: 0,
       alive: p.hp > 0,
     });
+    // The human's own soldier keeps its separate parts: they are the pattern
+    // the first-person rifle is cloned from.
+    if (p.id !== 0) {
+      const legJoints = legs.flatMap((leg) => [leg.hip, leg.knee, leg.ankle]), armJoints = arms.flatMap((arm) => [arm.shoulder, arm.elbow]);
+      this.mergeRigidParts(root, new Set<pc.GraphNode>([body, hips, upper, rifle, supportHand, bolt, magazine, reloadMagazine, ...legJoints, ...armJoints]));
+    }
+  }
+  // Parts that never move against their joint are drawn as one mesh per
+  // material. A rifle is some 25 pieces and a soldier 59; each separate piece is
+  // a bone the batch must carry, a transform to refresh every frame and a box
+  // to bound. Identical sets of parts share one mesh. `keep` lists the entities
+  // the animation moves on their own.
+  private mergeRigidParts(root: pc.Entity, keep: Set<pc.GraphNode>) {
+    if (!this.app.graphicsDevice) return;
+    const joints: pc.Entity[] = [];
+    root.forEach((node) => { joints.push(node as pc.Entity); });
+    for (const joint of joints) {
+      const groups = new Map<pc.Material, pc.Entity[]>();
+      for (const child of joint.children as pc.Entity[]) {
+        const render = child.render;
+        if (!render || !child.enabled || child.children.length || keep.has(child) || child.name === "Luger toggle front link" || child.name === "head"
+          || render.batchGroupId !== this.actorBatch || render.meshInstances.length !== 1 || !render.meshInstances[0].mesh) continue;
+        const material = render.meshInstances[0].material;
+        if (!material) continue;
+        groups.set(material, [...(groups.get(material) ?? []), child]);
+      }
+      for (const [material, parts] of groups) {
+        if (parts.length < 2) continue;
+        const signature = parts.map((part) => {
+          const at = part.getLocalPosition(), turn = part.getLocalRotation(), size = part.getLocalScale();
+          return [part.render!.meshInstances[0].mesh!.id, ...[at.x, at.y, at.z, turn.x, turn.y, turn.z, turn.w, size.x, size.y, size.z].map((v) => Math.round(v * 1e4))].join(",");
+        }).join("|");
+        const mesh = this.modelMesh(`rigid:${signature}`, () => {
+          const positions: number[] = [], normals: number[] = [], indices: number[] = [], uvs: number[] = [];
+          const v = new pc.Vec3();
+          for (const part of parts) {
+            const source = part.render!.meshInstances[0].mesh!, matrix = part.getLocalTransform(), normalMatrix = matrix.clone().invert().transpose();
+            const points: number[] = [], ns: number[] = [], is: number[] = [], sourceUV: number[] = [];
+            source.getPositions(points); source.getNormals(ns); source.getIndices(is); source.getUvs(0, sourceUV);
+            const base = positions.length / 3;
+            for (let i = 0; i < points.length; i += 3) {
+              matrix.transformPoint(v.set(points[i], points[i + 1], points[i + 2]), v); positions.push(v.x, v.y, v.z);
+              normalMatrix.transformVector(v.set(ns[i], ns[i + 1], ns[i + 2]), v).normalize(); normals.push(v.x, v.y, v.z);
+              uvs.push(sourceUV[(i / 3) * 2] ?? 0, sourceUV[(i / 3) * 2 + 1] ?? 0);
+            }
+            for (const index of is) indices.push(index + base);
+          }
+          return { positions, normals, indices, uvs };
+        });
+        const first = parts[0].render!, merged = new pc.Entity(`${parts[0].name} and ${parts.length - 1} more`);
+        joint.addChild(merged);
+        merged.addComponent("render", { meshInstances: [new pc.MeshInstance(mesh, material, merged)], batchGroupId: this.actorBatch,
+          castShadows: first.castShadows, receiveShadows: first.receiveShadows });
+        for (const part of parts) part.destroy();
+      }
+    }
+  }
+  // Each shadow cascade is a full extra pass over the scene. The nearest is
+  // redrawn every frame; the second every other frame and the third one frame
+  // in four, on different frames, so no frame draws all three. Their shadows
+  // lie 30 m and more away, where a frame or three of lag cannot be seen.
+  private scheduleShadowCascades() {
+    const light = this.sun?.light;
+    if (!light?.castShadows || light.numCascades < 2) { if (light?.shadowUpdateOverrides) light.shadowUpdateOverrides = null; return; }
+    const overrides = light.shadowUpdateOverrides ??= [];
+    for (let cascade = 0; cascade < light.numCascades; cascade++)
+      overrides[cascade] = shadowCascadeDue(cascade, this.drawCount) ? pc.SHADOWUPDATE_THISFRAME : pc.SHADOWUPDATE_NONE;
+  }
+  // Soldiers are drawn as dynamic batches. Every frame the engine merges the
+  // world bounds of each batched part into the batch's box, which means
+  // transforming some 3,000 boxes to learn that soldiers are spread over the
+  // field. Each soldier's parts share one box instead, moved with the soldier.
+  private boundSoldiers() {
+    this.people.forEach((root, i) => {
+      const rig = this.soldiers[i];
+      if (!rig) return;
+      rig.bounds ??= new pc.BoundingBox(root.getPosition().clone().add(pc.Vec3.UP), new pc.Vec3(1.7, 1.5, 1.7));
+      for (const render of root.findComponents("render") as pc.RenderComponent[]) {
+        if (render.batchGroupId !== this.actorBatch) continue;
+        for (const instance of render.meshInstances) {
+          // The engine keeps this flag private; with it off, `aabb` is used as given.
+          (instance as unknown as { _updateAabb: boolean })._updateAabb = false;
+          instance.aabb = rig.bounds;
+        }
+      }
+    });
   }
   private mergeSoldierKit(upper: pc.Entity, p: Soldier) {
     this.kitMeshes ??= new Map();
@@ -4342,6 +4459,7 @@ export class Renderer implements CollisionWorld {
     for (const p of g.players) this.casualtyMesh(p);
     this.batchGroup = -1;
     this.app.batcher!.generate([this.actorBatch]);
+    this.boundSoldiers();
     this.createFirstPersonRig();
     for (const rig of this.soldiers) rig.reloadMagazine.setLocalScale(0, 0, 0);
     for (const s of g.scoring !== "eliminations" ? g.sectors : []) {
@@ -4533,12 +4651,18 @@ export class Renderer implements CollisionWorld {
   draw(g: Game, alpha: number, dt: number, overview = false) {
     // Spread terrain rebuilds and presentation work over frames instead of
     // doing every shell's work in the frame it lands.
+    // One heavy job a frame. The frame a shell lands already carries the
+    // crater's simulation, so it does neither; after that, terrain rebuilds and
+    // visual work (mesh uploads, casualty setup) take turns.
+    const impact = this.worldChanged;
+    this.worldChanged = false;
     const terrainStart = battlePerformance.begin();
-    this.flushTerrainWork();
+    const rebuilt = impact || (this.visualTurn && this.visualWork.size) ? 0 : this.flushTerrainWork();
     battlePerformance.end("terrainWork", terrainStart);
     const visualStart = battlePerformance.begin();
-    battlePerformance.count("visualJobs", this.visualWork.flush());
+    battlePerformance.count("visualJobs", impact || rebuilt ? 0 : this.visualWork.flush());
     battlePerformance.end("visualWork", visualStart);
+    this.visualTurn = rebuilt > 0;
     this.flushWorldBatches();
     this.drawEmplacements(g);
     for (const kit of g.flames?.kits ?? []) {
@@ -4552,6 +4676,9 @@ export class Renderer implements CollisionWorld {
       marker.enabled=!!kit.at;
       if(kit.at)marker.setPosition(kit.at.x,groundHeight(kit.at.x,kit.at.z,g.map),kit.at.z);
     }
+    this.drawCount++;
+    this.scheduleShadowCascades();
+    const eye = this.camera.getPosition(), look = this.camera.forward, zoomed = this.camera.camera!.fov < 45;
     for (const p of g.players) {
       const visible=visualWeapon(p,g.tick-1+alpha);
       const kit = `${p.faction}-${visible.weapon}-${visible.weaponId}`;
@@ -4564,6 +4691,7 @@ export class Renderer implements CollisionWorld {
         this.soldiers[p.id] = this.soldiers.pop()!;
         old.destroy(); this.batchGroup = -1;
         this.app.batcher!.generate([this.actorBatch]);
+        this.boundSoldiers();
         if (p.id === 0) this.createFirstPersonRig();
       }
       // Dead actors keep the kit actually rendered at death while setup waits.
@@ -4571,22 +4699,38 @@ export class Renderer implements CollisionWorld {
       const e = this.people[p.id],
         previous = this.previous[p.id] ?? p,
         teleported = Math.hypot(previous.x - p.x, previous.z - p.z) > 2;
-      e.setPosition(
-        teleported ? p.x : previous.x + (p.x - previous.x) * alpha,
-        teleported ? p.y : previous.y + (p.y - previous.y) * alpha,
-        teleported ? p.z : previous.z + (p.z - previous.z) * alpha,
-      );
-      e.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
-      const position = e.getPosition();
+      const x = teleported ? p.x : previous.x + (p.x - previous.x) * alpha,
+        y = teleported ? p.y : previous.y + (p.y - previous.y) * alpha,
+        z = teleported ? p.z : previous.z + (p.z - previous.z) * alpha,
+        yaw = (-p.yaw * 180) / Math.PI;
       const rig = this.soldiers[p.id],
         tick = g.tick - 1 + alpha;
+      rig.bounds?.center.set(x, y + 1, z);
+      // Posing a soldier re-derives every one of its parts' transforms, which is
+      // the largest per-frame cost of a big battle. Soldiers the camera cannot
+      // see are posed one frame in four, and distant ones every other frame;
+      // the time skipped is owed to the next pose, so nothing runs slow.
+      const { every, inView } = soldierCadence(p.id === 0 || p.hp <= 0 || !rig.alive, x - eye.x, y + 1 - eye.y, z - eye.z, look, zoomed);
+      rig.owedSeconds = (rig.owedSeconds ?? 0) + dt;
+      const pose = every === 1 || (this.drawCount + p.id) % every === 0;
+      // A soldier in view moves every frame, so a runner never judders. One
+      // standing still keeps its transforms: moving the root would mark every
+      // part for recalculation.
+      if (pose || inView) {
+        const placed = rig.placed ??= { x: NaN, y: NaN, z: NaN, yaw: NaN };
+        if (placed.x !== x || placed.y !== y || placed.z !== z) { e.setPosition(x, y, z); placed.x = x; placed.y = y; placed.z = z; }
+        if (placed.yaw !== yaw) { e.setEulerAngles(0, yaw, 0); placed.yaw = yaw; }
+      }
+      if (!pose) continue;
+      const owed = rig.owedSeconds;
+      rig.owedSeconds = 0;
       if (p.hp > 0) {
-        e.setLocalScale(1, 1, 1);
+        if (e.getLocalScale().x !== 1) e.setLocalScale(1, 1, 1);
         rig.deathAt = null;
         rig.remnantCreated = false;
         this.visualWork.delete(`casualty:${p.id}`);
         this.pendingCasualties.delete(p.id);
-        this.animateSoldier(visible, position.x, position.z, dt, tick);
+        this.animateSoldier(visible, x, z, owed, tick);
         rig.rifle.enabled = p.mountedGun === undefined;
         this.applyModelDetail(p,rig);
       } else {

@@ -2,7 +2,7 @@ import { armLengths, boltMotion } from "./weapons";
 import { meleeRules } from "./melee";
 import { it, expect, vi } from "vitest";
 import { Entity, Vec3, NullGraphicsDevice, StandardMaterial, TEXTURELOCK_READ } from "playcanvas";
-import { Renderer } from "./rendering";
+import { Renderer, shadowCascadeDue, soldierCadence } from "./rendering";
 import {
   soldierStyle,
   reloadMotion,
@@ -810,4 +810,36 @@ it("shows a grenade attached to the winding-up hand, hides it on physical releas
   const rig = r.firstPersonRig;
   const wrist = rig.arms[1].elbow.getWorldTransform().transformPoint(new Vec3(0, -armLengths.forearm, 0));
   expect(wrist.distance(rig.rifle.getWorldTransform().transformPoint(new Vec3(0, -0.03, 0.14)))).toBeLessThan(0.001);
+});
+
+it("poses near and visible soldiers every frame, distant ones less often, and unseen ones one frame in four", () => {
+  const look = { x: 0, y: 0, z: -1 };
+  // Close by, in any direction: every frame.
+  expect(soldierCadence(false, 0, 0, 8, look)).toEqual({ every: 1, inView: true });
+  expect(soldierCadence(false, 5, 0, -9, look)).toEqual({ every: 1, inView: true });
+  // Ahead: every frame to 30 m, every other to 75 m, every third beyond.
+  expect(soldierCadence(false, 0, 0, -25, look)).toEqual({ every: 1, inView: true });
+  expect(soldierCadence(false, 0, 0, -45, look)).toEqual({ every: 2, inView: true });
+  expect(soldierCadence(false, 0, 0, -90, look)).toEqual({ every: 3, inView: true });
+  // Behind or far off to the side: one frame in four, and not in view.
+  expect(soldierCadence(false, 0, 0, 40, look)).toEqual({ every: 4, inView: false });
+  expect(soldierCadence(false, 40, 0, -5, look)).toEqual({ every: 4, inView: false });
+  // The edge of a wide screen (about 55 degrees off axis) still counts as in view.
+  expect(soldierCadence(false, 33, 0, -23, look).inView).toBe(true);
+  // Through a scope everything in view is posed every frame; what is behind is not.
+  expect(soldierCadence(false, 0, 0, -90, look, true)).toEqual({ every: 1, inView: true });
+  expect(soldierCadence(false, 0, 0, 40, look, true).every).toBe(4);
+  // The player's own soldier, and anyone dying, is never skipped.
+  expect(soldierCadence(true, 0, 0, 90, look)).toEqual({ every: 1, inView: true });
+});
+
+it("redraws the near shadow cascade every frame and never all three in one frame", () => {
+  const frames = Array.from({ length: 16 }, (_, frame) => [0, 1, 2].filter((cascade) => shadowCascadeDue(cascade, frame)));
+  for (const due of frames) {
+    expect(due).toContain(0);
+    expect(due.length).toBeLessThanOrEqual(2);
+  }
+  // The second cascade every other frame, the third one frame in four.
+  expect(frames.filter((due) => due.includes(1))).toHaveLength(8);
+  expect(frames.filter((due) => due.includes(2))).toHaveLength(4);
 });
