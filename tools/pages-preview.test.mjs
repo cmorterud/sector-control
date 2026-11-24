@@ -4,7 +4,7 @@ import {mkdtemp, mkdir, writeFile, readFile, rm, symlink, link} from 'node:fs/pr
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {basePath, safePath, staticFiles, gitHash, stamp, validateBuild, isCurrentPR, replaceBuild, verifyPublished, readPublishedManifest, resolveContext, stageSite, reportPreview} from './pages-preview.mjs';
+import {basePath, safePath, staticFiles, gitHash, stamp, validateBuild, isCurrentPR, replaceBuild, verifyPublished, readPublishedManifest, awaitPublishedManifest, resolveContext, stageSite, reportPreview} from './pages-preview.mjs';
 
 const repository = 'cmorterud/sector-control', head = 'a'.repeat(40), source = 'b'.repeat(40);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -307,4 +307,28 @@ test('a replaced build keeps only its own hashed bundle files, for one deploymen
   assert.equal(preview.get('assets/main-OLD.js').sha, 'old js');
   // An incoming file of the same name always wins over the retained one.
   assert.equal(replaceBuild(existing, new Map([['index.html', file('h')], ['assets/main-OLD.js', file('rebuilt')]]), 0, ['assets/main-OLD.js']).get('assets/main-OLD.js').sha, 'rebuilt');
+});
+
+test('a lagging Pages edge is retried with fresh URLs, but a different publication still fails', async () => {
+  const base = 'https://example.com/sector-control/pr-preview/pr-42/';
+  const current = manifest(), previous = {...manifest(), run: 122};
+  const expected = {head, source, run: 123, attempt: 1};
+  const urls = [], logs = [];
+  let waits = 0;
+  // Two answers from an edge still serving the previous build, then the expected one.
+  const lagging = async url => { urls.push(String(url)); return new Response(JSON.stringify(urls.length < 3 ? previous : current)); };
+  const options = {wait: async () => {waits++;}, log: line => logs.push(line)};
+  assert.deepEqual(await awaitPublishedManifest(base, expected, {...options, fetcher: lagging}), current);
+  assert.deepEqual([urls.length, waits, logs.length], [3, 2, 2]);
+  assert.equal(new Set(urls).size, 3, 'every attempt asks a URL no cache has seen');
+  for (const url of urls) assert.match(url, /revision\.json\?revision=a{40}&run=123&attempt=1&check=/);
+  // A newer publication never matches: it fails after the last attempt, not before.
+  let asked = 0;
+  const replaced = async () => { asked++; return new Response(JSON.stringify({...manifest(), run: 124})); };
+  await assert.rejects(awaitPublishedManifest(base, expected, {...options, attempts: 4, fetcher: replaced}), /provenance mismatch/);
+  assert.equal(asked, 4);
+  // A bad target is a caller error, not lag.
+  asked = 0;
+  await assert.rejects(awaitPublishedManifest('http://example.com/x', expected, {...options, fetcher: replaced}), /Invalid verification target/);
+  assert.equal(asked, 0);
 });
