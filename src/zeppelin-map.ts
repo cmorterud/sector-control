@@ -92,7 +92,7 @@ function stairTower(id: string, t: ZeppelinTower, doors: Volume[], roof?: Rect):
   const { interior, nearX, dir, laneA, laneB, base, flights } = t;
   const flightStart = nearX + dir * landingDepth, flightEnd = flightStart + dir * flightRun, farX = flightEnd + dir * landingDepth;
   const span = (a: number, b: number) => ({ x0: Math.min(a, b), x1: Math.max(a, b) });
-  const lanes = { z0: laneA[0], z1: laneB[1] };
+  const lanes = laneSpan(t);
   const parts: Box[] = [];
   // From the keel the first flight and first landing are solid, as is the
   // space under the second flight; higher up, everything is planks.
@@ -108,7 +108,7 @@ function stairTower(id: string, t: ZeppelinTower, doors: Volume[], roof?: Rect):
   if (ground) parts.push(box(`${id}-under-1`, { ...span(flightStart, flightEnd), z0: laneB[0], z1: laneB[1] }, base, base + flightRise - 0.2, structure));
   parts.push(floor(`${id}-base`, ground ? { ...span(nearX, flightStart), ...lanes } : interior, base));
   // The lanes are divided along the flights, all the way up.
-  parts.push(box(`${id}-divider`, { ...span(flightStart, flightEnd), z0: laneA[1], z1: laneB[0] }, base, deckUnderside, structure));
+  parts.push(box(`${id}-divider`, { ...span(flightStart, flightEnd), ...dividerSpan(t) }, base, deckUnderside, structure));
   const wall = 0.2, outer = { x0: interior.x0 - wall, x1: interior.x1 + wall, z0: interior.z0 - wall, z1: interior.z1 + wall };
   const bottom = ground ? base : base - floorThickness;
   const faces: Volume[] = [
@@ -151,7 +151,14 @@ const bombDoors: Rect[] = [{ x0: -1.4, x1: 0, z0: 1.7, z1: 3.4 }, { x0: -1.4, x1
 const deck: Rect = { x0: -59, x1: 0, z0: -2.25, z1: 2.25 };
 const platform: Rect = { x0: -11, x1: 0, z0: -6, z1: 6 };
 // Openings in the top walk over each tower's last flight.
-const laneSpan = (t: ZeppelinTower) => ({ z0: t.laneA[0], z1: t.laneB[1] });
+// A tower's lanes may lie either way round across z: lane B is beyond lane A
+// from the centre line, which is +z for one tower and -z for another.
+function laneSpan(t: ZeppelinTower) {
+  return { z0: Math.min(t.laneA[0], t.laneB[0]), z1: Math.max(t.laneA[1], t.laneB[1]) };
+}
+function dividerSpan(t: ZeppelinTower) {
+  return { z0: Math.min(t.laneA[1], t.laneB[1]), z1: Math.max(t.laneA[0], t.laneB[0]) };
+}
 const outerOf = (t: ZeppelinTower): Rect => ({ x0: t.interior.x0 - 0.2, x1: t.interior.x1 + 0.2, z0: t.interior.z0 - 0.2, z1: t.interior.z1 + 0.2 });
 // It reaches a metre back over the landing below, so a soldier starting up
 // the last flight has headroom under its edge.
@@ -229,6 +236,15 @@ function sternHalf(): Box[] {
   bridgeRail("bay-rail-1", -10 + landingDepth, 0, -1);
   parts.push(rail("bay-landing-rail-0", { x0: bayStair.landing.x0 - r, x1: bayStair.landing.x0 + r, z0: 1.6, z1: bayStair.z[0] }, gallery));
   parts.push(rail("bay-landing-rail-1", { x0: bayStair.landing.x1 - r, x1: bayStair.landing.x1 + r, z0: 1.6, z1: bayStair.landing.z1 }, gallery));
+  // A handrail up the open side of each stair along a wall, one bar per tread.
+  for (const [id, s] of [...stationStairs.map((s, i) => [`station-stair-${i}`, s] as const), ["bay-stair", bayStair] as const]) {
+    const open = Math.abs(s.z[0]) < Math.abs(s.z[1]) ? s.z[0] : s.z[1], side = Math.sign(open) * -1;
+    const { rise, run } = zeppelinStep;
+    for (let i = 0; i < 2 * zeppelinStep.flight; i++) {
+      const x = s.foot + s.dir * (i + 0.5) * run;
+      parts.push(rail(`${id}-${i}`, { x0: x - run / 2, x1: x + run / 2, z0: Math.min(open, open + side * 2 * r), z1: Math.max(open, open + side * 2 * r) }, keel + rise * (i + 1)));
+    }
+  }
   stationStairs.forEach((s, i) => {
     // The landing's inner edge, beside the stair's top.
     const edgeX = s.dir > 0 ? s.landing.x0 : s.landing.x1, [z0, z1] = s.dir > 0 ? [1.6, s.z[0]] : [s.z[1], -1.6];
@@ -332,8 +348,11 @@ function anchors(): Vec[] {
     const n = Math.max(1, Math.floor((b - a - 1.2) / spacing + 1e-6) + 1), mid = (a + b) / 2;
     return Array.from({ length: n }, (_, i) => mid + (i - (n - 1) / 2) * spacing);
   };
+  // None stands over a hatch in the top walk, where only a stair is below.
+  const overHatch = (x: number, z: number, y: number) =>
+    y === top && hatches.some((h) => x > h.x0 - 0.5 && x < h.x1 + 0.5 && z > h.z0 - 0.5 && z < h.z1 + 0.5);
   const grid = (r: Rect, y: number, spacing = 1.25) => {
-    for (const x of along(r.x0, r.x1, spacing)) for (const z of along(r.z0, r.z1, spacing)) points.push({ x, z, y });
+    for (const x of along(r.x0, r.x1, spacing)) for (const z of along(r.z0, r.z1, spacing)) if (!overHatch(x, z, y)) points.push({ x, z, y });
   };
   spawnRoom.forEach((r) => grid(r, keel));
   grid(keelWalk, keel);
@@ -358,7 +377,7 @@ function anchors(): Vec[] {
       const up = n % 2 === 0;
       flightAnchors(up ? start : end, up ? t.dir : -t.dir, up ? t.laneA : t.laneB, t.base + n * flightRise, zeppelinStep.flight);
     }
-    const lanes = { z0: t.laneA[0], z1: t.laneB[1] };
+    const lanes = laneSpan(t);
     const nearLanding = { x0: Math.min(t.nearX, start), x1: Math.max(t.nearX, start), ...lanes };
     const farLanding = { x0: Math.min(end, far), x1: Math.max(end, far), ...lanes };
     // Landings below the top walk: near ones on even levels, far ones on odd.
