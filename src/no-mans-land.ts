@@ -96,7 +96,11 @@ export function craterPonds(map: MapDefinition): CraterPond[] {
   let cached = ponds.get(source);
   if (cached) return cached;
   cached = [];
-  for (const c of source.craters ?? []) {
+  // Shell scars are irregular ovals; their narrower half-axis bounds the water.
+  const scars = map.noMansLand?.scarPonds
+    ? (source.shellScars ?? []).map((s) => ({ x: s.x, z: s.z, radius: Math.min(s.radiusX, s.radiusZ) }))
+    : [];
+  for (const c of [...(source.craters ?? []), ...scars]) {
     const y = groundHeight(c.x, c.z, map) + 0.16;
     let radius = c.radius;
     for (let i = 0; i < 12; i++) {
@@ -124,8 +128,10 @@ export function noMansLandDebris(map: MapDefinition): BackdropBox[] {
     { w: 0.09, h: 0.09, d: 0.3, color: "#7d6838" },
   ];
   const out: BackdropBox[] = [], wet = craterPonds(map), belts = map.wireBelts ?? [];
-  for (let i = 0; out.length < 70 && i < 400; i++) {
-    const x = (hash(i * 1.3) - 0.5) * 32, z = (hash(i * 2.1) - 0.5) * 118;
+  // Seventy pieces across Trench front's 32 m band; the same density on a wider one.
+  const width = map.noMansLand?.width ?? 32, count = Math.round((70 * width) / 32);
+  for (let i = 0; out.length < count && i < count * 6; i++) {
+    const x = (hash(i * 1.3) - 0.5) * width, z = (hash(i * 2.1) - 0.5) * 118;
     if (wet.some((p) => Math.hypot(x - p.x, z - p.z) < p.radius + 0.4)) continue;
     if (belts.some((b) => Math.abs(x - b.x) < b.w / 2 + 0.5 && Math.abs(z - b.z) < b.d / 2 + 0.5)) continue;
     const y = groundHeight(x, z, map);

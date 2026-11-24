@@ -83,6 +83,46 @@ export function trenchChurn(map: MapDefinition, x: number, z: number) {
   const between = (1 - smooth(front - 6, front, Math.abs(x))) * (0.75 + lookNoise(x * 0.09 + 3, z * 0.09) * 0.25);
   return Math.max(between, (1 - smooth(1.5, 7, trench)) * 0.8);
 }
+// Verdun is churned where the fighting has been rather than everywhere:
+// trodden mud in and beside every trench, earth thrown up around each shell
+// scar, and bare ground across the open field between the front lines. Under
+// the trees the leaf litter survives. The ground texture samples this for
+// every texel, so it is baked once per map onto a half-metre grid.
+const churnGrids = new WeakMap<object, { columns: number; rows: number; values: Float32Array }>();
+export function fieldChurn(map: MapDefinition, x: number, z: number) {
+  const key = map.terrain ?? map;
+  let grid = churnGrids.get(key);
+  if (!grid) {
+    const columns = map.width * 2 + 1, rows = map.depth * 2 + 1, values = new Float32Array(columns * rows);
+    for (let row = 0; row < rows; row++)
+      for (let col = 0; col < columns; col++) values[row * columns + col] = exactFieldChurn(map, col / 2 - map.width / 2, row / 2 - map.depth / 2);
+    churnGrids.set(key, (grid = { columns, rows, values }));
+  }
+  const gx = Math.max(0, Math.min(grid.columns - 1.001, (x + map.width / 2) * 2)), gz = Math.max(0, Math.min(grid.rows - 1.001, (z + map.depth / 2) * 2));
+  const c = Math.floor(gx), r = Math.floor(gz), fx = gx - c, fz = gz - r, v = grid.values, n = grid.columns;
+  const top = v[r * n + c] * (1 - fx) + v[r * n + c + 1] * fx, bottom = v[(r + 1) * n + c] * (1 - fx) + v[(r + 1) * n + c + 1] * fx;
+  return top * (1 - fz) + bottom * fz;
+}
+export function exactFieldChurn(map: MapDefinition, x: number, z: number) {
+  let front = Infinity, trench = Infinity, scar = 0;
+  for (const line of map.terrain?.trenchLines ?? []) {
+    const half = line.floor?.half ?? (line.role === "front" ? 2 : 1);
+    for (const s of line.sections) {
+      if (line.role === "front") front = Math.min(front, Math.abs(s.x));
+      trench = Math.min(trench, Math.hypot(Math.max(0, Math.abs(x - s.x) - half), Math.max(0, Math.abs(z - s.z) - s.length / 2)));
+    }
+  }
+  for (const r of map.terrain?.communicationRoutes ?? [])
+    for (let i = 1; i < r.points.length; i++) trench = Math.min(trench, distance({ x, z }, { a: r.points[i - 1], b: r.points[i] }) - 1);
+  if (front === Infinity) return 0;
+  for (const s of map.terrain?.shellScars ?? []) {
+    const r = Math.hypot((x - s.x) / (s.radiusX + 2.5), (z - s.z) / (s.radiusZ + 2.5));
+    scar = Math.max(scar, 1 - smooth(0.55, 1, r));
+  }
+  const woods = map.woodland ? woodlandDensity(map.woodland, x, z) : 0;
+  const open = (1 - smooth(front - 10, front - 2, Math.abs(x))) * (1 - woods) * (0.45 + lookNoise(x * 0.09 + 3, z * 0.09) * 0.3);
+  return Math.max((1 - smooth(1, 6, trench)) * 0.85, scar * 0.9, open);
+}
 export function groundField(map: MapDefinition, x: number, z: number) {
   const c = context(map);
   const wx = x + (lookNoise(x * 0.028 + 17, z * 0.028) - 0.5) * 9;
@@ -110,7 +150,7 @@ export function groundField(map: MapDefinition, x: number, z: number) {
   // The Trench front is churned: no-man's land between the front lines is
   // bare, wet earth, and the ground within a few metres of any trench is
   // trodden mud. Grass survives only on the rear ground.
-  const churn = trenchGround(map) ? trenchChurn(map, x, z) : 0;
+  const churn = trenchGround(map) ? trenchChurn(map, x, z) : map.noMansLand ? fieldChurn(map, x, z) : 0;
   if (churn > 0) {
     wet = Math.max(wet, churn * (0.4 + lookNoise(x * 0.13 + 5, z * 0.13 - 8) * 0.55));
     return { wet, dry: dry * (1 - churn * 0.8), grass: grass * (1 - churn), wear: Math.max(wear, churn * 0.55), litter, gravel, garden };

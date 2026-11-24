@@ -71,16 +71,24 @@ jobs:
         run: npm test -- --maxWorkers=1 --shard="$SHARD/3"
 
   render:
+    name: render (${{ matrix.group }})
     needs: build
     runs-on: ubuntu-latest
-    # Software rendering at High quality (ambient occlusion, shadow cascades)
-    # takes up to about six minutes on the larger maps. Maps with many detail
-    # views take longer: Verdun's ten run 25-35 s each on a hosted runner.
-    timeout-minutes: ${{ (matrix.map == 'training' || matrix.map == 'village' || matrix.map == 'fort-vaux' || matrix.map == 'verdun') && 13 || 9 }}
+    # Maps run in pairs to hold fewer runners at once: five jobs instead of
+    # nine, each about ten minutes, balanced on hosted-runner render times
+    # (Verdun about 9 min with its eleven detail views, Village 7.5, Zeppelin 6, Night raid, Lighthouse
+    # point and Trench front under 6, Training 4, Fort Vaux 3.5, Industrial
+    # 2). Each limit is the sum of the maps' own former limits.
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
-        map: [industrial, trenches, night-raid, verdun, village, headland, training, fort-vaux, zeppelin]
+        include:
+          - {group: verdun, maps: verdun, timeout: 13}
+          - {group: village-industrial, maps: village industrial, timeout: 22}
+          - {group: zeppelin-fort-vaux, maps: zeppelin fort-vaux, timeout: 22}
+          - {group: trenches-training, maps: trenches training, timeout: 22}
+          - {group: night-raid-headland, maps: night-raid headland, timeout: 18}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -94,33 +102,45 @@ jobs:
           name: production-build
           path: dist
       - name: Install locked tools for the Armory check
-        if: matrix.map == 'industrial'
+        if: contains(matrix.maps, 'industrial')
         run: npm ci
       - name: Prepare gameplay stats for the Armory check
-        if: matrix.map == 'industrial'
+        if: contains(matrix.maps, 'industrial')
         run: |
           mkdir -p playtest-artifacts
           node_modules/.bin/esbuild tools/armory-expectations.ts --bundle --platform=node --format=esm --outfile=playtest-artifacts/armory-expectations.mjs
           node playtest-artifacts/armory-expectations.mjs > playtest-artifacts/armory-expectations.json
-          echo 'REVIEW_ARMORY_STATS=playtest-artifacts/armory-expectations.json' >> "$GITHUB_ENV"
-      - name: Render map and check browser errors
-        run: node tools/render-review.mjs "${{ matrix.map }}"
+      # Every map runs even if an earlier one fails; the step fails if any did.
+      # Only Industrial opens the Armory, so only its run gets the stats.
+      - name: Render maps and check browser errors
+        env:
+          MAPS: ${{ matrix.maps }}
+        run: |
+          failed=""
+          for map in $MAPS; do
+            echo "::group::$map"
+            stats=""
+            if [ "$map" = industrial ]; then stats=playtest-artifacts/armory-expectations.json; fi
+            REVIEW_ARMORY_STATS="$stats" node tools/render-review.mjs "$map" || failed="$failed $map"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "::error::Rendered check failed:$failed"; exit 1; fi
       - name: Save screenshots and browser diagnostics
         id: screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: render-${{ matrix.map }}
-          path: playtest-artifacts/render-${{ matrix.map }}/
+          name: render-${{ matrix.group }}
+          path: playtest-artifacts/render-*/
           retention-days: 14
           if-no-files-found: error
       - name: Link visual review
         if: always()
         env:
-          MAP_NAME: ${{ matrix.map }}
+          MAPS: ${{ matrix.maps }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
         run: |
-          node --input-type=module -e 'import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_STEP_SUMMARY, "### " + process.env.MAP_NAME + " rendered review\n\n[Download screenshots and diagnostics](" + process.env.ARTIFACT_URL + ")\n\nOverview before battle, overview during battle, first person and third person. Software rendering is not a hardware FPS benchmark.\n");'
+          node --input-type=module -e 'import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_STEP_SUMMARY, "### " + process.env.MAPS + " rendered review\n\n[Download screenshots and diagnostics](" + process.env.ARTIFACT_URL + ")\n\nOverview before battle, overview during battle, first person and third person for each map. Software rendering is not a hardware FPS benchmark.\n");'
 
   pr-ready:
     if: always()
