@@ -144,7 +144,7 @@ try {
   if((map==='village'||map==='fort-vaux'||map==='trenches'||map==='night-raid'||map==='verdun') && mode==='ground') {
    const details=map==='village'?['school','inn','street','manor-room']
     :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
-    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench']
+    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench','trench-dugout','trench-sign']
     // By lamplight at a dugout, in the dark of no-man's land, and from a firing step.
     :map==='night-raid'?['trench-dugout','no-mans-land','firing-step']
     :['cistern','barracks','casemate','yard'];

@@ -1,5 +1,6 @@
 import type { BackdropBox } from "./backdrop";
 import { duckboards } from "./battlefield";
+import { factionFor, type FactionId } from "./loadouts";
 import { groundHeight, type MapDefinition, type Vec } from "./map";
 
 // Presentation-only construction detail for trench lines: sandbags along the
@@ -26,8 +27,9 @@ export type TrenchStretch = {
 export function trenchStretches(map: MapDefinition): TrenchStretch[] {
   return (map.terrain?.trenchLines ?? []).flatMap((line) => {
     const side = line.team === "blue" ? -1 : 1, front = line.role === "front";
+    const floor = line.floor ?? (front ? { offset: 1, half: 2 } : { offset: 0, half: 1 });
     return line.sections.map((s) => ({
-      team: line.team, front, floorX: s.x - (front ? side : 0), half: front ? 2 : 1, rear: side as 1 | -1,
+      team: line.team, front, floorX: s.x - side * floor.offset, half: floor.half, rear: side as 1 | -1,
       z0: s.z - s.length / 2, z1: s.z + s.length / 2,
     }));
   });
@@ -60,11 +62,13 @@ export function paradosBags(map: MapDefinition): BackdropBox[] {
 
 export type RevetmentStyle = "timber" | "corrugated" | "sandbag" | "wicker";
 // Whole walls share one finish: British stretches mix timber, corrugated iron
-// and sandbags; German stretches use neat timber and woven wicker hurdles.
-export function revetmentStyle(wallIndex: number, x: number): RevetmentStyle {
-  return x < 0
-    ? (["timber", "corrugated", "sandbag"] as const)[wallIndex % 3]
-    : (["timber", "wicker"] as const)[wallIndex % 2];
+// and sandbags; French ones are mostly woven hurdles (clayonnage) with some
+// timber and iron; German stretches use neat timber and woven wicker hurdles.
+export function revetmentStyle(wallIndex: number, x: number, blue: FactionId = "british"): RevetmentStyle {
+  if (x >= 0) return (["timber", "wicker"] as const)[wallIndex % 2];
+  return blue === "french"
+    ? (["wicker", "timber", "wicker", "corrugated"] as const)[wallIndex % 4]
+    : (["timber", "corrugated", "sandbag"] as const)[wallIndex % 3];
 }
 
 // 128 x 64 RGBA textures, laid across a 1 m by 0.45 m panel face.
@@ -123,9 +127,10 @@ export function dugoutBoxes(d: Dugout): BackdropBox[] {
 }
 
 export type Signboard = { x: number; y: number; z: number; facing: 1 | -1; text: string };
-const names = {
-  blue: ["PICCADILLY", "OXFORD ST", "HAYMARKET", "STRAND", "BOND ST", "REGENT ST", "THE MALL"],
-  red: ["KAISERWEG", "LANGER GRABEN", "HINDENBURGWEG", "MÜHLENGRABEN", "WALDGRABEN", "FELDWEG", "BRUNNENGRABEN"],
+const names: Partial<Record<FactionId, string[]>> = {
+  british: ["PICCADILLY", "OXFORD ST", "HAYMARKET", "STRAND", "BOND ST", "REGENT ST", "THE MALL"],
+  french: ["TR. DES SAPINS", "BOYAU DU RAVIN", "TR. DES CHÊNES", "BOYAU DE LA SOURCE", "TR. DU MOULIN", "BOYAU DES PINS", "TR. DE L'ÉTANG"],
+  german: ["KAISERWEG", "LANGER GRABEN", "HINDENBURGWEG", "MÜHLENGRABEN", "WALDGRABEN", "FELDWEG", "BRUNNENGRABEN"],
 };
 // Painted boards on the rear wall naming each trench, with an arrow along the
 // trench toward the team's nearest flag, as a soldier reading the board sees it.
@@ -141,7 +146,8 @@ export function signboards(map: MapDefinition): Signboard[] {
     // The board faces into the trench. Its reader faces the wall, along
     // (rear, 0, 0), so their right hand points along (0, 0, rear).
     const arrow = (flag.z - z) * s.rear > 0 ? "→" : "←";
-    const label = names[s.team][used[s.team]++ % names[s.team].length];
+    const list = names[factionFor(map, s.team)] ?? names[s.team === "blue" ? "british" : "german"]!;
+    const label = list[used[s.team]++ % list.length];
     out.push({ x: s.floorX + s.rear * (s.half - 0.06), y: groundHeight(s.floorX, z, map) + 1.65, z, facing: -s.rear as 1 | -1, text: `${label}\n${arrow} ${flag.id}` });
   });
   return out;

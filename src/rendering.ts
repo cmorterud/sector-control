@@ -36,7 +36,7 @@ import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { bayonetMount, weaponDesign } from "./weapon-design";
 import { flagCloth, flagColor, flagRingColor, type FlagState } from "./flag";
-import { factions, scoped } from "./loadouts";
+import { factionFor, factions, scoped } from "./loadouts";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
@@ -541,10 +541,8 @@ export class Renderer implements CollisionWorld {
     if (map.backdrop) {
       this.buildBackdrop();
       if (map.woodland) this.buildDeadZoneForest();
-      if (trenchGround(map)) {
-        this.buildTrenchDressing();
-        this.buildNoMansLand();
-      }
+      if (map.terrain?.trenchLines?.length) this.buildTrenchDressing();
+      if (trenchGround(map)) this.buildNoMansLand();
     }
     if (this.look.atmosphere) this.buildAtmosphere();
     if (map.night) this.buildNight();
@@ -1473,7 +1471,7 @@ export class Renderer implements CollisionWorld {
       root,
     );
     // Intact trench revetments on refreshed maps show their faction finish.
-    const style = object.lining && this.map.backdrop && trenchGround(this.map) && object.stage === 0 ? revetmentStyle(Number(object.id.split("-")[1]), b.x) : "timber";
+    const style = object.lining && this.map.backdrop && object.stage === 0 ? revetmentStyle(Number(object.id.split("-")[1]), b.x, factionFor(this.map, "blue")) : "timber";
     if (style !== "timber") panel.render!.material = this.revetmentMaterial(style);
     if (b.kind === "wood" && style !== "sandbag") {
       const wear = [...object.id].reduce((n, c) => n + c.charCodeAt(0), 0);
