@@ -104,8 +104,18 @@ const isKey = (action: ControlAction, code: string) => settings.bindings[action]
 const held = (action: ControlAction) => [...keys].some(code => isKey(action, code));
 function updateControlHints() {
   const hint = (action: ControlAction) => keyLabel(settings.bindings[action]);
-  document.querySelector(".controls")!.textContent =
-    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE　 ${hint("sprint")} SPRINT　 RMB AIM　 LMB FIRE　 ${hint("reload")} RELOAD　 ${hint("melee")} MELEE　 ${hint("grenade")} GRENADE　 ${hint("smoke")} SMOKE　 ${hint("crouch")} CROUCH　 ${hint("mantle")} HOP / MANTLE　 ${hint("view")} CHANGE VIEW　 ${hint("primary")} / ${hint("sidearm")} WEAPONS　 ${hint("interact")} INTERACT　 ${hint("tactical")} TACTICAL MAP`;
+  // One span per hint so a wrapping bar never splits a key from its action.
+  const hints = [
+    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE`, `${hint("sprint")} SPRINT`, "RMB AIM", "LMB FIRE",
+    `${hint("reload")} RELOAD`, `${hint("melee")} MELEE`, `${hint("grenade")} GRENADE`, `${hint("smoke")} SMOKE`,
+    `${hint("crouch")} CROUCH`, `${hint("mantle")} HOP / MANTLE`, `${hint("view")} CHANGE VIEW`,
+    `${hint("primary")} / ${hint("sidearm")} WEAPONS`, `${hint("interact")} INTERACT`, `${hint("tactical")} TACTICAL MAP`,
+  ];
+  document.querySelector(".controls")!.replaceChildren(...hints.map(text => {
+    const span = document.createElement("span");
+    span.textContent = text;
+    return span;
+  }));
   document.querySelector(".hint")!.innerHTML = `${hint("scoreboard")} · SCOREBOARD<br>ESC · PAUSE`;
 }
 
