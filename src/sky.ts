@@ -33,7 +33,16 @@ export function skyColor(look: MapLook, dir: Vec3, sun: Vec3): Vec3 {
   const y = dir[1];
   // Below the horizon is ground bounce. It is never seen past the terrain,
   // but it fills shaded faces, so it stays partway toward the horizon colour.
-  if (y < 0) return mix(horizon, ground, 0.6 * smooth(0, 0.3, -y));
+  if (y < 0) {
+    const below = mix(horizon, ground, 0.6 * smooth(0, 0.3, -y)), sea = look.cloudSea;
+    if (!sea) return below;
+    // Cloud tops on a flat layer far below, lit warmer toward the sun and
+    // lost in the horizon haze.
+    const drop = -y + 0.04, n = fbm(dir[0] / drop * sea.scale, dir[2] / drop * sea.scale);
+    const toSun = Math.max(0, dir[0] * sun[0] + dir[2] * sun[2]) / Math.max(0.2, Math.hypot(sun[0], sun[2]));
+    const cloud = mix(hexColor(sea.shade), hexColor(sea.top), smooth(0.3, 0.72, n) * (0.75 + 0.25 * toSun));
+    return mix(horizon, cloud, smooth(0.01, 0.22, -y));
+  }
   let c = mix(horizon, zenith, 1 - Math.pow(1 - y, 2.6));
   const facing = Math.max(0, dir[0] * sun[0] + dir[1] * sun[1] + dir[2] * sun[2]);
   // Clouds on a flat layer overhead, thinning into haze toward the horizon.

@@ -18,6 +18,8 @@ export interface TerrainGeometry {
 }
 export function terrainPatchKeys(map: MapDefinition) {
   const keys: string[] = [];
+  // A map in the sky has no ground mesh or collider at all.
+  if (map.sky) return keys;
   for (
     let x = Math.floor(-map.width / 2 / terrainPatchSize);
     x < map.width / 2 / terrainPatchSize;
