@@ -17,12 +17,12 @@ const smooth = (a: number, b: number, v: number) => {
   return t * t * (3 - 2 * t);
 };
 
-// The field's woodland belts, sampled at the nearest point just inside the
-// field, so a belt that reaches the edge carries on across the wire.
+// The field's woodland belts, sampled 8 m inside the field from the nearest
+// point, so a belt that reaches toward the edge carries on across the wire.
 function carriedDensity(map: MapDefinition, x: number, z: number) {
   const area = playArea(map);
   const belts = { ...map.woodland!, groves: undefined };
-  return woodlandDensity(belts, clamp(x, area.width / 2 - 2), clamp(z, area.depth / 2 - 2));
+  return woodlandDensity(belts, clamp(x, area.width / 2 - 8), clamp(z, area.depth / 2 - 8));
 }
 
 // The ground nearer the front was shelled bare: fewer crowns, more snapped trunks.
@@ -48,7 +48,7 @@ export function verdunDeadZoneTrees(map: MapDefinition): DeadZoneTree[] {
       const x = gx + cell / 2 + (hash(k) - 0.5) * cell * 0.8, z = gz + cell / 2 + (hash(k * 1.9) - 0.5) * cell * 0.8;
       if (beyondPlayArea(x, z, map) < clear || Math.abs(x) > hx - 0.8 || Math.abs(z) > hz - 0.8) continue;
       const carried = carriedDensity(map, x, z);
-      if (hash(k * 3.7) > 0.07 + 0.36 * carried) continue;
+      if (hash(k * 3.7) > 0.07 + 0.4 * carried) continue;
       const style = treeStyle(hash(k * 5.3), carried);
       const h = style === "snapped" ? 2.6 + hash(k * 6.1) * 2 : 6 + hash(k * 6.1) * 4.4;
       trees.push({ id: `verdun-dead-zone-tree-${n++}`, x, z, w: 0.48 + hash(k * 7.7) * 0.45, h, treeStyle: style, yaw: hash(k * 8.3) * 360 });

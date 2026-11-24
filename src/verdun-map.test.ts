@@ -23,15 +23,15 @@ test("Verdun initializes French and German rosters with five reachable open obje
 
 test("forms dense broken woods on both sides of the relay with low undergrowth and clear objectives", () => {
  const trees = verdunMap.vegetation!.filter(b=>b.kind==="tree");
- expect(trees.length).toBeGreaterThanOrEqual(220);
- expect(trees.length).toBeLessThanOrEqual(240);
- expect(trees.filter(treeHasCrown).length).toBeGreaterThan(115);
+ expect(trees.length).toBeGreaterThanOrEqual(300);
+ expect(trees.length).toBeLessThanOrEqual(330);
+ expect(trees.filter(treeHasCrown).length).toBeGreaterThan(160);
  expect(new Set(trees.map(b=>b.treeStyle)).size).toBe(4);
- for(const side of [-1,1])expect(trees.filter(b=>b.z*side>28).length).toBeGreaterThan(35);
+ for(const side of [-1,1])expect(trees.filter(b=>b.z*side>28).length).toBeGreaterThan(90);
  const central = trees.filter(b=>b.id!.startsWith("verdun-wood-central"));
- expect(central.length).toBeGreaterThanOrEqual(96);
- expect(central.length).toBeLessThanOrEqual(112);
- for (let i=0;i<8;i++)expect(central.filter(b=>b.id!.startsWith(`verdun-wood-central-${i}-`)).length).toBeGreaterThanOrEqual(10);
+ expect(central.length).toBeGreaterThanOrEqual(125);
+ expect(central.length).toBeLessThanOrEqual(136);
+ for (let i=0;i<8;i++)expect(central.filter(b=>b.id!.startsWith(`verdun-wood-central-${i}-`)).length).toBeGreaterThanOrEqual(12);
  for (const side of [-1,1]) {
   expect(central.some(b=>b.x*side>0)).toBe(true);
   expect(central.some(b=>b.z*side>0)).toBe(true);
