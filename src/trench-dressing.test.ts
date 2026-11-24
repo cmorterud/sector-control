@@ -6,6 +6,7 @@ import {
   dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, trenchStretches,
 } from "./trench-dressing";
 import { trenchMap } from "./trench-map";
+import { verdunMap } from "./verdun-map";
 
 const bank = trenchMap.terrain!.bankHeight, stretches = trenchStretches(trenchMap);
 const stretchAt = (x: number, z: number) =>
@@ -78,4 +79,40 @@ it("keeps all trench dressing within a modest triangle budget", () => {
   const props = trenchProps(trenchMap, brazierSites(trenchMap));
   const mesh = backdropBoxMesh([...paradosBags(trenchMap), ...props.boxes, ...dugouts(trenchMap).flatMap(dugoutBoxes)]);
   expect(mesh.indices.length / 3).toBeLessThan(25_000);
+});
+
+it("dresses Verdun's narrow trenches: parados bags, props, dugouts and French signboards", () => {
+  const vBank = verdunMap.terrain!.bankHeight, vStretches = trenchStretches(verdunMap);
+  // Every Verdun trench is a 2 m cut centred on its line.
+  expect(vStretches).toHaveLength(12);
+  for (const s of vStretches) {
+    expect(s.half).toBe(1);
+    expect(groundHeight(s.floorX, (s.z0 + s.z1) / 2, verdunMap)).toBeLessThan(0.1);
+  }
+  const vAt = (x: number, z: number) =>
+    vStretches.filter((s) => z >= s.z0 - 0.5 && z <= s.z1 + 0.5).sort((a, b) => Math.abs(a.floorX - x) - Math.abs(b.floorX - x))[0];
+  const bags = paradosBags(verdunMap);
+  expect(bags.length).toBeGreaterThan(200);
+  for (const b of bags) {
+    expect(Math.abs(groundHeight(b.x, b.z, verdunMap) - vBank)).toBeLessThan(0.06);
+    const s = vAt(b.x, b.z);
+    expect((b.x - s.floorX) * s.rear).toBeGreaterThan(s.half + 1);
+  }
+  const props = trenchProps(verdunMap, brazierSites(verdunMap));
+  expect(props.boxes.length).toBeGreaterThan(40);
+  for (const b of props.boxes) expect(groundHeight(b.x, b.z, verdunMap)).toBeLessThan(1);
+  expect(dugouts(verdunMap).length).toBeGreaterThanOrEqual(2);
+  const signs = signboards(verdunMap);
+  expect(signs.length).toBeGreaterThanOrEqual(8);
+  expect(signs.filter((s) => s.x < 0).every((s) => /^(TR\.|BOYAU)/.test(s.text))).toBe(true);
+  for (const sign of signs) {
+    const id = sign.text.split("\n")[1].split(" ")[1];
+    expect(verdunMap.sectors.find((f) => f.id === id)?.home).toBe(sign.x < 0 ? "blue" : "red");
+  }
+  // The French side is mostly woven hurdles; Trench front's British side is unchanged.
+  const french = Array.from({ length: 12 }, (_, i) => revetmentStyle(i, -60, "french"));
+  expect(french.filter((s) => s === "wicker").length).toBeGreaterThanOrEqual(6);
+  expect(revetmentStyle(1, -60)).toBe("corrugated");
+  const mesh = backdropBoxMesh([...bags, ...props.boxes, ...dugouts(verdunMap).flatMap(dugoutBoxes)]);
+  expect(mesh.indices.length / 3).toBeLessThan(20_000);
 });

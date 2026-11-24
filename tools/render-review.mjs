@@ -10,7 +10,7 @@ import {checkArmory,checkBriefing} from './briefing-review.mjs';
 import {expectedCI,awaitPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
-const maps=['fort-vaux','training','trenches','night-raid','village','verdun','headland','industrial'];
+const maps=['fort-vaux','zeppelin','training','trenches','night-raid','village','verdun','headland','industrial'];
 // Industrial still renders for CI checks but is not offered in the briefing.
 const pickerMaps=maps.filter(id=>id!=='industrial');
 if(!maps.includes(map))throw Error('Unknown map');
@@ -143,10 +143,12 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  if((map==='village'||map==='fort-vaux'||map==='trenches'||map==='night-raid'||map==='verdun') && mode==='ground') {
+  if((map==='village'||map==='fort-vaux'||map==='trenches'||map==='night-raid'||map==='verdun'||map==='zeppelin') && mode==='ground') {
    const details=map==='village'?['school','inn','street','manor-room']
+    // Each level of the airship, a flag room on two of them and the view from an engine car.
+    :map==='zeppelin'?['keel','station','gallery','bomb-bay','top','engine-car']
     :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
-    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench']
+    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench','trench-dugout','trench-sign']
     // By lamplight at a dugout, in the dark of no-man's land, and from a firing step.
     :map==='night-raid'?['trench-dugout','no-mans-land','firing-step']
     :['cistern','barracks','casemate','yard'];
@@ -199,6 +201,11 @@ try {
   if(log.summary.ticks<900||log.summary.frames<2)throw Error('Game did not progress through rendered frames');
   if(map==='fort-vaux'&&(log.summary.artilleryImpacts||log.events.some(event=>event.type==='artilleryImpact')))
    throw Error('Fort Vaux had an artillery impact');
+  if(map==='zeppelin'&&(log.summary.artilleryImpacts||log.events.some(event=>event.type==='artilleryImpact')))
+   throw Error('The Zeppelin had an artillery impact');
+  // Rails keep everyone aboard: nobody should fall off the airship.
+  if(map==='zeppelin'&&log.events.some(event=>event.type==='death'&&event.report?.kind==='fall'))
+   throw Error('A soldier fell from the Zeppelin');
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
  }

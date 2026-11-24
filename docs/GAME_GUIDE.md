@@ -129,6 +129,18 @@ Open the tactical map and press **F** to switch it from a fire mission to a flar
 
 The rule lives in `src/night.ts`: `sightLimit(map, target)` is 15 m in the dark and rises to 90 m beside an open fire. The renderer places a light at every lamp the rule lists, so what you see and what a bot sees agree.
 
+## Zeppelin
+
+Choose **Zeppelin** in the start menu or open `?map=zeppelin`. Six a side fight aboard a German naval airship drifting above a sea of cloud at dusk. French boarders spawn at the stern and the crew at the bow; the ship is the same both ways round.
+
+- **Three lanes, one above another.** The **keel** runs along the bottom of the hull, close and cluttered with fuel tanks and crates. The **gallery** runs through the gas cells above it: longer sight lines between valve housings. The **top walk** runs along the outside of the hull with nothing but vents for cover.
+- **Stairs join them.** A tower at each end climbs from the keel to the gallery and on to the top walk. Each engine station has two stairs up to the gallery bridge that crosses it. In the bomb bay a stair climbs from the keel to the bridge, and a tower from the bridge to the top walk.
+- **Three flags.** **A** (Aft engines) and **C** (Forward engines) are the stations near each spawn; **B** is the bomb bay amidships. Each station has engine cars on gangways to either side. You capture a flag from its floor; the bridge above gives cover, not the capture.
+- **Stay aboard.** Rails line every drop to open sky. They stop you, not bullets. Anyone who did fall would not survive.
+- **No artillery or flares,** and grenades break only crates: the airship itself stands up to anything.
+
+`src/zeppelin-map.ts` builds the stern half and turns it 180 degrees for the bow, so every route has its twin. `MapDefinition.sky` gives a map no ground: height queries off the decks return a floor far below, and a fall past `fallLimit` kills.
+
 ## Village front prototype
 
 Choose **Village front** in the start menu or open [the village map](http://localhost:5173/?map=village). It keeps the trench map's 50v50 roster, service rifles, machine gunners, grenades, bayonets and artillery, with the same domination rules.
@@ -162,6 +174,8 @@ The 208 × 128 m field has the same wired edge as Trench front: a barbed-wire be
 The woods do not stop at the wire. Where a belt reaches the edge it carries on through the dead zone, and scattered shell-torn trunks stand elsewhere in it; these trees are scenery and cannot be shot or felled. Beyond the terrain the land climbs into wooded hills, shattered near the continuing front line and intact further back. A ruined village with the stump of a church tower lies behind the French side, a fort's earth glacis and concrete front sit on a ridge behind the German side, and observation balloons, smoke columns, telegraph poles and distant shell bursts and flares fill the horizon. Each burst's rumble arrives after its flash, delayed by its distance.
 
 Verdun's overcast sun now stands at 30° rather than 42°, so the trees cast longer, softer shadows, and the haze closes at 260 m. Ground mist drifts through the woods across the whole field, about twice as many banks as Trench front's no-man's land for twice the width, and pools along every other trench section. Smoke rises from the shelter bays and from fresh shell craters, scraps of cloth hang in the boundary wire, and you hear wind in the wire, a machine gun far off and crows over the trees. Low graphics quality leaves the mist, smoke, cloth and moving backdrop out.
+
+Verdun's trenches are dressed like Trench front's, scaled to their 2 m width: sandbags along the parados, framed dugout entrances in the rear walls of the longer rear sections, crates, rifle racks, stretchers, braziers in the shelter bays, periscopes along the front lines, telephone cable and standing water in the sumps. French stretches are revetted mostly with woven hurdles (clayonnage), with some timber and corrugated iron; German stretches keep neat timber and wicker. Painted boards name each trench, in French on the French side, and point along it to the side's nearest flag. All of it is scenery and adds no cover.
 
 Three forward sap trenches turn through the woods, joining the existing rear/front network. The southern approaches take different doglegs on each side. Walk-out slopes, objective approaches and worn woodland tracks stay clear of new props. Brown leaf litter, needles and damp soil blend into the same terrain material; fresh artillery and grenade cuts reveal earth. Crowns disappear when trees are badly damaged, and destroyed trunks fall into physical low timber cover using the existing bounded animation/debris system.
 
