@@ -91,7 +91,7 @@ jobs:
   compare:
     needs: builds
     runs-on: ubuntu-latest
-    # Each revision captures every detail view; Verdun has ten.
+    # Each revision captures every detail view; Verdun has eleven.
     timeout-minutes: ${{ matrix.map == 'verdun' && 18 || 12 }}
     strategy:
       fail-fast: false

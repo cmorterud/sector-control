@@ -5,6 +5,8 @@ import { beyondPlayArea, groundHeight, inWire } from "./map";
 import { craterPonds, inCraterPond, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { Game, TestCollision, idle } from "./simulation";
 import { trenchMap } from "./trench-map";
+import { verdunMap } from "./verdun-map";
+import { villageMap } from "./village-map";
 
 const game = () => new Game(new TestCollision(trenchMap), false, 3000, 12345, undefined, { map: trenchMap, ambientArtillery: false });
 const belts = trenchMap.wireBelts!;
@@ -100,4 +102,42 @@ it("rebuilds only the cut and nearby wire segments from its cache", () => {
   expect(rebuilt.length).toBeLessThan(8);
   for (const id of rebuilt) expect(near(belts.find((b) => b.id === id)!) || id === target.id).toBe(true);
   expect(cache.get(target.id)!.cut).toBe(true);
+});
+
+it("wires Verdun's front lines without closing a single exit, and only slows the enemy", () => {
+  const vBelts = verdunMap.wireBelts!, t = verdunMap.terrain!;
+  const counts = (["blue", "red"] as const).map((team) => vBelts.filter((b) => b.team === team).length);
+  expect(Math.min(...counts)).toBeGreaterThanOrEqual(6);
+  expect(Math.abs(counts[0] - counts[1])).toBeLessThanOrEqual(2);
+  for (const b of vBelts) {
+    const side = b.team === "blue" ? -1 : 1;
+    // In front of its own line, toward the enemy.
+    expect(b.x * side).toBeLessThan(65);
+    expect(b.x * side).toBeGreaterThan(50);
+    expect(beyondPlayArea(b.x, b.z, verdunMap)).toBeLessThan(-15);
+    // Clear of every dug sap, route, ramp and trench by 2 m, and of the flags.
+    for (const r of [...t.rectangles, ...t.ramps])
+      expect(Math.abs(r.x - b.x) >= (r.w + b.w) / 2 + 2 || Math.abs(r.z - b.z) >= (r.d + b.d) / 2 + 2).toBe(true);
+    for (const f of verdunMap.sectors) expect(Math.hypot(f.x - b.x, f.z - b.z)).toBeGreaterThanOrEqual(9);
+    expect(groundHeight(b.x, b.z, verdunMap)).toBeGreaterThan(t.bankHeight - 1.2);
+    expect(inWire(b.x, b.z, verdunMap, b.team === "blue" ? "red" : "blue")).toBe(true);
+    expect(inWire(b.x, b.z, verdunMap, b.team)).toBe(false);
+  }
+});
+
+it("stands water in Verdun's shell scars and strews debris across its whole field", () => {
+  const ponds = craterPonds(verdunMap);
+  expect(ponds.length).toBeGreaterThan(15);
+  for (const p of ponds) {
+    const scar = verdunMap.terrain!.shellScars!.find((s) => s.x === p.x && s.z === p.z)!;
+    expect(p.radius).toBeLessThanOrEqual(Math.min(scar.radiusX, scar.radiusZ));
+    expect(groundHeight(p.x, p.z, verdunMap)).toBeLessThan(p.y);
+  }
+  const debris = noMansLandDebris(verdunMap);
+  expect(debris).toHaveLength(Math.round((70 * 112) / 32));
+  expect(debris.some((d) => d.x < -40) && debris.some((d) => d.x > 40)).toBe(true);
+  for (const d of debris) expect(d.h).toBeLessThanOrEqual(0.15);
+  // Other maps' shell scars stay dry: water there is Verdun's opt-in.
+  expect(villageMap.terrain!.shellScars!.length).toBeGreaterThan(0);
+  expect(craterPonds(villageMap)).toEqual([]);
 });
