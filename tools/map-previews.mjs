@@ -22,7 +22,7 @@ export const previewShots={
  training:{view:'third',ticks:60,survey:true},
  verdun:{view:'third',ticks:540},
  trenches:{view:'third',ticks:540},
- 'night-raid':{view:'third',ticks:540},
+ 'night-raid':{view:'third',ticks:540,survey:'trench-dugout'},
  headland:{view:'third',ticks:540},
  village:{view:'third',ticks:540},
  // Not in the picker, but its card shows when ?map=industrial is open.
