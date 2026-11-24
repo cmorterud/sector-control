@@ -31,13 +31,15 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
   // Cold grey dawn over no man's land: a low warm sun under a heavy cloud
   // deck, long shadows, mist lying in the field and pooled in the trenches.
   trenches: {
-    sun: { color: "#f2c9a0", intensity: 1.15, elevation: 14, azimuth: 70, shadowStrength: 0.72 },
+    sun: { color: "#f2c9a0", intensity: 1.15, elevation: 14, azimuth: 70, shadowStrength: 0.6 },
     sky: { zenith: "#66758a", horizon: "#aab0b3", ground: "#47483f", clouds: 0.85, cloud: "#959aa0", glow: "#efc497" },
     // Long enough to layer the distant woods, ruins and balloons into the haze.
     fog: { start: 30, end: 280 },
-    // Shadowed trench walls keep about the old brightness; the sky does the mood.
-    grade: { brightness: 0, contrast: 1.1, saturation: 0.78, tint: "#e4ecf3" },
-    vignette: 0.42, exposure: 1.05, ambient: 1.45, farClip: 420,
+    // Tuned on a real GPU, which renders shade far darker than CI's software
+    // renderer: a Blue player faces east into this sun, at banks lit only by
+    // the sky. Ambient this high keeps them readable; the sky does the mood.
+    grade: { brightness: 0, contrast: 1.06, saturation: 0.78, tint: "#e4ecf3" },
+    vignette: 0.36, exposure: 1.1, ambient: 1.9, farClip: 420,
     atmosphere: { fieldMist: 0.2, trenchMist: 0.16 },
   },
   // Overcast late morning; green-grey haze between the trees.

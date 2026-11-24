@@ -950,6 +950,10 @@ try {
       const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-15,-12,-7]};
       // Along a rear trench to its first dugout, and in front of the first signboard.
       const dugout=map.backdrop?dugouts(map)[0]:undefined,sign=map.backdrop?signboards(map)[0]:undefined;
+      // From the trench floor behind a Blue firing step, east toward the parapet
+      // and the low sun: the shadowed bank a Blue player looks at most.
+      const step=map.terrain?.firingPositions?.find(f=>f.team==="blue"&&Math.abs(f.z)<12);
+      if(step)trenchDetails["firing-step"]=[step.x-2.6,step.z+0.6,step.x+40,step.z+0.6];
       if(dugout)trenchDetails["trench-dugout"]=[dugout.x-dugout.rear*1.2,dugout.z+4.5,dugout.x,dugout.z];
       if(sign)trenchDetails["trench-sign"]=[sign.x+sign.facing*1.6,sign.z+1.6,sign.x,sign.z];
       const view = detail ? (map.fort ? fortDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "trenches" ? trenchDetails[detail] : undefined) : poses[map.id];

@@ -1978,16 +1978,20 @@ export class Renderer implements CollisionWorld {
     instances[1].castShadow = false;
     root.addComponent("render", { meshInstances: instances });
   }
+  // Crater ponds and trench sumps use the same muted water as the old puddles.
   private sumpWater() {
-    let pool = this.materials.get("sump water");
-    if (!pool) {
-      pool = new pc.StandardMaterial();
-      pool.diffuse = color("#1b1f1d");
-      pool.gloss = 0.9;
-      pool.update();
-      this.materials.set("sump water", pool);
+    let material = this.materials.get("shallow muddy water");
+    if (!material) {
+      material = new pc.StandardMaterial();
+      material.diffuse = color("#41483c");
+      // Sky reflections stay muted so shallow water doesn't read as ice.
+      material.specular = color("#5f6c6f");
+      material.gloss = 0.92;
+      material.emissive = color("#121a1c");
+      material.update();
+      this.materials.set("shallow muddy water", material);
     }
-    return pool;
+    return material;
   }
   // Parados sandbags, props, dugouts, signs and sump water along the lines.
   private buildTrenchDressing() {
@@ -2366,17 +2370,7 @@ export class Renderer implements CollisionWorld {
     }
     this.worldParent = this.mapRoot;
     this.batchGroup = -1;
-    let material = this.materials.get("shallow muddy water");
-    if (!material) {
-      material = new pc.StandardMaterial();
-      material.diffuse = color("#41483c");
-      // Sky reflections stay muted so shallow water doesn't read as ice.
-      material.specular = color("#5f6c6f");
-      material.gloss = 0.92;
-      material.emissive = color("#121a1c");
-      material.update();
-      this.materials.set("shallow muddy water", material);
-    }
+    const material = this.sumpWater();
     for (const p of groundPuddles(this.map)) {
       const root = this.joint("shallow puddle", this.mapRoot);
       const mesh = new pc.Mesh(this.app.graphicsDevice);

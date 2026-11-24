@@ -169,7 +169,7 @@ try {
  if(!visualOnly&&map==='trenches') {
   // Close views of the wire belt and a trench block. Kept out of the visual
   // comparison, whose base revision may not know these viewpoints.
-  for(const detail of ['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land']) {
+  for(const detail of ['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']) {
    const before=await client.evaluate(`window.sectorRenderReview.survey(true,${JSON.stringify(detail)}).frames`);
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
    await screenshot('detail-'+detail,true);
