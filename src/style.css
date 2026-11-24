@@ -196,6 +196,7 @@ footer {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  gap: 24px;
 }
 footer strong {
   display: block;
@@ -209,9 +210,15 @@ em {
 }
 #health {
   width: 170px;
+  flex-shrink: 0;
 }
+/* The side panels keep their width; the control hints take the squeeze. */
 #ammo {
+  flex-shrink: 0;
   text-align: right;
+}
+#ammo small {
+  white-space: nowrap;
 }
 .gun-traverse {
   position: relative;
@@ -229,11 +236,20 @@ em {
   background: #f3d49a;
 }
 .controls {
+  min-width: 0;
+  text-align: center;
   font-size: 9px;
   letter-spacing: 1px;
   color: #d1d8cf;
   background: #15242480;
   padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 14px;
+}
+.controls span {
+  white-space: nowrap;
 }
 .overlay {
   pointer-events: auto;
