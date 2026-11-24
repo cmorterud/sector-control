@@ -829,3 +829,48 @@ a.armory-link:hover { background: #3f5856; }
 .panel {width:min(760px,90vw);}
 .map-choice {grid-template-columns:repeat(2,minmax(0,1fr));}
 @media(max-width:650px) {.map-choice {grid-template-columns:1fr;}}
+/* Shown on phones and tablets without a mouse, before the game loads. */
+.device-gate {
+  position: fixed;
+  overflow-y: auto;
+  /* Auto margins centre the panel but let a tall one scroll from its top. */
+  place-items: start center;
+  padding: 16px;
+  z-index: 10;
+}
+.device-gate .panel {
+  width: min(480px, 100%);
+  max-height: none;
+  margin: auto 0;
+  padding: 24px;
+}
+.device-gate h1 {
+  font-size: clamp(32px, 9vw, 46px);
+  letter-spacing: -1px;
+  margin: 18px 0 14px;
+}
+.device-gate-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 16px;
+  border: 1px solid #b5b39a55;
+}
+.device-gate-status {
+  min-height: 1em;
+  margin: 8px 0;
+  font-size: 12px;
+  color: #d1c7a9;
+  overflow-wrap: anywhere;
+}
+.device-gate-anyway {
+  background: none;
+  color: #8b9f97;
+  padding: 10px 0;
+  text-decoration: underline;
+  text-transform: none;
+}
+.device-gate-anyway:hover {
+  background: none;
+  color: #ddd;
+}

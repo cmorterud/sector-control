@@ -300,14 +300,17 @@ function unpause() {
   accumulator = 0;
   el("menu").classList.add("hidden");
 }
+// Phones and some embedded browsers have no Pointer Lock API at all.
+const pointerLockSupported = "requestPointerLock" in Element.prototype;
 function mouseCaptureFailed() {
   mouseCapturePending = false;
   // Escape resumes immediately. A denied recapture must not pause it again;
   // wait for another fresh gameplay key/click instead of retrying on a timer.
   if (mouseCaptureNeeded && !paused) return;
   pause();
-  el("menu").querySelector("p")!.textContent =
-    "Mouse capture was denied. Click Resume to retry.";
+  el("menu").querySelector("p")!.textContent = pointerLockSupported
+    ? "Mouse capture was denied. Click Resume to retry."
+    : "This browser can't capture the mouse, so Sector Control can't be played here. Open it in a desktop browser with a keyboard and mouse.";
 }
 function captureMouse() {
   if (mouseCapturePending) return;
@@ -1055,7 +1058,7 @@ try {
 } catch (error) {
   menu(
     "Unable to initialize",
-    "A WebGL 2 capable desktop browser is required. " + String(error),
+    "Sector Control needs a desktop browser with WebGL 2, a keyboard and a mouse. " + String(error),
     "Reload",
     () => location.reload(),
   );
