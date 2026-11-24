@@ -257,8 +257,10 @@ export interface Fall {
   startTick: number;
   velocity: number;
 }
-export const hopSpeed = 3.8;
 export const hopGravity = 16;
+// Apex of a Space hop above its takeoff, in meters: 50% above the original 0.45 m.
+export const hopHeight = 0.68;
+export const hopSpeed = Math.sqrt(2 * hopGravity * hopHeight);
 export const smooth = (t: number) => {
   const u = Math.max(0, Math.min(1, t));
   return u * u * (3 - 2 * u);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Game, idle, TestCollision } from "./simulation";
+import { Game, hopHeight, idle, TestCollision } from "./simulation";
+import { eyeHeightOf } from "./crouch";
 import { groundHeight, mantleLanding } from "./map";
 import { trenchMap } from "./trench-map";
 
@@ -32,8 +33,9 @@ describe("Space hop fallback", () => {
       peak = Math.max(peak, p.y);
       events.push(...game.events);
     }
-    expect(peak).toBeGreaterThan(0.4);
-    expect(peak).toBeLessThan(0.5);
+    expect(hopHeight / 0.45).toBeCloseTo(1.5, 1);
+    expect(peak).toBeGreaterThan(hopHeight - 0.03);
+    expect(peak).toBeLessThanOrEqual(hopHeight + 1e-9);
     expect(p.x).toBeGreaterThan(x + 2);
     expect(p.hop).toBeNull();
     expect(p.y).toBe(groundHeight(p.x, p.z, trenchMap));
@@ -59,11 +61,28 @@ describe("Space hop fallback", () => {
       expect(p.x).toBeLessThanOrEqual(-17.8);
     }
     expect(starts).toBe(1);
-    // A steep rounded toe may catch the hop before its free-flight duration.
-    expect(p.y).toBeLessThan(0.6);
+    // A steep rounded toe may catch the hop before its free-flight duration,
+    // but never above the hop's own apex.
+    expect(p.y).toBeLessThanOrEqual(hopHeight + 0.001);
     game.respawn(p);
     expect(p.hop).toBeNull();
     expect(p.y).toBe(groundHeight(p.x, p.z, trenchMap));
+  });
+
+  it("never lands higher up a trench wall than the hop's apex", () => {
+    // Hop facing away, so Space hops instead of mantling, then back into the
+    // bank from each distance: the hop stops at the face, not partway up it.
+    for (let x = -19.6; x <= -18.2; x += 0.1) {
+      const game = scene(),
+        p = game.players[0];
+      Object.assign(p, { x, y: 0, z: -27 });
+      game.step({ ...idle(), yaw: -Math.PI / 2, mantle: true });
+      expect(p.hop).not.toBeNull();
+      for (let i = 0; i < 30; i++) game.step({ ...idle(), yaw: -Math.PI / 2, x: 1 });
+      expect(p.hop).toBeNull();
+      expect(p.y).toBeLessThanOrEqual(hopHeight + 0.001);
+      expect(p.y + eyeHeightOf(p)).toBeLessThan(2.4);
+    }
   });
 
   it("stops upward movement at a low ceiling and lands cleanly", () => {
