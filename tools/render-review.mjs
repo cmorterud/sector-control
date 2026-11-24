@@ -95,7 +95,7 @@ try {
  await client.send('Runtime.enable');await client.send('Page.enable');await client.send('Network.enable');
  await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
  for(const mode of ['overview','ground']) {
-  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:map==='village'||map==='fort-vaux'?'600':'120',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
+  const query=new URLSearchParams({map,view:'first',autoplay:'',playtest:'',renderReview:'',video:'0',clip:'600',duration:'120',quality:process.env.REVIEW_QUALITY??'high'});if(mode==='overview')query.set('overview','');
   if(map==='fort-vaux'&&mode==='overview'&&!visualOnly&&!process.env.REVIEW_BASE_URL)query.delete('map');
   // Pages caches a page for up to ten minutes. Like the manifest request, ask
   // for a URL unique to this revision so an earlier deployment's HTML cannot answer.
