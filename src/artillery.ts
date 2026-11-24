@@ -1,7 +1,7 @@
 import { auditArtilleryCall } from "./artillery-audit";
 import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
-import { blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
+import { beyondPlayArea, blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
 import {
   idle,
   pathfind,
@@ -540,8 +540,10 @@ export function evadeArtillery(g: Game, p: Soldier): Command | null {
           x: p.x + Math.sin((i * Math.PI) / 6) * 24,
           z: p.z + Math.cos((i * Math.PI) / 6) * 24,
         }));
+    // Never run from a barrage into the dead zone beyond the boundary wire.
     const safe = candidates.filter(
       (v) =>
+        beyondPlayArea(v.x, v.z, g.map) < -1.5 &&
         !blocked(v.x, v.z, 0.6, g.map) &&
         (dist(v, threat!.at) >= 10 ||
           groundHeight(v.x, v.z, g.map) < groundHeight(p.x, p.z, g.map) - 0.3 ||

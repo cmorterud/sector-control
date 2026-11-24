@@ -4,7 +4,9 @@ import { groundHeight, playArea, type MapDefinition, type Vec } from "./map";
 // Presentation-only atmosphere for maps whose look asks for it: drifting
 // ground mist, smoke from trench braziers and fresh craters, and scraps of
 // cloth caught on the boundary wire. Mist values are billboard opacities.
-export type Atmosphere = { fieldMist: number; trenchMist: number };
+// fieldWidth is how far across x the field mist lies, centred on the map:
+// no-man's land on Trench front (the default 64 m), the whole wooded field on Verdun.
+export type Atmosphere = { fieldMist: number; trenchMist: number; fieldWidth?: number };
 
 const hash = (n: number) => {
   const s = Math.sin(n * 12.9898 + 7.233) * 43758.5453;
@@ -17,10 +19,12 @@ export type MistBank = { x: number; y: number; z: number; w: number; h: number; 
 // out everything beneath it, while billboards read as mist at the grazing
 // angles and distances where ground mist is actually seen. Wide, low banks
 // lie across no-man's land; smaller ones pool along the trench floors.
-export function mistBanks(map: MapDefinition): MistBank[] {
+export function mistBanks(map: MapDefinition, fieldWidth = 64): MistBank[] {
   const bank = map.terrain?.bankHeight ?? 0, area = playArea(map), banks: MistBank[] = [];
-  for (let i = 0; i < 60; i++) {
-    const x = (hash(i * 1.7) - 0.5) * 64, z = (hash(i * 2.9) - 0.5) * (area.depth + 30);
+  // The same density of banks however wide the field is.
+  const count = Math.round((60 * fieldWidth) / 64);
+  for (let i = 0; i < count; i++) {
+    const x = (hash(i * 1.7) - 0.5) * fieldWidth, z = (hash(i * 2.9) - 0.5) * (area.depth + 30);
     banks.push({ x, y: bank + 0.7 + hash(i * 3.1) * 0.5, z, w: 9 + hash(i * 4.3) * 9, h: 2.2 + hash(i * 5.1) * 1.6, drift: 0.25 + hash(i * 6.7) * 0.3, trench: false });
   }
   const lines = map.terrain?.trenchLines ?? [];

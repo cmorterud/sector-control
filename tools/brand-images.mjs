@@ -1,7 +1,11 @@
 // Generates the browser icons and the social preview from a production build.
 //   node tools/brand-images.mjs [dist] [out]
+//   node tools/brand-images.mjs [dist] .github --github
 // Icons are rasterized from public/favicon.svg. The social preview is a real
-// Verdun battle (fixed seed, fixed tick) with the title composited over it.
+// battle (fixed seed, fixed tick) with the title composited over it.
+// --github writes only GitHub's repository social preview (1280x640, under
+// 1 MB), uploaded by hand under Settings > General > Social preview.
+// Build with --base /sector-control/ first.
 // Needs Chrome with a GPU for a representative shot: CHROME_PATH overrides.
 import {createServer} from 'node:http';
 import {spawn} from 'node:child_process';
@@ -10,8 +14,10 @@ import {tmpdir} from 'node:os';
 import {resolve,join,extname,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 
-const dist=resolve(process.argv[2]??'dist'),out=resolve(process.argv[3]??'public');
-const shot={map:'verdun',view:process.env.SHOT_VIEW??'third',ticks:Number(process.env.SHOT_TICKS??540),quality:'high'};
+const args=process.argv.slice(2),github=args.includes('--github'),[distArg,outArg]=args.filter(a=>!a.startsWith('--'));
+const dist=resolve(distArg??'dist'),out=resolve(outArg??(github?'.github':'public'));
+const size=github?{width:1280,height:640}:{width:1200,height:630};
+const shot={map:process.env.SHOT_MAP??'verdun',view:process.env.SHOT_VIEW??'third',ticks:Number(process.env.SHOT_TICKS??540),quality:'high'};
 const sitePath='/sector-control/';
 const chromePath=process.env.CHROME_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/google-chrome');
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.svg':'image/svg+xml','.jpg':'image/jpeg','.png':'image/png','.glb':'model/gltf-binary','.wav':'audio/wav','.json':'application/json','.webmanifest':'application/manifest+json'};
@@ -45,6 +51,7 @@ let pages=0;
 const show=async(html)=>{const path=`${sitePath}__brand/${++pages}.html`;generated.set(path,{type:'text/html; charset=utf-8',body:html});await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}${path}`});await until(`document.readyState==='complete'&&[...document.images].every(i=>i.complete)`);await evaluate('document.fonts.ready.then(()=>true)');};
 
 await (async()=>{try{
+ if(!github){
  // Icons: transparent outside the rounded square.
  const svg=await readFile(resolve('public/favicon.svg'),'utf8');
  await send('Emulation.setDefaultBackgroundColorOverride',{color:{r:0,g:0,b:0,a:0}});
@@ -54,9 +61,10 @@ await (async()=>{try{
   await writeFile(join(out,name),await capture());
  }
  await send('Emulation.setDefaultBackgroundColorOverride',{});
+ }
 
  // The battle shot, at twice the preview's resolution for a sharp downscale.
- await viewport(1200,630,2);
+ await viewport(size.width,size.height,2);
  const query=new URLSearchParams({map:shot.map,view:shot.view,autoplay:'',renderReview:'',playtest:'',video:'0',clip:'120',duration:'120',quality:shot.quality});
  await send('Page.navigate',{url:base+'?'+query});
  await until(`document.querySelector('#primary')?.textContent.trim().startsWith('Begin')`,90000);
@@ -72,12 +80,13 @@ await (async()=>{try{
 
  // Title band in the briefing screen's style, over the shot.
  generated.set(`${sitePath}__brand/shot.png`,{type:'image/png',body:battle});
- await viewport(1200,630);
+ const {width,height}=size;
+ await viewport(width,height);
  await show(`<!doctype html><meta charset="utf-8"><style>
-  html,body{margin:0;width:1200px;height:630px;overflow:hidden;background:#202c2c}
+  html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#202c2c}
   body{font-family:Inter,"Helvetica Neue",Arial,sans-serif;color:#edf0e7;position:relative}
   /* The soldier stands mid-frame; shift the shot so they clear the title. */
-  .shot{position:absolute;top:0;left:240px;width:1200px;height:630px}
+  .shot{position:absolute;top:0;left:${Math.round(width*.2)}px;width:${width}px;height:${height}px}
   .band{position:absolute;inset:0;background:linear-gradient(90deg,#152424 0,#152424 290px,#152424d9 420px,#15242470 580px,#15242400 760px)}
   .copy{position:absolute;left:64px;top:0;bottom:0;width:470px;display:flex;flex-direction:column;justify-content:center}
   .eyebrow{font-size:17px;letter-spacing:.2em;font-weight:700;color:#efd07b}
@@ -97,5 +106,5 @@ await (async()=>{try{
   <div class="sectors"><div class="sector blue">A<i></i></div><div class="sector contested">B<i></i></div><div class="sector red">C<i></i></div></div></div>
  <div class="url"><b>Free in your browser</b> · codymorterud.com/sector-control</div>`);
  await writeFile(join(out,'social-preview.png'),await capture());
- console.log('Wrote icons and social preview to',out);
+ console.log(github?'Wrote the GitHub social preview to':'Wrote icons and social preview to',out);
 }finally{ws.close();chrome.kill();server.close();await rm(profile,{recursive:true,force:true}).catch(()=>{});}})();

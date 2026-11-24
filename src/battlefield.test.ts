@@ -40,9 +40,11 @@ describe("battlefield presentation", () => {
     Object.assign(g.players[0],{...point,y:groundHeight(point!.x,point!.z,g.map),protectedUntil:0});
     g.tick=450;f.reset(g);const snapshot=g.snapshot();f.step(g);
     expect(g.snapshot()).toEqual(snapshot);
-    expect(cues.map(c=>c.kind)).toEqual(["forestWind","forestCreak","distantBattle"]);
+    // Verdun's backdrop adds the battlefield ambience and times its distant
+    // rumble to the bursts on its horizon, so the forest no longer adds its own.
+    expect(cues.map(c=>c.kind)).toEqual(["forestWind","forestCreak","wireWind","distantGun"]);
     expect(cues.find(c=>c.kind==="forestWind")!.volume).toBeLessThan(.05);
-    f.step(g);expect(cues).toHaveLength(3);
+    f.step(g);expect(cues).toHaveLength(4);
     g.explode({...point!,y:g.players[0].y+.03},-1,null,{...grenadeExplosionProfile,damage:0});
     expect(footSurface(point!,g.map)).toBe("mud");
     const plain=scene(false);plain.g.tick=500;plain.feedback.step(plain.g);

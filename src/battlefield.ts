@@ -502,7 +502,8 @@ export class BattlefieldFeedback {
       const tree=trees[Math.floor(n*trees.length)];
       if(tree){this.cue(g,"forestCreak",{x:tree.x,y:(tree.baseY??0)+3,z:tree.z},.12,false,true,g.tick);this.stats.forestSounds++;}
     }
-    if(g.tick>=this.nextDistant) {
+    // A map with a backdrop times its distant rumble to the bursts on its horizon.
+    if(!g.map.backdrop && g.tick>=this.nextDistant) {
       this.nextDistant=g.tick+540+Math.floor(n*480);
       const side=n<.5?-1:1;
       this.cue(g,"distantBattle",{x:side*(g.map.width/2+45),y:3,z:(n-.5)*g.map.depth},.4,false,false,g.tick);

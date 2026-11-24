@@ -26,27 +26,31 @@ const cosmetic = {
   structuralDamage: 0,
   craterRadius: 0,
 };
-it("preserves the original open-ground kill radius while reducing only the excavation footprint", () => {
+it("keeps peak damage while shrinking the blast radius and excavation footprint by a quarter", () => {
   const g = scene();
   for (const [i, x] of [0, 3, 5, 7, 9, 13].entries())
     g.players.push({ ...g.players[0], id: i + 1, x, team: "red", hp: 100 });
   g.explode({ x: 0, y: 0.9, z: 0 }, 0, "blue", cosmetic);
-  expect(g.players.slice(1).map((p) => p.hp)).toEqual([0, 0, 0, 0, 40, 100]);
-  expect(artilleryExplosionProfile.radius).toBe(12);
+  // ceil(240 x (1 - d / 9)): an unshielded soldier dies within 5.25 m.
+  expect(g.players.slice(1).map((p) => p.hp)).toEqual([0, 0, 0, 46, 100, 100]);
+  expect(artilleryExplosionProfile.damage).toBe(240);
+  expect(artilleryExplosionProfile.radius).toBe(9);
+  expect(artilleryExplosionProfile.structuralRadius).toBe(5.25);
   expect(artilleryExplosionProfile.structuralDamage).toBe(260);
-  expect(artilleryExplosionProfile.craterDepth).toBe(1.3);
-  expect(artilleryExplosionProfile.craterRadius).toBe(2.5);
-  expect(artilleryExplosionProfile.bankDepth).toBe(1.6);
+  expect(artilleryExplosionProfile.craterDepth).toBeCloseTo(0.975, 6);
+  expect(artilleryExplosionProfile.craterRadius).toBe(1.875);
+  expect(artilleryExplosionProfile.bankDepth).toBeCloseTo(1.2, 6);
 });
 it("protects partially exposed bodies and crouched soldiers behind earth without changing grenade damage", () => {
   const g = scene();
   g.players.push({ ...g.players[0], id: 1, x: 3, team: "red", hp: 100 });
   g.collision.ray = (_a, b) => (b.y >= 1.3 ? 1 : 0);
   g.explode({ x: 0, y: 0.9, z: 0 }, 0, "blue", cosmetic);
-  expect(g.players[1].hp).toBe(40);
+  // One of three probes exposed at 3 m: ceil(240 x (1 - 3 / 9) / 3) = 54.
+  expect(g.players[1].hp).toBe(46);
   g.players[1].crouched = true;
   g.explode({ x: 0, y: 0.9, z: 0 }, 0, "blue", cosmetic);
-  expect(g.players[1].hp).toBe(40);
+  expect(g.players[1].hp).toBe(46);
   Object.assign(g.players[1], { hp: 100, crouched: false });
   g.explode({ x: 0, y: 0.9, z: 0 }, 0, "blue", {
     ...grenadeExplosionProfile,

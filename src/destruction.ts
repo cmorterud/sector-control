@@ -39,17 +39,20 @@ export const grenadeExplosionProfile: ExplosionProfile = {
   terrainReach: 3,
   bankDepth: 1.05,
 };
+// Shells reach and dig 25% less than they once did: 12 m blast, 7 m structural
+// reach, and a 2.5 m x 1.3 m bowl cutting 1.6 m into banks. Peak damage is unchanged.
+const artilleryScale = 0.75;
 export const artilleryExplosionProfile: ExplosionProfile = {
   kind: "artillery",
-  radius: 12,
+  radius: 12 * artilleryScale,
   damage: 240,
   partialCover: true,
-  structuralRadius: 7,
+  structuralRadius: 7 * artilleryScale,
   structuralDamage: 260,
-  craterRadius: 2.5,
-  craterDepth: 1.3,
+  craterRadius: 2.5 * artilleryScale,
+  craterDepth: 1.3 * artilleryScale,
   terrainReach: 3.5,
-  bankDepth: 1.6,
+  bankDepth: 1.6 * artilleryScale,
   craterVariation: 0.18,
 };
 // Heavy stray shells double the footprint, retaining trench-friendly cut depth.
@@ -508,7 +511,7 @@ export function deformExplosion(
       relax();
     }
   }
-  // Blasts cut wire belt segments within reach (about 2.4 m for a shell, 1.4 m
+  // Blasts cut wire belt segments within reach (about 1.8 m for a shell, 1.4 m
   // for a grenade: shellfire was poor at clearing wire); flame does not.
   const cutReach = profile.kind === "flame" ? 0 : Math.min(2.5, profile.radius * 0.2), wire: string[] = [];
   for (const b of map.wireBelts ?? []) {

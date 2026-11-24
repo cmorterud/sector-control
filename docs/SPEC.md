@@ -86,7 +86,7 @@ Flags are decorative, rebased to deformed ground; capture checks use actual shar
 
 Six alternate connections and six turning shelter necks extend the four original lines; six recessed 6 × 6 m open-topped bays behind the rear lines provide earth-screened cover. All hundred firing stations, rear entries and continuous front parapets remain.
 
-Artillery retains its original 240 damage / 12 m falloff radius. Partial exposure scales damage by visible body probes; intact earth fully shields blocked bodies, while direct trench hits remain dangerous. Crater radius is 2.5 m (formerly 3.5), terrain reach 3.5 m and bank depth 1.6 m; bowl depth stays 1.3 m and structural damage/reach 260/7 m. Grenade damage is unchanged. Bare/snapped trees, exposed roots and sparse small crowns plus low cosmetic equipment dress the battlefield; branches have no invisible foliage concealment, trunks remain destructible and excavation clears equipment footing.
+Artillery deals 240 damage with a 9 m falloff radius. Partial exposure scales damage by visible body probes; intact earth fully shields blocked bodies, while direct trench hits remain dangerous. Crater radius is 1.875 m, terrain reach 3.5 m and bank depth 1.2 m; bowl depth is 0.975 m and structural damage/reach 260/5.25 m. On 2026-11-24 the blast radius, structural reach and crater size were all cut by a quarter, from 12 m, 7 m, and a 2.5 m × 1.3 m bowl cutting 1.6 m into banks. Grenade damage is unchanged. Bare/snapped trees, exposed roots and sparse small crowns plus low cosmetic equipment dress the battlefield; branches have no invisible foliage concealment, trunks remain destructible and excavation clears equipment footing.
 
 ## Tighter trench cross-sections — November 7
 

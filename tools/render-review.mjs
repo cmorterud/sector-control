@@ -141,11 +141,12 @@ try {
    await until(()=>client.evaluate(`window.sectorRenderReview.state().frames>=${before+2}`));
   }
   await screenshot(mode==='overview'?'overview-intact':'first-person',mode==='overview');
-  if((map==='village'||map==='fort-vaux'||map==='trenches'||map==='night-raid'||map==='zeppelin') && mode==='ground') {
+  if((map==='village'||map==='fort-vaux'||map==='trenches'||map==='night-raid'||map==='verdun'||map==='zeppelin') && mode==='ground') {
    const details=map==='village'?['school','inn','street','manor-room']
     // Each level of the airship, a flag room on two of them and the view from an engine car.
     :map==='zeppelin'?['keel','station','gallery','bomb-bay','top','engine-car']
     :map==='trenches'?['boundary-wire','trench-block','trench-dugout','trench-sign','no-mans-land','firing-step']
+    :map==='verdun'?['boundary-wire','dead-zone-woods','west-horizon','east-horizon','south-front','woods','relay','front-trench']
     // By lamplight at a dugout, in the dark of no-man's land, and from a firing step.
     :map==='night-raid'?['trench-dugout','no-mans-land','firing-step']
     :['cistern','barracks','casemate','yard'];
@@ -206,9 +207,11 @@ try {
   if(log.summary.errors.length)report.errors.push(...log.summary.errors);
   report.scenarios.push({mode,graphics,summary:log.summary});
  }
- if(!visualOnly&&map==='trenches') {
+ if(!visualOnly&&(map==='trenches'||map==='verdun')) {
   // Walk out through the boundary wire: the warning must appear and count down,
   // and staying out must end in the boundary salvo rather than a soldier's kill.
+  // The west wire starts at the play area's edge: x -80 on Trench front, -104 on Verdun.
+  const edge=map==='verdun'?-104:-80;
   report.boundary=await client.evaluate(`(()=>{
    const review=window.sectorRenderReview;
    const send=(type,code)=>window.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
@@ -218,7 +221,7 @@ try {
    send('keydown','KeyW');
    try {review.advance(75);} finally {send('keyup','KeyW');}
    const out=review.state().player, banner=document.querySelector('.boundary-warning')?.textContent??'';
-   if(out.x>-80.2||out.x<start-8)throw Error('Did not walk into the boundary wire: x '+out.x);
+   if(out.x>${edge}-0.2||out.x<start-8)throw Error('Did not walk into the boundary wire: x '+out.x);
    if(!banner.includes('OUT OF BOUNDS')||!/ARTILLERY IN [1-5]/.test(banner))throw Error('Boundary warning missing: '+banner);
    if(!document.querySelector('#ui').classList.contains('out-of-bounds'))throw Error('Boundary vignette missing');
    return {x:out.x,banner};

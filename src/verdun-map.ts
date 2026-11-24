@@ -4,7 +4,11 @@ import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
 import { buildVerdunForest, verdunWoodland, verdunFlankX } from "./verdun-forest";
 
 // An authored, battle-inspired sector, rather than a reconstruction of a specific fort.
-const width = 208, depth = 128, bankHeight = 2.4;
+// The fought-over 208 x 128 m area sits inside a 16 m dead zone: a barbed-wire
+// belt marks its edge, and soldiers who stay past it are shelled. Terrain patches
+// are 8 m and start at whole multiples of 8, so both half extents stay multiples of 8.
+const playWidth = 208, playDepth = 128, deadZone = 16, bankHeight = 2.4;
+const width = playWidth + deadZone * 2, depth = playDepth + deadZone * 2;
 const heights = new Float32Array(width * depth).fill(bankHeight);
 const terrain: NonNullable<MapDefinition["terrain"]> = {
  bankHeight, cellSize:1, columns:width, rows:depth, heights,
@@ -76,6 +80,7 @@ for(const r of terrain.rectangles) for(let row=0;row<depth;row++) for(let col=0;
 
 export const verdunMap:MapDefinition={
  id:"verdun", name:"Verdun sector",width,depth,navSpacing:4,scoring:"domination",
+ playArea:{width:playWidth,depth:playDepth}, boundary:{warningTicks:5*30,wireDepth:3}, backdrop:true,
  navigationPoints:[],
  spawn:{blue:{x:-93,z:0},red:{x:93,z:0}}, boxes,vegetation,terrain,woodland:verdunWoodland,
  sectors:[

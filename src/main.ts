@@ -978,7 +978,7 @@ try {
       // "no-mans-land" looks from the centre over a crater pond to Blue's wire belt.
       const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-15,-12,-7]};
       // Along a rear trench to its first dugout, and in front of the first signboard.
-      const dugout=map.backdrop?dugouts(map)[0]:undefined,sign=map.backdrop?signboards(map)[0]:undefined;
+      const dressed=map.backdrop&&trenchGround(map),dugout=dressed?dugouts(map)[0]:undefined,sign=dressed?signboards(map)[0]:undefined;
       // From the trench floor behind a Blue firing step, east toward the parapet
       // and the low sun: the shadowed bank a Blue player looks at most.
       const step=map.terrain?.firingPositions?.find(f=>f.team==="blue"&&Math.abs(f.z)<12);
@@ -987,7 +987,14 @@ try {
       if(sign)trenchDetails["trench-sign"]=[sign.x+sign.facing*1.6,sign.z+1.6,sign.x,sign.z];
       // Zeppelin viewpoints carry the deck they stand on: [x, z, toward x, toward z, deck].
       const zeppelinDetails:Record<string,[number,number,number,number,number]>={keel:[-47,-1,-20,-1,0],station:[-35,3,-25,-3,0],gallery:[-48,0,-30,0,5.1],"bomb-bay":[-8.5,-3.5,3,2,0],top:[-50,-1.2,0,0,12.75],"engine-car":[-25.5,9.6,40,8.5,0]};
-      const view = detail ? (map.fort ? fortDetails[detail] : map.sky ? zeppelinDetails[detail] : map.id === "village" ? villageDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : map.sky ? zeppelinDetails.keel : poses[map.id];
+      // Verdun: across the boundary wire behind Blue's spawn, and a walk out through it;
+      // north out of the woods past the wire; west to the village, east to the fort's
+      // ridge; and south along the continuing front.
+      const verdunDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-99,22,-108,32],"boundary-walk":[-100,6,-116,6],
+        "dead-zone-woods":[-40,-56,-46,-96],"west-horizon":[-97,30,-186,46],"east-horizon":[97,-36,222,-46],"south-front":[58,56,68,140],
+        // Through the woods to Shattered Wood (B), across Broken Relay (C), and along Blue's front trench.
+        "woods":[-36,-53,-54,-36],"relay":[-15,5,0,0],"front-trench":[-67,-28,-67,-48]};
+      const view = detail ? (map.fort ? fortDetails[detail] : map.sky ? zeppelinDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : map.sky ? zeppelinDetails.keel : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0],deck=map.sky?view[4]:undefined;
       const floor=(x:number,z:number)=>deck===undefined?groundHeight(x,z,game.map):supportHeight(x,z,game.map,deck+.23,.45);
