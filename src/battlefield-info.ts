@@ -6,7 +6,7 @@ export const battlefieldInfo = {
   verdun: {setting:"Verdun-inspired · 1917", factions:"France · Imperial Germany", description:"An extended forest front with five flags and the ruined Broken Relay at its center."},
   industrial: { setting: "Industrial skirmish", factions: "Training teams", description: "Close lanes and industrial cover. Three control points." },
   trenches: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Flooded farmland, broken farmyards and exposed trench crossings. Four flags." },
-  headland: { setting: "Atlantic coast · 1917", factions: "France · Imperial Germany", description: "Greybox preview. A lighthouse headland with a town square between cliff-top parks. Three flags." },
+  headland: { setting: "Atlantic coast · 1917", factions: "France · Imperial Germany", description: "Graybox preview. A lighthouse headland with a town square between cliff-top parks. Three flags." },
   village: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Nine village buildings, sheltered gardens and a destructible two-story manor. Five flags, including the manor." },
 };
 export function battlefieldCard(map: MapDefinition, href?: string) {

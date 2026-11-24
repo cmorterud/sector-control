@@ -1,14 +1,14 @@
-// The Armoury page: every number comes from weapon-stats.ts and the game's
+// The Armory page: every number comes from weapon-stats.ts and the game's
 // faction list, so the page can't drift from the game's data.
-import "./armoury.css";
+import "./armory.css";
 import { factions, type FactionId } from "./loadouts";
 import {
-  armouryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, timeToKill,
+  armoryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, timeToKill,
   weaponStats, type HitZone, type WeaponStats,
 } from "./weapon-stats";
 
 type Tab = FactionId | "compare";
-const root = document.getElementById("armoury")!;
+const root = document.getElementById("armory")!;
 const escape = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const seconds = (s: number) => s === 0 ? "instant" : `${s.toFixed(2).replace(/\.?0+$/, "")} s`;
 
@@ -92,12 +92,12 @@ function compare() {
 }
 
 function render(tab: Tab) {
-  const tabs: [Tab, string][] = [...armouryFactions.map(f => [f, factions[f].name] as [Tab, string]), ["compare", "Compare"]];
+  const tabs: [Tab, string][] = [...armoryFactions.map(f => [f, factions[f].name] as [Tab, string]), ["compare", "Compare"]];
   const content = tab === "compare" ? compare()
     : `<div class="cards">${weaponStats.filter(w => w.faction === tab).map(card).join("")}</div>`;
   root.innerHTML = `<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
-      <div class="eyebrow">SECTOR CONTROL</div><h1>Armoury</h1>
+      <div class="eyebrow">SECTOR CONTROL</div><h1>Armory</h1>
       <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles. Support can carry a light machine gun or take an emplacement kit on any map. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${tabs.map(([id, label]) => `<button role="tab" aria-selected="${id === tab}" data-tab="${id}">${escape(label)}</button>`).join("")}</nav>
@@ -115,4 +115,4 @@ function render(tab: Tab) {
   });
 }
 const fromHash = location.hash.slice(1) as Tab;
-render(fromHash === "compare" || armouryFactions.includes(fromHash as FactionId) ? fromHash : armouryFactions[0]);
+render(fromHash === "compare" || armoryFactions.includes(fromHash as FactionId) ? fromHash : armoryFactions[0]);

@@ -1,12 +1,12 @@
 import { expect, it } from "vitest";
 import { equipLoadout, factions, switchWeapon } from "./loadouts";
-import { armouryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
+import { armoryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
 
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
 
-it("gives every Armoury faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
-  for (const f of armouryFactions) {
+it("gives every Armory faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
+  for (const f of armoryFactions) {
     expect(factions[f].name).toBeTruthy();
     expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual(["emplaced", "machineGun", "pistol", "rifle", "scoped"]);
   }
@@ -59,7 +59,7 @@ function weaponRange() {
   return { g, shooter, target };
 }
 
-it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armoury profile when equipping, firing and reloading", w => {
+it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armory profile when equipping, firing and reloading", w => {
   const { g, shooter } = weaponRange();
   shooter.faction = w.faction;
   equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : "rifleman");

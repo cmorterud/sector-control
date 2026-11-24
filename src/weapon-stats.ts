@@ -1,4 +1,4 @@
-// Live balance shared by the faction loadouts, simulation and Armoury.
+// Live balance shared by the faction loadouts, simulation and Armory.
 import type { FactionId } from "./loadouts";
 
 export type HitZone = "head" | "chest" | "stomach" | "arms" | "legs";
@@ -149,7 +149,7 @@ export const weaponStats: WeaponStats[] = [
   },
 ];
 
-export const armouryFactions: FactionId[] = ["british", "german", "french"];
+export const armoryFactions: FactionId[] = ["british", "german", "french"];
 
 export function gameMuzzleVelocity(w: WeaponStats) {
   return Math.round(w.historical.muzzleVelocity * bulletSpeedScale);

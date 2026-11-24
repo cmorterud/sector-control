@@ -1,13 +1,10 @@
 // Runs in the real briefing before the existing battle scenarios start.
 export function checkBriefing(map, maps) {
-  // Published builds are checked with main's copy of this file, so it accepts the
-  // page under either spelling while the rename to "Armory" lands.
-  const armoury = document.querySelector('#menu a.armory-link, #menu a.armoury-link');
-  const spelling = armoury?.classList.contains('armory-link') ? 'Armory' : 'Armoury';
+  const armory = document.querySelector('#menu a.armory-link');
   const picker = document.querySelector('#menu .map-choice');
-  if (!armoury || armoury.textContent.trim() !== spelling || armoury.href !== new URL(spelling.toLowerCase() + '/', location.href).href ||
-      !picker || !(armoury.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING))
-    throw Error('The briefing needs an Armoury link above the map picker');
+  if (!armory || armory.textContent.trim() !== 'Armory' || armory.href !== new URL('armory/', location.href).href ||
+      !picker || !(armory.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING))
+    throw Error('The briefing needs an Armory link above the map picker');
   const select = document.getElementById(map === 'training' ? 'training-loadout' : 'loadout');
   if (!select || select.disabled) throw Error(`${map} loadout selector is missing or disabled`);
   const choices = [...select.options];
@@ -38,24 +35,24 @@ export function checkBriefing(map, maps) {
 }
 
 // Compares visible DOM text to the independently bundled game profiles.
-export function checkArmoury({ factions, weapons }) {
+export function checkArmory({ factions, weapons }) {
   const check = (condition, message) => { if (!condition) throw Error(message); };
   const firstNumber = element => Number(element?.textContent.trim().match(/^\d+(?:\.\d+)?/)?.[0]);
   const seconds = value => value === 0 ? 'instant' : `${Number(value.toFixed(2))} s`;
   const tab = name => {
     const button = document.querySelector(`[data-tab="${name}"]`);
-    check(button, `Missing Armoury tab ${name}`);
+    check(button, `Missing Armory tab ${name}`);
     button.click();
-    check(document.querySelector(`[data-tab="${name}"]`)?.getAttribute('aria-selected') === 'true', `Armoury did not open ${name}`);
+    check(document.querySelector(`[data-tab="${name}"]`)?.getAttribute('aria-selected') === 'true', `Armory did not open ${name}`);
   };
   for (const faction of factions) {
     tab(faction);
-    const cards = [...document.querySelectorAll('#armoury .card')];
+    const cards = [...document.querySelectorAll('#armory .card')];
     const roster = weapons.filter(weapon => weapon.faction === faction);
     check(cards.length === roster.length, `Unexpected weapon count for ${faction}`);
     for (const weapon of roster) {
       const card = cards.find(candidate => candidate.querySelector('h2')?.textContent === weapon.name);
-      check(card, `Armoury card missing for ${weapon.name}`);
+      check(card, `Armory card missing for ${weapon.name}`);
       const stats = new Map([...card.querySelectorAll('.stats dt')].map(label => [label.textContent, label.nextElementSibling]));
       const rounds = stats.get('Rounds per reload');
       check(firstNumber(rounds) === weapon.magazine && Number(rounds.querySelector('small')?.textContent.match(/\d+/)?.[0]) === weapon.reserve,
@@ -74,9 +71,9 @@ export function checkArmoury({ factions, weapons }) {
   }
   tab('compare');
   const rows = [...document.querySelectorAll('.compare tbody tr')];
-  check(rows.length === weapons.length, 'Armoury comparison is missing weapons');
+  check(rows.length === weapons.length, 'Armory comparison is missing weapons');
   const names = new Set(rows.map(row => row.cells[0].textContent));
-  check(weapons.every(weapon => names.has(weapon.name)), 'Armoury comparison has an incorrect weapon roster');
+  check(weapons.every(weapon => names.has(weapon.name)), 'Armory comparison has an incorrect weapon roster');
   const columns = [...document.querySelectorAll('.compare thead th')].map(th => th.textContent.replace(/ [▲▼]$/, ''));
   const velocity = columns.indexOf('Velocity in game (m/s)');
   for (const row of rows) {
@@ -96,6 +93,6 @@ export function checkArmoury({ factions, weapons }) {
   }
   document.querySelector(`.compare [data-sort="${velocity}"]`).click();
   const ordered = [...document.querySelectorAll('.compare tbody tr')].map(row => firstNumber(row.cells[velocity]));
-  check(ordered.every((value, index) => index === 0 || ordered[index - 1] >= value), 'Armoury comparison did not sort by velocity');
+  check(ordered.every((value, index) => index === 0 || ordered[index - 1] >= value), 'Armory comparison did not sort by velocity');
   return { factions, weapons: weapons.length, comparison: true };
 }

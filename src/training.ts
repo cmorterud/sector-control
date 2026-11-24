@@ -16,7 +16,7 @@ export const trainingLessons = [
 ] as const;
 export type TrainingGoal = typeof trainingLessons[number][number];
 export const trainingInstructions:Record<TrainingGoal,string>={
-  walk:"Move eight metres with {forward} {left} {backward} {right}. Follow the marked lanes.",
+  walk:"Move eight meters with {forward} {left} {backward} {right}. Follow the marked lanes.",
   sprint:"Sprint along the lane using {sprint} and a movement key.",
   crouch:"Press {crouch} to crouch behind cover. Press it again to stand.",
   hop:"Use {mantle} in the clear hop lane to jump the low rails.",
@@ -45,7 +45,7 @@ export const trainingInstructions:Record<TrainingGoal,string>={
   crater:"Land an explosive on open ground to cut a crater and expose fresh dirt.",
   reaction:"Fire near enemies and observe a real AI suppression or cover reaction. Friendly soldiers fight alongside you.",
   defeat:"Defeat two opponents in the squad exercise. Use cover, smoke and your preferred weapon.",
-  clear:"Clear two defenders from the exercise objective. You can use everything you have practised.",
+  clear:"Clear two defenders from the exercise objective. You can use everything you have practiced.",
   capture:"Enter the objective area and hold it until flag C turns blue. Tab opens the scoreboard.",
 };
 
