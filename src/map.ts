@@ -699,8 +699,24 @@ export function moveOnMap(
       ) -
         ground >
         0.23;
+    // A hopping soldier may step up onto ground it nearly clears, but not
+    // onto a bank face that keeps rising past that point: a hop backed into
+    // a trench wall would otherwise perch the soldier partway up it.
+    const ontoFace =
+      map.terrain?.banks &&
+      airborne &&
+      !!p.hop &&
+      next > feet + 0.00001 &&
+      groundHeight(
+        nx + Math.sign(nx - x) * 0.15,
+        nz + Math.sign(nz - z) * 0.15,
+        map,
+      ) -
+        next >
+        0.23;
     if (
       uphill ||
+      ontoFace ||
       next - feet > 0.23 ||
       outOfBounds(nx, nz, 1.45, map)
     )
