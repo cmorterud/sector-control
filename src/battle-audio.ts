@@ -240,7 +240,7 @@ export class BattleAudio {
                   ? 12000
                   : 8500
                 : cue.kind === "mud"
-                  ? 550
+                  ? 420
                   : cue.kind === "wood"
                     ? 1900
                     : wet ? 3700 : foot
@@ -260,10 +260,13 @@ export class BattleAudio {
     if (whistle) filter.frequency.exponentialRampToValueAtTime(420, end);
     const envelope = c.createGain();
     envelope.gain.setValueAtTime(0.0001, start);
-    const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1);
+    // Mud is the default ground on trench maps, so it is heard on nearly every
+    // stride: keep it a soft, dull squelch that sits under the battle.
+    const mud = cue.kind === "mud";
+    const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1) * (mud ? 0.5 : 1);
     envelope.gain.exponentialRampToValueAtTime(
       Math.max(0.0002, volume),
-      start + (forest?.attack ?? (whistle ? 0.1 : explosion ? 0.001 : 0.004)),
+      start + (forest?.attack ?? (whistle ? 0.1 : explosion ? 0.001 : mud ? 0.014 : 0.004)),
     );
     if (explosion) {
       envelope.gain.exponentialRampToValueAtTime(
@@ -308,6 +311,8 @@ export class BattleAudio {
         0.015,
       );
     }
+    if (mud)
+      envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * .3), start + .06);
     if (cue.kind === "leaves") {
       for(const [offset,level] of [[.045,.28],[.08,.7],[.15,.18]])
         envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);
