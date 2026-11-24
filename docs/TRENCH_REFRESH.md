@@ -39,6 +39,7 @@ Everything outside `boundary.ts`, `map.ts` and the wire checks in `simulation.ts
 - **The ground material is one clamped map-sized texture.** Geometry beyond the map must mirror its texture coordinates back in (`mirrorIntoMap`) and take tangents from unmirrored coordinates.
 - **Flat translucent sheets make bad mist.** Seen from above they wash out everything beneath them. Billboards that hide within 7 m of the camera work.
 - **Wire that slows everyone punishes the defenders' own assaults.** Belts are owned for that reason; seeded battles stayed balanced only after the change.
+- **Judge light on a real GPU.** CI's software renderer shows shade far brighter than real hardware does. The first look was tuned against CI screenshots and came out crushed to black inside the trenches. `detail-firing-step` is the view to check.
 - **Bot matches are nearly deterministic.** The seed barely changes them, so a seeded match is one sample, not many.
 
 ## Validation
