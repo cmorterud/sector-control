@@ -38,6 +38,10 @@ jobs:
         run: npm run test:pages
 
       - name: Build production game
+        env:
+          # The corner version label: the PR's own head commit, not the merge commit.
+          BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BUILD_PR: ${{ github.event.pull_request.number }}
         run: npm run build -- --base "$PAGES_BASE_PATH"
 
       - name: Record tested revision and asset hashes

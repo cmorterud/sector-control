@@ -1,6 +1,7 @@
 // The Armory page: every number comes from weapon-stats.ts and the game's
 // faction list, so the page can't drift from the game's data.
 import "./armory.css";
+import { showBuildVersion } from "./build-version";
 import { factions, type FactionId } from "./loadouts";
 import {
   armoryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, timeToKill,
@@ -9,6 +10,7 @@ import {
 
 type Tab = FactionId | "compare";
 const root = document.getElementById("armory")!;
+showBuildVersion();
 const escape = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const seconds = (s: number) => s === 0 ? "instant" : `${s.toFixed(2).replace(/\.?0+$/, "")} s`;
 
