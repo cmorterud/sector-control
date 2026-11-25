@@ -53,6 +53,9 @@ import { trenchMap } from "./trench-map";
 import { nightRaidMap } from "./night-map";
 import { lightAt } from "./night";
 import { flareRules } from "./flares";
+import { reinforcementsLeft } from "./reinforcements";
+import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
+import { soldierName } from "./soldier-names";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -68,7 +71,17 @@ killNotice.setAttribute("role", "status");
 const boundaryNotice = document.createElement("div");
 boundaryNotice.className = "boundary-warning";
 boundaryNotice.setAttribute("role", "alert");
-el("hud").append(battleSidebar, killNotice, boundaryNotice);
+const reinforcementNotice = document.createElement("div");
+reinforcementNotice.className = "reinforcement-notice";
+reinforcementNotice.setAttribute("role", "status");
+const reinforcementTallyBox = document.createElement("section");
+const spectateLabel = document.createElement("div");
+spectateLabel.className = "spectate-label";
+spectateLabel.setAttribute("role", "status");
+let spectateNext = false;
+el("hud").append(battleSidebar, killNotice, boundaryNotice, reinforcementNotice, spectateLabel);
+root.querySelector(".match")!.append(reinforcementTallyBox);
+const reinforcementNotices = new ReinforcementNotices(), teamName = (team: "blue" | "red") => factions[factionFor(map, team)].name;
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
 let displayedScoreboard = "";
@@ -355,6 +368,7 @@ function start() {
   renderer.reset(game);
   battlefield.reset(game);
   combatFeedback.reset();
+  reinforcementNotices.reset();
   displayedScoreboard = "";
   el("scoreboard").replaceChildren();
   audio ??= new BattleAudio();
@@ -393,11 +407,11 @@ function pause() {
   if (!started || game.phase !== "playing") return;
   menu(
     "Operation paused",
-    training?"Resume your exercise, change gear, resupply or choose another station below.":"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.",
+    training?"Resume your exercise, change gear, resupply or choose another station below.":reinforcementsLeft(game,game.players[0].team)?"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.":"Press Escape or click Resume to continue. Your side has no reinforcements left, so there is no redeploy.",
     "Resume operation",
     () => resume(),
     `<div class="pause-actions">
-      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
+      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 || !reinforcementsLeft(game,game.players[0].team) ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
       <button class="secondary" id="restart">Restart match</button>
       <button class="secondary" id="select-map" aria-expanded="false" aria-controls="pause-map-picker">Select map</button>
     </div>
@@ -416,6 +430,7 @@ function pause() {
 }
 function handle(e: Event) {
   combatFeedback.event(game,e);
+  reinforcementNotices.event(game, e, performance.now(), teamName);
   if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
@@ -492,9 +507,10 @@ function handle(e: Event) {
     sound(440, 0.6);
     const result =
       e.winner === "draw" ? "Draw" : e.winner === "blue" ? "Victory" : "Defeat";
+    const reason = reinforcementEndReason(game, teamName);
     menu(
       result,
-      `Operation complete · ${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
+      `Operation complete · ${reason ? reason + " · " : ""}${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
       "Deploy again",
       start,
       battlefieldChoices() + table(),
@@ -526,6 +542,15 @@ function hud(now: number) {
     boundaryText = outside ? `OUT OF BOUNDS · RETURN TO THE LINE · ${countdown ? `ARTILLERY IN ${countdown}` : "ARTILLERY INBOUND"}` : "";
   if (boundaryNotice.textContent !== boundaryText) boundaryNotice.textContent = boundaryText;
   root.classList.toggle("out-of-bounds", outside);
+  const tally = training ? "" : reinforcementTally(game), notice = paused ? "" : reinforcementNotices.text(now);
+  if (reinforcementTallyBox.innerHTML !== tally) reinforcementTallyBox.innerHTML = tally;
+  if (reinforcementNotice.textContent !== notice) reinforcementNotice.textContent = notice;
+  reinforcementNotice.classList.toggle("urgent", reinforcementNotices.urgent(now));
+  renderer.spectating = spectateTarget(game, renderer.spectating, spectateNext);
+  spectateNext = false;
+  const watched = renderer.spectating === null ? undefined : game.players[renderer.spectating];
+  const watching = watched && !paused ? `WATCHING ${soldierName(watched, game.map)} · LMB NEXT` : "";
+  if (spectateLabel.textContent !== watching) spectateLabel.textContent = watching;
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
@@ -585,7 +610,7 @@ function hud(now: number) {
     mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, game.map);
   el("capture").innerHTML =
     p.hp <= 0
-      ? `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
+      ? outOfReinforcements(game, p) ? "<h2>NO REINFORCEMENTS</h2>" : `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
       : p.mantle
         ? "<small>CLIMBING TRENCH EDGE</small>"
         : ledge && !(game.scoring === "domination" && sector)
@@ -769,6 +794,11 @@ window.addEventListener("mousedown", (e) => {
       triggerDown = true;
       if (document.pointerLockElement === renderer.canvas) tacticalMap.select();
     }
+    return;
+  }
+  // Out of reinforcements, the trigger cycles which teammate you watch.
+  if (outOfReinforcements(game, game.players[0])) {
+    if (e.button === 0) spectateNext = true;
     return;
   }
   if (placingGun) {

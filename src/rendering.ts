@@ -208,6 +208,8 @@ export class Renderer implements CollisionWorld {
   camera: pc.Entity;
   cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
   deathView:DeathView|null=null;
+  // A living teammate the camera follows once the player is out of reinforcements.
+  spectating:number|null=null;
   private boardBatch = -1;
   private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
@@ -4938,10 +4940,11 @@ export class Renderer implements CollisionWorld {
     }
     this.objectiveTerrainRevision = objectiveRevision;
     const p = g.players[0],
+      watched = p.hp<=0&&!overview&&this.spectating!==null&&g.players[this.spectating]?.hp>0?g.players[this.spectating]:undefined,
       gun = mountedGun(g, p),
-      firstPerson = (firstPersonView(p) || !!gun) && !overview,
-      deathView = p.hp<=0&&!overview?this.deathView:null,
-      baseView = deathView ?? gun ?? weaponAim(p),
+      firstPerson = (firstPersonView(p) || !!gun) && !overview && !watched,
+      deathView = p.hp<=0&&!overview&&!watched?this.deathView:null,
+      baseView = deathView ?? gun ?? weaponAim(watched ?? p),
       view = {
         yaw: baseView.yaw + (overview || firstPerson || deathView ? 0 : this.cameraReaction.yaw),
         pitch: baseView.pitch + (overview || firstPerson || deathView ? 0 : this.cameraReaction.pitch),
@@ -4952,8 +4955,8 @@ export class Renderer implements CollisionWorld {
         y: Math.sin(view.pitch),
         z: -Math.cos(view.yaw) * Math.cos(view.pitch),
       };
-    const visual = this.people[0].getPosition();
-    const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[0].crouch);
+    const visual = this.people[watched?.id ?? 0].getPosition();
+    const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[watched?.id ?? 0].crouch);
     const pivot = gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
       desired = {
         x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
