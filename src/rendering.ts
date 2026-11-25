@@ -151,6 +151,8 @@ const beaconColors: Record<FlagState, string> = { neutral: "#d4c699", blue: "#46
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
+// What a soldier's built model depends on, to match warm-up soldiers to a match's.
+export const standInKit = (p: Soldier) => `${p.team}|${p.faction}|${p.weapon}|${p.weaponId}`;
 type SoldierRig = {
   // One world-space box for all of this soldier's batched parts (boundSoldiers).
   bounds?: pc.BoundingBox;
@@ -219,6 +221,9 @@ export class Renderer implements CollisionWorld {
   private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
   private soldiers: SoldierRig[] = [];
+  // The shader warm-up's deployment, hidden but kept: Begin reuses each
+  // soldier whose kit matches instead of building it again.
+  private standIns?: { game: Game; map: string; kits: string[]; hidden: pc.MeshInstance[] };
   private firstPersonRig?: FirstPersonRig;
   private ragdollPhysics?: RagdollPhysics;
   private casualtyTemplates = new Map<string, pc.Mesh>();
@@ -3586,6 +3591,26 @@ export class Renderer implements CollisionWorld {
       this.mergeRigidParts(root, new Set<pc.GraphNode>([body, hips, upper, rifle, supportHand, bolt, magazine, reloadMagazine, ...legJoints, ...armJoints]));
     }
   }
+  // A warm-up soldier put back as it would be built: at the player's spawn,
+  // unmasked, with none of the warm-up's animation state.
+  private reuseSoldier(p: Soldier, root: pc.Entity, rig: SoldierRig) {
+    root.setPosition(p.x, p.y, p.z);
+    root.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
+    root.setLocalScale(1, 1, 1);
+    rig.gasMask?.setLocalScale(0, 0, 0);
+    rig.magazine.setLocalScale(rig.magazineScale);
+    rig.rifle.enabled = true;
+    this.people.push(root);
+    this.soldiers.push({
+      bounds: rig.bounds,
+      gasMask: rig.gasMask, maskShown: 0, body: rig.body, design: rig.design, hips: rig.hips, upper: rig.upper,
+      legs: rig.legs, arms: rig.arms, rifle: rig.rifle, supportHand: rig.supportHand, bolt: rig.bolt,
+      magazine: rig.magazine, reloadMagazine: rig.reloadMagazine, magazineScale: rig.magazineScale,
+      reloadMagazineScale: rig.reloadMagazineScale, style: soldierStyle(p.id),
+      forward: 0, sideways: 0, deathAt: null, remnantCreated: false, x: p.x, z: p.z,
+      phase: p.id * 1.7, motion: 0, sprint: 0, crouch: 0, alive: p.hp > 0,
+    });
+  }
   // Parts that never move against their joint are drawn as one mesh per
   // material. A rifle is some 25 pieces and a soldier 59; each separate piece is
   // a bone the batch must carry, a transform to refresh every frame and a box
@@ -4577,15 +4602,27 @@ export class Renderer implements CollisionWorld {
     }
     this.casualties = [];
     this.ragdollPhysics?.destroy(); this.ragdollPhysics = undefined;
-    for (const mesh of this.casualtyTemplates.values()) { mesh.decRefCount(); mesh.destroy(); }
-    this.casualtyTemplates.clear();
+    // Soldiers from the shader warm-up whose kit this match deploys again.
+    const standIns = this.standIns?.game !== g && this.standIns?.map === this.map.id ? this.standIns : undefined;
+    this.standIns = undefined;
+    const kept = new Map<number, { root: pc.Entity; rig: SoldierRig }>();
+    if (standIns) {
+      for (const p of g.players)
+        if (standIns.kits[p.id] === standInKit(p) && this.people[p.id] && this.soldiers[p.id])
+          kept.set(p.id, { root: this.people[p.id], rig: this.soldiers[p.id] });
+      for (const instance of standIns.hidden) instance.visible = true;
+    } else {
+      for (const mesh of this.casualtyTemplates.values()) { mesh.decRefCount(); mesh.destroy(); }
+      this.casualtyTemplates.clear();
+    }
+    const keptRoots = new Set([...kept.values()].map((v) => v.root));
     this.activeGame = g; this.deathHits.clear();
     for (const key of Object.keys(
       this.soldierStats,
     ) as (keyof typeof this.soldierStats)[])
       this.soldierStats[key] = 0;
     for (const e of [
-      ...this.people,
+      ...this.people.filter((root) => !keptRoots.has(root)),
       ...this.rings,
       ...this.projectiles.values(),
       ...this.grenades.values(),
@@ -4625,14 +4662,19 @@ export class Renderer implements CollisionWorld {
     this.remember(g);
     this.soldiers = [];
     this.batchGroup = this.actorBatch;
+    let built = 0;
+    const standInCount = standIns ? standIns.kits.length : 0;
     for (const p of g.players) {
-      this.createSoldier(p);
+      const reuse = kept.get(p.id);
+      if (reuse) this.reuseSoldier(p, reuse.root, reuse.rig);
+      else { this.createSoldier(p); built++; }
       this.actorKits.set(p.id, `${p.faction}-${p.weapon}-${p.weaponId}`);
     }
     // Merge each distinct rendered kit once during deployment, not mid-blast.
     for (const p of g.players) this.casualtyMesh(p);
     this.batchGroup = -1;
-    this.app.batcher!.generate([this.actorBatch]);
+    // Stand-ins left over or rebuilt change the batch; otherwise it is current.
+    if (built || kept.size < standInCount || !standIns) this.app.batcher!.generate([this.actorBatch]);
     this.boundSoldiers();
     this.createFirstPersonRig();
     for (const rig of this.soldiers) rig.reloadMagazine.setLocalScale(0, 0, 0);
@@ -4719,12 +4761,22 @@ export class Renderer implements CollisionWorld {
     this.camera.setRotation(rotation);
     Object.assign(main, { projection, orthoHeight, nearClip, fov });
     // Only the stand-ins: Begin may already have deployed the real match.
-    const standIns = [...this.people, ...this.rings, ...(this.firstPersonRig ? [this.firstPersonRig.root] : [])];
+    const people = [...this.people], others = [...this.rings, ...(this.firstPersonRig ? [this.firstPersonRig.root] : [])];
     this.app.once("frameend", () => {
       warm.destroy();
       target.destroy();
       color.destroy();
-      if (this.activeGame === g) for (const entity of standIns) entity.enabled = false;
+      if (this.activeGame !== g) return;
+      for (const entity of others) entity.enabled = false;
+      // Soldiers are hidden rather than disabled: disabling would mark the
+      // actor batch dirty, and Begin would pay to rebuild it.
+      const hidden: pc.MeshInstance[] = [];
+      for (const root of people)
+        for (const render of root.findComponents("render") as pc.RenderComponent[]) hidden.push(...render.meshInstances);
+      for (const batch of (this.app.batcher as unknown as { _batchList: { batchGroupId: number; meshInstance: pc.MeshInstance | null }[] })._batchList)
+        if (batch.batchGroupId === this.actorBatch && batch.meshInstance) hidden.push(batch.meshInstance);
+      for (const instance of hidden) instance.visible = false;
+      this.standIns = { game: g, map: this.map.id, kits: g.players.map(standInKit), hidden };
     });
   }
   // The dye currently on each flag's cloth, for the render review.
