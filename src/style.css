@@ -874,3 +874,5 @@ a.armory-link:hover { background: #3f5856; }
   background: none;
   color: #ddd;
 }
+/* The bayonet-charge prompt (src/charge.ts) stands out from flag and ledge prompts. */
+#capture .charge-prompt { color: #f4ce86; font-size: 12px; font-weight: 700; }

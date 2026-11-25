@@ -39,6 +39,8 @@ import {
   type Soldier,
 } from "./simulation";
 import { calloutText } from "./squads";
+import { chargePromptReady, whistleNotice, whistleReadyIn } from "./charge";
+import { playChargeYell, playWhistle } from "./charge-audio";
 import { BattleAudio } from "./battle-audio";
 import { smokeRules } from "./smoke";
 import { BattlefieldFeedback } from "./battlefield";
@@ -108,7 +110,8 @@ function updateControlHints() {
   // One span per hint so a wrapping bar never splits a key from its action.
   const hints = [
     `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE`, `${hint("sprint")} SPRINT`, "RMB AIM", "LMB FIRE",
-    `${hint("reload")} RELOAD`, `${hint("melee")} MELEE`, `${hint("grenade")} GRENADE`, `${hint("smoke")} SMOKE`,
+    `${hint("reload")} RELOAD`, `${hint("melee")} MELEE`, `${hint("sprint")} + ${hint("melee")} BAYONET CHARGE`, `${hint("whistle")} WHISTLE`,
+    `${hint("grenade")} GRENADE`, `${hint("smoke")} SMOKE`,
     `${hint("crouch")} CROUCH`, `${hint("mantle")} HOP / MANTLE`, `${hint("view")} CHANGE VIEW`,
     `${hint("primary")} / ${hint("sidearm")} WEAPONS`, `${hint("interact")} INTERACT`, `${hint("tactical")} TACTICAL MAP`,
   ];
@@ -127,7 +130,8 @@ let fire = false,
   mantle = false,
   grenade = false,
   smoke = false,
-  melee = false;
+  melee = false,
+  whistle = false;
 let pendingEquip: WeaponSlot | undefined;
 let placingGun = false, kitCommand: "deploy" | "pack" | undefined;
 let pendingInteract = false;
@@ -207,11 +211,11 @@ function battlefieldChoices() {
   return `<nav class="map-choice" aria-label="Battlefield">${choices.join("")}</nav>`;
 }
 function updateBriefControls() {
-  const menuKeys: Record<string, ControlAction> = { WASD: "forward", Shift: "sprint", T: "view", R: "reload", V: "melee", G: "grenade", C: "crouch", F: "smoke", Space: "mantle", Q: "tactical" };
+  const menuKeys: Record<string, ControlAction> = { WASD: "forward", Shift: "sprint", T: "view", R: "reload", V: "melee", G: "grenade", C: "crouch", F: "smoke", Space: "mantle", Q: "tactical", Z: "whistle" };
   for (const paragraph of Array.from(el("menu").querySelectorAll(".brief p")).slice(1)) {
     const original = (paragraph as HTMLElement).dataset.original ?? paragraph.textContent!;
     (paragraph as HTMLElement).dataset.original = original;
-    paragraph.textContent = original.replace(/\b(WASD|Shift|T|R|V|G|C|F|Space|Q)\b/g, (token: string) =>
+    paragraph.textContent = original.replace(/\b(WASD|Shift|T|R|V|G|C|F|Space|Q|Z)\b/g, (token: string) =>
       token === "WASD" ? ["forward", "left", "backward", "right"].map(a => keyLabel(settings.bindings[a as ControlAction])).join("") : keyLabel(settings.bindings[menuKeys[token]]));
   }
 }
@@ -230,6 +234,7 @@ function clear() {
   grenade = false;
   smoke = false;
   melee = false;
+  whistle = false;
   pendingArtillery = undefined;
   pendingEquip = undefined;
   kitCommand = undefined;
@@ -450,6 +455,21 @@ function handle(e: Event) {
   }
   if (e.type === "grenadeThrow" && e.actor === 0) sound(320, 0.12, 0.035);
   const listener = game.players[0];
+  const whistled = whistleNotice(game, e, listener);
+  if (whistled) {
+    callout = whistled;
+    calloutUntil = performance.now() + 2600;
+  }
+  if (e.type === "whistle" && audio && dist(listener, e.at) < 120) {
+    playWhistle(audio, e.actor === 0 ? null : e.at);
+    const men = e.recruits.map((id) => game.players.find((q) => q.id === id)!).filter((q) => q && q.hp > 0);
+    const voices = men.length + Number(e.actor !== 0);
+    if (voices) {
+      const at = [...men, ...(e.actor !== 0 ? [game.players.find((q) => q.id === e.actor)!] : [])]
+        .reduce((a, q) => ({ x: a.x + q.x / voices, y: a.y + (q.y + 1.6) / voices, z: a.z + q.z / voices }), { x: 0, y: 0, z: 0 });
+      playChargeYell(audio, at, voices);
+    }
+  }
   if (e.type === "callout" && listener.hp > 0 && e.actor !== 0) {
     const speaker = game.players.find((q) => q.id === e.actor);
     if (speaker?.team === listener.team && dist(listener, e.at) < 30) {
@@ -561,6 +581,8 @@ function hud(now: number) {
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
   );
   const flareIn = Math.max(0, Math.ceil((game.flares.readyAt[p.team] - game.tick) / 30));
+  const whistleIn = Math.ceil(whistleReadyIn(game, p.team) / 30);
+  el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.whistle)} · WHISTLE ${whistleIn ? whistleIn + "s" : "READY"}</small>`;
   el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
     ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
   tacticalMap.update();
@@ -590,6 +612,10 @@ function hud(now: number) {
         ? "<small>CLIMBING TRENCH EDGE</small>"
         : ledge && !(game.scoring === "domination" && sector)
           ? `<small>${keyLabel(settings.bindings.mantle)} · MANTLE</small>`
+          : p.melee?.kind === "charge" && !p.melee.struck
+            ? "<small class=\"charge-prompt\">BAYONET CHARGE · KEEP SPRINTING</small>"
+          : chargePromptReady(game, p)
+            ? `<small class="charge-prompt">${keyLabel(settings.bindings.melee)} · BAYONET CHARGE</small>`
           : sector
             ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
@@ -679,7 +705,8 @@ function command(): Command {
   c.grenade = grenade;
   c.smoke = smoke;
   c.melee = melee;
-  melee = false;
+  c.whistle = whistle && !tacticalMap.open;
+  melee = whistle = false;
   reload = false;
   mantle = false;
   grenade = false;
@@ -741,6 +768,7 @@ window.addEventListener("keydown", (e) => {
   if (isKey("grenade", e.code) && !e.repeat) grenade = true;
   if (isKey("smoke", e.code) && !e.repeat) smoke = true;
   if (isKey("melee", e.code) && !e.repeat) melee = true;
+  if (isKey("whistle", e.code) && !e.repeat) whistle = true;
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.code);
@@ -1052,7 +1080,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
+    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
 } catch (error) {

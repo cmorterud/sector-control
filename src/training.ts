@@ -37,7 +37,7 @@ export const trainingInstructions:Record<TrainingGoal,string>={
   grenade:"Throw with {grenade}. Land an explosion near the red group about 20 m ahead. Look higher for more distance; stay clear of the blast.",
   smoke:"Press {smoke} to throw smoke. Let the cloud bloom and observe the screen it creates.",
   thrust:"Choose Britain, France or Germany and Rifleman in the armory. Approach a red target and press {melee} without sprinting for a bayonet thrust.",
-  charge:"Keep your service rifle equipped. Sprint forward with {sprint}, then press {melee}. Keep charging until you strike a target.",
+  charge:"Keep your service rifle equipped and sprint forward with {sprint}. When {melee} · BAYONET CHARGE appears, press {melee} and keep sprinting until you strike a target. In battle, {whistle} blows your whistle and nearby riflemen charge with you.",
   call:"Open the tactical map with {tactical} and call artillery on the marked target house 30 m ahead. RMB cancels.",
   impact:"Wait for your shells to land. Notice that coordinates drift and individual shells scatter.",
   breach:"Use grenades or artillery to breach the two-story house. Direct hits damage structures most; destroy enough ground-floor supports and the building collapses.",

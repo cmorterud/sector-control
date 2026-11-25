@@ -4,7 +4,7 @@ const key = (code: string) => ({ code, ctrlKey: false, metaKey: false, altKey: f
 it("persists bindings, sprint and camera settings and tolerates invalid or unavailable storage", () => {
   const settings = freshControls();
   expect(settings.firstPerson).toBe(true);
-  expect(rebind(settings, "sprint", key("KeyZ"))).toBeNull();
+  expect(rebind(settings, "sprint", key("KeyK"))).toBeNull();
   settings.toggleSprint = true; settings.firstPerson = false;
   let data = "";
   saveControls(settings, { setItem: (_, value) => { data = value; } });
@@ -40,4 +40,16 @@ it("adds the emplacement binding without resetting an older custom layout", () =
   expect(restored.bindings.forward).toBe("KeyB");
   expect(restored.bindings.interact).toBe("KeyH");
   expect(restored.bindings.emplace).not.toBe("KeyB");
+});
+
+it("adds the whistle binding to a layout saved before it existed, on Z or the first free letter", () => {
+  const original = freshControls();
+  expect(original.bindings.whistle).toBe("KeyZ");
+  const { whistle: _missing, ...bindings } = original.bindings;
+  const free = loadControls({ getItem: () => JSON.stringify({ ...original, bindings }) });
+  expect(free.bindings.whistle).toBe("KeyZ");
+  const taken = loadControls({ getItem: () => JSON.stringify({ ...original, bindings: { ...bindings, crouch: "KeyZ" } }) });
+  expect(taken.bindings.crouch).toBe("KeyZ");
+  expect(taken.bindings.whistle).toBe("KeyX");
+  expect(rebind(taken, "whistle", key("KeyW"))).toContain("Already assigned");
 });
