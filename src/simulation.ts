@@ -2266,10 +2266,14 @@ export class Game {
       }
     }
     damageEmplacements(this, at, profile.radius, profile.damage);
+    const deformStart = battlePerformance.begin();
     const change = deformExplosion(this.map, at, profile, (a, b) =>
       this.collision.ray(a, b),
     );
+    battlePerformance.end("explosionDeform", deformStart);
+    const applyStart = battlePerformance.begin();
     if (change) this.applyDestruction(actor, change);
+    battlePerformance.end("explosionApply", applyStart);
     return hits;
   }
   // Falling kit floors and roofs hurt whoever is still beneath them when the

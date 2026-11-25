@@ -1,5 +1,5 @@
 import { groundHeight, type MapDefinition, type Box } from "./map";
-import type { DestructionChange } from "./destruction";
+import { addDestructible, destructibles, type DestructionChange } from "./destruction";
 import { settleKitBuildings } from "./kit-collapse";
 
 // A bounded support graph handles two stories without simulating every brick.
@@ -8,7 +8,7 @@ export function settleBuildings(map:MapDefinition, changes:DestructionChange["ob
   const state=map.destruction!;
   // Kit buildings follow their own staged support rules (kit-collapse.ts).
   const kit=new Set((map.buildings??[]).filter(b=>b.kit).map(b=>b.id));
-  const parts=Object.values(state.objects).filter(o=>o.original.architecture && !kit.has(o.original.architecture.building));
+  const parts=destructibles(state).all.filter(o=>o.original.architecture && !kit.has(o.original.architecture.building));
   const destroy=(id:string)=>{const change={id,hp:0,stage:2};changes.push(change);apply(change);};
   for(let pass=0;pass<10;pass++) {
     let count=0;
@@ -39,7 +39,7 @@ export function settleBuildings(map:MapDefinition, changes:DestructionChange["ob
     if(map.sectors.some(s=>Math.hypot(s.x-x,s.z-z)<3.2))continue;
     const rubble:Box={id,x,z,w:1.25,d:1.05,h:.38+((cx*7+cz*11)&3)*.09,
       baseY:groundHeight(x,z,map),kind:"rubble",walkable:true};
-    state.objects[id]={id,original:rubble,hp:180,maxHp:180,stage:0,lining:false};
+    addDestructible(state,{id,original:rubble,hp:180,maxHp:180,stage:0,lining:false});
     map.boxes.push({...rubble});changes.push({id,hp:180,stage:0});
   }
   if(kit.size)settleKitBuildings(map,changes,apply);
