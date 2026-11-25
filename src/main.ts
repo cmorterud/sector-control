@@ -544,13 +544,22 @@ function handle(e: Event) {
 function table() {
   return scoreboardTable(game);
 }
+const hudTargets = {
+  combat: () => combatOverlay, training: () => trainingOverlay,
+  health: () => el("health"), ammo: () => el("ammo"), capture: () => el("capture"),
+  sectors: () => el("sectors"), labels: () => el("labels"),
+};
+const displayedHud: Partial<Record<keyof typeof hudTargets, string>> = {};
 function hud(now: number) {
+  // Build this tick's HUD markup first and touch the DOM only where it changed:
+  // rewriting unchanged innerHTML every 50 ms reparses and relayouts it.
+  const staged: Partial<Record<keyof typeof hudTargets, string>> = {};
   const p = game.players[0];
   const playing = !paused && !held("scoreboard");
   const aimingScope = p.hp > 0 && !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick);
   const clearHUD = playing && !tacticalMap.open;
   root.classList.toggle("dead",p.hp<=0);
-  combatOverlay.innerHTML=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw):"";
+  staged.combat=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw):"";
   battleSidebar.hidden = !clearHUD || aimingScope;
   if (!battleSidebar.hidden) {
     minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
@@ -588,7 +597,7 @@ function hud(now: number) {
     .toString()
     .padStart(2, "0")}:${(t % 60).toString().padStart(2, "0")}`;
   if(training)el("clock").textContent="TRAINING";
-  el("sectors").innerHTML =
+  staged.sectors =
     game.scoring === "eliminations"
       ? '<span class="sector">TRENCH DUEL · ELIMINATIONS</span>'
       : (game.scoring === "domination"
@@ -602,22 +611,22 @@ function hud(now: number) {
           .join("");
   if(training){
     el("blue").textContent=String(training.completed);el("red").textContent="8";
-    el("sectors").innerHTML='<span class="mode-tag">FIELD EXERCISES<small>NO TIME LIMIT</small></span>';
-    trainingOverlay.hidden=paused;trainingOverlay.innerHTML=trainingHUD(training,game,settings);
+    staged.sectors='<span class="mode-tag">FIELD EXERCISES<small>NO TIME LIMIT</small></span>';
+    trainingOverlay.hidden=paused;staged.training=trainingHUD(training,game,settings);
   }
-  el("health").innerHTML =
+  staged.health =
     `<small>VITALS / ${factions[p.faction ?? factionFor(map,p.team)].name.toUpperCase()}</small><strong>${Math.ceil(p.hp)}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   root.classList.toggle("scoped", aimingScope);
-  el("ammo").innerHTML =
+  staged.ammo =
     `<small>${p.weaponId ?? weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : p.weapon === "machineGun" ? "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
     0,
     Math.ceil((game.artillery.readyAt[p.team] - game.tick) / 30),
   );
   const flareIn = Math.max(0, Math.ceil((game.flares.readyAt[p.team] - game.tick) / 30));
-  el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
+  staged.ammo += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
     ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
-  if (game.map.artillery !== false) el("ammo").innerHTML += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
+  if (game.map.artillery !== false) staged.ammo += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -630,7 +639,7 @@ function hud(now: number) {
         )
       : undefined;
   if (sector)
-    el("health").innerHTML +=
+    staged.health +=
       `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : (sector.owner?.toUpperCase() ?? "NEUTRAL")}</small>`;
   const ledge =
     map.terrain &&
@@ -638,7 +647,7 @@ function hud(now: number) {
     !p.hop &&
     !p.fall &&
     mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, game.map);
-  el("capture").innerHTML =
+  staged.capture =
     p.hp <= 0
       ? outOfReinforcements(game, p) ? "<h2>NO REINFORCEMENTS</h2>" : `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
       : p.mantle
@@ -655,9 +664,9 @@ function hud(now: number) {
   if (gun) {
     const loading = gun.reloadAt ? `RELOADING · ${((gun.reloadAt - game.tick) / 30).toFixed(1)}s` : "90° TRAVERSE · HOLD FIRE";
     const traverse = 50 + (gun.yaw - gun.baseYaw) / emplacementRules.traverse * 50;
-    el("ammo").innerHTML = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small><div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
+    staged.ammo = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small><div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
   } else if (placement) {
-    el("capture").innerHTML = placement.valid
+    staged.capture = placement.valid
       ? `<small>LMB · SET UP ${emplacementWeapon(p).toUpperCase()}　 ${deployKey} · CANCEL</small>`
       : `<small>${placement.reason}　 ${deployKey} · CANCEL</small>`;
   } else if (nearby) {
@@ -665,14 +674,14 @@ function hud(now: number) {
     const pack = nearby.owner === p.id && p.loadout === "emplacement" ? `　 ${deployKey} · PACK UP` : "";
     const action = setup > 0 ? `SETTING UP · ${(setup/30).toFixed(1)}s`
       : nearby.operator !== undefined ? "IN USE" : `${useKey} · MOUNT${pack}`;
-    el("capture").innerHTML = `<small>${nearby.weaponId} · ${action}</small>`;
+    staged.capture = `<small>${nearby.weaponId} · ${action}</small>`;
   } else if (p.hp > 0 && p.loadout === "emplacement") {
-    el("ammo").innerHTML += `<small>${p.emplacementLost ? "EMPLACEMENT LOST · RESUPPLY ON RESPAWN" :
+    staged.ammo += `<small>${p.emplacementLost ? "EMPLACEMENT LOST · RESUPPLY ON RESPAWN" :
       game.emplacements.has(p.id) ? deployKey + " · PACK UP WHEN NEAR YOUR GUN" : deployKey + " · PREVIEW EMPLACEMENT"}</small>`;
   }
   const pickup = !gun && !nearby && !placement && p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
-  if (pickup) el("capture").innerHTML = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
-  if (!gun && p.weapon === "flamethrower") el("ammo").innerHTML = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
+  if (pickup) staged.capture = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
+  if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
@@ -690,7 +699,7 @@ function hud(now: number) {
     }
   }
   el("labels").classList.toggle("aiming", aim);
-  el("labels").innerHTML =
+  staged.labels =
     game.scoring === "eliminations" || (training&&training.lesson<6)
       ? ""
       : game.sectors
@@ -705,6 +714,10 @@ function hud(now: number) {
               : "";
           })
           .join("");
+  for (const key of Object.keys(staged) as (keyof typeof hudTargets)[]) {
+    const markup = staged[key]!;
+    if (displayedHud[key] !== markup) hudTargets[key]().innerHTML = displayedHud[key] = markup;
+  }
 }
 function command(): Command {
   const c = idle();

@@ -16,6 +16,19 @@ export function tacticalRelief(map: MapDefinition, size = 256) {
   }
   return { width, height, pixels };
 }
+// Fallen trees and broken cover change the destruction revision but not the
+// ground, so keep the sampled relief until the terrain itself is cut again.
+const reliefCache = new WeakMap<object, Map<number, { terrainRevision: number; raster: ReturnType<typeof tacticalRelief> }>>();
+function cachedRelief(map: MapDefinition, size: number) {
+  const state = map.destruction;
+  if (!state) return tacticalRelief(map, size);
+  const terrainRevision = state.terrainRevision ?? state.revision;
+  let bySize = reliefCache.get(state);
+  if (!bySize) reliefCache.set(state, bySize = new Map());
+  let entry = bySize.get(size);
+  if (entry?.terrainRevision !== terrainRevision) bySize.set(size, entry = { terrainRevision, raster: tacticalRelief(map, size) });
+  return entry.raster;
+}
 export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinition, size = map.fort || map.zeppelin ? 720 : 256) {
   // Zeppelin floor plan: the hull from above, the keel's rooms and corridor
   // filled in, the top walk over them in a lighter wash, the gallery as the
@@ -72,7 +85,7 @@ export function drawTacticalTerrain(canvas: HTMLCanvasElement, map: MapDefinitio
     ctx.fillText("SERVICE PASSAGE", 0, -19.5);
     return;
   }
-  const raster = tacticalRelief(map, size);
+  const raster = cachedRelief(map, size);
   canvas.width = raster.width; canvas.height = raster.height;
   const ctx = canvas.getContext("2d")!;
   ctx.putImageData(new ImageData(raster.pixels, raster.width, raster.height), 0, 0);
