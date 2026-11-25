@@ -199,6 +199,16 @@ Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden s
 
 France versus Imperial Germany, 50 soldiers per team, five-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
 
+## Mustard gas shells
+
+Gas shells are an alternate artillery strike on every map that offers artillery. The rules live in `src/gas.ts`; the HUD, map clouds, lens and sounds in `src/gas-ui.ts`; the clouds as drawn in `src/gas-view.ts`.
+
+- **Calling gas.** Press **F** on the tactical map to switch the fire mission from high explosive to gas shells (on night maps F steps through artillery, flare and gas), then pick a sector. Gas follows the same rules as a fire mission: range, a human caller, one mission at a time and the same 30-second artillery cooldown, so each call is gas *or* high explosive. Gas shells cannot land within 24 m of either team's deployment.
+- **The cloud.** Three seconds after the call a low cloud spreads to about 18 m across and lingers 25 seconds, drifting along the front at 0.3 m/s. It burns anyone unmasked, up to 12 HP a second at its heart, your own side included. Kills on the enemy are credited to the caller; deaths read "Gas shell". Clouds show on the minimap and tactical map.
+- **Gas mask.** Every soldier carries one. Press **M** (remappable) to put it on: it takes a second with both hands, so you cannot fire, throw, aim, climb or finish a reload meanwhile. Taking it off takes half a second and protection ends at once. Masked, gas burns 1.5 HP a second, because mustard still blisters skin through a mask. In first person you see through two eyepieces and hear yourself breathe; other soldiers show the facepiece, eyepieces and filter tin. A masked bot notices enemies only within about 40° of where it looks, against 63° bare-faced. You redeploy bare-faced.
+- **Bots** mask up within 8 m of a cloud, walk out of it, route around it and take the mask off once 18 m clear for five seconds. A bot team's caller chooses gas over high explosive for a knot of three or more enemies 30–70 m away and clear of its own men.
+- **Look.** Each cloud is a ring of yellow-green billboards sitting on the ground. Quads within 6 m of the camera are left out, as for mist, so standing in one never washes out the view; a yellow haze at the screen edges says you are in it instead, halved through a mask.
+
 ## Farmland trench front
 
 Trench Front now has two rutted supply roads, broken farmyard boundaries, a lower ruined farmhouse with a recognizable chimney, bare orchard trees, supply carts/crates, shelter-bay stores and three shallow flooded pockets. A winding shallow drainage hollow adds ground-level variation in the northern crossing. There are87new destructible cover parts, clustered around supply districts and farm boundaries; existing trench routes, firing stations and four flags remain accessible.

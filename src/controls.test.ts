@@ -41,3 +41,12 @@ it("adds the emplacement binding without resetting an older custom layout", () =
   expect(restored.bindings.interact).toBe("KeyH");
   expect(restored.bindings.emplace).not.toBe("KeyB");
 });
+
+it("adds the gas mask binding to an older layout without taking a key already in use", () => {
+  expect(freshControls().bindings.mask).toBe("KeyM");
+  const { mask: _mask, emplace: _emplace, ...bindings } = freshControls().bindings;
+  const restored = loadControls({ getItem: () => JSON.stringify({ ...freshControls(), bindings: { ...bindings, reload: "KeyM" } }) });
+  expect(restored.bindings.reload).toBe("KeyM");
+  expect(restored.bindings.emplace).toBe("KeyB");
+  expect(restored.bindings.mask).toBe("KeyX");
+});
