@@ -874,3 +874,52 @@ a.armory-link:hover { background: #3f5856; }
   background: none;
   color: #ddd;
 }
+
+/* Capture the flag (src/ctf-hud.ts). */
+.mode-choice { margin-top: 10px; }
+.mode-choice strong { display: block; font-size: 13px; }
+.ctf-flag { min-width: 30px; padding: 5px 8px; text-align: center; }
+.ctf-flag small { margin-top: 2px; font-size: 9px; letter-spacing: 0; line-height: 1.2; }
+.ctf-flag.home { background: color-mix(in srgb, currentColor 22%, #192525cf); }
+.ctf-flag.carried { animation: blink 0.7s infinite alternate; }
+.ctf-flag.dropped { border-style: dashed; }
+.ctf-flag.restocking { opacity: .45; border-style: dotted; }
+.ctf-announcer {
+  position: absolute;
+  z-index: 8;
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 32px));
+  text-align: center;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px #000, 0 0 8px #000a;
+  pointer-events: none;
+}
+.ctf-announcer:empty { display: none; }
+.ctf-label.carried { font-size: 15px; }
+.ctf-label.dropped { animation: blink 0.7s infinite alternate; }
+.ctf-label.drop { padding: 1px 5px; border: 1px solid currentColor; background: #142323a8; font-size: 10px; letter-spacing: .1em; }
+.ctf-carrying { color: #f1d283; font-weight: 650; }
+#ui.flag-carrier::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px #e9c46a8c, inset 0 0 9vmin 1vmin #e9c46a2e;
+}
+.minimap-flag[data-state="empty"] { background: #142323cc; color: #d0c7a3; border-color: #d0c7a3aa; }
+.minimap-drop, .minimap-loose {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  line-height: 1;
+  text-shadow: 0 0 2px #091516, 0 1px 1px #091516;
+}
+.minimap-loose { font-size: 13px; }
+.minimap-loose[data-state="dropped"] { animation: blink 0.7s infinite alternate; }
+.kill-feed-entry.ctf-feed .feed-action { color: inherit; }

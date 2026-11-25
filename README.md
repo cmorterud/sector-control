@@ -10,6 +10,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
+- **Capture the flag.** Trench front, Night raid and Verdun sector can also be played as capture the flag: choose it in the briefing or add `?mode=ctf`. Each side keeps three flags at pickup points spread along its own line, so no one spot can be camped; raid any of the enemy's, carry it back across no-man's land to your single drop point and score. Carriers walk and fight with the pistol but can still mantle; a flag falls where its carrier dies, and first to five captures wins. Bot squads raid, escort, intercept carriers and return dropped flags.
 - **Eight maps.** Trench front, Night raid, Verdun sector, Village front, Lighthouse point, indoor Fort Vaux, the Zeppelin above the clouds, and a guided training camp.
 - **Per-map light and atmosphere.** Each map has its own sun, generated sky, fog and color grade, from Trench front's gray dawn to Village front's late afternoon. On Trench front a low sun burns through a heavy cloud deck; mist lies across no-man's land and pools in the trenches, brazier smoke drifts from the shelter bays, fresh craters smoulder, and you hear wind keening in the wire, a machine gun far up the line and crows. On Verdun a lower overcast sun lays long soft shadows through the woods, mist drifts between the trunks across the whole field and pools in the trenches, and the same battlefield sounds carry over the trees. Rooms darken away from their windows. Graphics quality is Auto, Low, Medium or High in the briefing; Auto picks from real frame times.
 - **Lived-in trenches.** On Trench front, sandbags line the parados, British stretches mix timber, corrugated iron and sandbag revetments while German ones use timber and wicker, and dugout entrances glow with lanterns. Painted boards name each trench and point to its flag; crates, rifle racks, stretchers, braziers, periscopes, field telephone cable and standing water fill the lines. All of it stays off the firing steps and adds no cover. Verdun's narrower trenches get the same treatment, with French stretches revetted mostly in woven hurdles and boards naming trenches such as TR. DES SAPINS and BOYAU DU RAVIN.
@@ -31,15 +32,17 @@ A single-player First World War shooter that runs in the browser. You fight alon
 | Map | Size | Objective |
 | --- | --- | --- |
 | Training grounds | Guided practice | Eight repeatable exercises covering movement, all weapons, artillery, destruction and squad combat |
-| Trench front | 50v50 | Four flags in opposing trench lines across no man's land |
-| Night raid | 24v24 | Trench front after dark. You see about 15 m. Call flares from the tactical map (**F** switches it) to light the field; lamps mark the trenches and white tape the lanes through the wire |
-| Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches |
+| Trench front | 50v50 | Four flags in opposing trench lines across no man's land, or capture the flag with three flags a side |
+| Night raid | 24v24 | Trench front after dark. You see about 15 m. Call flares from the tactical map (**F** switches it) to light the field; lamps mark the trenches and white tape the lanes through the wire. Also plays as capture the flag |
+| Verdun sector | 50v50 | Five flags through woodland, craters and communication trenches, or capture the flag with three flags a side |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 25v25 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Fort Vaux | 6v6 | France and Imperial Germany fight through vaulted galleries and the open-air Sunken Yard for three flags. Riflemen carry carbines: shorter, and quicker between shots. **Q** opens the floor plan. No artillery |
 | Zeppelin | 6v6 | Aboard a German airship adrift above the clouds at dusk: French boarders hold the stern, the crew the bow. Three lanes run its length one above another, the keel, a gallery through the gas cells and the walk along the top, and meet at both engine stations and the bomb bay. Carbines, as in Fort Vaux. **Q** opens the floor plan. No artillery |
 
 On the combat flag maps, each flag you hold uncontested earns a point every three seconds. The first team to 300 wins; otherwise the higher score after eight minutes does.
+
+Trench front, Night raid and Verdun sector also offer **capture the flag** (choose it in the briefing, or `?mode=ctf`). Each side has three flag pickup points in its own lines (A–C for Blue, D–F for Red) and one drop point in its support trench. Take an enemy flag by touching its stand and carry it home: the carrier cannot sprint or throw frags and fights with the pistol, but can mantle. The flag drops where its carrier dies; touch your own dropped flag to return it, or it goes home after 20 seconds, and a teammate can pick up a dropped enemy flag. Each capture scores one and empties that pickup point for 30 seconds. First to five captures wins, otherwise the higher score after eight minutes; a tie at full time goes to sudden death for up to two minutes. See [GAME_GUIDE.md](docs/GAME_GUIDE.md#capture-the-flag).
 
 ## Training grounds
 
@@ -85,7 +88,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
+The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `mode=ctf` plays capture the flag on Trench front, Night raid or Verdun sector (domination is the default), `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
 
 ## Continuous integration and publishing
 

@@ -99,6 +99,32 @@ Each side has a wire belt about five meters in front of its front-line parapet, 
 
 A barbed-wire belt surrounds the sector, just outside the playable area. Inside the wire you can only walk: no sprinting, hopping or mantling. Once you cross it, a banner counts down five seconds. Stay out and a three-shell salvo walks along the wire onto you, repeating until you return; it credits no one. Stepping back in for a full second clears the warning, but popping in and out does not reset the countdown. Each trench line continues past the north and south wire behind a sandbag block. Bots never leave the playable area.
 
+## Capture the flag
+
+Trench front, Night raid and Verdun sector offer a second mode beside domination. Choose **Capture the flag** under the map cards in the briefing, or add `?mode=ctf` to the URL (`?map=trenches&mode=ctf`). Domination stays the default, and other maps ignore the parameter. The mode came from playtest feedback that a domination match on Trench front invites camping one flag: here each side has **three flag pickup points** spread along its own line, so no single spot can be held against every raid, and one **drop point** in its own base.
+
+| | Trench front and Night raid | Verdun sector |
+| --- | --- | --- |
+| Blue pickup points | A North bay, B Centre bay, C South bay, on the front trench floor | A Shattered Wood, B front trench centre, C Supply Ruin |
+| Red pickup points | D North bay, E Centre bay, F South bay | D Gun Pit, E front trench centre, F Fortification |
+| Drop points | The centre bay of each side's support (rear) trench | The centre of each side's rear trench |
+
+Rules and why:
+
+- **Take a flag by touching its stand** (within 2.2 m, at about the same height and with nothing solid between, so not from the bank top above it). It is instant: a raider who reaches a stand alive has earned it. You carry one flag at a time.
+- **The carrier walks and fights with the pistol.** Sprint is off, the rifle is holstered and cannot be drawn, frags are held, and emplacements and flame kits cannot be used. Smoke is allowed, to cover the walk home. Mantling and hopping stay, because the trenches cannot be crossed without them. A slow, lightly armed carrier gives defenders time to run him down, so escorts matter.
+- **The flag falls where its carrier dies** (or redeploys). A flag that falls beyond the sector wire lands just inside it.
+- **Touch your own dropped flag to return it** to its stand at once. Left alone, a dropped flag goes home by itself after **20 seconds**, so a flag can never be lost in a crater. **A teammate can pick up a dropped enemy flag** and carry it on.
+- **A capture** happens when a carrier reaches his own drop point (within 3.5 m). It scores **one point**. Your own flags need not be home to score: with three flags a side that rule would only stall matches.
+- **A captured flag's pickup point restocks after 30 seconds.** Long enough that raiders move on to another point, short enough that all three stay in play. A returned flag goes straight back to its stand.
+- **First to 5 captures wins**, or the higher score after eight minutes. **Tied at full time**, the match goes to sudden-death overtime: the next capture wins. After two more minutes without one it is a draw.
+
+What you see: each pickup point is an ammunition box with a flag on a post, inside a ring painted in its side's colour; the ring turns pale while its flag is away. Drop points are tall signboards in the team colour inside a wider ring. A carrier wears the flag on a short staff across his back, above head height, so he stands out over a parapet. A dropped flag lies on the ground. The top HUD shows each side's three flags (`⚑` carried, a countdown while dropped or restocking) beside **CAPTURE THE FLAG · FIRST TO 5**; screen labels mark stocked stands, every carrier, every dropped flag and your own **DROP** point. The minimap shows the pickup points (hollow when empty), both drop points (◆) and loose flags (⚑). Flag events go to the kill feed and an announcer line ("A. Wright took the flag at E", "Britain captured flag E · 2–1"). Carrying, a gold frame edges the screen and the prompt reads **YOU HAVE FLAG E · TAKE IT TO YOUR DROP POINT** with the distance.
+
+Bots: every half second each team's orders are redrawn from public flag state (which flags are home, dropped where, or on whose back). A carrier heads for his drop point. The four nearest soldiers run down an enemy carrier of their flag, the three nearest go to each dropped flag (to return their own or carry on an enemy's), and up to four within 30 m escort their own carrier, walking a little ahead of him. Three squads in five raid: all parties strike one enemy stand together and move on to the next every 40 seconds, so the defence cannot settle on one. Massed raids replaced parties spread over all three points, which were shot down one by one in the open. The rest man the firing steps (Trench front) or guard their own stands (Verdun). Soldiers with orders to move keep walking while they shoot instead of creeping, leaving their trench they screen the crossing with smoke, and where the route planner has no way across (it can drop into a trench but not climb out) they go straight for the goal and mantle every bank in the way. The scripted trench assaults of domination are off in this mode.
+
+`tools/ctf-audit.ts` plays seeded full matches (bundle it with esbuild for Node; see its header). `src/ctf.test.ts` covers the rules, and a short seeded battle in which both teams capture.
+
 ## Night raid
 
 Choose **Night raid** in the start menu or open `?map=night-raid`. It is Trench front's ground after dark, with 24 soldiers a side: the same trenches, wire and four flags, so knowing the day map is knowing this one.

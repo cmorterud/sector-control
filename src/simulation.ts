@@ -106,6 +106,7 @@ import {
   type WeaponKind,
 } from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
+import { advanceCtf, createCtf, ctfBotCommand, ctfCommand, ctfGoal, ctfRules, type CtfEvent, type CtfState } from "./ctf";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
 import {
   advanceTactics, audible, checkCorners, collapseEscape, createTactics, dangerCost, formUp, grenadeCommand, heard, listen,
@@ -687,6 +688,7 @@ export type Event = { id: number; tick: number } & (
   | { type: "end"; winner: Team | "draw" }
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
+  | CtfEvent
 );
 type EventInput = Event extends infer E
   ? E extends Event
@@ -940,7 +942,7 @@ export class Game {
   projectileSequence = 0;
   sectors: Sector[];
   readonly map: MapDefinition;
-  readonly scoring: "sectors" | "eliminations" | "domination";
+  readonly scoring: "sectors" | "eliminations" | "domination" | "ctf";
   readonly scoreLimit: number | null;
   private grenadeCollision: TestCollision;
   botSettings: BotSettings;
@@ -952,6 +954,8 @@ export class Game {
   // Squads, the commander, shared contacts and the danger map; absent
   // without bots or with squads turned off.
   tactics?: Tactics;
+  // Capture the flag's flags, drop points and bot orders (src/ctf.ts).
+  ctf?: CtfState;
   constructor(
     public collision: CollisionWorld,
     public bots = true,
@@ -974,13 +978,16 @@ export class Game {
       this.map.artillery !== false && (options.ambientArtillery ?? (this.map.id !== "industrial" && this.map.id !== "training")),
     );
     this.artillery.enabled = this.map.artillery !== false;
+    // Capture the flag sends its own raiding parties (src/ctf.ts).
     this.assaults.enabled =
-      (options.assaults ?? true) && trenchGround(this.map);
+      (options.assaults ?? true) && trenchGround(this.map) && this.map.scoring !== "ctf";
     this.collision.setMap?.(this.map);
     this.grenadeCollision = new TestCollision(this.map);
     this.scoring = this.map.scoring ?? "sectors";
     this.scoreLimit =
+      this.scoring === "ctf" ? ctfRules.captureLimit :
       this.scoring === "domination" && this.map.id !== "training" ? dominationRules.scoreLimit : null;
+    this.ctf = createCtf(this.map);
     this.botSettings = {
       ...botSettingsFor(this.map, botSettings?.difficulty),
       ...botSettings,
@@ -1111,6 +1118,7 @@ export class Game {
       sequence: this.sequence,
       seed: this.seed,
       tactics: this.tactics,
+      ctf: this.ctf,
       world: this.map.destruction,
     });
   }
@@ -1275,6 +1283,7 @@ export class Game {
       );
       p.command = p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
       const c = p.command;
+      ctfCommand(this, p, c);
       if (p.id !== 0) evadeFlame(this,p);
       const interactPressed = !!c.interact && !p.commandInteractHeld;
       p.commandInteractHeld = !!c.interact;
@@ -1456,7 +1465,8 @@ export class Game {
     advanceBoundary(this);
     advanceArtillery(this);
     advanceFlares(this);
-    for (const s of this.scoring !== "eliminations" ? this.sectors : []) {
+    advanceCtf(this);
+    for (const s of this.scoring !== "eliminations" && this.scoring !== "ctf" ? this.sectors : []) {
       const occupants = this.players.filter((p) =>
           this.scoring === "domination"
             ? flagOccupant(this, p, s)
@@ -2697,11 +2707,14 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     (p.ammo < (p.weapon === "serviceRifle" ? 2 : 15) && p.target < 0);
   c.yaw = p.yaw;
   c.pitch = p.pitch;
-  const station = firingPosition(g, p);
+  // A capture-the-flag order outranks the bot's firing step or flag.
+  const raid = ctfGoal(g, p);
+  const station = raid ? undefined : firingPosition(g, p);
   if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;
-    const ordered = station ? undefined : squadObjective(g, p);
-    if (station) p.path = pathfind(p, station, g.map, true);
+    const ordered = station || raid ? undefined : squadObjective(g, p);
+    if (raid) p.path = pathfind(p, raid, g.map, true, dangerCost(g, p.team));
+    else if (station) p.path = pathfind(p, station, g.map, true);
     else if (ordered !== undefined) {
       p.objective = ordered;
       if (usesVillageTactics(g.map))
@@ -2823,7 +2836,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     1,
   );
   if (botMeleeIntent(g, p, target, c)) return c;
-  const objective = station ?? p.villagePlan?.goal ?? g.sectors[p.objective];
+  const objective = raid ?? station ?? p.villagePlan?.goal ?? g.sectors[p.objective];
   while (
     p.path.length &&
     (!g.map.buildings || Math.abs(p.y-(p.path[0].y ?? groundHeight(p.path[0].x,p.path[0].z,g.map)))<.24) &&
@@ -2834,7 +2847,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   const dest = safeBotDestination(g, p);
   if (
     dest &&
-    (dist(p, objective) > (p.villagePlan ? 0.8 : station ? 0.15 : 4) ||
+    (dist(p, objective) > (p.villagePlan ? 0.8 : station ? 0.15 : raid ? 1 : 4) ||
       (usesVillageTactics(g.map) && !flagOccupant(g, p, g.sectors[p.objective])))
   ) {
     const d = dist(p, dest);
@@ -3011,5 +3024,5 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     villageSteering(g, p, c, target ? dist(p, target) : Infinity);
     screenCrossing(g, p, c, objective);
   }
-  return braceCommand(g, p, assaultCommand(g, p, c));
+  return braceCommand(g, p, assaultCommand(g, p, ctfBotCommand(g, p, c)));
 }
