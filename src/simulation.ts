@@ -5,7 +5,7 @@ import { pitchedBoxRay } from "./box-geometry";
 import { NavigationEdges, type NavigationBounds } from "./navigation-edges";
 import { battlePerformance } from "./battle-performance";
 import { advanceBoundary, boundaryRules, type BoundaryWarning } from "./boundary";
-import { advanceGas, createGasState, escapeGas, gasAvailable, gasDeployment, gasThreatens, type GasEscape, type GasEvent, type GasMask, type GasState } from "./gas";
+import { advanceGas, botGasTarget, createGasState, escapeGas, requestGasStrike, resetGas, type GasEscape, type GasEvent, type GasMask, type GasState } from "./gas";
 import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction, type CombatCover } from "./combat-reaction";
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
@@ -108,6 +108,7 @@ import {
 } from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
+import { advanceReinforcements, createReinforcements, reinforcementsLeft, takeReinforcement, type ReinforcementState } from "./reinforcements";
 import {
   advanceTactics, audible, checkCorners, collapseEscape, createTactics, dangerCost, formUp, grenadeCommand, heard, listen,
   observeTactics, overwatchHold, reloadCallout, reportContact, squadContact, squadObjective, stackAtDoor,
@@ -208,7 +209,7 @@ export const exposedAimHeight = (map: MapDefinition, p?: Soldier) =>
   (map.terrain ? 1.65 : 1.25) - stanceDrop(p);
 export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
-    (position) => position.team === p.team && !gasThreatens(g, position, 2),
+    (position) => position.team === p.team,
   );
   const original = positions?.[p.teamIndex % positions.length];
   const flagPost = dominationPost(g, p, original);
@@ -694,6 +695,7 @@ export type Event = { id: number; tick: number } & (
       held?: Record<Team, number>;
     }
   | { type: "end"; winner: Team | "draw" }
+  | import("./reinforcements").ReinforcementEvent
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
 );
@@ -944,8 +946,8 @@ export class Game {
   bursts: Burst[] = [];
   assaults = createAssaultState();
   smokeClouds: SmokeCloud[] = [];
-  // Creeping gas, masks and gas shells; null unless the match turned it on.
-  gas: GasState | null = null;
+  // Gas shell clouds; masks live on each soldier.
+  gas: GasState = createGasState();
   smokeSequence = 0;
   grenadeSequence = 0;
   projectileSequence = 0;
@@ -963,6 +965,8 @@ export class Game {
   // Squads, the commander, shared contacts and the danger map; absent
   // without bots or with squads turned off.
   tactics?: Tactics;
+  // The final phase's team respawn pools; see reinforcements.ts.
+  reinforcements: ReinforcementState;
   constructor(
     public collision: CollisionWorld,
     public bots = true,
@@ -975,7 +979,6 @@ export class Game {
       humanPlayerIds?: readonly number[];
       assaults?: boolean;
       ambientArtillery?: boolean;
-      gas?: boolean;
     } = {},
   ) {
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
@@ -1005,7 +1008,6 @@ export class Game {
       contested: false,
     }));
     this.duration = this.map.id === "training" ? Number.MAX_SAFE_INTEGER : duration;
-    if (options.gas && gasAvailable(this.map)) this.gas = createGasState(this.map, this.duration);
     this.seed = seed;
     for (let i = 0; i < (bots ? this.teamSize * 2 : 1); i++) {
       const team: Team = i < this.teamSize ? "blue" : "red";
@@ -1089,6 +1091,7 @@ export class Game {
       this.respawn(this.players[i]);
     }
     this.tactics = createTactics(this);
+    this.reinforcements = createReinforcements(this);
   }
   random() {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0;
@@ -1125,6 +1128,7 @@ export class Game {
       sequence: this.sequence,
       seed: this.seed,
       tactics: this.tactics,
+      reinforcements: this.reinforcements,
       world: this.map.destruction,
     });
   }
@@ -1166,11 +1170,7 @@ export class Game {
       p.z = deployment.z;
     }
     if (usesVillageTactics(this.map)) p.villagePlan = null;
-    const forward = gasDeployment(this, p);
-    if (forward) {
-      p.x = forward.x;
-      p.z = forward.z;
-    }
+    resetGas(p);
     const sky = this.map.sky;
     if (sky) {
       // The airship is the same both ways round, so the team at the other end
@@ -1247,7 +1247,8 @@ export class Game {
   }
   redeploy(actor = 0): boolean {
     const p=this.players[actor];
-    if(this.phase!=="playing" || !p || p.hp<=0)return false;
+    // With the pool spent there is nobody to redeploy as.
+    if(this.phase!=="playing" || !p || p.hp<=0 || !reinforcementsLeft(this,p.team))return false;
     // Intentional self-death follows the same corpse/action/respawn lifecycle,
     // without awarding anyone a kill or changing domination team scores.
     this.damage(p,p.hp,-1,null,{kind:"redeploy",weapon:"Redeploy"});
@@ -1272,7 +1273,7 @@ export class Game {
     advanceTactics(this);
     for (const p of this.players) {
       if (p.hp <= 0) {
-        if (this.tick >= p.respawnAt) {
+        if (this.tick >= p.respawnAt && takeReinforcement(this, p)) {
           const held = p.triggerHeld;
           const meleeHeld = p.meleeHeld;
           this.respawn(p);
@@ -1319,6 +1320,7 @@ export class Game {
       p.meleeHeld = !!c.melee;
       const meleeSpeed = meleeMovement(this, p, c);
       if (c.artillery) requestArtillery(this, p, c.artillery);
+      else if (c.gasStrike) requestGasStrike(this, p, c.gasStrike);
       if (c.flare) requestFlare(this, p, c.flare);
       if (
         !c.fire ||
@@ -1522,7 +1524,9 @@ export class Game {
         }
       this.emit({ type: "score", points: { ...this.scores }, held });
     }
+    const decided = advanceReinforcements(this);
     if (
+      decided ||
       this.tick >= this.duration ||
       (this.scoreLimit !== null &&
         Math.max(this.scores.blue, this.scores.red) >= this.scoreLimit)
@@ -1540,12 +1544,12 @@ export class Game {
       this.artillery.shells = [];
       this.smokeClouds = [];
       this.assaults.missions = [];
-      this.winner =
+      this.winner = decided ?? (
         this.scores.blue === this.scores.red
           ? "draw"
           : this.scores.blue > this.scores.red
             ? "blue"
-            : "red";
+            : "red");
       this.emit({ type: "end", winner: this.winner });
     }
   }
@@ -2712,7 +2716,9 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   const duck = suppressionCommand(g, p);
   if (duck) return braceCommand(g, p, duck);
   const c = idle();
-  c.artillery = botArtilleryTarget(g, p) ?? undefined;
+  // Gas onto a tight knot of enemies, otherwise high explosive.
+  c.gasStrike = botGasTarget(g, p) ?? undefined;
+  if (!c.gasStrike) c.artillery = botArtilleryTarget(g, p) ?? undefined;
   c.flare = botFlareTarget(g, p) ?? undefined;
   c.reload =
     p.ammo < 1 ||

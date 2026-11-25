@@ -53,8 +53,11 @@ import { trenchMap } from "./trench-map";
 import { nightRaidMap } from "./night-map";
 import { lightAt } from "./night";
 import { flareRules } from "./flares";
-import { gasAvailable, masked } from "./gas";
-import { GasAudio, GasOverlay, GasScreen, gasBriefing, gasNotice, gasParameter, gasStatus } from "./gas-ui";
+import { masked } from "./gas";
+import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
+import { reinforcementsLeft } from "./reinforcements";
+import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
+import { soldierName } from "./soldier-names";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -70,14 +73,22 @@ killNotice.setAttribute("role", "status");
 const boundaryNotice = document.createElement("div");
 boundaryNotice.className = "boundary-warning";
 boundaryNotice.setAttribute("role", "alert");
+const reinforcementNotice = document.createElement("div");
+reinforcementNotice.className = "reinforcement-notice";
+reinforcementNotice.setAttribute("role", "status");
+const reinforcementTallyBox = document.createElement("section");
+const spectateLabel = document.createElement("div");
+spectateLabel.className = "spectate-label";
+spectateLabel.setAttribute("role", "status");
+let spectateNext = false;
 const gasWarning = document.createElement("div");
 gasWarning.className = "gas-warning";
 gasWarning.setAttribute("role", "status");
-el("hud").append(battleSidebar, killNotice, boundaryNotice, gasWarning);
+el("hud").append(battleSidebar, killNotice, boundaryNotice, reinforcementNotice, spectateLabel, gasWarning);
 const gasScreen = new GasScreen(el("hud")), minimapGas = new GasOverlay(), tacticalGas = new GasOverlay();
 const gasAudio = new GasAudio(() => audio);
-// A gas event's banner, shown for a few seconds over the standing notice.
-let gasBanner = "", gasBannerUntil = 0;
+root.querySelector(".match")!.append(reinforcementTallyBox);
+const reinforcementNotices = new ReinforcementNotices(), teamName = (team: "blue" | "red") => factions[factionFor(map, team)].name;
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
 let displayedScoreboard = "";
@@ -173,8 +184,6 @@ const params = new URLSearchParams(location.search),
   bots = params.get("bots") !== "0",
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
-// Creeping gas is off unless the briefing or ?gas=1 turns it on.
-let gasEnabled = gasParameter(params);
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
 const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
 // Graphics quality: ?quality= wins, then the stored choice, then Auto. Auto
@@ -278,7 +287,6 @@ function menu(
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
-  if (gasAvailable(map)) el("controls-settings").before(gasBriefing(gasEnabled, started, (on) => { gasEnabled = on; }));
   if (bots) {
     const skill = document.createElement("div"); skill.className = "loadout-choice";
     skill.innerHTML = `<label>Bot difficulty <select id="difficulty"><option value="recruit">Recruit · slower, looser, fewer grenades</option><option value="regular">Regular</option><option value="veteran">Veteran · quicker, sharper, more grenades</option></select></label><small>Both teams' soldiers: reaction, aim, grenades and squad coordination</small>`;
@@ -363,7 +371,7 @@ function start() {
     ),
     12345,
     training ? undefined : { difficulty },
-    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined, gas:!training&&gasEnabled },
+    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
   training?.begin(game);
@@ -371,6 +379,7 @@ function start() {
   renderer.reset(game);
   battlefield.reset(game);
   combatFeedback.reset();
+  reinforcementNotices.reset();
   displayedScoreboard = "";
   el("scoreboard").replaceChildren();
   audio ??= new BattleAudio();
@@ -409,11 +418,11 @@ function pause() {
   if (!started || game.phase !== "playing") return;
   menu(
     "Operation paused",
-    training?"Resume your exercise, change gear, resupply or choose another station below.":"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.",
+    training?"Resume your exercise, change gear, resupply or choose another station below.":reinforcementsLeft(game,game.players[0].team)?"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.":"Press Escape or click Resume to continue. Your side has no reinforcements left, so there is no redeploy.",
     "Resume operation",
     () => resume(),
     `<div class="pause-actions">
-      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
+      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 || !reinforcementsLeft(game,game.players[0].team) ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
       <button class="secondary" id="restart">Restart match</button>
       <button class="secondary" id="select-map" aria-expanded="false" aria-controls="pause-map-picker">Select map</button>
     </div>
@@ -432,6 +441,7 @@ function pause() {
 }
 function handle(e: Event) {
   combatFeedback.event(game,e);
+  reinforcementNotices.event(game, e, performance.now(), teamName);
   if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
@@ -496,12 +506,6 @@ function handle(e: Event) {
     // Gas burns every half second; a thud each time would drown everything.
     if (e.kind !== "gas") sound(60, 0.2, 0.12);
   }
-  if (e.type === "gas" && e.phase !== "settled") {
-    const final = e.final ? "FINAL " : "";
-    gasBanner = e.phase === "warning" ? `GAS ALARM · ${final}ADVANCE IN ${Math.round((e.startAt - e.tick) / 30)}s · NEW LINE ON THE MAP` : `GAS ADVANCING · ${final}LINE CLOSING`;
-    gasBannerUntil = performance.now() + 3500;
-    if (e.phase === "warning") gasAudio.gong();
-  }
   if (e.type === "gasMask" && e.actor === 0) gasAudio.seal();
   if (e.type === "gasStrike" && e.phase === "call" && e.actor === 0) {
     artilleryNotice = "GAS SHELLS AWAY · CLOUD IN 3s";
@@ -526,9 +530,10 @@ function handle(e: Event) {
     sound(440, 0.6);
     const result =
       e.winner === "draw" ? "Draw" : e.winner === "blue" ? "Victory" : "Defeat";
+    const reason = reinforcementEndReason(game, teamName);
     menu(
       result,
-      `Operation complete · ${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
+      `Operation complete · ${reason ? reason + " · " : ""}${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
       "Deploy again",
       start,
       battlefieldChoices() + table(),
@@ -561,11 +566,19 @@ function hud(now: number) {
     boundaryText = outside ? `OUT OF BOUNDS · RETURN TO THE LINE · ${countdown ? `ARTILLERY IN ${countdown}` : "ARTILLERY INBOUND"}` : "";
   if (boundaryNotice.textContent !== boundaryText) boundaryNotice.textContent = boundaryText;
   const gasLine = paused ? { text: "", danger: false } : gasNotice(game, p, keyLabel(settings.bindings.mask));
-  const gasText = !paused && game.gas && now < gasBannerUntil && !gasLine.danger ? gasBanner : gasLine.text;
-  if (gasWarning.textContent !== gasText) gasWarning.textContent = gasText;
+  if (gasWarning.textContent !== gasLine.text) gasWarning.textContent = gasLine.text;
   gasWarning.classList.toggle("danger", gasLine.danger);
   gasScreen.update(game, p, preferredFirstPerson && !renderer.deathView, !paused && !tacticalMap.open);
   root.classList.toggle("out-of-bounds", outside);
+  const tally = training ? "" : reinforcementTally(game), notice = paused ? "" : reinforcementNotices.text(now);
+  if (reinforcementTallyBox.innerHTML !== tally) reinforcementTallyBox.innerHTML = tally;
+  if (reinforcementNotice.textContent !== notice) reinforcementNotice.textContent = notice;
+  reinforcementNotice.classList.toggle("urgent", reinforcementNotices.urgent(now));
+  renderer.spectating = spectateTarget(game, renderer.spectating, spectateNext);
+  spectateNext = false;
+  const watched = renderer.spectating === null ? undefined : game.players[renderer.spectating];
+  const watching = watched && !paused ? `WATCHING ${soldierName(watched, game.map)} · LMB NEXT` : "";
+  if (spectateLabel.textContent !== watching) spectateLabel.textContent = watching;
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
@@ -603,7 +616,7 @@ function hud(now: number) {
   const flareIn = Math.max(0, Math.ceil((game.flares.readyAt[p.team] - game.tick) / 30));
   el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
     ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
-  if (game.gas) el("ammo").innerHTML += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
+  if (game.map.artillery !== false) el("ammo").innerHTML += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -626,7 +639,7 @@ function hud(now: number) {
     mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, game.map);
   el("capture").innerHTML =
     p.hp <= 0
-      ? `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
+      ? outOfReinforcements(game, p) ? "<h2>NO REINFORCEMENTS</h2>" : `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
       : p.mantle
         ? "<small>CLIMBING TRENCH EDGE</small>"
         : ledge && !(game.scoring === "domination" && sector)
@@ -766,7 +779,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (tacticalMap.open && e.code === mapCallKey && !e.repeat) tacticalMap.toggleMode();
   // The mask works with the map open too: gas does not wait.
-  if (isKey("mask", e.code) && !e.repeat && game.gas && game.players[0].hp > 0) pendingMask = true;
+  if (isKey("mask", e.code) && !e.repeat && game.players[0].hp > 0) pendingMask = true;
   if (tacticalMap.open && !isKey("reload", e.code)) return;
   const player = game.players[0];
   if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
@@ -815,6 +828,11 @@ window.addEventListener("mousedown", (e) => {
       triggerDown = true;
       if (document.pointerLockElement === renderer.canvas) tacticalMap.select();
     }
+    return;
+  }
+  // Out of reinforcements, the trigger cycles which teammate you watch.
+  if (outOfReinforcements(game, game.players[0])) {
+    if (e.button === 0) spectateNext = true;
     return;
   }
   if (placingGun) {
@@ -952,7 +970,7 @@ function frame(now: number) {
       );
       audio?.muffle(battlefield.state(game.tick).muffle);
       gasAudio.volume(audioVolume);
-      gasAudio.update(!!game.gas && game.players[0].hp > 0 && masked(game.players[0], game.tick));
+      gasAudio.update(game.players[0].hp > 0 && masked(game.players[0], game.tick));
       accumulator += dt;
       let steps = 0;
       // All of this frame's ticks share one navigation rebuild budget.
@@ -1077,10 +1095,9 @@ try {
       for(const component of weapon?.findComponents("render")??[])component.enabled=!detail;
       return {tick:game.tick,frames:reviewFrames};
     },
-    // Gas matches: skip ahead to a moment in the gas schedule and stand the
-    // player at a point looking at another, masked or not.
+    // Gas shells: skip ahead and stand the player at a point looking at
+    // another, masked or not, optionally beside a gas shell cloud.
     gas:(tick:number,x:number,z:number,tx:number,tz:number,mask:boolean,firstPerson=true,cloud?:{x:number;z:number})=>{
-      if(!game.gas)throw Error("Not a gas match");
       reviewManual=true;game.tick=Math.max(game.tick,Math.round(tick));const p=game.players[0];
       game.respawn(p);Object.assign(p,{x,z,y:groundHeight(x,z,game.map),yaw:Math.atan2(tx-x,-(tz-z)),pitch:-.04,protectedUntil:Infinity,vx:0,vz:0});
       p.gasMask=mask?{worn:true,since:game.tick-60,from:1}:null;

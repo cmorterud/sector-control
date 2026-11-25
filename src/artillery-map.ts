@@ -3,8 +3,8 @@ import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import { flareRules, flareTargetReason } from "./flares";
 import { gasStrikeReason, gasStrikeRules } from "./gas";
 
-// What a click on the map asks for. Flares exist only on night maps, gas
-// shells only in matches with creeping gas.
+// What a click on the map asks for. Flares exist only on night maps; gas
+// shells are an alternate artillery strike wherever artillery is offered.
 export type MapCall = "shell" | "flare" | "gas";
 export const mapCallKey = "KeyF";
 import type { Game } from "./simulation";
@@ -66,9 +66,9 @@ export class ArtilleryMap {
   }
   private modes(): MapCall[] {
     const g = this.game();
-    return ["shell", ...(g.map.night ? ["flare" as const] : []), ...(g.gas ? ["gas" as const] : [])];
+    return ["shell", ...(g.map.night ? ["flare" as const] : []), ...(g.map.artillery !== false ? ["gas" as const] : [])];
   }
-  // Night maps and gas matches: step the map through what it can call.
+  // Step the map through what it can call: shells, gas shells, and flares at night.
   toggleMode() {
     const modes = this.modes();
     if (!this.open || modes.length < 2) return;
@@ -81,7 +81,7 @@ export class ArtilleryMap {
     this.heading.textContent = !artillery ? "FORT VAUX · FLOOR PLAN" : flare ? "FLARE · CHOOSE A SECTOR" : gas ? "GAS SHELLS · CHOOSE A SECTOR" : "ARTILLERY · CHOOSE A SECTOR";
     this.intro.textContent = !artillery ? "Barracks, cistern and east casemate. Battle continues."
       : flare ? `Lights about ${flareRules.radius} m of ground for ${flareRules.burnTicks / 30} seconds. Its own cooldown. Battle continues.`
-      : gas ? `A low cloud about ${gasStrikeRules.radius * 2} m across for ${gasStrikeRules.lifetime / 30} seconds, drifting slowly along the front. It harms anyone unmasked, your own side too. Its own cooldown. Battle continues.`
+      : gas ? `A low cloud about ${gasStrikeRules.radius * 2} m across for ${gasStrikeRules.lifetime / 30} seconds, drifting slowly along the front. It harms anyone unmasked, your own side too. Uses the artillery cooldown. Battle continues.`
       : "Broad coordinates, imperfect fire. Battle continues.";
     const modes = this.modes(), next = modes[(modes.indexOf(this.mode) + 1) % modes.length];
     this.modeButton.hidden = modes.length < 2;
@@ -241,7 +241,7 @@ export class ArtilleryMap {
       const flare = this.mode === "flare", gas = this.mode === "gas", reason = this.reason({ ...selected, area: true });
       const ready = Math.max(
         0,
-        Math.ceil(((flare ? g.flares.readyAt[p.team] : gas ? g.gas!.strikeReadyAt[p.team] : g.artillery.readyAt[p.team]) - g.tick) / 30),
+        Math.ceil(((flare ? g.flares.readyAt[p.team] : g.artillery.readyAt[p.team]) - g.tick) / 30),
       );
       const error = artilleryUncertainty(g, p, selected);
       this.status.textContent = flare

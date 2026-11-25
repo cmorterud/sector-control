@@ -1,4 +1,4 @@
-/* Creeping gas: HUD notice, map overlay, mask lens and haze (src/gas-ui.ts). */
+/* Gas shells and masks: HUD notice, map clouds, mask lens and haze (src/gas-ui.ts). */
 .gas-warning {
   position: absolute;
   z-index: 9;
@@ -20,9 +20,6 @@
 .gas-warning.danger { background: #3a3a0ce8; border-bottom-color: #e8e35a; color: #fffbd0; }
 .gas-map { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .gas-map[hidden], .gas-map [hidden] { display: none; }
-/* The safe area is a hole; its huge shadow is the gas around it. */
-.gas-safe { position: absolute; box-shadow: 0 0 0 200vmax #a7ad3a70; }
-.gas-next { position: absolute; border: 1.5px dashed #f0ec8c; box-shadow: 0 0 0 1px #20220c80; }
 .gas-cloud { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, #c1c04ccc 30%, #c1c04c00 72%); }
 .tactical-grid .gas-map { z-index: 1; }
 .gas-lens, .gas-haze { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
@@ -30,4 +27,3 @@
 .gas-lens svg { width: 100%; height: 100%; display: block; }
 /* Strongest at the edges and never across the centre, so the view stays usable. */
 .gas-haze { z-index: 0; background: radial-gradient(ellipse at center, #b4b44a00 28%, #a9ab3c55 70%, #8f9330a0 100%); transition: opacity .25s linear; }
-.gas-choice label { display: flex; gap: 8px; align-items: center; }

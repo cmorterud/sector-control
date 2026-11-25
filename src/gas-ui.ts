@@ -1,84 +1,39 @@
-// The player's side of the gas rule: the briefing option, HUD announcements,
-// gas on the minimap and tactical map, the mask's lens, the haze of standing
-// in gas, and the alarm gong and breathing. Plain DOM and Web Audio only.
+// The player's side of gas shells and masks: HUD notices, clouds on the
+// minimap and tactical map, the mask's lens, the haze of standing in gas, and
+// the alarm gong and breathing. Plain DOM and Web Audio only.
 import "./gas.css";
-import {
-  cloudDensity, cloudPosition, cloudRadius, cloudExposure, frontDepth, gasActive,
-  maskProgress, masked, nextSafeArea, pendingStage, safeAreaAt, type SafeArea,
-} from "./gas";
+import { cloudDensity, cloudPosition, cloudRadius, cloudExposure, maskProgress, masked } from "./gas";
 import { playArea } from "./map";
 import type { Game, Soldier } from "./simulation";
 
-// `?gas=1` turns it on for a direct link; the briefing checkbox otherwise.
-export const gasParameter = (params: URLSearchParams) => ["1", "on", "true"].includes(params.get("gas") ?? "");
-
-export function gasBriefing(enabled: boolean, started: boolean, change: (on: boolean) => void) {
-  const option = document.createElement("div");
-  option.className = "loadout-choice gas-choice";
-  option.innerHTML = `<label><input id="gas-option" type="checkbox" ${enabled ? "checked" : ""}> Creeping gas</label><small>From 1:30 gas rolls in from the sector edges in three announced stages, closing on the flags. Wear your mask (M) or keep moving. Adds gas shells to the tactical map.${started ? " Applies when you restart." : ""}</small>`;
-  (option.querySelector("input") as HTMLInputElement).onchange = (e) => change((e.target as HTMLInputElement).checked);
-  return option;
-}
-
-const seconds = (ticks: number) => Math.max(0, Math.ceil(ticks / 30));
-// The standing line at the top of the screen: what the gas is doing and what
-// to do about it. Empty when there is nothing to say.
+// The standing line at the top of the screen while you are in a cloud.
+// Empty when there is nothing to say.
 export function gasNotice(g: Game, p: Soldier, maskKey: string) {
-  const gas = g.gas;
-  if (!gas || p.hp <= 0 || g.phase !== "playing") return { text: "", danger: false };
-  const front = frontDepth(g, p) > 0, cloud = !!cloudExposure(g, p);
-  if (front || cloud) {
-    if (masked(p, g.tick)) return { text: `IN GAS · MASK ON · STILL BURNING · ${front ? "MOVE INSIDE THE LINE" : "LEAVE THE CLOUD"}`, danger: true };
-    return { text: `GAS! · ${maskKey} · MASK ON · ${front ? "GET INSIDE THE LINE" : "LEAVE THE CLOUD"}`, danger: true };
-  }
-  const stage = pendingStage(gas, g.tick);
-  if (!stage) return { text: "", danger: false };
-  const which = stage.index === gas.stages.length - 1 ? "FINAL GAS ADVANCE" : "GAS ADVANCE";
-  if (g.tick < stage.startAt) return { text: `${which} IN ${seconds(stage.startAt - g.tick)}s · MOVE INSIDE THE DASHED LINE`, danger: false };
-  return { text: `GAS ADVANCING · ${seconds(stage.endAt - g.tick)}s · KEEP INSIDE THE DASHED LINE`, danger: false };
+  if (p.hp <= 0 || g.phase !== "playing" || !cloudExposure(g, p)) return { text: "", danger: false };
+  if (masked(p, g.tick)) return { text: "IN GAS · MASK ON · STILL BURNING · LEAVE THE CLOUD", danger: true };
+  return { text: `GAS! · ${maskKey} · MASK ON · LEAVE THE CLOUD`, danger: true };
 }
 
-// One short status line beside the artillery charge.
+// One short status line under the artillery charge.
 export function gasStatus(g: Game, p: Soldier, maskKey: string) {
-  if (!g.gas) return "";
-  const ready = seconds(g.gas.strikeReadyAt[p.team] - g.tick);
   const mask = p.gasMask?.worn ? (masked(p, g.tick) ? "MASK ON" : "MASKING…") : "MASK OFF";
-  return `${maskKey} · ${mask}　 GAS SHELLS ${ready ? ready + "s" : "READY"}`;
+  return `${maskKey} · ${mask}`;
 }
 
-// Gas drawn over a plan of the play area: the gassed ground now, the outline
-// of the next safe area once announced, and any gas shell clouds.
+// Gas shell clouds drawn over a plan of the play area.
 export class GasOverlay {
   readonly root = document.createElement("div");
-  private safe = document.createElement("i");
-  private next = document.createElement("i");
   private clouds: HTMLElement[] = [];
   constructor() {
     this.root.className = "gas-map";
     this.root.setAttribute("aria-hidden", "true");
-    this.safe.className = "gas-safe";
-    this.next.className = "gas-next";
-    this.root.append(this.safe, this.next);
   }
   update(g: Game, container: HTMLElement) {
-    const gas = g.gas;
-    this.root.hidden = !gas;
-    if (!gas) return;
+    const live = g.gas.clouds.filter((c) => cloudDensity(c, g.tick) > 0);
+    this.root.hidden = !live.length;
+    if (!live.length) return;
     if (this.root.parentElement !== container) container.append(this.root);
     const { width, depth } = playArea(g.map);
-    const place = (e: HTMLElement, a: SafeArea) => {
-      e.style.left = `${(0.5 - a.halfWidth / width) * 100}%`;
-      e.style.top = `${(0.5 - a.halfDepth / depth) * 100}%`;
-      e.style.width = `${(a.halfWidth * 2 / width) * 100}%`;
-      e.style.height = `${(a.halfDepth * 2 / depth) * 100}%`;
-      e.style.borderRadius = `${(a.radius / (2 * a.halfWidth)) * 100}% / ${(a.radius / (2 * a.halfDepth)) * 100}%`;
-    };
-    this.safe.hidden = !gasActive(gas, g.tick);
-    if (!this.safe.hidden) place(this.safe, safeAreaAt(gas, g.tick));
-    const next = nextSafeArea(gas, g.tick), stage = pendingStage(gas, g.tick);
-    this.next.hidden = !next || !stage;
-    if (next && stage) place(this.next, next);
-    const live = gas.clouds.filter((c) => cloudDensity(c, g.tick) > 0);
     while (this.clouds.length < live.length) {
       const dot = document.createElement("b");
       dot.className = "gas-cloud";
@@ -115,7 +70,7 @@ export class GasScreen {
     parent.prepend(this.haze, this.lens);
   }
   update(g: Game | undefined, p: Soldier | undefined, firstPerson: boolean, visible: boolean) {
-    const live = !!g?.gas && !!p && p.hp > 0 && visible;
+    const live = !!g && !!p && p.hp > 0 && visible;
     const progress = live ? maskProgress(p!, g!.tick) : 0;
     const lens = firstPerson ? progress : 0;
     this.lens.style.opacity = lens > 0 ? String(Math.min(1, lens * 1.4)) : "0";
@@ -123,8 +78,8 @@ export class GasScreen {
     this.lens.style.transform = `translateY(${(1 - lens) * 35}%)`;
     let haze = 0;
     if (live) {
-      const front = frontDepth(g!, p!), cloud = cloudExposure(g!, p!, 2);
-      haze = Math.max(front > -2 ? Math.min(0.85, 0.4 + front / 10) : 0, cloud ? Math.min(0.85, 0.3 + cloud.strength * 0.6) : 0);
+      const cloud = cloudExposure(g!, p!, 2);
+      haze = cloud ? Math.min(0.85, 0.3 + cloud.strength * 0.6) : 0;
       // Through a mask the gas is still there, but the glass keeps it off your eyes.
       if (masked(p!, g!.tick)) haze *= 0.5;
     }

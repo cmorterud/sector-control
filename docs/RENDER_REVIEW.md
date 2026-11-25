@@ -20,6 +20,17 @@ Each build's browser jobs check the map links and available loadouts in the brie
 
 **Map and model visual comparison** is opt-in: add the `visual-comparison` label to a map, model or rendering PR, and it builds both the target branch and proposed merge, then compares again on each push while the label stays on. It renders every map twice, so it does not run unlabelled. Each map job uses the same browser, graphics preset, opening seed and camera setup for both revisions. Download `visual-comparison-<map>` from the run summary, extract it and open `index.html` to compare overviews and first-person views side by side. Village and Fort Vaux also include four inspection views each. New maps receive screenshots of the proposed build until a base revision contains the map. These opening scenes are for review and do not gate publishing or merges. A viewpoint that only one revision has is shown alone, labelled as new or removed; the base build is simply not asked for viewpoints it predates. Trench front's close-ups (boundary wire, trench block, dugout, signboard, no-man's land, firing step) are captured before the battle, so they are compared too.
 
+## Map picker previews
+
+The map picker's card images in `public/previews/` are frames from the game, not illustrations. Regenerate them after a visible change to a map:
+
+```sh
+npx vite build --base /sector-control/
+node tools/map-previews.mjs dist public/previews
+```
+
+Each map opens at `quality=high` with the fixed opening seed, runs a short battle and is captured in third person with the HUD hidden, at 1280×720 downscaled to a 640×360 JPEG. Name maps after the output folder to render only those, for example `node tools/map-previews.mjs dist public/previews verdun village`. The per-map camera and timing live in `previewShots` at the top of the script. It runs under SwiftShader, which is slow (about a minute a map); `CHROME_PATH` can point at a Chrome with a GPU.
+
 ## Nightly and on-demand audits
 
 **Battlefield audits** runs on `main` nightly at 08:23 UTC. Use **Run workflow** in Actions for an on-demand run. The `audit-ai`, `audit-maps` and `audit-performance` artifacts contain JSON reports and any failure logs. They cover squad behavior and reactions, objective routes and structural collapse, and CPU timings for simulated battles, terrain updates and scenery rebuilds. The audit groups are independent of the PR gate, and their reported timings are diagnostic without a timing threshold. Run a group locally after `npm ci` with `node tools/run-battlefield-audits.mjs ai`, `maps` or `performance` as the last argument.
