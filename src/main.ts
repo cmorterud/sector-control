@@ -544,9 +544,8 @@ function handle(e: Event) {
     artilleryNoticeUntil = performance.now() + 3000;
     sound(520, 0.25, 0.06);
   }
-  // Soft pops rather than blasts; close by, someone shouts it.
+  // The shells pop in battle audio; close by, someone shouts it.
   if (e.type === "gasStrike" && e.phase === "land" && game.players[0].hp > 0 && dist(game.players[0], e.at) < 40) {
-    sound(140, 0.25, 0.05);
     if (dist(game.players[0], e.at) < 25) { callout = "GAS! GAS!"; calloutUntil = performance.now() + 2500; gasAudio.gong(0.5); }
   }
   if (
@@ -1004,6 +1003,8 @@ function combatReview(stage:string) {
       source.yaw=Math.atan2(dx,-dz)-source.recoilYaw;
       source.pitch=Math.atan2(target.y+1.1-source.y-eyeHeightOf(source),Math.hypot(dx,dz))-source.recoilPitch;
       if(source.id===0){yaw=source.yaw;pitch=source.pitch;}
+      // Sights up, so the review round is aimed rather than spread from the hip.
+      source.aimMotion={tick:-1e9,from:1,to:1,duration:6};
       const hp=target.hp;game.events=[];game.fire(source);for(const e of game.events)handle(e);advanceReview(2);
       if(target.hp>=hp)throw Error("Combat review round did not hit its target");
     }
@@ -1177,11 +1178,12 @@ try {
     },
     // Gas shells: skip ahead and stand the player at a point looking at
     // another, masked or not, optionally beside a gas shell cloud.
-    gas:(tick:number,x:number,z:number,tx:number,tz:number,mask:boolean,firstPerson=true,cloud?:{x:number;z:number})=>{
+    // With cloud.shells, the cloud is still a second out and arrives by shell.
+    gas:(tick:number,x:number,z:number,tx:number,tz:number,mask:boolean,firstPerson=true,cloud?:{x:number;z:number;shells?:boolean})=>{
       reviewManual=true;game.tick=Math.max(game.tick,Math.round(tick));const p=game.players[0];
       game.respawn(p);Object.assign(p,{x,z,y:groundHeight(x,z,game.map),yaw:Math.atan2(tx-x,-(tz-z)),pitch:-.04,protectedUntil:Infinity,vx:0,vz:0});
       p.gasMask=mask?{worn:true,since:game.tick-60,from:1}:null;
-      if(cloud)game.gas.clouds.push({id:++game.gas.sequence,team:"red",actor:game.teamSize,...cloud,heading:Math.PI/2,landAt:game.tick-120,endsAt:game.tick+630});
+      if(cloud)game.gas.clouds.push({id:++game.gas.sequence,team:"red",actor:game.teamSize,x:cloud.x,z:cloud.z,heading:Math.PI/2,...(cloud.shells?{landAt:game.tick+30,endsAt:game.tick+780,launched:0,bursts:[]}:{landAt:game.tick-120,endsAt:game.tick+630})});
       yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
       renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
       return {tick:game.tick,hp:p.hp,masked:masked(p,game.tick)};

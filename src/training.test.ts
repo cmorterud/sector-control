@@ -15,7 +15,8 @@ function exercise(index=0,session=new TrainingSession()){
   const step=(input:Partial<Command>={},ticks=1)=>{for(let n=0;n<ticks;n++){const c={...idle(),firstPerson:true,...input};g.step(c);session.observe(g,c);}};
   const fireAt=(id=4)=>{
     const p=g.players[0],q=g.players[id],yaw=Math.atan2(q.x-p.x,-(q.z-p.z));
-    step({yaw,aim:true,fire:true});step({yaw,aim:true},24);
+    // Raise the sights first: a round fired on the way up leaves from the hip.
+    step({yaw,aim:true},8);step({yaw,aim:true,fire:true});step({yaw,aim:true},24);
   };
   return {g,session,step,fireAt,p:g.players[0],done:session.progress[index]};
 }

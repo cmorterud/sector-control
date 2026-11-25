@@ -78,6 +78,8 @@ export interface FireMission {
 }
 export interface ArtilleryShell extends V3 {
   ambient?: boolean;
+  // A gas shell: the cloud it bursts into instead of exploding.
+  gas?: number;
   boundary?: boolean;
   id: number;
   mission: number;
@@ -148,7 +150,7 @@ function ambientGap(state: ArtilleryState["ambient"]): number {
     )
   );
 }
-function launchShell(
+export function launchShell(
   g: Game,
   target: Vec,
   mission: number,
@@ -156,6 +158,7 @@ function launchShell(
   team: Team,
   ambient = false,
   boundary = false,
+  gas?: number,
 ) {
   const side = team === "blue" ? -1 : 1;
   const floor = groundHeight(target.x, target.z, g.map);
@@ -170,6 +173,7 @@ function launchShell(
     team,
     ...(ambient ? { ambient: true } : {}),
     ...(boundary ? { boundary: true } : {}),
+    ...(gas !== undefined ? { gas } : {}),
     x: target.x + side * shellApproach,
     y: surface + shellHeight,
     z: target.z,
@@ -431,6 +435,12 @@ export function advanceArtillery(g: Game) {
       g.tick - shell.bornAt >= 90
     ) {
       const at = { x: shell.x, y: shell.y + 0.025, z: shell.z };
+      if (shell.gas !== undefined) {
+        // A small bursting charge cracks the case open: no blast, a jet of gas.
+        g.gas.clouds.find((c) => c.id === shell.gas)?.bursts?.push({ x: at.x, y: at.y, z: at.z, tick: g.tick });
+        g.emit({ type: "gasShellImpact", actor: shell.actor, cloud: shell.gas, shell: shell.id, at });
+        continue;
+      }
       const profile = shell.boundary
         ? boundaryArtilleryExplosionProfile
         : shell.ambient

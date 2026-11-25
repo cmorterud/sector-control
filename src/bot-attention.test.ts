@@ -4,6 +4,9 @@ import { industrialMap } from "./map";
 import { trenchMap } from "./trench-map";
 import { PlaytestLog } from "./playtest";
 
+// botCommand is called here without stepping the match, so the sights are
+// already up: bots hold fire until they are (src/hip-fire.ts).
+const raiseSights = (p: { aimMotion?: unknown }) => { p.aimMotion = { tick: 0, from: 1, to: 1, duration: 6 }; };
 function scene() {
   const g = new Game(
     { ray: () => 1, move: (p) => ({ x: p.x, z: p.z }) },
@@ -17,6 +20,7 @@ function scene() {
   Object.assign(target, { x: 0, y: 0, z: 0, hp: 1000000, protectedUntil: 0 });
   Object.assign(p, { x: 20, y: 0, z: 0, nextThink: 1e9, protectedUntil: 0 });
   g.botSettings.awareness = false; // isolate attention timers from the separate perception model.
+  raiseSights(p);
   return { g, p, target };
 }
 
@@ -146,6 +150,7 @@ describe("bot attention", () => {
     expect(p.distractedUntil).toBe(0);
     expect(p.target).toBe(-1);
     Object.assign(p, { x: 20, z: 0, y: 0, nextThink: 1e9 });
+    raiseSights(p);
     Object.assign(g.botSettings, {
       reactionTicks: 0,
       focusMaxTicks: 0,

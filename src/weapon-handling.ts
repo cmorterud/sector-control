@@ -33,7 +33,7 @@ export function aimBlend(p:Pick<Soldier,"aimMotion"|"command">,tick:number) {
  return m?m.from+(m.to-m.from)*smooth((tick-m.tick)/m.duration):(p.command.aim?1:0);
 }
 export function updateAimMotion(p:Soldier,tick:number) {
- const target=p.command.aim && !p.reloadAt && !p.mantle && !p.melee && tick>=p.throwUntil && !switchPose(p,tick).active?1:0;
+ const target=p.command.aim && !p.gasMask?.worn && !p.reloadAt && !p.mantle && !p.melee && tick>=p.throwUntil && !switchPose(p,tick).active?1:0;
  if(!p.aimMotion || p.aimMotion.to!==target){
   const current=p.aimMotion?aimBlend(p,tick):0;
   p.aimMotion={tick,from:current,to:target,duration:target && p.loadout==="marksman" && p.weapon==="serviceRifle"?15:6};

@@ -5,7 +5,7 @@
 // enemy; a mask cuts it to a slow burn. Everything here is plain state
 // advanced by the fixed-tick simulation.
 import { artillerySector } from "./artillery-sectors";
-import { artilleryRules, artilleryTargetReason, teamHasHuman } from "./artillery";
+import { artilleryRules, artilleryTargetReason, launchShell, teamHasHuman } from "./artillery";
 import { sightLimit } from "./night";
 import { blocked, dist, playArea, walkSegment, type Vec } from "./map";
 import { idle, pathfind, safeBotDestination, type Command, type Game, type Soldier, type Team } from "./simulation";
@@ -46,6 +46,13 @@ export const gasStrikeRules = {
   // No gas shells onto either team's deployment.
   deployClearance: 24,
   edgeMargin: 6,
+  // Shells per strike, landing over this many ticks from the first, within
+  // this distance of the aim point. The cloud starts with the first.
+  shells: 4,
+  shellSpread: [0, 7, 14, 22],
+  shellScatter: 3.5,
+  // How long a shell's own jet of gas stays visible as it bursts.
+  burstTicks: 3 * 30,
   // A bot caller chooses gas over high explosive only for a knot of at least
   // this many enemies, clear of its own soldiers.
   botCluster: 3,
@@ -60,6 +67,10 @@ export interface GasCloud {
   heading: number;
   landAt: number;
   endsAt: number;
+  // Shells fired so far, and where each burst. A cloud made without shells
+  // (a test or a review scene) leaves these out.
+  launched?: number;
+  bursts?: (Vec & { y: number; tick: number })[];
 }
 export interface GasState {
   clouds: GasCloud[];
@@ -71,6 +82,7 @@ export interface GasMask { worn: boolean; since: number; from: number }
 export interface GasEscape { destination: Vec; since: number }
 export type GasEvent =
   | { type: "gasMask"; actor: number; worn: boolean }
+  | { type: "gasShellImpact"; actor: number; cloud: number; shell: number; at: { x: number; y: number; z: number } }
   | { type: "gasStrike"; phase: "call" | "land" | "end"; cloud: number; actor: number; team: Team; at: Vec; landAt: number; endsAt: number };
 
 export const createGasState = (): GasState => ({ clouds: [], sequence: 0 });
@@ -156,6 +168,8 @@ export function requestGasStrike(g: Game, p: Soldier, target: Vec & { area?: boo
     heading: (gas.sequence % 2 ? 1 : -1) * Math.PI / 2 + 0.3 * Math.sin(gas.sequence * 1.7),
     landAt: g.tick + gasStrikeRules.flightTicks,
     endsAt: g.tick + gasStrikeRules.flightTicks + gasStrikeRules.lifetime,
+    launched: 0,
+    bursts: [],
   };
   gas.clouds.push(cloud);
   // Gas instead of high explosive: the battery reloads either way.
@@ -163,6 +177,13 @@ export function requestGasStrike(g: Game, p: Soldier, target: Vec & { area?: boo
   p.protectedUntil = 0;
   g.emit({ type: "gasStrike", phase: "call", cloud: cloud.id, actor: p.id, team: p.team, at: { x: cloud.x, z: cloud.z }, landAt: cloud.landAt, endsAt: cloud.endsAt });
   return true;
+}
+// Where each shell of a strike falls: scattered about the aim point, the
+// same way every time for a given strike so a replay matches.
+export function gasShellTarget(cloud: Pick<GasCloud, "id" | "x" | "z">, index: number): Vec {
+  const a = (cloud.id * 2.39996 + index * 1.9) % (Math.PI * 2);
+  const r = gasStrikeRules.shellScatter * (index ? 0.45 + 0.55 * ((index * 0.618 + cloud.id * 0.37) % 1) : 0.25);
+  return { x: cloud.x + Math.cos(a) * r, z: cloud.z + Math.sin(a) * r };
 }
 // A bot team's caller picks gas over high explosive only for a tight knot of
 // enemies 30 to 70 m away, clear of its own soldiers; otherwise it leaves the
@@ -193,6 +214,13 @@ export function advanceGas(g: Game, damage: Damage) {
     if (!g.humanPlayerIds.includes(p.id)) botMask(g, p);
   }
   for (const cloud of gas.clouds) {
+    // The battery fires so the first shell lands as the cloud starts.
+    while (cloud.launched !== undefined && cloud.launched < gasStrikeRules.shells &&
+      g.tick >= cloud.landAt - artilleryRules.flightTicks + gasStrikeRules.shellSpread[cloud.launched]) {
+      launchShell(g, gasShellTarget(cloud, cloud.launched), -cloud.id, cloud.actor, cloud.team, false, false, cloud.id);
+      cloud.launched++;
+    }
+    if (cloud.bursts?.length) cloud.bursts = cloud.bursts.filter((b) => g.tick - b.tick < gasStrikeRules.burstTicks);
     if (g.tick === cloud.landAt)
       g.emit({ type: "gasStrike", phase: "land", cloud: cloud.id, actor: cloud.actor, team: cloud.team, at: cloudPosition(cloud, g.tick), landAt: cloud.landAt, endsAt: cloud.endsAt });
   }

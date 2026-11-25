@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { raiseSights } from "./test-sights";
 import {
   Game,
   TestCollision,
@@ -152,6 +153,7 @@ describe("concealing smoke", () => {
     g.botSettings.reactionTicks = 18;
     g.botSettings.reactionJitterTicks = 6;
     enemy(g);
+    raiseSights(p);
     g.tick = 12;
     expect(botCommand(g, p).fire).toBe(false);
     g.tick = 24;

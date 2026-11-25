@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Game, idle, botCommand, type Event } from "./simulation";
 import { weaponAim, recoilRules } from "./recoil";
 import { industrialMap } from "./map";
+import { raiseSights } from "./test-sights";
 type Shot = Extract<Event, { type: "fire" }>;
 function scene(bots = false) {
   const g = new Game(
@@ -35,16 +36,19 @@ describe("rifle recoil", () => {
     const g = scene(),
       p = g.players[0];
     const shots: Shot[] = [];
+    // From the shoulder, so the rounds follow the recoil alone, not hip spread.
+    for (let i = 0; i < 10; i++) g.step({ ...idle(), aim: true });
     for (let i = 0; i < 54; i++) {
-      g.step({ ...idle(), fire: i % 6 === 0 });
+      g.step({ ...idle(), aim: true, fire: i % 6 === 0 });
       for (const e of g.events) if (e.type === "fire") shots.push(e);
       expect(p.pitch).toBe(0);
       expect(p.yaw).toBe(0);
     }
     expect(shots).toHaveLength(9);
     expect(shots[0].recoil).toEqual({ pitch: 0, yaw: 0 });
+    // Aiming braces the kick to 0.8 (src/recoil.ts).
     expect(shots[1].recoil.pitch).toBeCloseTo(
-      recoilRules.pitchKick * Math.exp((-recoilRules.recovery * 6) / 30),
+      0.8 * recoilRules.pitchKick * Math.exp((-recoilRules.recovery * 6) / 30),
     );
     expect(shots.at(-1)!.recoil.pitch).toBeGreaterThan(shots[1].recoil.pitch);
     expect(shots.slice(1).some((e) => Math.abs(e.recoil.yaw) > 0.0001)).toBe(
@@ -60,6 +64,7 @@ describe("rifle recoil", () => {
   it("lets downward and sideways aim compensate without erasing the recoil state", () => {
     const g = scene(),
       p = g.players[0];
+    raiseSights(p);
     g.fire(p);
     const initial = g.events.find((e) => e.type === "fire")!;
     expect(p.recoilPitch).toBeGreaterThan(0);

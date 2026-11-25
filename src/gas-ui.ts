@@ -2,7 +2,7 @@
 // minimap and tactical map, the mask's lens, the haze of standing in gas, and
 // the alarm gong and breathing. Plain DOM and Web Audio only.
 import "./gas.css";
-import { cloudDensity, cloudPosition, cloudRadius, cloudExposure, maskProgress, masked } from "./gas";
+import { cloudDensity, cloudPosition, cloudRadius, cloudExposure, gasRules, maskProgress, masked } from "./gas";
 import { playArea } from "./map";
 import type { Game, Soldier } from "./simulation";
 
@@ -56,14 +56,57 @@ export class GasOverlay {
 // The mask's eyepieces in first person, and the yellow haze of standing in
 // gas. Both are screen overlays, so the gas billboards can stay out of the
 // camera's way instead of washing out the view.
+//
+// The view is a period small box respirator from inside: two round glass
+// eyepieces in pressed metal rims, set apart by the bridge of the nose in a
+// dark rubberised facepiece. The eyepieces stay round on any screen shape
+// (the drawing is cropped, never stretched). Putting it on, the facepiece
+// comes up from under the chin, tilted, and settles; the glass mists over as
+// it seals and then with each breath out.
+const eyepiece = (cx: number) => `
+  <circle cx="${cx}" cy="44" r="25" fill="url(#gas-glass)"/>
+  <circle cx="${cx}" cy="44" r="25" fill="url(#gas-glass-edge)"/>
+  <circle class="gas-fog-seal" cx="${cx}" cy="44" r="25" fill="url(#gas-fog)"/>
+  <circle class="gas-fog-breath" cx="${cx}" cy="44" r="25" fill="url(#gas-fog)"/>
+  <path d="M${cx - 17} ${44 - 13} A21 21 0 0 1 ${cx + 2} ${44 - 21}" fill="none" stroke="#f4f6e6" stroke-opacity=".16" stroke-width="2.2" stroke-linecap="round" filter="url(#gas-soft)"/>
+  <path d="M${cx + 14} ${44 + 15} A20 20 0 0 0 ${cx + 20} ${44 + 6}" fill="none" stroke="#f4f6e6" stroke-opacity=".08" stroke-width="1.4" stroke-linecap="round" filter="url(#gas-soft)"/>
+  <path d="M${cx - 9} ${44 + 9} l7 -3 M${cx + 6} ${44 - 15} l4 2.5" stroke="#e8ead8" stroke-opacity=".07" stroke-width=".3"/>
+  <g filter="url(#gas-soft)">
+    <circle cx="${cx}" cy="44" r="23.6" fill="none" stroke="#090806" stroke-width="1.6"/>
+    <circle cx="${cx}" cy="44" r="25.9" fill="none" stroke="url(#gas-rim)" stroke-width="3.4"/>
+    <circle cx="${cx}" cy="44" r="27.8" fill="none" stroke="#0c0b08" stroke-opacity=".8" stroke-width="1"/>
+  </g>`;
+const maskDrawing = `<svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><defs>
+  <mask id="gas-eyepieces"><rect x="-80" y="-1" width="320" height="131" fill="#fff"/><circle cx="50" cy="44" r="25" fill="#000"/><circle cx="110" cy="44" r="25" fill="#000"/></mask>
+  <filter id="gas-soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation=".45"/></filter>
+  <filter id="gas-weave" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .16  0 0 0 0 .15  0 0 0 0 .1  0 0 0 .22 0"/><feGaussianBlur stdDeviation=".25"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+  <radialGradient id="gas-face" cx="50%" cy="48%" r="62%"><stop offset=".3" stop-color="#26241a"/><stop offset=".75" stop-color="#121109"/><stop offset="1" stop-color="#050504"/></radialGradient>
+  <radialGradient id="gas-bridge" cx="50%" cy="30%" r="50%"><stop offset="0" stop-color="#3b3828" stop-opacity=".7"/><stop offset="1" stop-color="#3b3828" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gas-nose" cx="50%" cy="100%" r="60%"><stop offset="0" stop-color="#000" stop-opacity=".7"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  <linearGradient id="gas-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a8266"/><stop offset=".35" stop-color="#4c4632"/><stop offset=".6" stop-color="#25221a"/><stop offset="1" stop-color="#5e5741"/></linearGradient>
+  <radialGradient id="gas-glass"><stop offset="0" stop-color="#b9c08e" stop-opacity=".05"/><stop offset="1" stop-color="#b9c08e" stop-opacity=".1"/></radialGradient>
+  <radialGradient id="gas-glass-edge"><stop offset=".72" stop-color="#0e0f0a" stop-opacity="0"/><stop offset="1" stop-color="#0e0f0a" stop-opacity=".55"/></radialGradient>
+  <radialGradient id="gas-fog" cx="50%" cy="95%" r="85%"><stop offset="0" stop-color="#e9ecdf" stop-opacity=".75"/><stop offset=".55" stop-color="#e2e6d6" stop-opacity=".4"/><stop offset="1" stop-color="#dde2d0" stop-opacity="0"/></radialGradient>
+  <linearGradient id="gas-chin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".65"/></linearGradient>
+</defs>
+<g mask="url(#gas-eyepieces)">
+  <rect x="-80" y="-1" width="320" height="131" fill="url(#gas-face)"/>
+  <rect x="-80" y="-1" width="320" height="131" fill="#000" filter="url(#gas-weave)"/>
+  <ellipse cx="80" cy="40" rx="9" ry="22" fill="url(#gas-bridge)"/>
+  <ellipse cx="80" cy="92" rx="26" ry="24" fill="url(#gas-nose)"/>
+  <rect x="-80" y="64" width="320" height="66" fill="url(#gas-chin)"/>
+</g>
+${eyepiece(50)}${eyepiece(110)}
+</svg>`;
+
+const smooth = (v: number) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
 export class GasScreen {
   private lens = document.createElement("div");
   private haze = document.createElement("div");
   constructor(parent: HTMLElement) {
     this.lens.className = "gas-lens";
     this.lens.setAttribute("aria-hidden", "true");
-    // Two eyepieces cut out of the facepiece; the mask makes the holes a union.
-    this.lens.innerHTML = `<svg viewBox="0 0 160 90" preserveAspectRatio="none"><defs><mask id="gas-eyepieces"><rect width="160" height="90" fill="#fff"/><ellipse cx="56" cy="43" rx="33" ry="33" fill="#000"/><ellipse cx="104" cy="43" rx="33" ry="33" fill="#000"/></mask><radialGradient id="gas-glass" cx="50%" cy="85%" r="60%"><stop offset="0" stop-color="#e8f0dc" stop-opacity=".09"/><stop offset="1" stop-color="#e8f0dc" stop-opacity="0"/></radialGradient></defs><rect width="160" height="90" fill="#16180f" mask="url(#gas-eyepieces)"/><ellipse cx="56" cy="43" rx="33" ry="33" fill="url(#gas-glass)" stroke="#2f3324" stroke-width="2.4"/><ellipse cx="104" cy="43" rx="33" ry="33" fill="url(#gas-glass)" stroke="#2f3324" stroke-width="2.4"/></svg>`;
+    this.lens.innerHTML = maskDrawing;
     this.haze.className = "gas-haze";
     this.haze.setAttribute("aria-hidden", "true");
     // First in the HUD, so health, ammo and notices draw over them.
@@ -73,9 +116,17 @@ export class GasScreen {
     const live = !!g && !!p && p.hp > 0 && visible;
     const progress = live ? maskProgress(p!, g!.tick) : 0;
     const lens = firstPerson ? progress : 0;
-    this.lens.style.opacity = lens > 0 ? String(Math.min(1, lens * 1.4)) : "0";
-    // The facepiece comes up from below as it goes on.
-    this.lens.style.transform = `translateY(${(1 - lens) * 35}%)`;
+    const style = this.lens.style;
+    style.opacity = lens > 0 ? "1" : "0";
+    // Up from under the chin, tilted and too close, then settled square on the face.
+    const e = smooth(lens);
+    style.transform = lens > 0 ? `translateY(${(1 - e) * 115}%) rotate(${(1 - e) * -7}deg) scale(${1 + (1 - e) * 0.25})` : "";
+    // The glass mists as the seal closes, clears over a second and a half,
+    // then fogs a little with each breath out.
+    const m = p?.gasMask, sealed = live && firstPerson && masked(p!, g!.tick);
+    const sinceSeal = sealed && m ? (g!.tick - m.since - (1 - m.from) * gasRules.donTicks) / 30 : Infinity;
+    style.setProperty("--gas-seal-fog", sealed ? (0.15 + 0.6 * Math.exp(-sinceSeal / 0.7)).toFixed(3) : "0");
+    this.lens.classList.toggle("sealed", sealed);
     let haze = 0;
     if (live) {
       const cloud = cloudExposure(g!, p!, 2);

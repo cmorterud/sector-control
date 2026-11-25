@@ -135,7 +135,8 @@ it("applies pistol falloff on a projectile beyond the old 25 metre limit", () =>
   shooter.faction = "british";
   equipLoadout(shooter, "rifleman");
   switchWeapon(shooter, "sidearm", 0);
-  for (let i = 0; i < 10; i++) g.step(idle());
+  // Sights up before the shot, so the round is not spread from the hip.
+  for (let i = 0; i < 10; i++) g.step({ ...idle(), firstPerson: true, aim: true, pitch: -0.009 });
   g.step({ ...idle(), fire: true, firstPerson: true, aim: true, pitch: -0.009 });
   const origin = g.projectiles[0].origin!;
   expect(g.projectiles[0].remaining).toBeGreaterThan(50);

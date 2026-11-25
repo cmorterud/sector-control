@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { raiseSights } from "./test-sights";
 import { Game, TestCollision, idle } from "./simulation";
 import { trenchMap } from "./trench-map";
 import { industrialMap } from "./map";
@@ -126,6 +127,7 @@ it("emits rapid four-to-six-round bursts separated by long pauses, with suppress
     p = g.players[0];
   p.weapon = "machineGun";
   p.ammo = 60;
+  raiseSights(p);
   const shots: number[] = [];
   for (g.tick = 0; g.tick < 300; g.tick++) {
     if (semiAutoIntent(g, p)) shots.push(g.tick);
