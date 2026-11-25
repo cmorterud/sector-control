@@ -1,9 +1,11 @@
 import { artillerySector, artillerySectors } from "./artillery-sectors";
 import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import { flareRules, flareTargetReason } from "./flares";
+import { gasStrikeReason, gasStrikeRules } from "./gas";
 
-// What a click on the map asks for. Flares exist only on night maps.
-export type MapCall = "shell" | "flare";
+// What a click on the map asks for. Flares exist only on night maps; gas
+// shells are an alternate artillery strike wherever artillery is offered.
+export type MapCall = "shell" | "flare" | "gas";
 export const mapCallKey = "KeyF";
 import type { Game } from "./simulation";
 import { playArea, type Vec } from "./map";
@@ -29,6 +31,8 @@ export class ArtilleryMap {
   private modeButton = document.createElement("button");
   private buttons: HTMLButtonElement[] = [];
   private flagMarkers: { id: string; dot: Element }[] = [];
+  // Drawn over the map after each update, such as the gas front.
+  decorate?: (grid: HTMLElement) => void;
   constructor(
     private game: () => Game,
     private call: (target: Vec & { area: true }, kind: MapCall) => void,
@@ -60,22 +64,29 @@ export class ArtilleryMap {
       (document.activeElement as HTMLElement).blur();
     this.panel.classList.add("hidden");
   }
-  // Night maps: switch the map between a fire mission and a flare.
+  private modes(): MapCall[] {
+    const g = this.game();
+    return ["shell", ...(g.map.night ? ["flare" as const] : []), ...(g.map.artillery !== false ? ["gas" as const] : [])];
+  }
+  // Step the map through what it can call: shells, gas shells, and flares at night.
   toggleMode() {
-    if (!this.open || !this.game().map.night) return;
-    this.mode = this.mode === "shell" ? "flare" : "shell";
+    const modes = this.modes();
+    if (!this.open || modes.length < 2) return;
+    this.mode = modes[(modes.indexOf(this.mode) + 1) % modes.length];
     this.describe();
     this.update();
   }
   private describe() {
-    const g = this.game(), artillery = g.map.artillery !== false, flare = this.mode === "flare";
-    this.heading.textContent = !artillery ? "FORT VAUX · FLOOR PLAN" : flare ? "FLARE · CHOOSE A SECTOR" : "ARTILLERY · CHOOSE A SECTOR";
+    const g = this.game(), artillery = g.map.artillery !== false, flare = this.mode === "flare", gas = this.mode === "gas";
+    this.heading.textContent = !artillery ? "FORT VAUX · FLOOR PLAN" : flare ? "FLARE · CHOOSE A SECTOR" : gas ? "GAS SHELLS · CHOOSE A SECTOR" : "ARTILLERY · CHOOSE A SECTOR";
     this.intro.textContent = !artillery ? "Barracks, cistern and east casemate. Battle continues."
       : flare ? `Lights about ${flareRules.radius} m of ground for ${flareRules.burnTicks / 30} seconds. Its own cooldown. Battle continues.`
+      : gas ? `A low cloud about ${gasStrikeRules.radius * 2} m across for ${gasStrikeRules.lifetime / 30} seconds, drifting slowly along the front. It harms anyone unmasked, your own side too. Uses the artillery cooldown. Battle continues.`
       : "Broad coordinates, imperfect fire. Battle continues.";
-    this.modeButton.hidden = !g.map.night;
-    this.modeButton.textContent = flare ? "F · SWITCH TO ARTILLERY" : "F · SWITCH TO FLARE";
-    this.modeButton.setAttribute("aria-pressed", String(flare));
+    const modes = this.modes(), next = modes[(modes.indexOf(this.mode) + 1) % modes.length];
+    this.modeButton.hidden = modes.length < 2;
+    this.modeButton.textContent = `F · SWITCH TO ${next === "flare" ? "FLARE" : next === "gas" ? "GAS SHELLS" : "ARTILLERY"}`;
+    this.modeButton.setAttribute("aria-pressed", String(this.mode !== "shell"));
   }
   toggle() {
     if (this.open) {
@@ -87,7 +98,7 @@ export class ArtilleryMap {
     if (p.hp <= 0) return;
     const artillery = this.targeting = g.map.artillery !== false;
     this.panel.setAttribute("aria-label", artillery ? "Artillery tactical map" : "Fort floor plan");
-    if (!g.map.night) this.mode = "shell";
+    if (!this.modes().includes(this.mode)) this.mode = "shell";
     this.describe();
     this.status.hidden = !artillery;
     this.setShortcut(this.shortcut);
@@ -193,7 +204,8 @@ export class ArtilleryMap {
   }
   private reason(target: Vec & { area: true }) {
     const g = this.game();
-    return this.mode === "flare" ? flareTargetReason(g, g.players[0], target) : artilleryTargetReason(g, g.players[0], target);
+    return this.mode === "flare" ? flareTargetReason(g, g.players[0], target)
+      : this.mode === "gas" ? gasStrikeReason(g, g.players[0], target) : artilleryTargetReason(g, g.players[0], target);
   }
   private selected() {
     const g = this.game();
@@ -223,10 +235,10 @@ export class ArtilleryMap {
         // Keep unavailable cells in the mouse event path so right-click cancel
         // and cursor tracking work even over a dimmed sector.
         b.setAttribute("aria-disabled", String(!!reason));
-        b.title = reason ?? (this.mode === "flare" ? "Send a flare over this sector" : "Request broad sector");
+        b.title = reason ?? (this.mode === "flare" ? "Send a flare over this sector" : this.mode === "gas" ? "Fire gas shells into this sector" : "Request broad sector");
         b.classList.toggle("selected", sectors[i].name === selected.name);
       });
-      const flare = this.mode === "flare", reason = this.reason({ ...selected, area: true });
+      const flare = this.mode === "flare", gas = this.mode === "gas", reason = this.reason({ ...selected, area: true });
       const ready = Math.max(
         0,
         Math.ceil(((flare ? g.flares.readyAt[p.team] : g.artillery.readyAt[p.team]) - g.tick) / 30),
@@ -234,6 +246,7 @@ export class ArtilleryMap {
       const error = artilleryUncertainty(g, p, selected);
       this.status.textContent = flare
         ? `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO SEND A FLARE"} · light in ${flareRules.flightTicks / 30}s`
+        : gas ? `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO FIRE GAS SHELLS"} · cloud in ${gasStrikeRules.flightTicks / 30}s`
         : `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO REQUEST"} · ${error === 10 ? "BLIND" : "OBSERVED"} ±${error}m drift + shell scatter`;
       this.marker.style.left = `${this.cursor.x * 100}%`;
       this.marker.style.top = `${this.cursor.z * 100}%`;
@@ -257,5 +270,6 @@ export class ArtilleryMap {
               : "#d0c7a3",
       );
     }
+    this.decorate?.(this.grid);
   }
 }

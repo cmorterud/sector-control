@@ -876,3 +876,50 @@ a.armory-link:hover { background: #3f5856; }
 }
 /* The bayonet-charge prompt (src/charge.ts) stands out from flag and ledge prompts. */
 #capture .charge-prompt { color: #f4ce86; font-size: 12px; font-weight: 700; }
+/* Final-phase reinforcements: the pools under the score and a phase banner. */
+.reinforcement-hint { margin-top: 6px; font-size: 9px; color: #c7c8b9; }
+.reinforcement-tally {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  padding: 4px 14px;
+  background: #192525cf;
+  border-bottom: 2px solid #dfcb8e;
+}
+.reinforcement-tally b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.reinforcement-tally b.low { animation: blink 0.7s infinite alternate; }
+.reinforcement-tally small { font-size: 9px; color: #f3ead0; }
+.reinforcement-notice {
+  position: absolute;
+  z-index: 9;
+  top: 32%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 70vw;
+  padding: 8px 16px;
+  background: #142323e8;
+  border-bottom: 2px solid #dfcb8e;
+  color: #f3ead0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-align: center;
+}
+.reinforcement-notice.urgent { background: #3b1511e8; border-color: #e2725d; color: #ffe6dc; }
+.reinforcement-notice:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { .reinforcement-tally b.low { animation: none; } }
+.spectate-label {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  background: #142323e5;
+  border-bottom: 2px solid #69c5ef;
+  color: #f3ead0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .08em;
+}
+.spectate-label:empty { display: none; }

@@ -28,6 +28,7 @@ import { flagContains } from "./domination";
 import { Renderer } from "./rendering";
 import {
   Game,
+  TestCollision,
   idle,
   botCommand,
   resolveTeamSize,
@@ -55,6 +56,11 @@ import { trenchMap } from "./trench-map";
 import { nightRaidMap } from "./night-map";
 import { lightAt } from "./night";
 import { flareRules } from "./flares";
+import { masked } from "./gas";
+import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
+import { reinforcementsLeft } from "./reinforcements";
+import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
+import { soldierName } from "./soldier-names";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -70,7 +76,22 @@ killNotice.setAttribute("role", "status");
 const boundaryNotice = document.createElement("div");
 boundaryNotice.className = "boundary-warning";
 boundaryNotice.setAttribute("role", "alert");
-el("hud").append(battleSidebar, killNotice, boundaryNotice);
+const reinforcementNotice = document.createElement("div");
+reinforcementNotice.className = "reinforcement-notice";
+reinforcementNotice.setAttribute("role", "status");
+const reinforcementTallyBox = document.createElement("section");
+const spectateLabel = document.createElement("div");
+spectateLabel.className = "spectate-label";
+spectateLabel.setAttribute("role", "status");
+let spectateNext = false;
+const gasWarning = document.createElement("div");
+gasWarning.className = "gas-warning";
+gasWarning.setAttribute("role", "status");
+el("hud").append(battleSidebar, killNotice, boundaryNotice, reinforcementNotice, spectateLabel, gasWarning);
+const gasScreen = new GasScreen(el("hud")), minimapGas = new GasOverlay(), tacticalGas = new GasOverlay();
+const gasAudio = new GasAudio(() => audio);
+root.querySelector(".match")!.append(reinforcementTallyBox);
+const reinforcementNotices = new ReinforcementNotices(), teamName = (team: "blue" | "red") => factions[factionFor(map, team)].name;
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
 let displayedScoreboard = "";
@@ -143,11 +164,13 @@ let difficulty: Difficulty = (difficulties as string[]).includes(new URLSearchPa
   : (difficulties as string[]).includes(storedDifficulty ?? "") ? storedDifficulty as Difficulty : "regular";
 // Short text callouts from nearby friendly soldiers and enemy grenade warnings.
 let callout = "", calloutUntil = 0;
-let pendingArtillery: Command["artillery"], pendingFlare: Command["flare"];
+let pendingArtillery: Command["artillery"], pendingFlare: Command["flare"], pendingGas: Command["gasStrike"];
+let pendingMask = false;
 const tacticalMap = new ArtilleryMap(
   () => game,
   (target, kind) => {
     if (kind === "flare") pendingFlare = target;
+    else if (kind === "gas") pendingGas = target;
     else pendingArtillery = target;
   },
   ()=>training?.station.target,
@@ -161,6 +184,7 @@ let audioVolume = 0.65;
 let cameraReactions = true;
 let recording: PlaytestRecorder | undefined;
 let rawFrameMs = 0;
+tacticalMap.decorate = (grid) => tacticalGas.update(game, grid);
 const params = new URLSearchParams(location.search),
   bots = params.get("bots") !== "0",
   autoplay = params.has("autoplay"),
@@ -235,7 +259,8 @@ function clear() {
   smoke = false;
   melee = false;
   whistle = false;
-  pendingArtillery = undefined;
+  pendingArtillery = pendingGas = undefined;
+  pendingMask = false;
   pendingEquip = undefined;
   kitCommand = undefined;
   placingGun = pendingInteract = false;
@@ -360,6 +385,7 @@ function start() {
   renderer.reset(game);
   battlefield.reset(game);
   combatFeedback.reset();
+  reinforcementNotices.reset();
   displayedScoreboard = "";
   el("scoreboard").replaceChildren();
   audio ??= new BattleAudio();
@@ -398,11 +424,11 @@ function pause() {
   if (!started || game.phase !== "playing") return;
   menu(
     "Operation paused",
-    training?"Resume your exercise, change gear, resupply or choose another station below.":"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.",
+    training?"Resume your exercise, change gear, resupply or choose another station below.":reinforcementsLeft(game,game.players[0].team)?"Press Escape or click Resume to continue. Redeploy ends this life and respawns you in five seconds.":"Press Escape or click Resume to continue. Your side has no reinforcements left, so there is no redeploy.",
     "Resume operation",
     () => resume(),
     `<div class="pause-actions">
-      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
+      <button class="secondary" id="redeploy" ${game.players[0].hp<=0 || !reinforcementsLeft(game,game.players[0].team) ? "disabled" : ""} title="Die now and redeploy at your team spawn in five seconds">Redeploy</button>
       <button class="secondary" id="restart">Restart match</button>
       <button class="secondary" id="select-map" aria-expanded="false" aria-controls="pause-map-picker">Select map</button>
     </div>
@@ -421,6 +447,7 @@ function pause() {
 }
 function handle(e: Event) {
   combatFeedback.event(game,e);
+  reinforcementNotices.event(game, e, performance.now(), teamName);
   if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
@@ -497,7 +524,19 @@ function handle(e: Event) {
   }
   if (e.type === "damage" && e.actor === 0) {
     damageUntil = performance.now() + 250;
-    sound(60, 0.2, 0.12);
+    // Gas burns every half second; a thud each time would drown everything.
+    if (e.kind !== "gas") sound(60, 0.2, 0.12);
+  }
+  if (e.type === "gasMask" && e.actor === 0) gasAudio.seal();
+  if (e.type === "gasStrike" && e.phase === "call" && e.actor === 0) {
+    artilleryNotice = "GAS SHELLS AWAY · CLOUD IN 3s";
+    artilleryNoticeUntil = performance.now() + 3000;
+    sound(520, 0.25, 0.06);
+  }
+  // Soft pops rather than blasts; close by, someone shouts it.
+  if (e.type === "gasStrike" && e.phase === "land" && game.players[0].hp > 0 && dist(game.players[0], e.at) < 40) {
+    sound(140, 0.25, 0.05);
+    if (dist(game.players[0], e.at) < 25) { callout = "GAS! GAS!"; calloutUntil = performance.now() + 2500; gasAudio.gong(0.5); }
   }
   if (
     e.type === "reload" &&
@@ -512,9 +551,10 @@ function handle(e: Event) {
     sound(440, 0.6);
     const result =
       e.winner === "draw" ? "Draw" : e.winner === "blue" ? "Victory" : "Defeat";
+    const reason = reinforcementEndReason(game, teamName);
     menu(
       result,
-      `Operation complete · ${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
+      `Operation complete · ${reason ? reason + " · " : ""}${game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
       "Deploy again",
       start,
       battlefieldChoices() + table(),
@@ -524,16 +564,26 @@ function handle(e: Event) {
 function table() {
   return scoreboardTable(game);
 }
+const hudTargets = {
+  combat: () => combatOverlay, training: () => trainingOverlay,
+  health: () => el("health"), ammo: () => el("ammo"), capture: () => el("capture"),
+  sectors: () => el("sectors"), labels: () => el("labels"),
+};
+const displayedHud: Partial<Record<keyof typeof hudTargets, string>> = {};
 function hud(now: number) {
+  // Build this tick's HUD markup first and touch the DOM only where it changed:
+  // rewriting unchanged innerHTML every 50 ms reparses and relayouts it.
+  const staged: Partial<Record<keyof typeof hudTargets, string>> = {};
   const p = game.players[0];
   const playing = !paused && !held("scoreboard");
   const aimingScope = p.hp > 0 && !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick);
   const clearHUD = playing && !tacticalMap.open;
   root.classList.toggle("dead",p.hp<=0);
-  combatOverlay.innerHTML=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw):"";
+  staged.combat=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw):"";
   battleSidebar.hidden = !clearHUD || aimingScope;
   if (!battleSidebar.hidden) {
     minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
+    minimapGas.update(game, el("minimap"));
     const feed = combatFeedback.killFeed(game);
     if (feed !== displayedFeed) {
       killFeed.innerHTML = displayedFeed = feed;
@@ -545,7 +595,20 @@ function hud(now: number) {
     outside = !paused && p.hp > 0 && countdown !== null && beyondPlayArea(p.x, p.z, game.map) > 0,
     boundaryText = outside ? `OUT OF BOUNDS · RETURN TO THE LINE · ${countdown ? `ARTILLERY IN ${countdown}` : "ARTILLERY INBOUND"}` : "";
   if (boundaryNotice.textContent !== boundaryText) boundaryNotice.textContent = boundaryText;
+  const gasLine = paused ? { text: "", danger: false } : gasNotice(game, p, keyLabel(settings.bindings.mask));
+  if (gasWarning.textContent !== gasLine.text) gasWarning.textContent = gasLine.text;
+  gasWarning.classList.toggle("danger", gasLine.danger);
+  gasScreen.update(game, p, preferredFirstPerson && !renderer.deathView, !paused && !tacticalMap.open);
   root.classList.toggle("out-of-bounds", outside);
+  const tally = training ? "" : reinforcementTally(game), notice = paused ? "" : reinforcementNotices.text(now);
+  if (reinforcementTallyBox.innerHTML !== tally) reinforcementTallyBox.innerHTML = tally;
+  if (reinforcementNotice.textContent !== notice) reinforcementNotice.textContent = notice;
+  reinforcementNotice.classList.toggle("urgent", reinforcementNotices.urgent(now));
+  renderer.spectating = spectateTarget(game, renderer.spectating, spectateNext);
+  spectateNext = false;
+  const watched = renderer.spectating === null ? undefined : game.players[renderer.spectating];
+  const watching = watched && !paused ? `WATCHING ${soldierName(watched, game.map)} · LMB NEXT` : "";
+  if (spectateLabel.textContent !== watching) spectateLabel.textContent = watching;
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
@@ -554,7 +617,7 @@ function hud(now: number) {
     .toString()
     .padStart(2, "0")}:${(t % 60).toString().padStart(2, "0")}`;
   if(training)el("clock").textContent="TRAINING";
-  el("sectors").innerHTML =
+  staged.sectors =
     game.scoring === "eliminations"
       ? '<span class="sector">TRENCH DUEL · ELIMINATIONS</span>'
       : (game.scoring === "domination"
@@ -568,13 +631,13 @@ function hud(now: number) {
           .join("");
   if(training){
     el("blue").textContent=String(training.completed);el("red").textContent="8";
-    el("sectors").innerHTML='<span class="mode-tag">FIELD EXERCISES<small>NO TIME LIMIT</small></span>';
-    trainingOverlay.hidden=paused;trainingOverlay.innerHTML=trainingHUD(training,game,settings);
+    staged.sectors='<span class="mode-tag">FIELD EXERCISES<small>NO TIME LIMIT</small></span>';
+    trainingOverlay.hidden=paused;staged.training=trainingHUD(training,game,settings);
   }
-  el("health").innerHTML =
+  staged.health =
     `<small>VITALS / ${factions[p.faction ?? factionFor(map,p.team)].name.toUpperCase()}</small><strong>${Math.ceil(p.hp)}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   root.classList.toggle("scoped", aimingScope);
-  el("ammo").innerHTML =
+  staged.ammo =
     `<small>${p.weaponId ?? weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : p.weapon === "machineGun" ? "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
     0,
@@ -582,9 +645,10 @@ function hud(now: number) {
   );
   const flareIn = Math.max(0, Math.ceil((game.flares.readyAt[p.team] - game.tick) / 30));
   const whistleIn = Math.ceil(whistleReadyIn(game, p.team) / 30);
-  el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.whistle)} · WHISTLE ${whistleIn ? whistleIn + "s" : "READY"}</small>`;
-  el("ammo").innerHTML += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
+  staged.ammo += `<small>${keyLabel(settings.bindings.whistle)} · WHISTLE ${whistleIn ? whistleIn + "s" : "READY"}</small>`;
+  staged.ammo += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
     ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
+  if (game.map.artillery !== false) staged.ammo += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -597,7 +661,7 @@ function hud(now: number) {
         )
       : undefined;
   if (sector)
-    el("health").innerHTML +=
+    staged.health +=
       `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : (sector.owner?.toUpperCase() ?? "NEUTRAL")}</small>`;
   const ledge =
     map.terrain &&
@@ -605,9 +669,9 @@ function hud(now: number) {
     !p.hop &&
     !p.fall &&
     mantleLanding(p, { x: Math.sin(p.yaw), z: -Math.cos(p.yaw) }, game.map);
-  el("capture").innerHTML =
+  staged.capture =
     p.hp <= 0
-      ? `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
+      ? outOfReinforcements(game, p) ? "<h2>NO REINFORCEMENTS</h2>" : `<h2>SOLDIER DOWN</h2><p>Redeploying in ${Math.ceil((p.respawnAt - game.tick) / 30)}s</p>`
       : p.mantle
         ? "<small>CLIMBING TRENCH EDGE</small>"
         : ledge && !(game.scoring === "domination" && sector)
@@ -626,9 +690,9 @@ function hud(now: number) {
   if (gun) {
     const loading = gun.reloadAt ? `RELOADING · ${((gun.reloadAt - game.tick) / 30).toFixed(1)}s` : "90° TRAVERSE · HOLD FIRE";
     const traverse = 50 + (gun.yaw - gun.baseYaw) / emplacementRules.traverse * 50;
-    el("ammo").innerHTML = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small><div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
+    staged.ammo = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small><div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
   } else if (placement) {
-    el("capture").innerHTML = placement.valid
+    staged.capture = placement.valid
       ? `<small>LMB · SET UP ${emplacementWeapon(p).toUpperCase()}　 ${deployKey} · CANCEL</small>`
       : `<small>${placement.reason}　 ${deployKey} · CANCEL</small>`;
   } else if (nearby) {
@@ -636,14 +700,14 @@ function hud(now: number) {
     const pack = nearby.owner === p.id && p.loadout === "emplacement" ? `　 ${deployKey} · PACK UP` : "";
     const action = setup > 0 ? `SETTING UP · ${(setup/30).toFixed(1)}s`
       : nearby.operator !== undefined ? "IN USE" : `${useKey} · MOUNT${pack}`;
-    el("capture").innerHTML = `<small>${nearby.weaponId} · ${action}</small>`;
+    staged.capture = `<small>${nearby.weaponId} · ${action}</small>`;
   } else if (p.hp > 0 && p.loadout === "emplacement") {
-    el("ammo").innerHTML += `<small>${p.emplacementLost ? "EMPLACEMENT LOST · RESUPPLY ON RESPAWN" :
+    staged.ammo += `<small>${p.emplacementLost ? "EMPLACEMENT LOST · RESUPPLY ON RESPAWN" :
       game.emplacements.has(p.id) ? deployKey + " · PACK UP WHEN NEAR YOUR GUN" : deployKey + " · PREVIEW EMPLACEMENT"}</small>`;
   }
   const pickup = !gun && !nearby && !placement && p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
-  if (pickup) el("capture").innerHTML = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
-  if (!gun && p.weapon === "flamethrower") el("ammo").innerHTML = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
+  if (pickup) staged.capture = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
+  if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(p.suppression * 0.22) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
@@ -661,7 +725,7 @@ function hud(now: number) {
     }
   }
   el("labels").classList.toggle("aiming", aim);
-  el("labels").innerHTML =
+  staged.labels =
     game.scoring === "eliminations" || (training&&training.lesson<6)
       ? ""
       : game.sectors
@@ -676,6 +740,10 @@ function hud(now: number) {
               : "";
           })
           .join("");
+  for (const key of Object.keys(staged) as (keyof typeof hudTargets)[]) {
+    const markup = staged[key]!;
+    if (displayedHud[key] !== markup) hudTargets[key]().innerHTML = displayedHud[key] = markup;
+  }
 }
 function command(): Command {
   const c = idle();
@@ -697,7 +765,10 @@ function command(): Command {
   fire = false;
   c.artillery = pendingArtillery;
   c.flare = pendingFlare;
-  pendingArtillery = pendingFlare = undefined;
+  c.gasStrike = pendingGas;
+  c.gasMask = pendingMask;
+  pendingArtillery = pendingFlare = pendingGas = undefined;
+  pendingMask = false;
   c.aim = aim && !tacticalMap.open;
   c.firstPerson = preferredFirstPerson;
   c.reload = reload;
@@ -748,6 +819,8 @@ window.addEventListener("keydown", (e) => {
     tacticalMap.toggle();
   }
   if (tacticalMap.open && e.code === mapCallKey && !e.repeat) tacticalMap.toggleMode();
+  // The mask works with the map open too: gas does not wait.
+  if (isKey("mask", e.code) && !e.repeat && game.players[0].hp > 0) pendingMask = true;
   if (tacticalMap.open && !isKey("reload", e.code)) return;
   const player = game.players[0];
   if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
@@ -797,6 +870,11 @@ window.addEventListener("mousedown", (e) => {
       triggerDown = true;
       if (document.pointerLockElement === renderer.canvas) tacticalMap.select();
     }
+    return;
+  }
+  // Out of reinforcements, the trigger cycles which teammate you watch.
+  if (outOfReinforcements(game, game.players[0])) {
+    if (e.button === 0) spectateNext = true;
     return;
   }
   if (placingGun) {
@@ -933,6 +1011,8 @@ function frame(now: number) {
         combatFeedback.camera(game,game.tick,view)?.pitch??view.pitch,
       );
       audio?.muffle(battlefield.state(game.tick).muffle);
+      gasAudio.volume(audioVolume);
+      gasAudio.update(game.players[0].hp > 0 && masked(game.players[0], game.tick));
       accumulator += dt;
       let steps = 0;
       // All of this frame's ticks share one navigation rebuild budget.
@@ -1057,6 +1137,17 @@ try {
       for(const component of weapon?.findComponents("render")??[])component.enabled=!detail;
       return {tick:game.tick,frames:reviewFrames};
     },
+    // Gas shells: skip ahead and stand the player at a point looking at
+    // another, masked or not, optionally beside a gas shell cloud.
+    gas:(tick:number,x:number,z:number,tx:number,tz:number,mask:boolean,firstPerson=true,cloud?:{x:number;z:number})=>{
+      reviewManual=true;game.tick=Math.max(game.tick,Math.round(tick));const p=game.players[0];
+      game.respawn(p);Object.assign(p,{x,z,y:groundHeight(x,z,game.map),yaw:Math.atan2(tx-x,-(tz-z)),pitch:-.04,protectedUntil:Infinity,vx:0,vz:0});
+      p.gasMask=mask?{worn:true,since:game.tick-60,from:1}:null;
+      if(cloud)game.gas.clouds.push({id:++game.gas.sequence,team:"red",actor:game.teamSize,...cloud,heading:Math.PI/2,landAt:game.tick-120,endsAt:game.tick+630});
+      yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
+      renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
+      return {tick:game.tick,hp:p.hp,masked:masked(p,game.tick)};
+    },
     finish:()=>recording?.stop(),
   }});
   menu(
@@ -1083,6 +1174,25 @@ try {
     training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
+  // Build the bot navigation graph while the briefing is read rather than in
+  // the Begin click; every match on this map then copies it.
+  // Then compile the match's shaders on a stand-in deployment, so the first
+  // frames after Begin don't stall on them.
+  const prepare = () => {
+    if (bots || training) prepareNavigation(map);
+    if (started || renderReview) return;
+    try {
+      const standIn = new Game(new TestCollision(map), true, 30, 12345, undefined,
+        { map, teamSize: training ? 4 : teamSize, humanPlayerIds: [0], ambientArtillery: false });
+      standIn.selectLoadout(standIn.players[0], chosenLoadout);
+      standIn.players[0].command.firstPerson = true;
+      renderer.warmShaders(standIn);
+    } catch (error) {
+      console.warn("Shader warm-up skipped", error);
+    }
+  };
+  if ("requestIdleCallback" in window) requestIdleCallback(prepare, { timeout: 2000 });
+  else setTimeout(prepare, 500);
 } catch (error) {
   menu(
     "Unable to initialize",

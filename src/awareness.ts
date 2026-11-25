@@ -1,4 +1,5 @@
 import type { Game, Soldier, V3 } from "./simulation";
+import { gasRules, masked } from "./gas";
 
 export interface Awareness {
   confidence: number;
@@ -32,9 +33,10 @@ export function canNotice(g: Game, p: Soldier, q: Soldier) {
   if (!g.botSettings.awareness) return true;
   const distance = Math.hypot(q.x - p.x, q.z - p.z);
   const angle = Math.abs(angleDelta(p.yaw, Math.atan2(q.x - p.x, p.z - q.z)));
-  // A close silhouette or recent nearby gunshot can draw attention outside the forward view.
+  // A close silhouette or recent nearby gunshot can draw attention outside the
+  // forward view. A gas mask's eyepieces narrow that view.
   return (
-    distance < 7 || angle < 1.1 || (g.tick - q.lastShotAt < 20 && distance < 40)
+    distance < 7 || angle < (masked(p, g.tick) ? gasRules.maskedView : 1.1) || (g.tick - q.lastShotAt < 20 && distance < 40)
   );
 }
 export function observeTarget(g: Game, p: Soldier, q: Soldier, aimY: number) {

@@ -1,5 +1,5 @@
 import { groundHeight, type Box, type KitRuntime, type MapDefinition } from "./map";
-import type { DestructionChange } from "./destruction";
+import { addDestructible, type DestructionChange } from "./destruction";
 
 // Kit buildings (docs/HOUSE_KIT.md) stand only while each piece has an
 // unbroken chain of surviving supports down to the ground. Floors and roofs
@@ -116,7 +116,7 @@ function addKitRubble(map: MapDefinition, building: NonNullable<MapDefinition["b
     return;
   }
   const rubble: Box = { id, x, z, w, d, h, baseY: groundHeight(x, z, map), kind: "rubble", walkable: true };
-  state.objects[id] = { id, original: rubble, hp: 180, maxHp: 180, stage: 0, lining: false };
+  addDestructible(state, { id, original: rubble, hp: 180, maxHp: 180, stage: 0, lining: false });
   map.boxes.push({ ...rubble });
   changes.push({ id, hp: 180, stage: 0 });
 }

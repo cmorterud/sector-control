@@ -21,6 +21,8 @@ import { flareBrightness, flarePosition as starShellPosition, flareRules } from 
 const flareLightIntensity = 9;
 const burstLightIntensity = 16;
 import { BillboardBuffer } from "./billboards";
+import { GasView } from "./gas-view";
+import { maskProgress } from "./gas";
 import { craterPonds, noMansLandDebris, wireBeltGeometry, type WireCache } from "./no-mans-land";
 import { dugoutBoxes, dugouts, paradosBags, revetmentPixels, revetmentStyle, signboards, trenchProps, type RevetmentStyle } from "./trench-dressing";
 import { backdropBoxMesh, backdropGround, backdropHeight, backdropLife, backdropScenery, distantFlares, distantFlashes, flarePosition, flareTicks } from "./backdrop";
@@ -161,6 +163,9 @@ type SoldierRig = {
   weight?: MovementWeight;
   feet?: (FootContact|undefined)[];
   design?: ReturnType<typeof weaponDesign>;
+  // Shown, and pulled up over the face, while a gas mask goes on (src/gas.ts).
+  gasMask?: pc.Entity;
+  maskShown?: number;
   body: pc.Entity;
   hips: pc.Entity;
   upper: pc.Entity;
@@ -208,6 +213,8 @@ export class Renderer implements CollisionWorld {
   camera: pc.Entity;
   cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
   deathView:DeathView|null=null;
+  // A living teammate the camera follows once the player is out of reinforcements.
+  spectating:number|null=null;
   private boardBatch = -1;
   private boardVisuals: { root: pc.Entity; x: number; z: number }[] = [];
   people: pc.Entity[] = [];
@@ -313,6 +320,8 @@ export class Renderer implements CollisionWorld {
     materials: pc.StandardMaterial[];
   }[] = [];
   private mapRoot!: pc.Entity;
+  // Built the first time a gas shell cloud is drawn.
+  private gasView?: GasView;
   private fortRoof?: pc.Entity;
   private worldParent?: pc.Entity;
   private terrainPhysics = new TerrainPhysics();
@@ -2921,6 +2930,24 @@ export class Renderer implements CollisionWorld {
     e.tags.add(`model-near:hand-${side}-world`,`model-far:hand-${side}-far`,`hand-side:${side}`);
     return e;
   }
+  // Up from the chest over the face as it goes on; gone while it is off.
+  private poseGasMask(rig: SoldierRig, on: number) {
+    if (!rig.gasMask || rig.maskShown === on) return;
+    rig.maskShown = on;
+    const scale = on > 0 ? 0.75 + 0.25 * on : 0;
+    rig.gasMask.setLocalScale(scale, scale, scale);
+    rig.gasMask.setLocalPosition(0, -0.4 * (1 - on), -0.1 * (1 - on));
+  }
+  private createGasView() {
+    const root = this.joint("gas", this.mapRoot);
+    return new GasView({
+      map: this.map,
+      billboards: (name, capacity, hex, opacity) => this.billboards(name, root, capacity, hex, opacity),
+      begin: (batch) => this.beginBillboards(batch),
+      end: (batch) => this.endBillboards(batch as { buffer: BillboardBuffer; mesh: pc.Mesh }),
+      enable: (on) => { if (root.enabled !== on) root.enabled = on; },
+    });
+  }
   private applyModelDetail(p:Soldier,rig:SoldierRig) {
     const distance=this.people[p.id].getPosition().distance(this.camera.getPosition());
     const far=p.id!==0 && distance>(rig.farDetail?32:42);
@@ -3513,8 +3540,19 @@ export class Renderer implements CollisionWorld {
     if(refined)this.gripHand("left hand",supportHand,"left");
     else part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
     if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p);
+    // The gas mask: rubberised facepiece, two eyepieces and a filter tin under
+    // the chin. A joint of its own, scaled away while it is not worn, so
+    // masking never rebuilds the soldier's batched kit.
+    const gasMask = this.joint("gas mask", upper);
+    part("mask facepiece", 0, .635, -.07, .25, .275, .2, "#5c624b", gasMask, "head");
+    for (const side of [-1, 1])
+      part("mask eyepiece", side * .056, .69, -.168, .072, .026, .072, "#aab6ae", gasMask, "disc").setLocalEulerAngles(90, 0, 0);
+    part("mask filter tin", 0, .535, -.2, .088, .12, .088, "#474c3c", gasMask, "limb").setLocalEulerAngles(32, 0, 0);
+    gasMask.setLocalScale(0, 0, 0);
     this.people.push(root);
     this.soldiers.push({
+      gasMask,
+      maskShown: 0,
       body,
       design,
       hips,
@@ -4654,6 +4692,41 @@ export class Renderer implements CollisionWorld {
       this.rings.push(ring);
     }
   }
+  // Compile the match's shaders while the briefing is open. Deploy a stand-in
+  // match (same map and kits), pose it once, and draw everything once from the
+  // player's view into a tiny offscreen target, so soldiers, their shadows,
+  // the first-person rig and the flags compile before Begin. The briefing view
+  // is restored and the stand-ins hidden; reset() replaces them at Begin.
+  warmShaders(g: Game) {
+    const main = this.camera.camera!;
+    const position = this.camera.getPosition().clone(), rotation = this.camera.getRotation().clone();
+    const projection = main.projection, orthoHeight = main.orthoHeight, nearClip = main.nearClip, fov = main.fov;
+    this.reset(g);
+    this.draw(g, 1, 0, false);
+    const device = this.app.graphicsDevice;
+    const color = new pc.Texture(device, { width: 4, height: 4, format: pc.PIXELFORMAT_RGBA8, mipmaps: false });
+    const target = new pc.RenderTarget({ colorBuffer: color, depth: true });
+    const warm = new pc.Entity("shader warm-up");
+    warm.addComponent("camera", {
+      clearColor: main.clearColor, fov: main.fov, nearClip: main.nearClip, farClip: main.farClip,
+      layers: main.layers, toneMapping: main.toneMapping, gammaCorrection: main.gammaCorrection,
+      frustumCulling: false, renderTarget: target, priority: main.priority - 1,
+    });
+    warm.setPosition(this.camera.getPosition());
+    warm.setRotation(this.camera.getRotation());
+    this.app.root.addChild(warm);
+    this.camera.setPosition(position);
+    this.camera.setRotation(rotation);
+    Object.assign(main, { projection, orthoHeight, nearClip, fov });
+    // Only the stand-ins: Begin may already have deployed the real match.
+    const standIns = [...this.people, ...this.rings, ...(this.firstPersonRig ? [this.firstPersonRig.root] : [])];
+    this.app.once("frameend", () => {
+      warm.destroy();
+      target.destroy();
+      color.destroy();
+      if (this.activeGame === g) for (const entity of standIns) entity.enabled = false;
+    });
+  }
   // The dye currently on each flag's cloth, for the render review.
   flagDyes() {
     return this.rings.map((ring) => {
@@ -4869,6 +4942,7 @@ export class Renderer implements CollisionWorld {
         this.animateSoldier(visible, x, z, owed, tick);
         rig.rifle.enabled = p.mountedGun === undefined;
         this.applyModelDetail(p,rig);
+        this.poseGasMask(rig, maskProgress(p, tick));
       } else {
         if (rig.deathAt === null) {
           rig.deathAt = tick;
@@ -4938,10 +5012,11 @@ export class Renderer implements CollisionWorld {
     }
     this.objectiveTerrainRevision = objectiveRevision;
     const p = g.players[0],
+      watched = p.hp<=0&&!overview&&this.spectating!==null&&g.players[this.spectating]?.hp>0?g.players[this.spectating]:undefined,
       gun = mountedGun(g, p),
-      firstPerson = (firstPersonView(p) || !!gun) && !overview,
-      deathView = p.hp<=0&&!overview?this.deathView:null,
-      baseView = deathView ?? gun ?? weaponAim(p),
+      firstPerson = (firstPersonView(p) || !!gun) && !overview && !watched,
+      deathView = p.hp<=0&&!overview&&!watched?this.deathView:null,
+      baseView = deathView ?? gun ?? weaponAim(watched ?? p),
       view = {
         yaw: baseView.yaw + (overview || firstPerson || deathView ? 0 : this.cameraReaction.yaw),
         pitch: baseView.pitch + (overview || firstPerson || deathView ? 0 : this.cameraReaction.pitch),
@@ -4952,8 +5027,8 @@ export class Renderer implements CollisionWorld {
         y: Math.sin(view.pitch),
         z: -Math.cos(view.yaw) * Math.cos(view.pitch),
       };
-    const visual = this.people[0].getPosition();
-    const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[0].crouch);
+    const visual = this.people[watched?.id ?? 0].getPosition();
+    const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[watched?.id ?? 0].crouch);
     const pivot = gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
       desired = {
         x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
@@ -4999,6 +5074,7 @@ export class Renderer implements CollisionWorld {
     this.drawEnvironmentEffects(dt);
     this.drawBackdrop(g, alpha);
     this.drawAtmosphere(g, alpha);
+    if (g.gas.clouds.length || this.gasView) (this.gasView ??= this.createGasView()).draw(g, alpha, this.camera.getPosition(), this.quality);
     if (this.map.night) this.drawNight(g, alpha);
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {

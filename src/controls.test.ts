@@ -53,3 +53,12 @@ it("adds the whistle binding to a layout saved before it existed, on Z or the fi
   expect(taken.bindings.whistle).toBe("KeyX");
   expect(rebind(taken, "whistle", key("KeyW"))).toContain("Already assigned");
 });
+
+it("adds the gas mask binding to an older layout without taking a key already in use", () => {
+  expect(freshControls().bindings.mask).toBe("KeyM");
+  const { mask: _mask, emplace: _emplace, ...bindings } = freshControls().bindings;
+  const restored = loadControls({ getItem: () => JSON.stringify({ ...freshControls(), bindings: { ...bindings, reload: "KeyM" } }) });
+  expect(restored.bindings.reload).toBe("KeyM");
+  expect(restored.bindings.emplace).toBe("KeyB");
+  expect(restored.bindings.mask).toBe("KeyX");
+});

@@ -4,6 +4,7 @@ export const defaultBindings = {
   grenade: "KeyG", smoke: "KeyF", mantle: "Space", tactical: "KeyQ",
   view: "KeyT", scoreboard: "Tab", primary: "Digit1", sidearm: "Digit2", interact: "KeyE", emplace: "KeyB",
   whistle: "KeyZ",
+  mask: "KeyM",
 };
 export type ControlAction = keyof typeof defaultBindings;
 export interface ControlSettings {
@@ -19,6 +20,7 @@ export const controlLabels: Record<ControlAction, string> = {
   grenade: "Grenade", smoke: "Smoke", mantle: "Hop / mantle", tactical: "Tactical map",
   view: "Change view", scoreboard: "Scoreboard", primary: "Primary weapon", sidearm: "Sidearm", interact: "Interact with equipment", emplace: "Set up / pack machine gun",
   whistle: "Whistle: squad bayonet charge",
+  mask: "Gas mask on / off",
 };
 export function freshControls(): ControlSettings {
   return { bindings: { ...defaultBindings }, toggleSprint: false, firstPerson: true };
@@ -31,15 +33,12 @@ export function loadControls(storage?: Pick<Storage, "getItem">): ControlSetting
     if (typeof saved.firstPerson === "boolean") settings.firstPerson = saved.firstPerson;
     if (typeof saved.toggleSprint === "boolean") settings.toggleSprint = saved.toggleSprint;
     const bindings = saved.bindings ? { ...saved.bindings } : undefined;
-    if (bindings && bindings.emplace === undefined) {
+    // Actions added since a layout was saved take their default key, or the
+    // first free one, so an older custom layout survives.
+    const added: [ControlAction, string[]][] = [["emplace", ["KeyB", "KeyN", "KeyJ"]], ["mask", ["KeyM", "KeyX", "KeyZ"]], ["whistle", ["KeyZ", "KeyX", "KeyH"]]];
+    for (const [action, preferred] of added) if (bindings && bindings[action] === undefined) {
       const used = new Set(Object.values(bindings));
-      bindings.emplace = ["KeyB", "KeyN", "KeyJ", ...Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", c => "Key" + c)]
-        .find(code => !used.has(code));
-    }
-    // Saved before the whistle existed: give it Z, or the first free letter.
-    if (bindings && bindings.whistle === undefined) {
-      const used = new Set(Object.values(bindings));
-      bindings.whistle = ["KeyZ", "KeyX", "KeyH", ...Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", c => "Key" + c)]
+      bindings[action] = [...preferred, ...Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", c => "Key" + c)]
         .find(code => !used.has(code));
     }
     if (bindings && Object.keys(defaultBindings).every(action =>
