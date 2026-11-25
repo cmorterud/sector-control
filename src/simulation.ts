@@ -115,6 +115,10 @@ import {
   observeTactics, overwatchHold, reloadCallout, reportContact, squadContact, squadObjective, stackAtDoor,
   suppressiveFire, squadFeatures, threatScore, type CalloutLine, type Tactics,
 } from "./squads";
+import {
+  advanceCharges, chargeCommand, chargeRules, charging, createChargeState, observeCharges, blowWhistle, startLoneCharge,
+  type ChargeEvent, type ChargeState, type Shaken, type SoldierCharge,
+} from "./charge";
 export type Team = "blue" | "red";
 export type V3 = Vec & { y: number };
 export interface CollisionWorld {
@@ -152,6 +156,8 @@ export interface Command {
   gasStrike?: Vec & { area?: boolean };
   // Bots only: launch speed for a planned short or lobbed frag.
   throwSpeed?: number;
+  // Blow the whistle for a squad bayonet charge (src/charge.ts).
+  whistle?: boolean;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -447,6 +453,10 @@ export interface Soldier extends Vec {
   distractedUntil: number;
   mode: string;
   artilleryEvade: ArtilleryEvade | null;
+  // Bayonet charges and the shock of one arriving (src/charge.ts).
+  charge?: SoldierCharge | null;
+  shaken?: Shaken | null;
+  nextLoneCharge?: number;
   gasMask?: GasMask | null;
   gasEscape?: GasEscape | null;
   gasClearSince?: number;
@@ -699,6 +709,7 @@ export type Event = { id: number; tick: number } & (
   | import("./reinforcements").ReinforcementEvent
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
+  | ChargeEvent
 );
 type EventInput = Event extends infer E
   ? E extends Event
@@ -946,6 +957,7 @@ export class Game {
   flares = createFlareState();
   bursts: Burst[] = [];
   assaults = createAssaultState();
+  charges: ChargeState = createChargeState();
   smokeClouds: SmokeCloud[] = [];
   // Gas shell clouds; masks live on each soldier.
   gas: GasState = createGasState();
@@ -1122,6 +1134,7 @@ export class Game {
       emplacements: [...this.emplacements.values()],
       artilleryAudit: this.artilleryAudit,
       assaults: this.assaults,
+      charges: this.charges,
       smokeClouds: this.smokeClouds,
       smokeSequence: this.smokeSequence,
       gas: this.gas,
@@ -1257,6 +1270,7 @@ export class Game {
   }
   step(human: Command) {
     observeTactics(this, this.events);
+    observeCharges(this, this.events);
     this.events = [];
     if (this.phase !== "playing") return;
     this.tick++;
@@ -1272,6 +1286,7 @@ export class Game {
     });
     advanceAssaults(this);
     advanceTactics(this);
+    advanceCharges(this);
     for (const p of this.players) {
       if (p.hp <= 0) {
         if (this.tick >= p.respawnAt && takeReinforcement(this, p)) {
@@ -1317,6 +1332,7 @@ export class Game {
       recoverRecoil(p);
       if (p.melee) c.crouch = p.crouched;
       updateCrouch(this, p, c);
+      if (c.whistle) blowWhistle(this, p, c);
       if (c.melee && !p.meleeHeld) startMelee(this, p, c);
       p.meleeHeld = !!c.melee;
       const meleeSpeed = meleeMovement(this, p, c);
@@ -2745,6 +2761,8 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   if (gasEscape) return gasEscape;
   const escape = collapseEscape(g, p);
   if (escape) return escape;
+  const charge = chargeCommand(g, p);
+  if (charge) return charge;
   const coverReaction = reactionCoverCommand(g, p);
   if (coverReaction) return coverReaction;
   const duck = suppressionCommand(g, p);
@@ -2884,6 +2902,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     0,
     1,
   );
+  if (startLoneCharge(g, p, target)) return chargeCommand(g, p) ?? c;
   if (botMeleeIntent(g, p, target, c)) return c;
   const objective = station ?? p.villagePlan?.goal ?? g.sectors[p.objective];
   while (
@@ -2936,9 +2955,12 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   if (target) {
     p.mode = "Engage";
     const d = dist(p, target);
+    // A charger runs straight at you in the open: easier to lead and to hit.
+    const exposed = charging(target);
     const error = botAimOffset(
       p,
       g.tick,
+      (exposed ? chargeRules.chargerAim : 1) *
       g.botSettings.aimError *
         (p.weapon === "machineGun" ? 1.35 : 1) *
         (1 +
@@ -2971,7 +2993,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     );
     const estimate = g.botSettings.awareness
       ? Math.min(0.7, lead) *
-        (0.35 + awarenessSample(p, p.spottedAt, 337) * 0.35)
+        (exposed ? chargeRules.chargerLead : 0.35 + awarenessSample(p, p.spottedAt, 337) * 0.35)
       : lead;
     const aimX = rx + velocity.x * estimate,
       aimZ = rz + velocity.z * estimate;

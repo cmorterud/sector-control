@@ -52,6 +52,10 @@ export class BattleAudio {
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
   }
+  // For effects synthesized elsewhere (src/charge-audio.ts): the spatial mix
+  // bus, and whether the battle is running.
+  get bus(): AudioNode { return this.world; }
+  get live() { return this.running; }
   prepareVoices() {
     this.speechLoading ??= Promise.all(
       voiceLines.flatMap((line) =>
