@@ -609,12 +609,12 @@ a.armory-link:hover { background: #3f5856; }
   .table .row > * { padding: 5px 4px; }
 }
 
-.map-choice {
+:is(.map-choice, .mode-choice) {
   gap: 10px;
   margin-top: 20px;
   flex-wrap: wrap;
 }
-.map-choice > * {
+:is(.map-choice, .mode-choice) > * {
   flex: 1;
   padding: 12px;
   border: 1px solid #b5b39a55;
@@ -622,14 +622,14 @@ a.armory-link:hover { background: #3f5856; }
   text-decoration: none;
   font-size: 12px;
 }
-.map-choice [aria-current],
-.map-choice a:hover,
-.map-choice a:focus-visible {
+:is(.map-choice, .mode-choice) [aria-current],
+:is(.map-choice, .mode-choice) a:hover,
+:is(.map-choice, .mode-choice) a:focus-visible {
   border-color: #c8ba8a;
   color: #eee0b0;
   background: #c8ba8a12;
 }
-.map-choice small {
+:is(.map-choice, .mode-choice) small {
   margin-top: 4px;
   font-size: 9px;
 }
@@ -647,7 +647,7 @@ a.armory-link:hover { background: #3f5856; }
   font-size: 12px;
   color: #b4c2bc;
 }
-.pause-map-picker .map-choice {
+.pause-map-picker :is(.map-choice, .mode-choice) {
   margin-top: 8px;
 }
 
@@ -812,23 +812,23 @@ a.armory-link:hover { background: #3f5856; }
 .controls-panel > label { display: block; margin: 12px 0; }
 .controls-panel > p { min-height: 2em; color: #eee0b0; }
 
-.map-choice { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.map-choice > * { padding: 0 0 10px; overflow: hidden; background: #172626; }
-.map-choice img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: linear-gradient(145deg,#7b8575,#293e3c); color:#ddd; }
-.map-choice strong, .map-choice small, .map-choice p { display: block; margin: 8px 10px 0; }
-.map-choice p { font-size: 10px; line-height: 1.5; color: #b4c2bc; }
+:is(.map-choice, .mode-choice) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:is(.map-choice, .mode-choice) > * { padding: 0 0 10px; overflow: hidden; background: #172626; }
+:is(.map-choice, .mode-choice) img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: linear-gradient(145deg,#7b8575,#293e3c); color:#ddd; }
+:is(.map-choice, .mode-choice) strong, :is(.map-choice, .mode-choice) small, :is(.map-choice, .mode-choice) p { display: block; margin: 8px 10px 0; }
+:is(.map-choice, .mode-choice) p { font-size: 10px; line-height: 1.5; color: #b4c2bc; }
 .tactical-terrain { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 .tactical-grid button { position:relative; border-color:#fff2; background:transparent; text-shadow:0 1px 3px #000; }
 .tactical-grid button[aria-disabled="true"] { background:#111a1c40; }
-@media(max-width:650px) { .map-choice {grid-template-columns:1fr;} .map-choice img {max-height:120px;} }
+@media(max-width:650px) { :is(.map-choice, .mode-choice) {grid-template-columns:1fr;} :is(.map-choice, .mode-choice) img {max-height:120px;} }
 .loadout-choice {text-align:left; padding:12px; margin:14px 0; background:#ffffff08; font-size:13px;}
 .loadout-choice label, .loadout-choice small {display:block; margin:6px 0;}
 .loadout-choice select {background:#263a38; color:#e3e6d9; padding:8px; width:100%; border:1px solid #8e9b86;}
 #ui.scoped::after {content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle closest-side,transparent 78%,#131b18 79%); z-index:2;}
 #ui.scoped #reticle {z-index:3; font-size:24px; opacity:.8;}
 .panel {width:min(760px,90vw);}
-.map-choice {grid-template-columns:repeat(2,minmax(0,1fr));}
-@media(max-width:650px) {.map-choice {grid-template-columns:1fr;}}
+:is(.map-choice, .mode-choice) {grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(max-width:650px) {:is(.map-choice, .mode-choice) {grid-template-columns:1fr;}}
 /* Shown on phones and tablets without a mouse, before the game loads. */
 .device-gate {
   position: fixed;
@@ -874,6 +874,55 @@ a.armory-link:hover { background: #3f5856; }
   background: none;
   color: #ddd;
 }
+
+/* Capture the flag (src/ctf-hud.ts). */
+.mode-choice { margin-top: 10px; }
+.mode-choice strong { display: block; font-size: 13px; }
+.ctf-flag { min-width: 30px; padding: 5px 8px; text-align: center; }
+.ctf-flag small { margin-top: 2px; font-size: 9px; letter-spacing: 0; line-height: 1.2; }
+.ctf-flag.home { background: color-mix(in srgb, currentColor 22%, #192525cf); }
+.ctf-flag.carried { animation: blink 0.7s infinite alternate; }
+.ctf-flag.dropped { border-style: dashed; }
+.ctf-flag.restocking { opacity: .45; border-style: dotted; }
+.ctf-announcer {
+  position: absolute;
+  z-index: 8;
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 32px));
+  text-align: center;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px #000, 0 0 8px #000a;
+  pointer-events: none;
+}
+.ctf-announcer:empty { display: none; }
+.ctf-label.carried { font-size: 15px; }
+.ctf-label.dropped { animation: blink 0.7s infinite alternate; }
+.ctf-label.drop { padding: 1px 5px; border: 1px solid currentColor; background: #142323a8; font-size: 10px; letter-spacing: .1em; }
+.ctf-carrying { color: #f1d283; font-weight: 650; }
+#ui.flag-carrier::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px #e9c46a8c, inset 0 0 9vmin 1vmin #e9c46a2e;
+}
+.minimap-flag[data-state="empty"] { background: #142323cc; color: #d0c7a3; border-color: #d0c7a3aa; }
+.minimap-drop, .minimap-loose {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  line-height: 1;
+  text-shadow: 0 0 2px #091516, 0 1px 1px #091516;
+}
+.minimap-loose { font-size: 13px; }
+.minimap-loose[data-state="dropped"] { animation: blink 0.7s infinite alternate; }
+.kill-feed-entry.ctf-feed .feed-action { color: inherit; }
 /* The bayonet-charge prompt (src/charge.ts) stands out from flag and ledge prompts. */
 #capture .charge-prompt { color: #f4ce86; font-size: 12px; font-weight: 700; }
 /* Final-phase reinforcements: the pools under the score and a phase banner. */

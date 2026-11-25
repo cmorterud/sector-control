@@ -109,7 +109,8 @@ export function whistleTarget(g: Game, p: Soldier, yaw: number, pitch: number): 
   const ahead = (v: Vec, range: number) =>
     dist(p, v) > 6 && dist(p, v) < range && Math.abs(angleDelta(yaw, bearing(p, v))) < cone;
   const nearest = (vs: Vec[]) => vs.sort((a, b) => dist(p, a) - dist(p, b))[0];
-  const flag = nearest(g.sectors.filter((s) => s.owner !== p.team && ahead(s, 70)));
+  // In capture the flag the sectors are pickup points; skip your own side's.
+  const flag = nearest(g.sectors.filter((s) => s.owner !== p.team && (g.scoring !== "ctf" || s.home !== p.team) && ahead(s, 70)));
   if (flag) return { x: flag.x, z: flag.z };
   const enemy = p.team === "blue" ? "red" : "blue";
   const front = g.map.terrain?.trenchLines?.find((l) => l.team === enemy && l.role === "front");

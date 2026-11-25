@@ -216,7 +216,7 @@ export interface MapDefinition {
   // Draw distant land, the continuing front and its life past the terrain edge
   // (src/backdrop.ts) instead of a perimeter wall.
   backdrop?: boolean;
-  scoring?: "sectors" | "eliminations" | "domination";
+  scoring?: "sectors" | "eliminations" | "domination" | "ctf";
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
   farmland?: FarmFront;

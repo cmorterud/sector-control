@@ -1,6 +1,7 @@
 import type { Game, Soldier, Team } from "./simulation";
 
-// Limited reinforcements in a domination match's final phase. Until then
+// Limited reinforcements in the final phase of a domination or capture the
+// flag match. Until then
 // respawns are free; from then on each one spends from a team pool, and at
 // zero the dead stay dead. A side with nobody standing and nothing left in
 // its pool loses on the spot, so a stalemate can't simply run out the clock.
@@ -9,7 +10,8 @@ export const reinforcementRules = {
   // shortened (?duration=) match, whichever is shorter.
   finalTicks: 120 * 30,
   finalShare: 0.25,
-  // ...or as soon as either side is within reach of the score limit.
+  // ...or as soon as either side is within reach of the score limit (in
+  // capture the flag, 4 of the 5 captures).
   scoreShare: 0.8,
   // Respawns per soldier. Measured bot battles lose about one to three
   // soldiers per man in two minutes, so one each runs the harder-pressed side
@@ -53,7 +55,7 @@ export function createReinforcements(g: Game): ReinforcementState {
   const size = { blue: count("blue"), red: count("red") };
   // Training keeps its own respawn rules, and a lone soldier with no enemy
   // (?bots=0) can't be eliminated by anyone.
-  const enabled = g.scoring === "domination" && g.scoreLimit !== null && size.blue > 0 && size.red > 0;
+  const enabled = (g.scoring === "domination" || g.scoring === "ctf") && g.scoreLimit !== null && size.blue > 0 && size.red > 0;
   const pool = {
     blue: Math.max(1, Math.round(size.blue * reinforcementRules.perSoldier)),
     red: Math.max(1, Math.round(size.red * reinforcementRules.perSoldier)),

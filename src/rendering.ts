@@ -40,6 +40,7 @@ import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { bayonetMount, weaponDesign } from "./weapon-design";
 import { flagCloth, flagColor, flagRingColor, type FlagState } from "./flag";
+import { CtfMarkers } from "./ctf-render";
 import { factionFor, factions, scoped } from "./loadouts";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
@@ -234,6 +235,8 @@ export class Renderer implements CollisionWorld {
   private activeGame?: Game;
   private deathHits = new Map<number, pc.Vec3>();
   rings: pc.Entity[] = [];
+  // Capture the flag's stands, drop points and flags, in their own module.
+  private ctfMarkers = new CtfMarkers(this);
   private objectiveTerrainRevision = -1;
   effects: { e: pc.Entity; life: number; velocity?: V3; size?: number; billboard?: boolean }[] = [];
   private fallingTrees: FallingTree[] = [];
@@ -4678,7 +4681,8 @@ export class Renderer implements CollisionWorld {
     this.boundSoldiers();
     this.createFirstPersonRig();
     for (const rig of this.soldiers) rig.reloadMagazine.setLocalScale(0, 0, 0);
-    for (const s of g.scoring !== "eliminations" ? g.sectors : []) {
+    this.ctfMarkers.reset(g);
+    for (const s of g.scoring !== "eliminations" && g.scoring !== "ctf" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
       this.app.root.addChild(ring);
       ring.setPosition(s.x, (s.y ?? groundHeight(s.x, s.z, this.map)) + (this.map.fort?.waterHeight ?? 0) + .04, s.z);
@@ -5063,6 +5067,7 @@ export class Renderer implements CollisionWorld {
       }
     }
     this.objectiveTerrainRevision = objectiveRevision;
+    this.ctfMarkers.draw(g, overview);
     const p = g.players[0],
       watched = p.hp<=0&&!overview&&this.spectating!==null&&g.players[this.spectating]?.hp>0?g.players[this.spectating]:undefined,
       gun = mountedGun(g, p),

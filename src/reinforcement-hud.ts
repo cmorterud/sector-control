@@ -15,7 +15,7 @@ export function reinforcementTally(g: Game): string {
   const r = g.reinforcements;
   if (!r.enabled) return "";
   if (!finalPhase(g))
-    return `<small class="reinforcement-hint">LIMITED REINFORCEMENTS AT ${clock(finalPhaseTicks(g.duration))} OR ${Math.ceil(g.scoreLimit! * reinforcementRules.scoreShare)} POINTS</small>`;
+    return `<small class="reinforcement-hint">LIMITED REINFORCEMENTS AT ${clock(finalPhaseTicks(g.duration))} OR ${Math.ceil(g.scoreLimit! * reinforcementRules.scoreShare)} ${g.scoring === "ctf" ? "CAPTURES" : "POINTS"}</small>`;
   const count = (team: Team) =>
     `<b class="${team}${r.remaining[team] <= lowThreshold(g, team) ? " low" : ""}">${r.remaining[team]}</b>`;
   return `<div class="reinforcement-tally" title="Respawns each side has left. At zero its fallen stay down.">${count("blue")}<small>REINFORCEMENTS</small>${count("red")}</div>`;
