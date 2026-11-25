@@ -4692,6 +4692,41 @@ export class Renderer implements CollisionWorld {
       this.rings.push(ring);
     }
   }
+  // Compile the match's shaders while the briefing is open. Deploy a stand-in
+  // match (same map and kits), pose it once, and draw everything once from the
+  // player's view into a tiny offscreen target, so soldiers, their shadows,
+  // the first-person rig and the flags compile before Begin. The briefing view
+  // is restored and the stand-ins hidden; reset() replaces them at Begin.
+  warmShaders(g: Game) {
+    const main = this.camera.camera!;
+    const position = this.camera.getPosition().clone(), rotation = this.camera.getRotation().clone();
+    const projection = main.projection, orthoHeight = main.orthoHeight, nearClip = main.nearClip, fov = main.fov;
+    this.reset(g);
+    this.draw(g, 1, 0, false);
+    const device = this.app.graphicsDevice;
+    const color = new pc.Texture(device, { width: 4, height: 4, format: pc.PIXELFORMAT_RGBA8, mipmaps: false });
+    const target = new pc.RenderTarget({ colorBuffer: color, depth: true });
+    const warm = new pc.Entity("shader warm-up");
+    warm.addComponent("camera", {
+      clearColor: main.clearColor, fov: main.fov, nearClip: main.nearClip, farClip: main.farClip,
+      layers: main.layers, toneMapping: main.toneMapping, gammaCorrection: main.gammaCorrection,
+      frustumCulling: false, renderTarget: target, priority: main.priority - 1,
+    });
+    warm.setPosition(this.camera.getPosition());
+    warm.setRotation(this.camera.getRotation());
+    this.app.root.addChild(warm);
+    this.camera.setPosition(position);
+    this.camera.setRotation(rotation);
+    Object.assign(main, { projection, orthoHeight, nearClip, fov });
+    // Only the stand-ins: Begin may already have deployed the real match.
+    const standIns = [...this.people, ...this.rings, ...(this.firstPersonRig ? [this.firstPersonRig.root] : [])];
+    this.app.once("frameend", () => {
+      warm.destroy();
+      target.destroy();
+      color.destroy();
+      if (this.activeGame === g) for (const entity of standIns) entity.enabled = false;
+    });
+  }
   // The dye currently on each flag's cloth, for the render review.
   flagDyes() {
     return this.rings.map((ring) => {

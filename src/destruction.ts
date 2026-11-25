@@ -106,6 +106,23 @@ export interface DestructionState {
   // Wire belt segments blown apart.
   wire?: Record<string, true>;
 }
+// Every destructible in insertion order, plus the supported roofs, cached so
+// each blast doesn't rebuild these lists from the whole map. Add objects with
+// addDestructible so the cache sees them; hp and stage are read live.
+const destructibleLists = new WeakMap<object, { all: Destructible[]; roofs: Destructible[] }>();
+export function destructibles(state: DestructionState) {
+  let lists = destructibleLists.get(state.objects);
+  if (!lists) {
+    const all = Object.values(state.objects);
+    lists = { all, roofs: all.filter((o) => o.original.supports && !o.original.architecture) };
+    destructibleLists.set(state.objects, lists);
+  }
+  return lists;
+}
+export function addDestructible(state: DestructionState, object: Destructible) {
+  state.objects[object.id] = object;
+  destructibleLists.delete(state.objects);
+}
 export interface DestructionChange {
   geometry?: boolean;
   collapses?: string[];
@@ -121,6 +138,12 @@ export interface DestructionChange {
   patches: string[];
   // Wire belt segments this explosion cut.
   wire?: string[];
+}
+// The authored map each runtime copy was made from, so work that depends
+// only on the untouched map can be shared between matches.
+const runtimeSources = new WeakMap<MapDefinition, MapDefinition>();
+export function runtimeSource(map: MapDefinition) {
+  return runtimeSources.get(map);
 }
 export function runtimeMap(source: MapDefinition): MapDefinition {
   const map: MapDefinition = {
@@ -155,14 +178,14 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
           rubble: 110,
         } as Partial<Record<Box["kind"], number>>
       )[original.kind] ?? 40;
-    map.destruction!.objects[id] = {
+    addDestructible(map.destruction!, {
       id,
       original: { ...original },
       hp: maxHp,
       maxHp,
       stage: 0,
       lining,
-    };
+    });
   };
   for (const box of map.boxes)
     if (
@@ -208,8 +231,12 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
       );
     }
   }
+  runtimeSources.set(map, source);
   return map;
 }
+// Integer grid coordinates as one number (|x|, |z| < 32768 samples).
+const cellOffset = 32768, cellStride = 65536;
+const cellKey = (x: number, z: number) => (x + cellOffset) * cellStride + z + cellOffset;
 const patchKey = (x: number, z: number) =>
   `${Math.floor(x / terrainPatchSize)},${Math.floor(z / terrainPatchSize)}`;
 export function deformExplosion(
@@ -224,12 +251,21 @@ export function deformExplosion(
   // Fixed anchors are unchanged until cover application; avoid scanning every
   // small wall/floor panel for each quarter-meter excavation sample.
   const terrainAnchors=map.boxes.filter(b=>["building","bunker","container","barrier"].includes(b.kind));
+  const maximumStructuralReach = Math.max(profile.structuralRadius,
+    profile.kind === "artillery-ambient" ? artilleryExplosionProfile.structuralRadius : 0);
   // Evaluate all cover against the world as it stood before this explosion.
-  for (const object of Object.values(state.objects)) {
+  for (const object of destructibles(state).all) {
     if (object.stage === 2) continue;
     if (profile.kind === "flame" && !["wood", "tree", "brush", "log"].includes(object.original.kind)) continue;
     const box = object.original,
       base = box.baseY ?? 0;
+    // The nearest point lies within this horizontal footprint (a pitched roof
+    // reaches further along x), so most of the map is rejected without it.
+    const pitch = box.architecture?.roofPitch ?? 0,
+      halfX = (box.w / 2) * Math.abs(Math.cos(pitch)) + (box.h / 2) * Math.abs(Math.sin(pitch)) + 1e-6,
+      outX = Math.max(0, Math.abs(at.x - box.x) - halfX),
+      outZ = Math.max(0, Math.abs(at.z - box.z) - box.d / 2 - 1e-6);
+    if (outX * outX + outZ * outZ >= maximumStructuralReach * maximumStructuralReach) continue;
     const nearest = nearestBoxPoint(at, { ...box, h: box.h * (object.stage===1 && !box.architecture ? .6 : 1) });
     const distance = Math.hypot(
       nearest.x - at.x,
@@ -266,28 +302,53 @@ export function deformExplosion(
     const stage = hp === 0 ? 2 : hp <= object.maxHp / 2 ? 1 : 0;
     objects.push({ id: object.id, hp, stage });
   }
-  const edits = new Map<string, number>();
+  // Grid samples are keyed by number while carving; the stored "x,z" text
+  // keys are written once at the end. Insertion order is the same either way.
+  const edits = new Map<number, number>();
+  // Authored ground height and stored cut depth per sample; neither changes
+  // until this blast's edits are committed below.
+  const bases = new Map<number, number>();
+  const stored = new Map<number, number>();
+  const baseAt = (x: number, z: number) => {
+    const key = cellKey(x, z);
+    let base = bases.get(key);
+    if (base === undefined) {
+      base = baseGroundHeight(x * terrainResolution, z * terrainResolution, map);
+      bases.set(key, base);
+    }
+    return base;
+  };
   const queue: { x: number; z: number }[] = [];
-  const read = (x: number, z: number) =>
-    edits.get(`${x},${z}`) ?? state.cuts[`${x},${z}`] ?? 0;
+  const read = (x: number, z: number) => {
+    const key = cellKey(x, z);
+    const edited = edits.get(key);
+    if (edited !== undefined) return edited;
+    let depth = stored.get(key);
+    if (depth === undefined) {
+      depth = state.cuts[`${x},${z}`] ?? 0;
+      stored.set(key, depth);
+    }
+    return depth;
+  };
   const lower = (x: number, z: number, depth: number) => {
     const wx = x * terrainResolution,
       wz = z * terrainResolution;
     if (Math.abs(wx) >= map.width / 2 - 1 || Math.abs(wz) >= map.depth / 2 - 1)
       return;
+    const base = baseAt(x, z);
     if (
       terrainAnchors.some(
         (box) =>
-          (box.baseY ?? 0) <= baseGroundHeight(wx, wz, map) + 0.1 &&
           Math.abs(wx - box.x) <= box.w / 2 &&
-          Math.abs(wz - box.z) <= box.d / 2,
+          Math.abs(wz - box.z) <= box.d / 2 &&
+          (box.baseY ?? 0) <= base + 0.1,
       )
     )
       return;
-    const limit = Math.max(0, baseGroundHeight(wx, wz, map) + 0.9);
+    const limit = Math.max(0, base + 0.9);
     const next = Math.min(limit, depth);
     if (next <= read(x, z) + 0.0001) return;
-    edits.set(`${x},${z}`, next);
+    edits.set(cellKey(x, z), next);
     queue.push({ x, z });
   };
   const shape = profile.craterVariation
@@ -383,11 +444,7 @@ export function deformExplosion(
   const relax = () => {
     for (; relaxed < queue.length; relaxed++) {
       const { x, z } = queue[relaxed];
-      const base = baseGroundHeight(
-        x * terrainResolution,
-        z * terrainResolution,
-        map,
-      );
+      const base = baseAt(x, z);
       const height = base - read(x, z);
       for (const [dx, dz] of [
         [1, 0],
@@ -397,11 +454,7 @@ export function deformExplosion(
       ]) {
         const nx = x + dx,
           nz = z + dz;
-        const neighborBase = baseGroundHeight(
-          nx * terrainResolution,
-          nz * terrainResolution,
-          map,
-        );
+        const neighborBase = baseAt(nx, nz);
         if (Math.abs(neighborBase - base) > 0.3) {
           const high =
             base > neighborBase
@@ -409,7 +462,7 @@ export function deformExplosion(
               : { x: nx, z: nz, base: neighborBase };
           const low = Math.min(base, neighborBase);
           const touched =
-            directCuts.has(`${x},${z}`) || directCuts.has(`${nx},${nz}`);
+            directCuts.has(cellKey(x, z)) || directCuts.has(cellKey(nx, nz));
           // Only an actual blast contact may crumble an authored ledge. Let a
           // struck firing step blend into its floor, but keep remote bank faces.
           const stepLip = !!shape && high.base <= 1.1 && low >= -0.1;
@@ -446,7 +499,7 @@ export function deformExplosion(
     // Blast-damaged, narrow earth traverses should slump, rather than leave a
     // tall sheet between two excavated sides. Freeze the eligible footprint:
     // collapse must never march along an untouched trench wall.
-    const eligible = new Map<string, { x: number; z: number }>();
+    const eligible = new Map<number, { x: number; z: number }>();
     for (const { x, z } of queue)
       for (const [dx, dz] of [
         [0, 0],
@@ -457,22 +510,8 @@ export function deformExplosion(
       ]) {
         const nx = x + dx,
           nz = z + dz;
-        eligible.set(`${nx},${nz}`, { x: nx, z: nz });
+        eligible.set(cellKey(nx, nz), { x: nx, z: nz });
       }
-    const bases = new Map<string, number>();
-    const baseAt = (x: number, z: number) => {
-      const key = `${x},${z}`;
-      let base = bases.get(key);
-      if (base === undefined) {
-        base = baseGroundHeight(
-          x * terrainResolution,
-          z * terrainResolution,
-          map,
-        );
-        bases.set(key, base);
-      }
-      return base;
-    };
     const surface = (x: number, z: number) =>
       Math.max(-0.9, baseAt(x, z) - read(x, z));
     // Five samples span 1.25 m on each side: a damaged strip narrower than
@@ -495,14 +534,14 @@ export function deformExplosion(
           // sample or newly lost support on at least one sampled shoulder.
           if (
             read(x, z) < 0.15 &&
-            !edits.has(`${x - dx},${z - dz}`) &&
-            !edits.has(`${x + dx},${z + dz}`)
+            !edits.has(cellKey(x - dx, z - dz)) &&
+            !edits.has(cellKey(x + dx, z + dz))
           )
             continue;
           const before = read(x, z);
           lower(x, z, base - (shoulder + terrainResolution * 0.45));
           if (read(x, z) > before + 0.0001) {
-            directCuts.add(`${x},${z}`);
+            directCuts.add(cellKey(x, z));
             changed = true;
           }
         }
@@ -529,9 +568,13 @@ export function deformExplosion(
     -Infinity,
   ];
   let reach = r;
-  for (const [key, depth] of edits) {
+  const terrain = new Map<string, number>();
+  for (const [cell, depth] of edits) {
+    const x = Math.floor(cell / cellStride) - cellOffset,
+      z = (cell % cellStride) - cellOffset,
+      key = `${x},${z}`;
+    terrain.set(key, depth);
     state.cuts[key] = depth;
-    const [x, z] = key.split(",").map(Number);
     if (shape)
       reach = Math.max(
         reach,
@@ -550,7 +593,7 @@ export function deformExplosion(
   if (edits.size) {
     const previous = state.terrainRevision ?? state.revision;
     state.terrainRevision = previous + 1;
-    updateTerrainCutGrid(map, previous, edits);
+    updateTerrainCutGrid(map, previous, terrain);
   }
   const failingBefore = new Set(Object.keys(state.failing ?? {}));
   const collapses = applyCoverChanges(
@@ -583,7 +626,7 @@ export function deformExplosion(
     geometry: edits.size > 0 || objects.length > 0,
     at: { ...at },
     crater,
-    terrain: [...edits].map(([key, depth]) => ({ key, depth })),
+    terrain: [...terrain].map(([key, depth]) => ({ key, depth })),
     objects,
     patches: [...patches],
   };
@@ -611,14 +654,14 @@ function applyCoverChanges(
       collapses.push(object.id);
       for (const part of collapsedStructureParts(map, object)) {
         const hp = 110;
-        state.objects[part.id!] = {
+        addDestructible(state, {
           id: part.id!,
           original: part,
           hp,
           maxHp: hp,
           stage: 0,
           lining: false,
-        };
+        });
         map.boxes.push({ ...part });
         changes.push({ id: part.id!, hp, stage: 0 });
       }
@@ -626,14 +669,14 @@ function applyCoverChanges(
     if (object.original.kind === "tree" && was !== 2 && object.stage === 2) {
       for (const part of fallenTreeParts(map, object, at)) {
         const hp = part.kind === "log" ? 90 : 60;
-        state.objects[part.id!] = {
+        addDestructible(state, {
           id: part.id!,
           original: part,
           hp,
           maxHp: hp,
           stage: 0,
           lining: false,
-        };
+        });
         map.boxes.push({ ...part });
         changes.push({ id: part.id!, hp, stage: 0 });
       }
@@ -641,9 +684,9 @@ function applyCoverChanges(
   };
   for (const change of changes.slice()) apply(change);
   const collapseUnsupportedRoofs = () => {
-    for (const roof of Object.values(state.objects)) {
-      if (roof.stage === 2 || !roof.original.supports || roof.original.architecture) continue;
-      const remaining = roof.original.supports.filter((id) => {
+    for (const roof of destructibles(state).roofs) {
+      if (roof.stage === 2) continue;
+      const remaining = roof.original.supports!.filter((id) => {
         const support = state.objects[id];
         return (
           support &&
@@ -663,7 +706,7 @@ function applyCoverChanges(
   collapseUnsupportedRoofs();
   if(map.buildings) settleBuildings(map,changes,apply);
   if (!bounds) return collapses;
-  for (const object of Object.values(state.objects)) {
+  for (const object of destructibles(state).all) {
     if (object.stage === 2) continue;
     const b = object.original;
     if (

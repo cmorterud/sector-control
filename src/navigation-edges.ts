@@ -8,6 +8,13 @@ type Row = {point:Vec;targets?:string[];checks:Map<string,Check>};
 export class NavigationEdges {
   private points = new Map<string,Vec>();
   private rows = new Map<string,Row>();
+  // An independent copy: later invalidation of either leaves the other intact.
+  clone() {
+    const copy=new NavigationEdges();
+    copy.points=new Map(this.points);
+    for(const [key,row] of this.rows)copy.rows.set(key,{point:row.point,targets:row.targets,checks:new Map(row.checks)});
+    return copy;
+  }
   invalidate(bounds?:NavigationBounds) {
     for(const row of this.rows.values()) {
       if(!bounds){row.checks.clear();row.targets=undefined;continue;}

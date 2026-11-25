@@ -19,6 +19,7 @@ const groups = {
     ['trench-terrain', 'performance-terrain'],
     ['trench-terrain-cached', 'performance-terrain', '--cached'],
     ['verdun-scenery', 'performance-scenery'],
+    ['shell-landing', 'performance-shell'],
   ],
 };
 const group = process.argv[2];
