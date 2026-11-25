@@ -923,6 +923,8 @@ a.armory-link:hover { background: #3f5856; }
 .minimap-loose { font-size: 13px; }
 .minimap-loose[data-state="dropped"] { animation: blink 0.7s infinite alternate; }
 .kill-feed-entry.ctf-feed .feed-action { color: inherit; }
+/* The bayonet-charge prompt (src/charge.ts) stands out from flag and ledge prompts. */
+#capture .charge-prompt { color: #f4ce86; font-size: 12px; font-weight: 700; }
 /* Final-phase reinforcements: the pools under the score and a phase banner. */
 .reinforcement-hint { margin-top: 6px; font-size: 9px; color: #c7c8b9; }
 .reinforcement-tally {

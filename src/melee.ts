@@ -35,17 +35,22 @@ export const meleeReady = (g: Game, p: Soldier) =>
   g.tick >= p.nextMelee &&
   g.tick >= p.staggerUntil;
 
+// A bayoneted rifle at a forward sprint: V now starts a charge rather than a
+// thrust. The HUD prompt and charging bots read the same test.
+export const chargeStance = (p: Soldier, c: Command) =>
+  p.weapon === "serviceRifle" &&
+  c.sprint &&
+  !c.aim &&
+  !p.crouched &&
+  c.x * Math.sin(c.yaw) - c.z * Math.cos(c.yaw) > 0.65 &&
+  Math.hypot(p.vx, p.vz) >= 5.5;
+
 export function startMelee(g: Game, p: Soldier, c: Command) {
   if (!meleeReady(g, p)) return;
-  const forward = c.x * Math.sin(c.yaw) - c.z * Math.cos(c.yaw);
   const kind: MeleeKind =
     p.weapon !== "serviceRifle"
       ? "butt"
-      : c.sprint &&
-          !c.aim &&
-          !p.crouched &&
-          forward > 0.65 &&
-          Math.hypot(p.vx, p.vz) >= 5.5
+      : chargeStance(p, c)
         ? "charge"
         : "bayonet";
   const rule = meleeRules[kind];

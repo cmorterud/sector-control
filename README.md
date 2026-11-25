@@ -23,6 +23,7 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Coastal headland.** Layered sea cliffs, foreshore rocks, short coastal grass, rippled water and destructible garden furniture surround Lighthouse Point’s three flags.
 - **Limited reinforcements at the end.** In the final two minutes, or once either side reaches 240 points, each side's respawns come from a pool of one per soldier. When it runs dry the fallen stay down, and a side with nobody left standing loses on the spot. The HUD shows both pools under the score and warns when yours runs low; once you are out you watch your teammates fight on.
 - **Three roles.** Rifleman, Marksman and Support, each with a faction-specific primary and a pistol, plus grenades, smoke, bayonets, callable artillery and rare flame kits.
+- **Bayonet charges, and going over the top.** Sprint forward with a service rifle and the HUD offers **V · BAYONET CHARGE**: a 100-damage lunge you hold until it strikes. Press **Z** to blow your whistle and up to ten nearby riflemen, your squad first, fix bayonets and charge with you toward where you aim, yelling, then return to their squads. Bot squads blow their own whistles in the last stretch of an attack, and a bot caught with an empty rifle may rush a close enemy. As in the war after 1914, a charge into alert rifles and machine guns mostly dies in the open; one that arrives out of smoke, under covering fire or shellfire breaks the defenders for a moment.
 - **Emplaced machine guns.** Choose Support · Emplacement kit on any map. Press **B** to preview, click to set up, then **E** to mount or dismount. **B** packs your unoccupied gun when you are close to it. The gun keeps its loaded ammunition, reserve and reload progress when you dismount.
 - **Armory.** A weapon reference at [`/armory/`](https://codymorterud.com/sector-control/armory/), linked as **Armory** above the map picker: damage by body part (head, chest, stomach, arms, legs), hits and time to kill, rate of fire, muzzle velocity and reloads for each faction's rifle, scoped rifle, pistol and machine gun. The game and reference use the same faction weapon stats in `src/weapon-stats.ts`.
 - **Readable combat feedback.** Kill confirmations, a team-colored kill feed, directional hit indicators, a brief view toward the last attack, death reports and damage-based assists. The HUD minimap shows your position, heading and flag ownership.
@@ -65,7 +66,8 @@ All keys can be remapped from **Controls** in the briefing or pause menu.
 | Reload | R |
 | Primary / pistol | 1 / 2 |
 | Grenade / smoke | G / F |
-| Melee or bayonet | V |
+| Melee or bayonet; sprint forward first for a bayonet charge (the HUD shows **V · BAYONET CHARGE**) | V |
+| Whistle: nearby riflemen go over the top with you (shared 50-second team cooldown) | Z |
 | Interact (mount / dismount or pick up a flame kit) | E |
 | Preview or pack an emplacement | B |
 | Tactical map and artillery (F on the map switches to gas shells, or flares at night) | Q |

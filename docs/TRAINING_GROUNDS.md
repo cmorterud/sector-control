@@ -7,7 +7,7 @@ Open `?map=training` from the map selector or the published game URL. This is a 
 | Movement & cover | Walk, sprint, toggle crouch, hop, mantle the brick wall, switch camera views and fire from a real trench firing step |
 | Weapon range | Rifle hit, reload, scoped hit, machine-gun hit, pistol hit, close-range flame damage, AR-01 hit, and emplacement setup, firing, reload and packing |
 | Grenades & smoke | Place a grenade explosion near the target group and let smoke bloom |
-| Bayonet lane | Land a normal thrust and a sprinting charge |
+| Bayonet lane | Land a normal thrust and a sprinting charge (press melee when the HUD shows **V · BAYONET CHARGE**); the lesson also points to the whistle that takes a squad over the top |
 | Fire support | Request artillery on the target house through the tactical map and observe impacts |
 | Demolition yard | Breach the two-story house, fell the marked pine and cut a crater; continue destroying supports to experiment with full collapse |
 | Squad exercise | Observe real suppression/cover reactions and defeat two enemies alongside friendly bots |
