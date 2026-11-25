@@ -139,6 +139,12 @@ export interface DestructionChange {
   // Wire belt segments this explosion cut.
   wire?: string[];
 }
+// The authored map each runtime copy was made from, so work that depends
+// only on the untouched map can be shared between matches.
+const runtimeSources = new WeakMap<MapDefinition, MapDefinition>();
+export function runtimeSource(map: MapDefinition) {
+  return runtimeSources.get(map);
+}
 export function runtimeMap(source: MapDefinition): MapDefinition {
   const map: MapDefinition = {
     ...source,
@@ -225,6 +231,7 @@ export function runtimeMap(source: MapDefinition): MapDefinition {
       );
     }
   }
+  runtimeSources.set(map, source);
   return map;
 }
 // Integer grid coordinates as one number (|x|, |z| < 32768 samples).

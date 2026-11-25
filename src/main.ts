@@ -28,6 +28,7 @@ import { flagContains } from "./domination";
 import { Renderer } from "./rendering";
 import {
   Game,
+  TestCollision,
   idle,
   botCommand,
   resolveTeamSize,
@@ -1132,6 +1133,25 @@ try {
     training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}<div class="brief"><b>01 / ${map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
   );
   requestAnimationFrame(frame);
+  // Build the bot navigation graph while the briefing is read rather than in
+  // the Begin click; every match on this map then copies it.
+  // Then compile the match's shaders on a stand-in deployment, so the first
+  // frames after Begin don't stall on them.
+  const prepare = () => {
+    if (bots || training) prepareNavigation(map);
+    if (started || renderReview) return;
+    try {
+      const standIn = new Game(new TestCollision(map), true, 30, 12345, undefined,
+        { map, teamSize: training ? 4 : teamSize, humanPlayerIds: [0], ambientArtillery: false });
+      standIn.selectLoadout(standIn.players[0], chosenLoadout);
+      standIn.players[0].command.firstPerson = true;
+      renderer.warmShaders(standIn);
+    } catch (error) {
+      console.warn("Shader warm-up skipped", error);
+    }
+  };
+  if ("requestIdleCallback" in window) requestIdleCallback(prepare, { timeout: 2000 });
+  else setTimeout(prepare, 500);
 } catch (error) {
   menu(
     "Unable to initialize",

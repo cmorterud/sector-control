@@ -90,6 +90,7 @@ import {
 } from "./map";
 import {
   runtimeMap,
+  runtimeSource,
   deformExplosion,
   damageVegetation,
   advanceStructuralFailures,
@@ -2514,10 +2515,34 @@ function* navigationNodeWork(map: MapDefinition): Generator<boolean, { nodes: Ve
   }
   return { nodes, nodeKeys };
 }
-function graph(map: MapDefinition) {
+// The graph of each authored map before any destruction, built once on a
+// private runtime copy and shared by every match on that map (each match
+// gets its own copy of the retained walk checks).
+type PristineGraph = { nodes: Vec[]; edges: number[][]; checks: NavigationEdges };
+type NavigationGraph = { nodes: Vec[]; edges: number[][]; revision: number };
+const pristineNavigation = new WeakMap<MapDefinition, PristineGraph>();
+function pristineGraph(source: MapDefinition): PristineGraph {
+  let pristine = pristineNavigation.get(source);
+  if (!pristine) {
+    const map = runtimeMap(source), built = graph(map, false);
+    pristine = { nodes: built.nodes, edges: built.edges, checks: navigationMemo(map) };
+    pristineNavigation.set(source, pristine);
+  }
+  return pristine;
+}
+function graph(map: MapDefinition, shared = true): NavigationGraph {
   const revision = map.destruction?.revision ?? 0;
   const cached = navigation.get(map);
   if (cached?.revision === revision) return cached;
+  const source = shared && !revision && !navigationSegments.has(map) ? runtimeSource(map) : undefined;
+  if (source) {
+    const pristine = pristineGraph(source);
+    const result = { nodes: pristine.nodes, edges: pristine.edges, revision };
+    navigation.set(map, result);
+    navigationSegments.set(map, { revision, edges: pristine.checks.clone() });
+    navigationWork.delete(map);
+    return result;
+  }
   const start = battlePerformance.begin();
   const { nodes, nodeKeys } = navigationNodes(map);
   const edges = navigationMemo(map).build(nodes, nodeKeys, map.navSpacing, (a,b) => {
@@ -2529,7 +2554,12 @@ function graph(map: MapDefinition) {
   battlePerformance.end("navigationBuild", start);
   return result;
 }
-export function prepareNavigation(map:MapDefinition) { graph(map); }
+// Build the graph ahead of a match, e.g. while the briefing is open. Passing
+// the authored map prepares every later match on it.
+export function prepareNavigation(map:MapDefinition) {
+  if (runtimeSource(map)) graph(map);
+  else pristineGraph(map);
+}
 // Weakly connected components of a navigation graph, cached per graph
 // object (a rebuilt graph is a new object).
 const componentCache = new WeakMap<object, Int32Array>();
