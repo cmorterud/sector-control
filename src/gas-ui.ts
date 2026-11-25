@@ -63,21 +63,28 @@ export class GasOverlay {
 // (the drawing is cropped, never stretched). Putting it on, the facepiece
 // comes up from under the chin, tilted, and settles; the glass mists over as
 // it seals and then with each breath out.
-const eyepiece = (cx: number) => `
-  <circle cx="${cx}" cy="44" r="25" fill="url(#gas-glass)"/>
-  <circle cx="${cx}" cy="44" r="25" fill="url(#gas-glass-edge)"/>
-  <circle class="gas-fog-seal" cx="${cx}" cy="44" r="25" fill="url(#gas-fog)"/>
-  <circle class="gas-fog-breath" cx="${cx}" cy="44" r="25" fill="url(#gas-fog)"/>
-  <path d="M${cx - 17} ${44 - 13} A21 21 0 0 1 ${cx + 2} ${44 - 21}" fill="none" stroke="#f4f6e6" stroke-opacity=".16" stroke-width="2.2" stroke-linecap="round" filter="url(#gas-soft)"/>
-  <path d="M${cx + 14} ${44 + 15} A20 20 0 0 0 ${cx + 20} ${44 + 6}" fill="none" stroke="#f4f6e6" stroke-opacity=".08" stroke-width="1.4" stroke-linecap="round" filter="url(#gas-soft)"/>
-  <path d="M${cx - 9} ${44 + 9} l7 -3 M${cx + 6} ${44 - 15} l4 2.5" stroke="#e8ead8" stroke-opacity=".07" stroke-width=".3"/>
+// The eyepieces: radius, centre height and how far apart. Large and set wide,
+// so the facepiece frames the view rather than hiding it.
+const lens = { r: 35, cy: 45, left: 41, right: 119 };
+const eyepiece = (cx: number) => {
+  const { r, cy } = lens, k = r / 25;
+  const at = (dx: number, dy: number) => `${cx + dx * k} ${cy + dy * k}`;
+  return `
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#gas-glass)"/>
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#gas-glass-edge)"/>
+  <circle class="gas-fog-seal" cx="${cx}" cy="${cy}" r="${r}" fill="url(#gas-fog)"/>
+  <circle class="gas-fog-breath" cx="${cx}" cy="${cy}" r="${r}" fill="url(#gas-fog)"/>
+  <path d="M${at(-17, -13)} A${21 * k} ${21 * k} 0 0 1 ${at(2, -21)}" fill="none" stroke="#f4f6e6" stroke-opacity=".16" stroke-width="${2.2 * k}" stroke-linecap="round" filter="url(#gas-soft)"/>
+  <path d="M${at(14, 15)} A${20 * k} ${20 * k} 0 0 0 ${at(20, 6)}" fill="none" stroke="#f4f6e6" stroke-opacity=".08" stroke-width="${1.4 * k}" stroke-linecap="round" filter="url(#gas-soft)"/>
+  <path d="M${at(-9, 9)} l${7 * k} ${-3 * k} M${at(6, -15)} l${4 * k} ${2.5 * k}" stroke="#e8ead8" stroke-opacity=".07" stroke-width=".3"/>
   <g filter="url(#gas-soft)">
-    <circle cx="${cx}" cy="44" r="23.6" fill="none" stroke="#090806" stroke-width="1.6"/>
-    <circle cx="${cx}" cy="44" r="25.9" fill="none" stroke="url(#gas-rim)" stroke-width="3.4"/>
-    <circle cx="${cx}" cy="44" r="27.8" fill="none" stroke="#0c0b08" stroke-opacity=".8" stroke-width="1"/>
+    <circle cx="${cx}" cy="${cy}" r="${r - 1.4}" fill="none" stroke="#090806" stroke-width="1.6"/>
+    <circle cx="${cx}" cy="${cy}" r="${r + 0.9}" fill="none" stroke="url(#gas-rim)" stroke-width="3.4"/>
+    <circle cx="${cx}" cy="${cy}" r="${r + 2.8}" fill="none" stroke="#0c0b08" stroke-opacity=".8" stroke-width="1"/>
   </g>`;
+};
 const maskDrawing = `<svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><defs>
-  <mask id="gas-eyepieces"><rect x="-80" y="-1" width="320" height="131" fill="#fff"/><circle cx="50" cy="44" r="25" fill="#000"/><circle cx="110" cy="44" r="25" fill="#000"/></mask>
+  <mask id="gas-eyepieces"><rect x="-80" y="-1" width="320" height="131" fill="#fff"/><circle cx="${lens.left}" cy="${lens.cy}" r="${lens.r}" fill="#000"/><circle cx="${lens.right}" cy="${lens.cy}" r="${lens.r}" fill="#000"/></mask>
   <filter id="gas-soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation=".45"/></filter>
   <filter id="gas-weave" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .16  0 0 0 0 .15  0 0 0 0 .1  0 0 0 .22 0"/><feGaussianBlur stdDeviation=".25"/><feComposite in2="SourceGraphic" operator="in"/></filter>
   <radialGradient id="gas-face" cx="50%" cy="48%" r="62%"><stop offset=".3" stop-color="#26241a"/><stop offset=".75" stop-color="#121109"/><stop offset="1" stop-color="#050504"/></radialGradient>
@@ -92,11 +99,11 @@ const maskDrawing = `<svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid sli
 <g mask="url(#gas-eyepieces)">
   <rect x="-80" y="-1" width="320" height="131" fill="url(#gas-face)"/>
   <rect x="-80" y="-1" width="320" height="131" fill="#000" filter="url(#gas-weave)"/>
-  <ellipse cx="80" cy="40" rx="9" ry="22" fill="url(#gas-bridge)"/>
+  <ellipse cx="80" cy="42" rx="4" ry="26" fill="url(#gas-bridge)"/>
   <ellipse cx="80" cy="92" rx="26" ry="24" fill="url(#gas-nose)"/>
   <rect x="-80" y="64" width="320" height="66" fill="url(#gas-chin)"/>
 </g>
-${eyepiece(50)}${eyepiece(110)}
+${eyepiece(lens.left)}${eyepiece(lens.right)}
 </svg>`;
 
 const smooth = (v: number) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
