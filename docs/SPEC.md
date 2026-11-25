@@ -82,6 +82,10 @@ Four initially neutral flags: A(−22.5,−33), B(−22.5,35) in Blue’s front 
 
 Flags are decorative, rebased to deformed ground; capture checks use actual shared terrain/collision. HUD/world/tactical map show public ownership and contests; scoreboard includes captures. Bot assaults target enemy flags, landed survivors capture then defend steps, nearby riflemen retake threatened home flags. Existing artillery evasion, suppression, awareness and machine-gunner covering roles retain priority. Industrial keeps its original capture/scoring rules. Creeping barrage remains deferred.
 
+### Final-phase reinforcements (November 24)
+
+Domination maps other than Training enter a final phase at `min(3600, duration / 4)` ticks remaining, or on the score tick either team reaches 240 (80% of the limit), whichever is first. Each team then gets a pool of one respawn per soldier (`reinforcementRules`, `src/reinforcements.ts`). Every respawn after that tick spends one; at zero, due respawns wait indefinitely and Redeploy is refused. A team with no living soldiers and an empty pool loses that tick; simultaneous elimination falls back to score. Low (a quarter of the pool, at least 3, below the starting pool) holds that team's trench assaults. Disabled when either side has no soldiers (`?bots=0`). State lives in `Game.reinforcements` and is serialized in snapshots; typed `reinforcements` events mark the phase, low, empty and elimination.
+
 ## Branching trenches and artillery protection — November 7
 
 Six alternate connections and six turning shelter necks extend the four original lines; six recessed 6 × 6 m open-topped bays behind the rear lines provide earth-screened cover. All hundred firing stations, rear entries and continuous front parapets remain.

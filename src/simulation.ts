@@ -107,6 +107,7 @@ import {
 } from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
+import { advanceReinforcements, createReinforcements, reinforcementsLeft, takeReinforcement, type ReinforcementState } from "./reinforcements";
 import {
   advanceTactics, audible, checkCorners, collapseEscape, createTactics, dangerCost, formUp, grenadeCommand, heard, listen,
   observeTactics, overwatchHold, reloadCallout, reportContact, squadContact, squadObjective, stackAtDoor,
@@ -685,6 +686,7 @@ export type Event = { id: number; tick: number } & (
       held?: Record<Team, number>;
     }
   | { type: "end"; winner: Team | "draw" }
+  | import("./reinforcements").ReinforcementEvent
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
 );
@@ -952,6 +954,8 @@ export class Game {
   // Squads, the commander, shared contacts and the danger map; absent
   // without bots or with squads turned off.
   tactics?: Tactics;
+  // The final phase's team respawn pools; see reinforcements.ts.
+  reinforcements: ReinforcementState;
   constructor(
     public collision: CollisionWorld,
     public bots = true,
@@ -1076,6 +1080,7 @@ export class Game {
       this.respawn(this.players[i]);
     }
     this.tactics = createTactics(this);
+    this.reinforcements = createReinforcements(this);
   }
   random() {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0;
@@ -1111,6 +1116,7 @@ export class Game {
       sequence: this.sequence,
       seed: this.seed,
       tactics: this.tactics,
+      reinforcements: this.reinforcements,
       world: this.map.destruction,
     });
   }
@@ -1228,7 +1234,8 @@ export class Game {
   }
   redeploy(actor = 0): boolean {
     const p=this.players[actor];
-    if(this.phase!=="playing" || !p || p.hp<=0)return false;
+    // With the pool spent there is nobody to redeploy as.
+    if(this.phase!=="playing" || !p || p.hp<=0 || !reinforcementsLeft(this,p.team))return false;
     // Intentional self-death follows the same corpse/action/respawn lifecycle,
     // without awarding anyone a kill or changing domination team scores.
     this.damage(p,p.hp,-1,null,{kind:"redeploy",weapon:"Redeploy"});
@@ -1253,7 +1260,7 @@ export class Game {
     advanceTactics(this);
     for (const p of this.players) {
       if (p.hp <= 0) {
-        if (this.tick >= p.respawnAt) {
+        if (this.tick >= p.respawnAt && takeReinforcement(this, p)) {
           const held = p.triggerHeld;
           const meleeHeld = p.meleeHeld;
           this.respawn(p);
@@ -1502,7 +1509,9 @@ export class Game {
         }
       this.emit({ type: "score", points: { ...this.scores }, held });
     }
+    const decided = advanceReinforcements(this);
     if (
+      decided ||
       this.tick >= this.duration ||
       (this.scoreLimit !== null &&
         Math.max(this.scores.blue, this.scores.red) >= this.scoreLimit)
@@ -1520,12 +1529,12 @@ export class Game {
       this.artillery.shells = [];
       this.smokeClouds = [];
       this.assaults.missions = [];
-      this.winner =
+      this.winner = decided ?? (
         this.scores.blue === this.scores.red
           ? "draw"
           : this.scores.blue > this.scores.red
             ? "blue"
-            : "red";
+            : "red");
       this.emit({ type: "end", winner: this.winner });
     }
   }

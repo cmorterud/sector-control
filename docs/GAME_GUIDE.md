@@ -49,7 +49,7 @@ npm run build
 npm run preview
 ```
 
-Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores.
+Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores. In a domination match's final phase it spends a reinforcement like any other respawn, and it is unavailable once your team has none left.
 
 Use **Select map** in the pause menu to leave the current match and open another battlefield’s start screen. The results screen also offers map choices. Your selected camera view carries over.
 
@@ -92,6 +92,16 @@ Capture **A and B** in Blue’s front trench and **C and D** in Red’s. All fou
 World-space objective markers show only a small, dim letter and distance, fading further near the crosshair and while aiming. Contested flags use gold and a small `!`; full names, ownership and capture progress remain in the top HUD, capture readout and tactical map.
 
 Each uncontested flag earns its owner **one point every three seconds**. First to **300** wins; otherwise the higher score after eight minutes wins, with ties drawn. Kills remain personal scoreboard statistics and earn no team points. The HUD shows ownership, contested flags and capture progress; the Q tactical map also marks public flag ownership. Named landmarks help orient the four areas: **A Farmhouse**, **B Shattered Wood**, **C Gun Pit**, and **D Broken Bunker**. Flags remain in their original trench positions; the ruins, shattered trees and abandoned gun stand nearby without closing the existing trench routes.
+
+### Final phase: limited reinforcements
+
+Playtesters found the end of a close match could become an endless trade of charges with nothing at stake. So the last two minutes are a **final phase** on every domination map except Training. It also starts the moment either side reaches **240 points** (80% of the limit). A shortened match (`?duration=`) uses its last quarter, so `?duration=30` starts it with 7.5 seconds left. Before then the HUD notes when it will come.
+
+When it starts, a banner announces it and each side gets a reinforcement pool of **one respawn per soldier**: 50 on the 50v50 maps, 25 on Lighthouse point, 24 on Night raid and 6 in Fort Vaux and the Zeppelin. Each respawn from then on spends one, including a death just before the phase whose five-second wait ends after it. The pools are shown under the score. Your side's count blinks and a banner warns you when it reaches a quarter of the pool (at least 3, and never at the start). Banners also tell you when either side runs dry. At zero, a side's dead stay dead. Flags keep scoring as normal, and the score or the clock still decides the match unless a side with nobody standing has no reinforcements left: it **loses immediately**, whatever the score. If both sides fall on the same tick, the score decides. The results screen gives the reason, for example "Imperial Germany ran out of reinforcements".
+
+When you die with nothing left, the death card reads **No reinforcements** in place of the countdown and says how many of your side still stand. Once the five-second death report has run, the camera follows a living teammate; left-click switches to the next. Redeploy is unavailable from then on.
+
+A side at or below its low mark stops launching over-the-top trench assaults and holds what it has. One respawn per soldier was chosen from seven seeded 8-minute all-bot matches, one per combat map. Bots lose roughly one to three soldiers per man over two minutes, so in five matches the first side ran dry 49 to 90 seconds into the phase, leaving the last minute as a fight that losses decide. That side usually finished outnumbered (12 standing against 44 on Trench front), but no side was wiped out. On Verdun and Village front the score reached 240 early and a side reached 300 with 44 to 68 percent of each pool unspent. Rerun the audit with `tools/reinforcement-audit.ts`; its header explains how to bundle it. Tune the rule in `reinforcementRules` (`src/reinforcements.ts`).
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
