@@ -1003,6 +1003,8 @@ function combatReview(stage:string) {
       source.yaw=Math.atan2(dx,-dz)-source.recoilYaw;
       source.pitch=Math.atan2(target.y+1.1-source.y-eyeHeightOf(source),Math.hypot(dx,dz))-source.recoilPitch;
       if(source.id===0){yaw=source.yaw;pitch=source.pitch;}
+      // Sights up, so the review round is aimed rather than spread from the hip.
+      source.aimMotion={tick:-1e9,from:1,to:1,duration:6};
       const hp=target.hp;game.events=[];game.fire(source);for(const e of game.events)handle(e);advanceReview(2);
       if(target.hp>=hp)throw Error("Combat review round did not hit its target");
     }
