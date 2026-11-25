@@ -23,7 +23,7 @@ export function modeChoice(map: MapDefinition, ctf: boolean, query: URLSearchPar
     const content = `<strong>${label}</strong><small>${note}</small>`;
     return (mode === "ctf") === ctf ? `<span aria-current="page">${content}</span>` : `<a href="?${q}">${content}</a>`;
   };
-  return `<nav class="map-choice mode-choice" aria-label="Game mode">${link("domination", "Domination", "Hold flags to score")}${link("ctf", "Capture the flag", `Three flags a side · first to ${ctfRules.captureLimit}`)}</nav>`;
+  return `<nav class="mode-choice" aria-label="Game mode">${link("domination", "Domination", "Hold flags to score")}${link("ctf", "Capture the flag", `Three flags a side · first to ${ctfRules.captureLimit}`)}</nav>`;
 }
 
 export function ctfBrief(g: Pick<Game, "map">) {
