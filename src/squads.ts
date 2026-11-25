@@ -7,6 +7,7 @@
 import { dist, walkSegment, type Box, type Vec } from "./map";
 import { angleDelta, semiAutoIntent, turnToward } from "./awareness";
 import { flagContains } from "./domination";
+import { gasCost } from "./gas";
 import {
   exposedAimHeight,
   grenadeBlastRadius,
@@ -175,9 +176,12 @@ export function raiseDanger(g: Game, team: Team, at: Vec, amount: number) {
 // Extra A* cost: each metre through a dangerous cell costs more than open
 // ground. Distance stays a lower bound, so the search remains exact.
 export function dangerCost(g: Game, team: Team) {
-  if (!squadFeatures.danger || !g.tactics?.danger[team].size) return undefined;
-  return (a: Vec, b: Vec) =>
+  // Gas is a danger every soldier can see, squad or not.
+  const gas = gasCost(g);
+  if (!squadFeatures.danger || !g.tactics?.danger[team].size) return gas;
+  const danger = (a: Vec, b: Vec) =>
     dist(a, b) * squadRules.dangerWeight * dangerAt(g, team, (a.x + b.x) / 2, (a.z + b.z) / 2);
+  return gas ? (a: Vec, b: Vec) => danger(a, b) + gas(a, b) : danger;
 }
 
 // --- Buildings ------------------------------------------------------------

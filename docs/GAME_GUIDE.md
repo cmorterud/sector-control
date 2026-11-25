@@ -49,7 +49,7 @@ npm run build
 npm run preview
 ```
 
-Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores.
+Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores. In a domination match's final phase it spends a reinforcement like any other respawn, and it is unavailable once your team has none left.
 
 Use **Select map** in the pause menu to leave the current match and open another battlefield’s start screen. The results screen also offers map choices. Your selected camera view carries over.
 
@@ -92,6 +92,16 @@ Capture **A and B** in Blue’s front trench and **C and D** in Red’s. All fou
 World-space objective markers show only a small, dim letter and distance, fading further near the crosshair and while aiming. Contested flags use gold and a small `!`; full names, ownership and capture progress remain in the top HUD, capture readout and tactical map.
 
 Each uncontested flag earns its owner **one point every three seconds**. First to **300** wins; otherwise the higher score after eight minutes wins, with ties drawn. Kills remain personal scoreboard statistics and earn no team points. The HUD shows ownership, contested flags and capture progress; the Q tactical map also marks public flag ownership. Named landmarks help orient the four areas: **A Farmhouse**, **B Shattered Wood**, **C Gun Pit**, and **D Broken Bunker**. Flags remain in their original trench positions; the ruins, shattered trees and abandoned gun stand nearby without closing the existing trench routes.
+
+### Final phase: limited reinforcements
+
+Playtesters found the end of a close match could become an endless trade of charges with nothing at stake. So the last two minutes are a **final phase** on every domination map except Training. It also starts the moment either side reaches **240 points** (80% of the limit). A shortened match (`?duration=`) uses its last quarter, so `?duration=30` starts it with 7.5 seconds left. Before then the HUD notes when it will come.
+
+When it starts, a banner announces it and each side gets a reinforcement pool of **one respawn per soldier**: 50 on the 50v50 maps, 25 on Lighthouse point, 24 on Night raid and 6 in Fort Vaux and the Zeppelin. Each respawn from then on spends one, including a death just before the phase whose five-second wait ends after it. The pools are shown under the score. Your side's count blinks and a banner warns you when it reaches a quarter of the pool (at least 3, and never at the start). Banners also tell you when either side runs dry. At zero, a side's dead stay dead. Flags keep scoring as normal, and the score or the clock still decides the match unless a side with nobody standing has no reinforcements left: it **loses immediately**, whatever the score. If both sides fall on the same tick, the score decides. The results screen gives the reason, for example "Imperial Germany ran out of reinforcements".
+
+When you die with nothing left, the death card reads **No reinforcements** in place of the countdown and says how many of your side still stand. Once the five-second death report has run, the camera follows a living teammate; left-click switches to the next. Redeploy is unavailable from then on.
+
+A side at or below its low mark stops launching over-the-top trench assaults and holds what it has. One respawn per soldier was chosen from seven seeded 8-minute all-bot matches, one per combat map. Bots lose roughly one to three soldiers per man over two minutes, so in five matches the first side ran dry 49 to 90 seconds into the phase, leaving the last minute as a fight that losses decide. That side usually finished outnumbered (12 standing against 44 on Trench front), but no side was wiped out. On Verdun and Village front the score reached 240 early and a side reached 300 with 44 to 68 percent of each pool unspent. Rerun the audit with `tools/reinforcement-audit.ts`; its header explains how to bundle it. Tune the rule in `reinforcementRules` (`src/reinforcements.ts`).
 
 Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
 
@@ -189,7 +199,7 @@ Choose **Lighthouse point** in the start menu or open `?map=headland`. This is a
 
 The coastline is an authored outline (`coast` on the map definition). Ground beyond it is sea bed one bank height below the land, under a flat sea plane, and is closed to movement, navigation and deployment about a meter back from the cliff edge. Open-sea terrain patches are not built.
 
-Ten single-story houses come from the Village building kit, so they can be entered and destroyed. The lighthouse, church and two tenements are the contributed exterior models from `public/models/`, loaded only on this map. They are sealed: each has simple box collision and cannot be entered or destroyed. If a model fails to load, its collision box is drawn instead. Low walls, rocks, crates, sandbags and scattered trees provide cover. `tools/headland-preview.ts` regenerates the menu illustration.
+Ten single-story houses come from the Village building kit, so they can be entered and destroyed. The lighthouse, church and two tenements are the contributed exterior models from `public/models/`, loaded only on this map. They are sealed: each has simple box collision and cannot be entered or destroyed. If a model fails to load, its collision box is drawn instead. Low walls, rocks, crates, sandbags and scattered trees provide cover. `tools/map-previews.mjs` regenerates its menu preview, as for every map.
 
 ## Verdun forest trenches
 
@@ -214,6 +224,16 @@ The latest forest geometry, floor detail and ambient audio are included in publi
 Intact leaf-covered ground has crunchy footsteps; duckboards keep their wooden steps and fresh craters sound muddy. Quiet wind/rustling, occasional creaks and off-map distant battle sounds add ambience. Wind rustling weakens as nearby crowns are stripped or felled. Tree damage and falling timber produce positional cracks/thuds, including Verdun's tree IDs. All sounds use the existing volume, pause/reset, capture and voice-budget controls; no spoken callouts were added.
 
 France versus Imperial Germany, 50 soldiers per team, five-flag domination. Choose [Verdun sector](https://sector-control-trial-20261108.cody22597.chatgpt.site/?map=verdun) in the battlefield menu. This is an authored forest battlefield, not a reconstruction of a particular historical site.
+
+## Mustard gas shells
+
+Gas shells are an alternate artillery strike on every map that offers artillery. The rules live in `src/gas.ts`; the HUD, map clouds, lens and sounds in `src/gas-ui.ts`; the clouds as drawn in `src/gas-view.ts`.
+
+- **Calling gas.** Press **F** on the tactical map to switch the fire mission from high explosive to gas shells (on night maps F steps through artillery, flare and gas), then pick a sector. Gas follows the same rules as a fire mission: range, a human caller, one mission at a time and the same 30-second artillery cooldown, so each call is gas *or* high explosive. Gas shells cannot land within 24 m of either team's deployment.
+- **The cloud.** Three seconds after the call a low cloud spreads to about 18 m across and lingers 25 seconds, drifting along the front at 0.3 m/s. It burns anyone unmasked, up to 12 HP a second at its heart, your own side included. Kills on the enemy are credited to the caller; deaths read "Gas shell". Clouds show on the minimap and tactical map.
+- **Gas mask.** Every soldier carries one. Press **M** (remappable) to put it on: it takes a second with both hands, so you cannot fire, throw, aim, climb or finish a reload meanwhile. Taking it off takes half a second and protection ends at once. Masked, gas burns 1.5 HP a second, because mustard still blisters skin through a mask. In first person you see through two eyepieces and hear yourself breathe; other soldiers show the facepiece, eyepieces and filter tin. A masked bot notices enemies only within about 40° of where it looks, against 63° bare-faced. You redeploy bare-faced.
+- **Bots** mask up within 8 m of a cloud, walk out of it, route around it and take the mask off once 18 m clear for five seconds. A bot team's caller chooses gas over high explosive for a knot of three or more enemies 30–70 m away and clear of its own men.
+- **Look.** Each cloud is a ring of yellow-green billboards sitting on the ground. Quads within 6 m of the camera are left out, as for mist, so standing in one never washes out the view; a yellow haze at the screen edges says you are in it instead, halved through a mask.
 
 ## Farmland trench front
 
