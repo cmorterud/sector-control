@@ -29,6 +29,12 @@ export const hipFireRules = {
   crouched: 0.8,
   // How far up the sights must be before a bot will squeeze the trigger.
   botReady: 0.95,
+  // A masked bot also aims worse, not just from the hip: misted glass and
+  // narrow eyepieces, as the player sees them. Multiplies the scatter a bot
+  // puts on each shot as it fires (not the wobble it waits out before
+  // firing), so the mask costs accuracy up close, where the hip cone is
+  // small, without making masked bots hold their fire.
+  maskedBotAim: 3.5,
 };
 
 // A gas mask's eyepieces sit where the sights would: no aiming while one is on
@@ -57,6 +63,8 @@ export function hipFireOffset(p: Shooter, tick: number, random: () => number) {
   const angle = random() * Math.PI * 2, radius = Math.sqrt(random()) * spread;
   return { yaw: Math.cos(angle) * radius, pitch: Math.sin(angle) * radius };
 }
+
+export const maskedBotAim = (p: Pick<Soldier, "gasMask">) => maskBlocksAim(p) ? hipFireRules.maskedBotAim : 1;
 
 // Bots fire only once the sights are up, unless a mask means they never will be.
 export const botSightsReady = (p: Pick<Soldier, "gasMask" | "aimMotion" | "command">, tick: number) =>

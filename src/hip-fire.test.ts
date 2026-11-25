@@ -8,20 +8,20 @@ import { gasRules } from "./gas";
 const sealed = (tick: number) => ({ worn: true, since: tick - gasRules.donTicks - 1, from: 1 });
 
 // A bot rifleman 38 m from a target that cannot die, as in bot-bloom.test.ts.
-function duel() {
+function duel(gap = 38, aimError = 0.02) {
   const world = new TestCollision(trenchMap);
   const game = new Game({ ray: (a, b) => world.ray(a, b), move: (p) => p }, true, 1200, 12345, undefined, { map: trenchMap, teamSize: 1 });
-  game.botSettings.aimError = 0.02;
+  game.botSettings.aimError = aimError;
   for (const p of game.players) { p.weapon = "rifle"; game.respawn(p); }
   game.artillery.enabled = false;
   game.botSettings.reactionTicks = 0;
   const [target, shooter] = game.players;
   Object.assign(target, { x: -19, y: 0.85, z: -1, hp: 1000000, protectedUntil: 0 });
-  Object.assign(shooter, { x: 19, y: 0.85, z: -1, target: target.id, spottedAt: -100, nextThink: 1e9, protectedUntil: 0 });
+  Object.assign(shooter, { x: -19 + gap, y: 0.85, z: -1, target: target.id, spottedAt: -100, nextThink: 1e9, protectedUntil: 0 });
   return { game, target, shooter };
 }
-function measure(masked: boolean) {
-  const { game, shooter } = duel();
+function measure(masked: boolean, gap = 38, aimError?: number) {
+  const { game, shooter } = duel(gap, aimError);
   let hits = 0, shots = 0, aimedShots = 0;
   for (let i = 0; i < 900; i++) {
     // Keep the mask on: there is no cloud, so the bot would otherwise take it off.
@@ -95,6 +95,15 @@ describe("hip fire", () => {
     // Every unmasked bot round leaves with the sights up.
     expect(aimed.aimedShots).toBe(aimed.shots);
     expect(masked.aimedShots).toBe(0);
+    expect(masked.shots).toBeGreaterThan(10);
+    expect(masked.hits / masked.shots).toBeLessThan((aimed.hits / aimed.shots) * 0.6);
+  });
+
+  it("costs a masked bot accuracy up close too, where the hip cone is small", () => {
+    // At 8 m, with the trench's own bot aim, the cone alone barely matters;
+    // the masked bot's worse aim does.
+    const aimError = new Game({ ray: () => 1, move: (p) => p }, false, 1200, 1, undefined, { map: trenchMap }).botSettings.aimError;
+    const aimed = measure(false, 8, aimError), masked = measure(true, 8, aimError);
     expect(masked.shots).toBeGreaterThan(10);
     expect(masked.hits / masked.shots).toBeLessThan((aimed.hits / aimed.shots) * 0.6);
   });

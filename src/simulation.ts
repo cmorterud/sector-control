@@ -53,7 +53,7 @@ import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
 import { burstRadius, sightLimit, type Burst } from "./night";
 import { advanceFlares, botFlareTarget, createFlareState, requestFlare } from "./flares";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
-import { hipFireOffset, maskBlocksAim } from "./hip-fire";
+import { hipFireOffset, maskBlocksAim, maskedBotAim } from "./hip-fire";
 import { firstPersonView, viewMuzzle } from "./player-view";
 import {
   suppressNearMiss,
@@ -3046,6 +3046,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       c.fire = semiAutoIntent(g, p);
       if (c.fire && g.botSettings.awareness) {
         const scatter =
+          maskedBotAim(p) *
           g.botSettings.aimError *
           (p.weapon === "machineGun" ? 0.9 : 0.65) *
           (1 + p.suppression);

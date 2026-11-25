@@ -17,6 +17,10 @@ const reports = [];
 for (const [seed, map] of runs) {
   const g = new Game(new TestCollision(map), true, seconds * 30, seed, undefined, { map, humanPlayerIds: [] });
   const kind = new Map<number, "aimed" | "hip" | "masked">();
+  // Hit rates by the shooter's range to its target, so close and far shots compare like for like.
+  const bands = [8, 16, 30, Infinity], byRange: Record<string, Record<string, Bucket>> = { aimed: {}, masked: {} };
+  const band = (r: number) => String(bands.find((b) => r < b));
+  const shotBand = new Map<number, string>();
   const out = { aimed: bucket(), hip: bucket(), masked: bucket() };
   let deaths = 0, gasStrikes = 0, gasShells = 0, maskOns = 0;
   while (g.phase === "playing") {
@@ -29,12 +33,18 @@ for (const [seed, map] of runs) {
         kind.set(e.projectile, k);
         out[k].shots++;
         const target = g.players.find((q) => q.id === p.target);
-        out[k].range += target ? Math.hypot(target.x - p.x, target.z - p.z) : 0;
+        const r = target ? Math.hypot(target.x - p.x, target.z - p.z) : 0;
+        out[k].range += r;
+        if (target && k !== "hip") { const b = band(r); shotBand.set(e.projectile, b); (byRange[k][b] ??= bucket()).shots++; }
       }
       if (e.type === "impact" && e.hit && e.target !== null) {
         const k = kind.get(e.projectile);
         const shooter = g.players.find((q) => q.id === e.actor), target = g.players.find((q) => q.id === e.target);
-        if (k && shooter && target && shooter.team !== target.team) out[k].hits++;
+        if (k && shooter && target && shooter.team !== target.team) {
+          out[k].hits++;
+          const b = shotBand.get(e.projectile);
+          if (b && k !== "hip") byRange[k][b].hits++;
+        }
       }
       if (e.type === "death") deaths++;
       if (e.type === "gasStrike" && e.phase === "call") gasStrikes++;
@@ -48,6 +58,7 @@ for (const [seed, map] of runs) {
   const report = {
     seed, map: map.id, seconds, scores: g.scores, winner: g.winner, deaths, gasStrikes, gasShells, maskOns,
     shots: all.shots, hitRate: rate(all),
+    byRange: Object.fromEntries(Object.entries(byRange).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).map(([b, x]) => [b, `${x.hits}/${x.shots}`]))])),
     aimed: { ...out.aimed, rate: rate(out.aimed) }, hip: { ...out.hip, rate: rate(out.hip) }, masked: { ...out.masked, rate: rate(out.masked) },
   };
   reports.push(report);

@@ -8,6 +8,7 @@ import { dist, walkSegment, type Box, type Vec } from "./map";
 import { angleDelta, semiAutoIntent, turnToward } from "./awareness";
 import { flagContains } from "./domination";
 import { gasCost } from "./gas";
+import { maskedBotAim } from "./hip-fire";
 import {
   exposedAimHeight,
   grenadeBlastRadius,
@@ -588,7 +589,7 @@ export function suppressiveFire(g: Game, p: Soldier, c: Command) {
   c.sprint = false;
   c.fire = Math.abs(angleDelta(c.yaw, yaw)) < 0.1 && semiAutoIntent(g, p);
   if (c.fire) {
-    const scatter = g.botSettings.aimError * 1.4;
+    const scatter = g.botSettings.aimError * 1.4 * maskedBotAim(p);
     c.yaw += Math.sin(g.tick * 1.7 + p.id) * scatter;
     c.pitch += Math.cos(g.tick * 2.3 + p.id) * scatter * 0.5;
   }
