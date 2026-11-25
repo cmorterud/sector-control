@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { raiseSights } from "./test-sights";
 import {
   Game,
   TestCollision,
@@ -86,6 +87,7 @@ describe("combat and lifecycle", () => {
       // Recenter each deliberate shot; this fixture isolates damage/lifecycle.
       p.pitch = -p.recoilPitch;
       p.yaw = -p.recoilYaw;
+      raiseSights(p);
       g.fire(p);
       advance(g, 3);
     }

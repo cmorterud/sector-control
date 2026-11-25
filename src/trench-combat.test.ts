@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { raiseSights } from "./test-sights";
 import {
   Game,
   TestCollision,
@@ -62,6 +63,7 @@ describe("firing-step trench combat", () => {
       // Isolate cover and head damage with deliberately recentered shots.
       blue.pitch = -blue.recoilPitch;
       blue.yaw = Math.PI / 2 - blue.recoilYaw;
+      raiseSights(blue);
       game.fire(blue);
     };
     for (let i = 0; i < 4; i++) aimedShot();
@@ -85,6 +87,7 @@ describe("firing-step trench combat", () => {
     expect(botCommand(game, blue).fire).toBe(false);
     expect(blue.target).toBe(-1);
     Object.assign(blue, { x: -19, y: 0.85 });
+    raiseSights(blue);
     game.tick = 4;
     const command = botCommand(game, blue);
     expect(blue.target).toBe(red.id);

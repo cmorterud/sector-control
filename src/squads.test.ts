@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { raiseSights } from "./test-sights";
 import {
   Game,
   TestCollision,
@@ -158,6 +159,7 @@ describe("shared memory and perception", () => {
     reportContact(g, observer, enemy);
     expect(squadOf(g, gunner)!.contact).toMatchObject({ enemy: enemy.id });
     Object.assign(gunner, { weapon: "machineGun", ammo: 50, yaw: Math.PI / 2 });
+    raiseSights(gunner);
     let fired = 0;
     for (let i = 0; i < 60; i++) {
       g.tick++;
@@ -177,6 +179,7 @@ describe("shared memory and perception", () => {
     const rifleman = blue(g).find((p) => p.id % 3 === 0)!;
     rifleman.awareness.observed = { x: 21.5, y: 1.3, z: rifleman.z };
     rifleman.awareness.seenAt = g.tick - 20;
+    raiseSights(rifleman);
     let fired = false;
     for (let i = 0; i < 30 && !fired; i++) {
       g.tick++;

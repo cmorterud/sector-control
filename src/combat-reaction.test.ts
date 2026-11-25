@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { raiseSights } from "./test-sights";
 import { Game, TestCollision, idle, botCommand } from "./simulation";
 import { industrialMap, walkSegment, dist } from "./map";
 import { reactToThreat, reactionCoverCommand, braceCommand, combatReactionPose } from "./combat-reaction";
@@ -98,6 +99,7 @@ it("leaves recovery gaps under continuous fire and never consumes trigger plans 
   Object.assign(g.players[0],{x:0,z:-8});
   p.awareness.observed={x:0,y:1.6,z:-8};p.awareness.seenAt=g.tick;
   p.awareness.confidence=1;p.awareness.visible=true;p.awareness.nextLook=1e9;p.awareness.nextTrigger=0;
+  raiseSights(p);
   const before=p.awareness.stringShots;
   expect(botCommand(g,p).fire).toBe(false);
   expect(p.awareness.stringShots).toBe(before);

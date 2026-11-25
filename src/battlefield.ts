@@ -338,6 +338,9 @@ export class BattlefieldFeedback {
       this.cue(g, "whistle", e.from, 0.3, false, false, e.id);
       this.stats.whistles++;
     }
+    // A gas shell lands with a dull plop, not a blast.
+    if (e.type === "gasShellImpact" && Math.hypot(p.x - e.at.x, p.z - e.at.z) < 90)
+      this.cue(g, "grenade", e.at, 0.32, false, true, e.shell);
     if (e.type === "grenadeExplosion" || e.type === "artilleryImpact") {
       const artillery = e.type === "artilleryImpact";
       const distance = Math.hypot(p.x - e.at.x, p.y + 1 - e.at.y, p.z - e.at.z);

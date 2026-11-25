@@ -53,6 +53,7 @@ import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
 import { burstRadius, sightLimit, type Burst } from "./night";
 import { advanceFlares, botFlareTarget, createFlareState, requestFlare } from "./flares";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
+import { hipFireOffset, maskBlocksAim } from "./hip-fire";
 import { firstPersonView, viewMuzzle } from "./player-view";
 import {
   suppressNearMiss,
@@ -1319,6 +1320,8 @@ export class Game {
       );
       p.command = p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
       const c = p.command;
+      // No sights to the eye through a gas mask's eyepieces.
+      if (maskBlocksAim(p)) c.aim = false;
       ctfCommand(this, p, c);
       if (p.id !== 0) evadeFlame(this,p);
       const interactPressed = !!c.interact && !p.commandInteractHeld;
@@ -1727,9 +1730,10 @@ export class Game {
       const spread = p.command.aim ? 0.005 : 0.011;
       yaw += (this.random() - 0.5) * spread;
       pitch += (this.random() - 0.5) * spread;
-    } else if (weapon === "machineGun" && p.id === 0 && p.loadout === "support") {
-      const spread = Math.hypot(p.vx,p.vz) > 1 ? .045 : p.command.aim ? .005 : .018;
-      yaw += (this.random() - .5) * spread; pitch += (this.random() - .5) * spread;
+    } else {
+      // Fired from the hip, or before the sights are up, a shot wanders.
+      const hip = hipFireOffset(p, this.tick, () => this.random());
+      yaw += hip.yaw; pitch += hip.pitch;
     }
     const shooter = gun ?? p;
     shooter.ammo--;

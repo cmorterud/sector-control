@@ -1,5 +1,6 @@
 import type { Game, Soldier, V3 } from "./simulation";
 import { gasRules, masked } from "./gas";
+import { botSightsReady } from "./hip-fire";
 
 export interface Awareness {
   confidence: number;
@@ -63,7 +64,9 @@ export function semiAutoIntent(g: Game, p: Soldier) {
     p.reloadAt ||
     p.ammo <= 0 ||
     p.mantle ||
-    g.tick < p.throwUntil
+    g.tick < p.throwUntil ||
+    // Squeeze off the shot once the sights are up, not on the way.
+    !botSightsReady(p, g.tick)
   )
     return false;
   const a = p.awareness;
