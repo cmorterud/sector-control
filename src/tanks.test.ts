@@ -228,6 +228,19 @@ describe("tanks", () => {
     expect(tankPanel(g, g.players[0], keys)).toContain("FIRES WHEN LOADED");
   });
 
+  it("hold fire and say so when the ground beside the gun would stop the shell", () => {
+    const g = scene();
+    const t = command(g);
+    // Beside the sandbags at C, aiming down past them from the low sponson.
+    place(g, t, 8, -20, east);
+    const keys = { interact: "E", forward: "W", backward: "S", left: "A", right: "D" };
+    expect(tankEvents(run(g, 20, { yaw: t.yaw - 1.5, pitch: -0.2, aim: true }), "cannon")).toHaveLength(0);
+    expect(t.cannon.ammo).toBe(tankRules.cannonAmmo);
+    expect(tankPanel(g, g.players[0], keys)).toContain('class="warn">GROUND IN THE WAY');
+    // Raise the aim over them and it fires.
+    expect(tankEvents(run(g, 5, { yaw: t.yaw - 1.5, pitch: 0.05, aim: true }), "cannon")).toHaveLength(1);
+  });
+
   it("fire a fast shell that can be seen in flight and bursts where it lands", () => {
     const g = scene();
     const t = command(g);

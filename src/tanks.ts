@@ -110,7 +110,9 @@ export interface Tank extends V3 {
   mg: { ammo: number; reserve: number; nextShot: number; reloadAt: number; weaponId: string; mount: number };
   // refused: the last tick the trigger was held while the gun could not fire.
   // firedAt and muzzle: the last shot, for the smoke drawn at the barrel.
-  cannon: { ammo: number; nextShot: number; held: boolean; refused: number; firedAt: number; muzzle: V3 };
+  // clear: whether the gun has a line to the crosshair (a gun low in the hull
+  // cannot see down into a trench the commander's raised view looks into).
+  cannon: { ammo: number; nextShot: number; held: boolean; refused: number; firedAt: number; muzzle: V3; clear: boolean };
   knockedOutAt?: number;
   bot: { objective?: Vec; nextPlan: number; target: number; nextScan: number; check: Vec & { tick: number }; reverseUntil: number; turn: number; heading?: number; nextSteer: number };
 }
@@ -361,7 +363,7 @@ function spawnTank(g: Game, team: Team) {
       speed: 0, travel: 0, hp: tankRules.hp, state: "mobile", until: 0, gap: 0, splash: 0,
       aimYaw: yaw, aimPitch: 0, aim: { ...toWorld({ x: c.x, z: c.z, yaw }, 30, 0), y: pose.y + 1.3 },
       mg: { ammo: tankRules.mgBelt, reserve: tankRules.mgReserve, nextShot: 0, reloadAt: 0, weaponId, mount: -1 },
-      cannon: { ammo: tankRules.cannonAmmo, nextShot: 0, held: false, refused: -1, firedAt: -1, muzzle: { x: c.x, y: pose.y, z: c.z } },
+      cannon: { ammo: tankRules.cannonAmmo, nextShot: 0, held: false, refused: -1, firedAt: -1, muzzle: { x: c.x, y: pose.y, z: c.z }, clear: true },
       bot: { nextPlan: 0, target: -1, nextScan: 0, check: { x: c.x, z: c.z, tick: g.tick }, reverseUntil: 0, turn: 1, nextSteer: 0 },
     };
     g.tanks.list.push(tank);
@@ -792,11 +794,21 @@ function fireMachineGun(g: Game, t: Tank, p: Soldier) {
   });
 }
 
-function fireCannon(g: Game, t: Tank, p: Soldier, yaw: number, pitch: number) {
-  const gun = t.cannon;
-  if (gun.ammo <= 0 || g.tick < gun.nextShot || !cannonBears(t, yaw)) return false;
+// Whether the main gun can reach where the crosshair rests: ground, a
+// parapet or sandbags stopping the shell more than a few metres short means
+// the gun, sitting low in the hull, cannot see what the commander sees.
+export const cannonBlockedShort = 3;
+function cannonLine(g: Game, t: Tank, p: Soldier, yaw: number, pitch: number) {
   const target = aimPoint(g, t, p, yaw, pitch, tankRules.cannonRange);
   const from = cannonMuzzle(t, yaw, pitch);
+  const len = Math.hypot(target.x - from.x, target.y - from.y, target.z - from.z);
+  return { target, from, clear: (1 - g.collision.ray(from, target)) * len <= cannonBlockedShort };
+}
+
+function fireCannon(g: Game, t: Tank, p: Soldier, line?: ReturnType<typeof cannonLine>) {
+  const gun = t.cannon;
+  if (gun.ammo <= 0 || g.tick < gun.nextShot || !line?.clear) return false;
+  const { target, from } = line;
   const spread = 0.006 + t.splash * 0.03;
   const len = Math.max(0.001, Math.hypot(target.x - from.x, target.y - from.y, target.z - from.z));
   const range = Math.min(tankRules.cannonRange, len + 2);
@@ -860,8 +872,10 @@ export function operateTank(g: Game, p: Soldier, t: Tank, c: Command) {
   if (c.fire) fireMachineGun(g, t, p);
   // Holding the right button keeps the main gun firing each time it is
   // loaded and bears, so a press during the reload is not lost.
+  const line = cannonBears(t, p.yaw) ? cannonLine(g, t, p, p.yaw, p.pitch) : undefined;
+  t.cannon.clear = line?.clear ?? true;
   t.cannon.held = !!c.aim;
-  if (t.cannon.held && !fireCannon(g, t, p, p.yaw, p.pitch)) t.cannon.refused = g.tick;
+  if (t.cannon.held && !fireCannon(g, t, p, line)) t.cannon.refused = g.tick;
 }
 
 // Whether the tank could drive a few metres along a heading without being

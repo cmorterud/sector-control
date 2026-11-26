@@ -30,6 +30,7 @@ export function tankPanel(g: Game, p: Soldier, keys: { interact: string; forward
   const gunStatus = !t.cannon.ammo ? line("NO ROUNDS LEFT", true)
     : loading ? line(`LOADING · ${(loading / 30).toFixed(1)}s${t.cannon.held ? " · FIRES WHEN LOADED" : ""}`)
     : !bears ? line(arc, refused)
+    : !t.cannon.clear ? line("GROUND IN THE WAY · THE GUN SITS LOW · AIM FARTHER OUT", refused)
     : line("READY · RMB");
   const gun = `<div>${line(tankGun(t.model).toUpperCase())}<strong>${t.cannon.ammo}<em> RDS</em></strong>${bar(1 - loading / tankRules.cannonReloadTicks)}${gunStatus}</div>`;
   return `<small>${t.name.toUpperCase()} · ${Math.ceil((t.hp / tankRules.hp) * 100)}% HULL · ${tankLabel(t)}${t.splash > 0.35 ? " · SPLASH ON THE SLITS" : ""}</small>` +
