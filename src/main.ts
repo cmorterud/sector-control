@@ -14,6 +14,7 @@ import { factions, factionFor, kitFor, riflemanWeapon, scoped, type Loadout, typ
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
+import { forwardMenuWheel } from "./menu-wheel";
 import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
 import { villageMap } from "./village-map";
@@ -132,6 +133,7 @@ function persistSettings() {
   tacticalMap.setShortcut(keyLabel(settings.bindings.tactical));
 }
 const controlsPanel = new ControlsPanel(settings, persistSettings);
+forwardMenuWheel(el("menu"));
 const isKey = (action: ControlAction, code: string) => settings.bindings[action] === code ||
   (settings.bindings[action] === "ShiftLeft" && code === "ShiftRight");
 const held = (action: ControlAction) => [...keys].some(code => isKey(action, code));

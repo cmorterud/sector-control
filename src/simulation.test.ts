@@ -139,6 +139,8 @@ describe("combat and lifecycle", () => {
   });
   it("moves rounds at a visible finite speed and delays damage until impact", () => {
     const { g, p, enemy } = scene();
+    // Far enough that the round is still in flight after its first tick.
+    enemy.z = -14;
     g.fire(p);
     expect(enemy.hp).toBe(100);
     expect(g.events.some((e) => e.type === "damage")).toBe(false);
@@ -187,6 +189,7 @@ describe("combat and lifecycle", () => {
   });
   it("lets targets leave or enter a round's flight path after the shot", () => {
     const first = scene();
+    first.enemy.z = -14;
     first.g.fire(first.p);
     advance(first.g, 1);
     first.enemy.x = 3;
@@ -194,6 +197,7 @@ describe("combat and lifecycle", () => {
     expect(first.enemy.hp).toBe(100);
     const second = scene();
     second.enemy.x = 8;
+    second.enemy.z = -14;
     second.g.fire(second.p);
     advance(second.g, 1);
     second.enemy.x = 0;
@@ -260,11 +264,12 @@ describe("combat and lifecycle", () => {
       const { g, p, enemy } = scene();
       enemy.protectedUntil = protectedUntil;
       enemy.hp = 25;
+      enemy.z = -14;
       g.fire(p);
       p.hp = 0;
       p.respawnAt = 150;
       advance(g, 15);
-      // At 192m/s this round arrives on tick2, after protection ending at2
+      // At 288m/s this round to 14m arrives on tick2, after protection ending at2
       // but before protection ending at3. Shooter death never cancels flight.
       expect(enemy.hp).toBe(protectedUntil === 2 ? 0 : 25);
       expect(p.kills).toBe(protectedUntil === 2 ? 1 : 0);
@@ -293,10 +298,10 @@ describe("combat and lifecycle", () => {
     g.botSettings.awareness = false;
     g.tick = 1;
     const c = botCommand(g, p);
-    expect(c.yaw).toBeCloseTo(Math.asin(4.5 / 192));
+    expect(c.yaw).toBeCloseTo(Math.asin(4.5 / projectileSpeed));
     p.weapon = "machineGun";
     const slower = botCommand(g, p);
-    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.05);
+    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.04);
     expect(slower.yaw).toBeLessThan(0.3);
   });
   it("aligns the autoplay driver with the first-person sight camera", () => {

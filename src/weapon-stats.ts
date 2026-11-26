@@ -11,10 +11,10 @@ export const hitZones: { id: HitZone; label: string; where: string }[] = [
 ];
 export const soldierHealth = 100;
 
-// Bullets fly at a quarter of real speed so moving targets need leading. One
-// scale for every weapon keeps their real differences: it puts the SMLE at
-// the game's current 192 m/s.
-export const bulletSpeedScale = 192 / 744;
+// Bullets fly well below real speed (about two fifths) so moving targets need
+// leading. One scale for every weapon keeps their real differences: it puts
+// the SMLE at the game's 288 m/s.
+export const bulletSpeedScale = 288 / 744;
 
 export type WeaponRole = "rifle" | "carbine" | "scoped" | "pistol" | "machineGun" | "emplaced";
 export const roleLabels: Record<WeaponRole, string> = {

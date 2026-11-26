@@ -230,10 +230,10 @@ it("requires awareness and stops gunner bursts immediately when sight is lost", 
 
 it("scales all bullet velocities by 1.5, and keeps in-flight speed after a weapon change", () => {
   for (const [weapon, speed] of [
-    ["rifle", 192],
-    ["serviceRifle", 192],
-    ["machineGun", 48],
-    ["pistol", 192],
+    ["rifle", 288],
+    ["serviceRifle", 288],
+    ["machineGun", 72],
+    ["pistol", 288],
   ] as const) {
     const g = new Game(
         new TestCollision({ ...industrialMap, boxes: [] }),
@@ -250,7 +250,7 @@ it("scales all bullet velocities by 1.5, and keeps in-flight speed after a weapo
     for (let i = 0; i < 3; i++) g.step(idle());
     expect(
       Math.hypot(shot.x - start.x, shot.y - start.y, shot.z - start.z),
-    ).toBeCloseTo(speed / 10);
+    ).toBeCloseTo(Math.min(speed / 10, start.remaining));
   }
 });
 
