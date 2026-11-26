@@ -71,6 +71,7 @@ import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui"
 import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
 import { soldierName } from "./soldier-names";
+import { rainChoice, rainIntensity, rainStorageKey, supportsRain } from "./weather";
 import { crewTank, supportsTanks, takeCommand, tankRules, toWorld } from "./tanks";
 import { tankBrief, tankChoice, tankNotice, tankPanel, tankPrompt, tankStorageKey } from "./tank-hud";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
@@ -241,6 +242,9 @@ const trainingOverlay=document.createElement("aside");trainingOverlay.id="traini
 document.querySelector("#ui")!.append(trainingOverlay);
 // Tanks on the maps that have them: ?tanks=1 or 0 wins, then the briefing's last choice.
 let tanksOn = params.has("tanks") ? params.get("tanks") !== "0" : params.get("tank") === "1" ? true : (() => { try { return localStorage.getItem(tankStorageKey) === "1"; } catch { return false; } })();
+// Rain on the maps that have weather: ?rain=1 or 0 wins, then the briefing's
+// last choice; it rains by default.
+let rainOn = params.has("rain") ? params.get("rain") !== "0" : (() => { try { return localStorage.getItem(rainStorageKey) !== "0"; } catch { return true; } })();
 const requestedTeamSize = params.has("teamSize")
   ? Number(params.get("teamSize"))
   : undefined;
@@ -331,6 +335,15 @@ function menu(
       try { localStorage.setItem(tankStorageKey, tanksOn ? "1" : "0"); } catch { /* per-viewer convenience only */ }
     };
   }
+  if (supportsRain(map)) {
+    const weather = document.createElement("div"); weather.className = "loadout-choice";
+    weather.innerHTML = rainChoice(rainOn) + (started ? "<small>Takes effect when you restart the match</small>" : "");
+    el("controls-settings").before(weather);
+    (el("rain") as HTMLInputElement).onchange = (e) => {
+      rainOn = (e.target as HTMLInputElement).checked;
+      try { localStorage.setItem(rainStorageKey, rainOn ? "1" : "0"); } catch { /* per-viewer convenience only */ }
+    };
+  }
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
   if (bots) {
     const skill = document.createElement("div"); skill.className = "loadout-choice";
@@ -416,7 +429,7 @@ function start() {
     ),
     12345,
     training ? undefined : { difficulty },
-    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined, tanks: !training && tanksOn },
+    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined, tanks: !training && tanksOn, rain: !training && rainOn },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
   training?.begin(game);
@@ -431,6 +444,7 @@ function start() {
   audio ??= new BattleAudio();
   audio.reset();
   audio.volume(audioVolume);
+  audio.rain(game.rain, rainIntensity(0));
   if (params.has("playtest"))
     recording = new PlaytestRecorder(
       renderer.canvas,
@@ -1109,6 +1123,7 @@ function frame(now: number) {
         combatFeedback.camera(game,game.tick,view)?.pitch??view.pitch,
       );
       audio?.muffle(battlefield.state(game.tick).muffle);
+      if (game.rain && game.tick % 15 === 0) audio?.rain(true, rainIntensity(game.tick / 30));
       gasAudio.volume(audioVolume);
       gasAudio.update(game.players[0].hp > 0 && masked(game.players[0], game.tick));
       accumulator += dt;
@@ -1182,6 +1197,8 @@ try {
     manual:()=>{reviewManual=true;},
     training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
     advance:advanceReview,
+    // Rain: show the water as it stands this many seconds into the downpour.
+    flood:(seconds:number)=>{if(!game.rain)throw Error("No rain on this operation");game.rainSince=game.tick-Math.round(seconds*30);renderer.draw(game,1,0,false);return {tick:game.tick};},
     // Night maps: put a flare over a point at once, and read the light the rule sees there.
     flare:(x:number,z:number)=>{game.flares.flares.push({id:++game.flares.sequence,team:"blue",actor:0,x,z,heading:Math.PI/2,burstAt:game.tick,endsAt:game.tick+flareRules.burnTicks});},
     light:(x:number,z:number)=>lightAt(game,{x,z}),
@@ -1226,7 +1243,7 @@ try {
       }
       // Across the boundary wire behind Blue's spawn, and up Blue's front line to its trench block.
       // "no-mans-land" looks from the centre over a crater pond to Blue's wire belt.
-      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,70,-28,88],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-25,-12,-17]};
+      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,70,-28,88],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-25,-12,-17],"flooded-crater":[-12,29,-7,34]};
       // Along a rear trench to its first dugout, and in front of the first signboard.
       const dressed=map.backdrop&&!!map.terrain?.trenchLines?.length,dugout=dressed?dugouts(map)[0]:undefined,sign=dressed?signboards(map)[0]:undefined;
       // From the trench floor behind a Blue firing step, east toward the parapet

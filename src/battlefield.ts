@@ -1,5 +1,6 @@
 import { distantFlashes } from "./backdrop";
 import { inCraterPond } from "./no-mans-land";
+import { floodAt, waterDepth } from "./weather";
 import { groundField, villageRoad } from "./ground-surface";
 import { treeHasCrown } from "./vegetation";
 import { inFortRect } from "./fort-vaux-map";
@@ -38,6 +39,7 @@ export type SoundKind =
   | "wood"
   | "concrete"
   | "splash"
+  | "sludge"
   | "drip"
   | "grenade"
   | "artillery"
@@ -105,7 +107,10 @@ export function footSurface(
   p: Vec,
   map: MapDefinition,
   boards = duckboards(map),
-): "wood" | "mud" | "concrete" | "leaves" | "splash" {
+  // In the rain (src/weather.ts): the flood level, so water reaches farther
+  // and the mud is heavy.
+  flood?: number,
+): "wood" | "mud" | "concrete" | "leaves" | "splash" | "sludge" {
   if (map.fort) {
     if ((p.y ?? 0) < map.fort.waterHeight && inFortRect(p, map.fort.water)) return "splash";
     if (map.fort.rooms.some(room => room.id === "barracks" && inFortRect(p, room))) return "wood";
@@ -128,6 +133,7 @@ export function footSurface(
   if (board && intactBoard(board, map)) return "wood";
   const y = groundHeight(p.x, p.z, map);
   if (map.woodland && y > 1.5 && y >= baseGroundHeight(p.x, p.z, map) - .15 && groundField(map,p.x,p.z).litter > .35) return "leaves";
+  if (flood !== undefined) return waterDepth(p, map, flood) > 0.03 ? "splash" : "sludge";
   return inCraterPond(p, map) ? "splash" : "mud";
 }
 
@@ -443,7 +449,7 @@ export class BattlefieldFeedback {
         const length = p.crouched ? 0.9 : p.command.sprint ? 1.8 : 1.35;
         if (stride >= length) {
           stride %= length;
-          const surface = footSurface(p, g.map, this.boards);
+          const surface = footSurface(p, g.map, this.boards, g.rain ? floodAt(g.tick - g.rainSince) : undefined);
           this.cue(
             g,
             surface,
@@ -462,7 +468,7 @@ export class BattlefieldFeedback {
                 ? "waterSteps"
                 : surface === "leaves"
                 ? "leafSteps"
-              : surface === "mud"
+              : surface === "mud" || surface === "sludge"
                 ? "mudSteps"
                 : "concreteSteps"
           ]++;
