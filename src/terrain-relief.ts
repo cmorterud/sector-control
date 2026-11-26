@@ -146,9 +146,13 @@ export function buildTrenchElevation(map: MapDefinition): TerrainElevation {
 
 // Author only depressions in the central field. Three meters of untouched earth
 // remain before the nearest front parapet, and existing cover keeps level footing.
+// Depressions are cut only within `half` metres of the centre line (Trench
+// front's 32 m no-man's land by default; Verdun's wider field between its
+// front lines), fading out over the last few metres before the trenches.
 export function buildTrenchRelief(
   map: MapDefinition,
   depressions: Depression[],
+  half = 16,
 ): TerrainRelief {
   const cuts: Record<string, number> = {},
     patches: Record<string, true> = {};
@@ -186,11 +190,11 @@ export function buildTrenchRelief(
             ? scarEdge(depression, Math.atan2(nz, nx))
             : 1,
           r2 = (nx * nx + nz * nz) / (edge * edge);
-        if (r2 >= 1 || Math.abs(x) >= 15 || Math.abs(z) >= playArea(map).depth / 2 - 2)
+        if (r2 >= 1 || Math.abs(x) >= half - 1 || Math.abs(z) >= playArea(map).depth / 2 - 2)
           continue;
         if (baseGroundHeight(x, z, authored) < map.terrain!.bankHeight - 0.01)
           continue;
-        let protection = smooth((15 - Math.abs(x)) / 3);
+        let protection = smooth((half - 1 - Math.abs(x)) / 3);
         for (const box of map.boxes) {
           if (box.landmark) continue;
           const distance = Math.hypot(
@@ -210,9 +214,9 @@ export function buildTrenchRelief(
             ] = true;
       }
   }
-  const originX = -16 / terrainResolution,
+  const originX = -half / terrainResolution,
     originZ = -map.depth / 2 / terrainResolution;
-  const columns = 32 / terrainResolution + 1,
+  const columns = (half * 2) / terrainResolution + 1,
     rows = map.depth / terrainResolution + 1;
   const values = new Float32Array(columns * rows);
   for (const [key, depth] of Object.entries(cuts)) {

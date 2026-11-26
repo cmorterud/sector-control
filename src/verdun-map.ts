@@ -172,7 +172,9 @@ for (const [x,z] of [[-24,-3],[24,3],[-23,21],[24,-23],[0,-21],[3,22]])
 }
 terrain.banks=buildTrenchBanks(verdunMap);
 terrain.elevation=buildTrenchElevation(verdunMap);
-terrain.relief=buildTrenchRelief(verdunMap,terrain.shellScars!);
+// Every shell scar between the front lines is a real bowl, so the water that
+// stands in them pools below the rim (the cuts fade out short of the wire).
+terrain.relief=buildTrenchRelief(verdunMap,terrain.shellScars!,56);
 for(const b of [...boxes,...vegetation]) b.baseY=groundHeight(b.x,b.z,verdunMap)-.03+(b.baseY??0);
 const forest = buildVerdunForest(verdunMap);
 vegetation.push(...forest.filter(b=>b.kind==="tree" || b.kind==="brush"));
