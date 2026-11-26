@@ -12,6 +12,13 @@ export class ControlsPanel {
     this.panel.setAttribute("aria-modal", "true");
     this.panel.setAttribute("aria-label", "Controls");
     document.getElementById("ui")!.append(this.panel);
+    // A press anywhere outside the dialog dismisses it, like Done. Capture
+    // phase, so the press closes the dialog without also reaching the game.
+    document.addEventListener("pointerdown", (event) => {
+      if (!this.open || this.panel.contains(event.target as Node)) return;
+      event.preventDefault(); event.stopPropagation();
+      this.close();
+    }, true);
   }
   show(opener: HTMLElement) {
     this.open = true; this.opener = opener; this.waiting = null;
