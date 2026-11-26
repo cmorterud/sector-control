@@ -1,4 +1,6 @@
 import { emplacementRules, emplacementView, mountedGun, type Placement } from "./emplacements";
+import { mortarAim, mortarSpread, mortarTargetBlocked, tubeElevation } from "./mortar";
+import { isMortarWeapon } from "./mortar-stats";
 import { TankView } from "./tank-render";
 import { crewTank, tankCamera } from "./tanks";
 import {handlingPath,handlingWrist} from "./handling-pose";
@@ -4805,6 +4807,9 @@ export class Renderer implements CollisionWorld {
     this.tankView?.reset();
     this.gunGhost?.root.destroy();
     this.gunGhost = undefined;
+    for (const bomb of this.mortarBombs.values()) bomb.destroy();
+    this.mortarBombs.clear();
+    if (this.mortarRing) this.mortarRing.root.enabled = false;
     this.pendingCasualties.clear();
     this.dirtyWorldBatches?.clear();
     this.clearEnvironmentEffects();
@@ -5032,7 +5037,52 @@ export class Renderer implements CollisionWorld {
   // Each nation's mounted gun: the Vickers with its fluted water jacket and
   // steam condenser, the MG 08 on its sled with a smooth jacket and muzzle
   // booster, and the air-cooled Hotchkiss with brass fins and a feed strip.
+  // A trench mortar: baseplate, tube on its elevation joint, and a bipod.
+  private buildMortar(name: string): EmplacementMesh {
+    const root = this.joint(name, this.app.root);
+    const steel = "#363c38", plate = "#4c5248", dark = "#1b201f";
+    const german = name === "Granatenwerfer 16", french = name.startsWith("Mortier");
+    // The baseplate the tube's foot sits in.
+    this.cube("baseplate", 0, 0.03, 0.02, german ? 0.42 : 0.56, 0.05, german ? 0.36 : 0.46, plate, false, root);
+    this.cube("baseplate rib", 0, 0.065, 0.02, 0.06, 0.025, german ? 0.34 : 0.44, steel, false, root);
+    const yaw = this.joint("traverse", root, 0, 0.07, 0);
+    const barrel = this.joint("elevation", yaw);
+    const slide = this.joint("recoiling tube", barrel);
+    const length = german ? 0.62 : french ? 0.78 : 1.05, bore = german ? 0.07 : french ? 0.1 : 0.095;
+    const cylinder = (label: string, y: number, diameter: number, height: number, color: string) => {
+      const part = this.joint(label, slide, 0, y, 0);
+      part.addComponent("render", { type: "cylinder", material: this.material(color), castShadows: true, receiveShadows: true });
+      part.setLocalScale(diameter, height, diameter);
+      return part;
+    };
+    if (german) {
+      // A spigot: a thin rod on which the finned bomb sits, over a small cradle.
+      cylinder("spigot", length / 2, 0.035, length, steel);
+      cylinder("spigot collar", 0.08, 0.08, 0.1, plate);
+      cylinder("bomb body on spigot", length + 0.04, 0.11, 0.22, "#5b5f48");
+    } else {
+      cylinder("tube", length / 2, bore, length, steel);
+      cylinder("breech cap", 0.04, bore + 0.03, 0.08, plate);
+      cylinder("muzzle band", length - 0.03, bore + 0.018, 0.05, plate);
+      cylinder("bore", length + 0.002, bore * 0.72, 0.004, dark);
+    }
+    // The bipod stands ahead of the baseplate and holds the tube at its collar.
+    const collar = new pc.Vec3(0, 0.07 + length * 0.55 * Math.sin(1.13), -length * 0.55 * Math.cos(1.13));
+    for (const side of [-1, 1]) {
+      const foot = new pc.Vec3(side * (german ? 0.2 : 0.26), -0.06, collar.z - 0.2);
+      const center = new pc.Vec3().add2(foot, collar).mulScalar(0.5);
+      const leg = this.cube("bipod leg", center.x, center.y, center.z, 0.03, 0.03, foot.distance(collar), steel, false, yaw);
+      leg.lookAt(yaw.getWorldTransform().transformPoint(collar));
+      this.cube("bipod foot", foot.x, foot.y + 0.01, foot.z, 0.07, 0.02, 0.07, plate, false, yaw);
+    }
+    this.cube("traversing screw", 0, collar.y, collar.z, 0.24, 0.035, 0.035, plate, false, yaw);
+    // Spare bombs stacked beside the plate.
+    for (let i = 0; i < 3; i++) this.cube("spare bomb", 0.42, 0.06, -0.12 + i * 0.13, 0.09, 0.09, 0.26, "#5b5f48", false, root);
+    return { root, yaw, barrel, slide, name };
+  }
+
   private buildEmplacement(name: string): EmplacementMesh {
+    if (isMortarWeapon(name) || name === "Mortar preview") return this.buildMortar(name);
     const root = this.joint(name, this.app.root);
     const steel = "#343d3a", plate = "#51584e", brass = "#a8843c", canvas = "#6d6448";
     const mg08 = name === "MG 08", hotchkiss = name === "Hotchkiss M1914";
@@ -5159,6 +5209,12 @@ export class Renderer implements CollisionWorld {
       const setup = Math.max(0, (gun.readyAt - g.tick) / emplacementRules.setupTicks);
       mesh.root.setLocalScale(1, 1 - 0.25 * setup, 1);
       mesh.yaw.setLocalEulerAngles(0, (gun.baseYaw - gun.yaw) * pc.math.RAD_TO_DEG, 0);
+      if (gun.mortar) {
+        // Tilted forward from upright to the range table's elevation; each bomb jolts the tube down.
+        mesh.barrel.setLocalEulerAngles(-(90 - tubeElevation(gun.mortar.range) * pc.math.RAD_TO_DEG), 0, 0);
+        mesh.slide.setLocalPosition(0, -kick * 0.05, 0);
+        continue;
+      }
       mesh.barrel.setLocalEulerAngles(gun.pitch * pc.math.RAD_TO_DEG, 0, 0);
       mesh.slide.setLocalPosition(0, kick * 0.004, kick * recoilFeel.emplaced.push);
       mesh.slide.setLocalEulerAngles(shake * 0.9, 0, 0);
@@ -5172,13 +5228,20 @@ export class Renderer implements CollisionWorld {
       }
     }
 
+    this.drawMortarBombs(g, alpha);
+    this.drawMortarRing(g);
     const preview = this.machineGunPreview;
     if (!preview) {
       if (this.gunGhost) this.gunGhost.root.enabled = false;
       return;
     }
+    const ghostName = preview.mortar ? "Mortar preview" : "Placement preview";
+    if (this.gunGhost && this.gunGhost.name !== ghostName) {
+      this.gunGhost.root.destroy();
+      this.gunGhost = undefined;
+    }
     if (!this.gunGhost) {
-      this.gunGhost = this.buildEmplacement("Placement preview");
+      this.gunGhost = this.buildEmplacement(ghostName);
       const root = this.gunGhost.root;
       this.cube("operator position", 0, 0.045, emplacementRules.operatorOffset, 0.62, 0.032, 0.6, "#ffffff", false, root);
       for (const edge of [-1, 1]) {
@@ -5209,6 +5272,99 @@ export class Renderer implements CollisionWorld {
       render.material = material;
       render.castShadows = false;
     }
+  }
+
+  // Bombs in flight, drawn from their velocity between ticks.
+  private mortarBombs = new Map<number, pc.Entity>();
+  private drawMortarBombs(g: Game, alpha: number) {
+    const bombs = g.mortars?.bombs ?? [];
+    const active = new Set(bombs.map(b => b.id));
+    for (const [id, entity] of this.mortarBombs) if (!active.has(id)) { entity.destroy(); this.mortarBombs.delete(id); }
+    for (const bomb of bombs) {
+      let entity = this.mortarBombs.get(bomb.id);
+      if (!entity) {
+        entity = this.joint("mortar bomb", this.app.root);
+        const body = this.joint("mortar bomb body", entity);
+        body.addComponent("render", { type: "cylinder", material: this.material("#5b5f48") });
+        body.setLocalScale(0.09, 0.26, 0.09);
+        this.cube("mortar bomb fins", 0, -0.16, 0, 0.13, 0.08, 0.02, "#3c4033", false, entity);
+        this.cube("mortar bomb fins", 0, -0.16, 0, 0.02, 0.08, 0.13, "#3c4033", false, entity);
+        this.mortarBombs.set(bomb.id, entity);
+      }
+      const back = (1 - alpha) / 30;
+      entity.setPosition(bomb.x - bomb.vx * back, bomb.y - bomb.vy * back, bomb.z - bomb.vz * back);
+      // Nose along the flight path.
+      const speed = Math.hypot(bomb.vx, bomb.vy, bomb.vz) || 1;
+      entity.lookAt(bomb.x + bomb.vx / speed, bomb.y + bomb.vy / speed, bomb.z + bomb.vz / speed);
+      entity.rotateLocal(-90, 0, 0);
+    }
+  }
+
+  // The landing ring for the player's laid tube: its size is the spread the next
+  // bomb will land in, so it blooms when the tube moves and tightens as it settles.
+  private mortarRing?: { root: pc.Entity; marks: pc.Entity[]; cross: pc.Entity[]; refused?: boolean };
+  private ringMaterials = new Map<boolean, pc.StandardMaterial>();
+  private ringMaterial(refused: boolean) {
+    let material = this.ringMaterials.get(refused);
+    if (!material) {
+      material = new pc.StandardMaterial();
+      material.emissive = color(refused ? "#ff4a3a" : "#6ff2ff");
+      material.diffuse = color("#000000");
+      material.useLighting = false;
+      material.opacity = 0.9;
+      material.blendType = pc.BLEND_NORMAL;
+      material.depthTest = false;
+      material.depthWrite = false;
+      material.update();
+      this.ringMaterials.set(refused, material);
+    }
+    return material;
+  }
+  private drawMortarRing(g: Game) {
+    const p = g.players[0], gun = mountedGun(g, p);
+    if (!gun?.mortar || p.hp <= 0) {
+      if (this.mortarRing) this.mortarRing.root.enabled = false;
+      return;
+    }
+    if (!this.mortarRing) {
+      const root = this.joint("mortar aim ring", this.app.root);
+      const marks = Array.from({ length: 28 }, () => this.cube("mortar ring mark", 0, 0, 0, 0.16, 0.05, 1, "#f2d48a", false, root));
+      // A ground cross and a thin post over the aim point, readable from a trench at 80 m.
+      const cross = [0, 1, 2].map(i => this.cube("mortar aim cross", 0, 0, 0, i === 1 ? 0.12 : i ? 0.07 : 1.2, i === 2 ? 2.4 : 0.05, i === 1 ? 1.2 : i ? 0.07 : 0.12, "#f2d48a", false, root));
+      for (const part of [...marks, ...cross]) part.render!.castShadows = false;
+      this.mortarRing = { root, marks, cross };
+    }
+    const ring = this.mortarRing;
+    ring.root.enabled = true;
+    const aim = mortarAim(g, gun), radius = mortarSpread(gun), refused = mortarTargetBlocked(g, aim);
+    if (ring.refused !== refused) {
+      ring.refused = refused;
+      const material = this.ringMaterial(refused);
+      for (const part of [...ring.marks, ...ring.cross]) part.render!.material = material;
+    }
+    // Each mark rides the ground (or parapet) where it falls, so the ring
+    // drapes over trench lips. It shows through cover: a mortarman lays the
+    // tube from the bottom of a trench.
+    const top = (x: number, z: number) => {
+      const floor = groundHeight(x, z, g.map);
+      return floor + 40 * (1 - this.ray({ x, y: floor + 40, z }, { x, y: floor - 0.02, z })) + 0.07;
+    };
+    // Stakes grow with range so they read the same size at 40 m and 80 m.
+    const n = ring.marks.length, chord = 2 * Math.PI * radius / n, k = gun.mortar.range / 25;
+    ring.marks.forEach((mark, i) => {
+      const a = (i / n) * Math.PI * 2, x = aim.x + Math.cos(a) * radius, z = aim.z + Math.sin(a) * radius;
+      // Short stakes rather than a flat line: seen nearly edge-on from the
+      // tube, their spread across the view shows the ring's width.
+      mark.setPosition(x, top(x, z) + 0.25 * k, z);
+      mark.setEulerAngles(0, -a * pc.math.RAD_TO_DEG, 0);
+      mark.setLocalScale(0.07 * k, 0.5 * k, chord * 0.45);
+    });
+    const centre = top(aim.x, aim.z);
+    ring.cross.forEach((part, i) => {
+      part.setPosition(aim.x, centre + (i === 2 ? 1.2 * k : 0), aim.z);
+      if (i === 2) part.setLocalScale(0.05 * k, 2.4 * k, 0.05 * k);
+      part.setEulerAngles(0, -gun.yaw * pc.math.RAD_TO_DEG, 0);
+    });
   }
 
   private flameScorches = new Map<string,{entity:pc.Entity;life:number}>();

@@ -7,6 +7,7 @@ import {
   armoryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, tankHits, timeToKill,
   weaponStats, type HitZone, type WeaponStats,
 } from "./weapon-stats";
+import { mortarExplosionProfile, mortarRules, mortarStats, type MortarStats } from "./mortar-stats";
 
 type Tab = FactionId | "compare";
 const root = document.getElementById("armory")!;
@@ -63,6 +64,24 @@ function card(w: WeaponStats) {
   </article>`;
 }
 
+// Support's trench mortar: one card per army, from the same rules the game runs.
+function mortarCard(m: MortarStats) {
+  const [short, long] = mortarRules.flightTicks.map(t => t / weaponTicksPerSecond);
+  return `<article class="card mortar">
+    <header><div class="eyebrow">TRENCH MORTAR</div><h2>${escape(m.name)}</h2><div class="round">${escape(m.bomb)}</div></header>
+    <dl class="stats">
+      <div><dt>Range</dt><dd>${mortarRules.minRange}–${mortarRules.maxRange} m<small> set with forward/back · ${escape(m.historical.range)} historical</small></dd></div>
+      <div><dt>Blast</dt><dd>${mortarExplosionProfile.radius} m<small> · ${mortarExplosionProfile.damage} damage at the burst, falling to nothing at the edge · hurts both sides</small></dd></div>
+      <div><dt>Bombs</dt><dd>${mortarRules.bombs}<small> per life · refilled on respawn</small></dd></div>
+      <div><dt>Rate of fire</dt><dd>${seconds(mortarRules.loadTicks / weaponTicksPerSecond)}<small> between bombs</small></dd></div>
+      <div><dt>Flight</dt><dd>${seconds(short)}–${seconds(long)}<small> from the shortest to the longest range</small></dd></div>
+      <div><dt>Landing spread</dt><dd>±${mortarRules.spread} m<small> settled · up to ±${mortarRules.spread + mortarRules.bloomMax} m just after moving or firing</small></dd></div>
+    </dl>
+    <p class="summary">${escape(m.summary)}</p>
+    <p class="note">${escape(m.historical.calibre)}. ${escape(m.historical.note)}</p>
+  </article>`;
+}
+
 // What an anti-tank weapon's rounds do to a tank's plates.
 function armourStats(w: WeaponStats) {
   const side = tankHits(w), slit = tankHits(w, true);
@@ -110,11 +129,11 @@ function compare() {
 function render(tab: Tab) {
   const tabs: [Tab, string][] = [...armoryFactions.map(f => [f, factions[f].name] as [Tab, string]), ["compare", "Compare"]];
   const content = tab === "compare" ? compare()
-    : `<div class="cards">${weaponStats.filter(w => w.faction === tab).map(card).join("")}</div>`;
+    : `<div class="cards">${weaponStats.filter(w => w.faction === tab).map(card).join("")}${mortarStats.filter(m => m.faction === tab).map(mortarCard).join("")}</div>`;
   root.innerHTML = `<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
       <div class="eyebrow">SECTOR CONTROL</div><h1>Armory</h1>
-      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun or take an emplacement kit on any map, and where tanks fight, an anti-tank kit whose rounds go through tank plate. Each role has a pistol.</p>
+      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun or take an emplacement kit on any map, and where tanks fight, an anti-tank kit whose rounds go through tank plate. On maps with artillery, Support can also set up a trench mortar that lobs bombs one trench line ahead. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${tabs.map(([id, label]) => `<button role="tab" aria-selected="${id === tab}" data-tab="${id}">${escape(label)}</button>`).join("")}</nav>
     <section>${content}</section>

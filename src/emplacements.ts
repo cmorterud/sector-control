@@ -5,6 +5,7 @@ import type { Command, Game, Soldier, Team, V3 } from "./simulation";
 import { weaponStats } from "./weapon-stats";
 import { weaponProfile } from "./weapons";
 import { coolBarrel, type BarrelHeat } from "./weapon-heat";
+import { mortarFor, mortarRules } from "./mortar-stats";
 
 export const emplacementRules = {
   setupTicks: 45,
@@ -33,8 +34,11 @@ export interface Emplacement extends EmplacementPose, GunSupply {
   reloadAt: number;
   lastShotAt: number;
   barrel: BarrelHeat;
+  // A trench mortar (src/mortar.ts) rather than a machine gun: its range card
+  // in metres and how far the landing ring has bloomed past its settled size.
+  mortar?: { range: number; bloom: number };
 }
-export type Placement = EmplacementPose & { valid: boolean; reason?: string };
+export type Placement = EmplacementPose & { valid: boolean; reason?: string; mortar?: boolean };
 
 const offset = (origin: V3, yaw: number, forward: number, side = 0, up = 0): V3 => ({
   x: origin.x + Math.sin(yaw) * forward + Math.cos(yaw) * side,
@@ -42,7 +46,13 @@ const offset = (origin: V3, yaw: number, forward: number, side = 0, up = 0): V3 
   z: origin.z - Math.cos(yaw) * forward + Math.sin(yaw) * side,
 });
 
-export function emplacementWeapon(p: Pick<Soldier, "faction">) {
+// The two kits that set something up: the emplaced machine gun and the mortar.
+export const setsUpKit = (p: Pick<Soldier, "loadout">) => p.loadout === "emplacement" || p.loadout === "mortar";
+export const kitOwns = (p: Pick<Soldier, "loadout">, gun: Pick<Emplacement, "mortar">) =>
+  p.loadout === (gun.mortar ? "mortar" : "emplacement");
+
+export function emplacementWeapon(p: Pick<Soldier, "faction" | "loadout">) {
+  if (p.loadout === "mortar") return mortarFor(p.faction).name;
   return weaponStats.find(w => w.role === "emplaced" && w.faction === p.faction)?.name ??
     weaponStats.find(w => w.id === "vickers")!.name;
 }
@@ -58,21 +68,23 @@ function footprintClear(g: Game, point: V3, radius: number, height: number) {
 }
 
 export function placementFor(g: Game, p: Soldier, yaw: number): Placement {
-  const at = offset(p, yaw, 1.25);
+  const mortar = p.loadout === "mortar";
+  const at = offset(p, yaw, mortar ? 0.95 : 1.25);
   at.y = supportHeight(at.x, at.z, g.map, p.y + 0.18);
-  const seat = offset(at, yaw, -emplacementRules.operatorOffset);
+  const seat = offset(at, yaw, -(mortar ? mortarRules.operatorOffset : emplacementRules.operatorOffset));
   seat.y = supportHeight(seat.x, seat.z, g.map, at.y + 0.18);
-  const placement = { at, seat, baseYaw: yaw };
-  if (p.loadout !== "emplacement" || p.hp <= 0 || p.emplacementLost ||
+  const placement = { at, seat, baseYaw: yaw, ...(mortar ? { mortar: true } : {}) };
+  if (!setsUpKit(p) || p.hp <= 0 || p.emplacementLost ||
       p.mantle || p.hop || p.fall || p.melee || p.mountedGun !== undefined || p.flameKit !== undefined ||
       Math.abs(p.y - at.y) > 0.18 || g.tick < p.staggerUntil || g.tick < p.throwUntil)
     return { ...placement, valid: false, reason: "You need a ready kit and level ground" };
   if (g.emplacements.has(p.id)) return { ...placement, valid: false, reason: "Pack up your existing emplacement first" };
-  const breech = offset(at, yaw, 0, 0, emplacementRules.pivotHeight);
-  const muzzle = offset(breech, yaw, emplacementRules.barrelLength);
-  if (!footprintClear(g, at, 0.52, 1.22) || !footprintClear(g, seat, 0.4, 1.42) ||
+  // A machine gun needs a clear line ahead; a mortar needs open sky above.
+  const breech = offset(at, yaw, 0, 0, mortar ? mortarRules.muzzleHeight : emplacementRules.pivotHeight);
+  const muzzle = mortar ? offset(breech, yaw, 0.6, 0, 4) : offset(breech, yaw, emplacementRules.barrelLength);
+  if (!footprintClear(g, at, mortar ? 0.4 : 0.52, 1.22) || !footprintClear(g, seat, 0.4, 1.42) ||
       Math.abs(seat.y - at.y) > 0.16 || g.collision.ray(breech, muzzle) < 0.999)
-    return { ...placement, valid: false, reason: "Find room for the gun and operator on level ground" };
+    return { ...placement, valid: false, reason: mortar ? "Find level ground with open sky above the tube" : "Find room for the gun and operator on level ground" };
   for (const gun of g.emplacements.values()) {
     if (Math.abs(gun.at.y - at.y) < 1.3 && Math.hypot(gun.at.x - at.x, gun.at.z - at.z) < 1.8)
       return { ...placement, valid: false, reason: "Too close to another emplacement" };
@@ -100,7 +112,8 @@ function profileFor(gun: Pick<Emplacement, "weaponId">) {
   return weaponProfile({ weapon: "machineGun", weaponId: gun.weaponId });
 }
 
-function supply(weaponId: string): GunSupply {
+function supply(weaponId: string, mortar = false): GunSupply {
+  if (mortar) return { ammo: mortarRules.bombs, reserve: 0 };
   const { magazine, reserve } = profileFor({ weaponId });
   return { ammo: magazine, reserve };
 }
@@ -125,13 +138,16 @@ export function emplacementCommand(g: Game, p: Soldier, c: Command, interactPres
   if (c.deployGun) {
     const placement = placementFor(g, p, c.yaw);
     if (placement.valid) {
-      const weaponId = emplacementWeapon(p);
+      const weaponId = emplacementWeapon(p), mortar = p.loadout === "mortar";
       const { at, seat, baseYaw } = placement;
+      const packed = p.packedEmplacement;
       g.emplacements.set(p.id, {
         at, seat, baseYaw, owner: p.id, team: p.team, weaponId, hp: emplacementRules.durability,
         readyAt: g.tick + emplacementRules.setupTicks, yaw: baseYaw, pitch: 0,
-        ...(p.packedEmplacement ?? supply(weaponId)), reloadAt: 0, nextShot: g.tick, lastShotAt: -1000,
+        ...(packed ? { ammo: packed.ammo, reserve: packed.reserve, hp: packed.hp } : supply(weaponId, mortar)),
+        reloadAt: 0, nextShot: g.tick, lastShotAt: -1000,
         barrel: { heat: 0, overheated: false },
+        ...(mortar ? { mortar: { range: packed?.range ?? mortarRules.startRange, bloom: mortarRules.bloomMax } } : {}),
       });
       p.packedEmplacement = undefined;
       p.protectedUntil = 0;
@@ -144,8 +160,8 @@ export function emplacementCommand(g: Game, p: Soldier, c: Command, interactPres
   if (p.mantle || p.hop || p.fall || p.melee || g.tick < p.staggerUntil || g.tick < p.throwUntil ||
       gun.operator !== undefined || g.tick < gun.readyAt) return true;
   if (c.packGun) {
-    if (gun.owner === p.id && p.loadout === "emplacement") {
-      p.packedEmplacement = { ammo: gun.ammo, reserve: gun.reserve, hp: gun.hp };
+    if (gun.owner === p.id && kitOwns(p, gun)) {
+      p.packedEmplacement = { ammo: gun.ammo, reserve: gun.reserve, hp: gun.hp, ...(gun.mortar ? { range: gun.mortar.range } : {}) };
       g.emplacements.delete(gun.owner);
       g.emit({ type: "emplacement", actor: p.id, phase: "pack", owner: gun.owner });
     }
@@ -219,6 +235,15 @@ export function resupplyEmplacement(g: Game, p: Soldier) {
 
 export function emplacementView(gun: Emplacement) {
   const dir = viewDirection(gun.yaw, gun.pitch);
+  if (gun.mortar) {
+    // The mortarman kneels behind the baseplate, left of the tube, and looks
+    // out past it the way the sight on its left side does.
+    const side = -0.42;
+    const eye = { x: gun.seat.x + Math.cos(gun.baseYaw) * side, y: gun.seat.y + 1.3, z: gun.seat.z + Math.sin(gun.baseYaw) * side };
+    const pivot = { ...gun.at, y: gun.at.y + 0.3 };
+    const muzzle = { ...gun.at, y: gun.at.y + mortarRules.muzzleHeight };
+    return { eye, pivot, muzzle };
+  }
   const pivot = { ...gun.at, y: gun.at.y + emplacementRules.pivotHeight };
   // Both sights sit above the barrel on the rotating assembly.
   const back = emplacementRules.operatorOffset, up = emplacementRules.sightHeight;

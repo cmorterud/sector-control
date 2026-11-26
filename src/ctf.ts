@@ -272,7 +272,7 @@ export function ctfCommand(g: Game, p: Soldier, c: Command) {
     if (c.equip === "primary") c.equip = undefined;
     if (p.equippedSlot !== "sidearm" && p.inventory) c.equip = "sidearm";
     if (!g.humanPlayerIds.includes(p.id) && !g.ctf.rearm.includes(p.id)) g.ctf.rearm.push(p.id);
-  } else if (g.ctf.rearm.includes(p.id) && p.equippedSlot === "sidearm" && p.loadout !== "emplacement") c.equip = "primary";
+  } else if (g.ctf.rearm.includes(p.id) && p.equippedSlot === "sidearm" && p.loadout !== "emplacement" && p.loadout !== "mortar") c.equip = "primary";
 }
 
 // Bots with an order to move keep moving in a fight. An ordinary bot that
