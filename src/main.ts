@@ -18,6 +18,7 @@ import { equipLoadout, factions, factionFor, kitFor, riflemanWeapon, scoped, typ
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
+import { controlHints, type HintSituation } from "./control-hints";
 import { forwardMenuWheel } from "./menu-wheel";
 import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
@@ -147,22 +148,20 @@ forwardMenuWheel(el("menu"));
 const isKey = (action: ControlAction, code: string) => settings.bindings[action] === code ||
   (settings.bindings[action] === "ShiftLeft" && code === "ShiftRight");
 const held = (action: ControlAction) => [...keys].some(code => isKey(action, code));
-function updateControlHints() {
-  const hint = (action: ControlAction) => keyLabel(settings.bindings[action]);
+let hintSituation: HintSituation = { kind: "foot" }, shownHints = "";
+function updateControlHints(situation = hintSituation) {
+  hintSituation = situation;
+  const hints = controlHints(settings, situation), shown = JSON.stringify(hints);
+  if (shown === shownHints) return;
+  shownHints = shown;
   // One span per hint so a wrapping bar never splits a key from its action.
-  const hints = [
-    `${hint("forward")}${hint("left")}${hint("backward")}${hint("right")} MOVE`, `${hint("sprint")} SPRINT`, "RMB AIM", "LMB FIRE",
-    `${hint("reload")} RELOAD`, `${hint("melee")} MELEE`, `${hint("sprint")} + ${hint("melee")} BAYONET CHARGE`, `${hint("whistle")} WHISTLE`,
-    `${hint("grenade")} GRENADE`, `${hint("smoke")} SMOKE`,
-    `${hint("crouch")} CROUCH`, `${hint("mantle")} HOP / MANTLE`, `${hint("view")} CHANGE VIEW`,
-    `${hint("primary")} / ${hint("sidearm")} WEAPONS`, `${hint("interact")} INTERACT`, `${hint("tactical")} TACTICAL MAP`,
-  ];
-  document.querySelector(".controls")!.replaceChildren(...hints.map(text => {
-    const span = document.createElement("span");
+  // Controls for the current kit or vehicle lead the bar in bold.
+  document.querySelector(".controls")!.replaceChildren(...hints.map(({ text, context }) => {
+    const span = document.createElement(context ? "b" : "span");
     span.textContent = text;
     return span;
   }));
-  document.querySelector(".hint")!.innerHTML = `${hint("scoreboard")} · SCOREBOARD<br>ESC · PAUSE`;
+  document.querySelector(".hint")!.innerHTML = `${keyLabel(settings.bindings.scoreboard)} · SCOREBOARD<br>ESC · PAUSE`;
 }
 
 let triggerDown = false;
@@ -243,7 +242,7 @@ let trainingReset=false;
 const trainingOverlay=document.createElement("aside");trainingOverlay.id="training-lesson";trainingOverlay.hidden=true;
 document.querySelector("#ui")!.append(trainingOverlay);
 // Tanks on the maps that have them: ?tanks=1 or 0 wins, then the briefing's last choice.
-let tanksOn = params.has("tanks") ? params.get("tanks") !== "0" : params.get("tank") === "1" ? true : (() => { try { return localStorage.getItem(tankStorageKey) === "1"; } catch { return false; } })();
+let tanksOn = params.has("tanks") ? params.get("tanks") !== "0" : params.get("tank") === "1" ? true : (() => { try { return localStorage.getItem(tankStorageKey) !== "0"; } catch { return true; } })();
 // Rain on the maps that have weather: ?rain=1 or 0 wins, then the briefing's
 // last choice; it rains by default.
 let rainOn = params.has("rain") ? params.get("rain") !== "0" : (() => { try { return localStorage.getItem(rainStorageKey) !== "0"; } catch { return true; } })();
@@ -807,6 +806,11 @@ function hud(now: number) {
     const prompt = tankPrompt(game, p, useKey);
     if (prompt) staged.capture = prompt;
   }
+  updateControlHints(crewed ? { kind: "tank" } : gun ? { kind: "gun" } : {
+    kind: "foot", scoped: scoped(p), flame: p.weapon === "flamethrower", gas: gasLine.danger,
+    antiTank: p.loadout === "antiTank" && p.equippedSlot !== "sidearm",
+    emplacement: placement ? "preview" : p.loadout !== "emplacement" || p.emplacementLost ? undefined : game.emplacements.has(p.id) ? "placed" : "carry",
+  });
   if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(Math.max(p.suppression * 0.22, (crewed?.splash ?? 0) * 0.55)) : "0";
@@ -896,8 +900,9 @@ function deploymentChoice(p: Soldier) {
   if (!map.deployments) return "";
   const points = deploymentPoints(game, p.team);
   if (p.deployAt && !points.some((q) => q.sector === p.deployAt)) p.deployAt = undefined;
-  const option = (key: number, label: string, chosen: boolean) => `<span class="deploy-option${chosen ? " chosen" : ""}">${key} · ${label}</span>`;
-  return `<small>DEPLOY AT</small><p class="deploy-choice">${[option(1, "Rear lines", !p.deployAt), ...points.map((q, i) => option(i + 2, `${q.sector} ${q.name}`, p.deployAt === q.sector))].join("")}</p>`;
+  if (!points.length) return `<small class="deploy-heading">DEPLOYING AT THE REAR LINES · HOLD A HOME FLAG TO DEPLOY FORWARD</small>`;
+  const option = (key: number, label: string, chosen: boolean) => `<span class="deploy-option${chosen ? " chosen" : ""}"><kbd>${key}</kbd>${label}</span>`;
+  return `<small class="deploy-heading">CHOOSE WHERE TO DEPLOY · PRESS <kbd>1</kbd>–<kbd>${points.length + 1}</kbd></small><p class="deploy-choice">${[option(1, "Rear lines", !p.deployAt), ...points.map((q, i) => option(i + 2, `${q.sector} ${q.name}`, p.deployAt === q.sector))].join("")}</p>`;
 }
 window.addEventListener("keydown", (e) => {
   if (controlsPanel.key(e)) return;
