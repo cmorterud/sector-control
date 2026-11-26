@@ -86,10 +86,15 @@ function segmentGeometry(map: MapDefinition, s: WireSegment, n: number, isCut: b
   return { boxes, lines };
 }
 
-export type CraterPond = { x: number; z: number; y: number; radius: number };
-// Standing water in each authored crater: a little above the bowl's floor,
-// reaching only as far as the ground stays below it in every direction.
+// `radius` is how far the water reaches in its narrowest direction (footstep
+// splashes use it). `edge` is the drawn outline: one radius per direction,
+// running a little past the waterline under the bank so the ground clips the
+// water instead of a flat disc floating over the lower parts of the bowl.
+export type CraterPond = { x: number; z: number; y: number; radius: number; edge: number[] };
+// Standing water in each authored crater: a little above the bowl's floor and
+// only where the bowl holds it, its level lowered until the rim closes all round.
 const ponds = new WeakMap<object, CraterPond[]>();
+export const pondDirections = 24;
 export function craterPonds(map: MapDefinition): CraterPond[] {
   const source = map.terrain;
   if (!source) return [];
@@ -100,16 +105,38 @@ export function craterPonds(map: MapDefinition): CraterPond[] {
   const scars = map.noMansLand?.scarPonds
     ? (source.shellScars ?? []).map((s) => ({ x: s.x, z: s.z, radius: Math.min(s.radiusX, s.radiusZ) }))
     : [];
+  const step = 0.05;
   for (const c of [...(source.craters ?? []), ...scars]) {
-    const y = groundHeight(c.x, c.z, map) + 0.16;
-    let radius = c.radius;
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      let r = 0;
-      while (r < c.radius && groundHeight(c.x + Math.cos(a) * (r + 0.1), c.z + Math.sin(a) * (r + 0.1), map) < y) r += 0.1;
-      radius = Math.min(radius, r);
+    // The bowl's floor: the lowest ground near the middle.
+    let floor = Infinity, fx = c.x, fz = c.z;
+    for (let r = 0; r <= c.radius * 0.5; r += 0.25)
+      for (let i = 0; i < (r ? 12 : 1); i++) {
+        const x = c.x + Math.cos((i / 12) * Math.PI * 2) * r, z = c.z + Math.sin((i / 12) * Math.PI * 2) * r, h = groundHeight(x, z, map);
+        if (h < floor) { floor = h; fx = x; fz = z; }
+      }
+    // Walk out from the floor in each direction to where the ground rises
+    // above the water. A side that never closes within the scar would spill,
+    // so lower the water and try again.
+    for (let depth = 0.16; depth >= 0.03; depth -= 0.01) {
+      const y = floor + depth, shore: number[] = [];
+      for (let i = 0; i < pondDirections; i++) {
+        const a = (i / pondDirections) * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a);
+        let r = 0;
+        while (r < c.radius * 1.5 && groundHeight(fx + dx * (r + step), fz + dz * (r + step), map) < y) r += step;
+        if (r >= c.radius * 1.5) break;
+        shore.push(r);
+      }
+      if (shore.length < pondDirections || Math.min(...shore) < 0.6) continue;
+      // Carry each edge vertex on until it is safely under the bank.
+      const edge = shore.map((r, i) => {
+        const a = (i / pondDirections) * Math.PI * 2;
+        let e = r + step;
+        while (e < r + 0.6 && groundHeight(fx + Math.cos(a) * e, fz + Math.sin(a) * e, map) < y + 0.05) e += step;
+        return e + 0.1;
+      });
+      cached.push({ x: fx, z: fz, y, radius: Math.min(...shore) - 0.05, edge });
+      break;
     }
-    if (radius >= 0.6) cached.push({ x: c.x, z: c.z, y, radius: radius - 0.05 });
   }
   ponds.set(source, cached);
   return cached;

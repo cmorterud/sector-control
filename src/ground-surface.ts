@@ -119,8 +119,10 @@ export function exactFieldChurn(map: MapDefinition, x: number, z: number) {
     const r = Math.hypot((x - s.x) / (s.radiusX + 2.5), (z - s.z) / (s.radiusZ + 2.5));
     scar = Math.max(scar, 1 - smooth(0.55, 1, r));
   }
+  // Between the lines even the woods are churned to bare earth (June 1916);
+  // only behind them does much leaf litter survive under the trees.
   const woods = map.woodland ? woodlandDensity(map.woodland, x, z) : 0;
-  const open = (1 - smooth(front - 10, front - 2, Math.abs(x))) * (1 - woods) * (0.45 + lookNoise(x * 0.09 + 3, z * 0.09) * 0.3);
+  const open = (1 - smooth(front - 10, front - 2, Math.abs(x))) * (1 - woods * 0.55) * (0.55 + lookNoise(x * 0.09 + 3, z * 0.09) * 0.3);
   return Math.max((1 - smooth(1, 6, trench)) * 0.85, scar * 0.9, open);
 }
 export function groundField(map: MapDefinition, x: number, z: number) {

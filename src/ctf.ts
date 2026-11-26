@@ -58,12 +58,12 @@ const trenchLayout: CtfLayout = {
 // centre bay; the drop point is the rear trench's centre.
 const verdunLayout: CtfLayout = {
   pickups: [
-    { id: "A", team: "blue", name: "Shattered Wood", x: -42, z: -31 },
+    { id: "A", team: "blue", name: "Chapitre Wood", x: -42, z: -31 },
     { id: "B", team: "blue", name: "Front trench", x: -63, z: 2 },
-    { id: "C", team: "blue", name: "Supply Ruin", x: -45, z: 25 },
-    { id: "D", team: "red", name: "Gun Pit", x: 44, z: -17 },
+    { id: "C", team: "blue", name: "Fleury", x: -45, z: 25 },
+    { id: "D", team: "red", name: "Dame Ravine", x: 44, z: -17 },
     { id: "E", team: "red", name: "Front trench", x: 63, z: 2 },
-    { id: "F", team: "red", name: "Fortification", x: 49, z: 29 },
+    { id: "F", team: "red", name: "Hardaumont Work", x: 49, z: 29 },
   ],
   drops: {
     blue: { name: "Support trench", x: -75, z: -8 },

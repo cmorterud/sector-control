@@ -1,10 +1,11 @@
-// Gas shell clouds as the camera sees them: low yellow-green puffs that sit
+// Gas shell clouds as the camera sees them: low puffs, yellow-green mustard or
+// paler grey-white phosgene (gasAgent), that sit
 // on the ground and drift. Batched camera-facing quads (src/billboards.ts),
 // one draw. Quads near the camera are left out, as for mist, so standing in a
 // cloud never fills the screen; the screen haze in src/gas-ui.ts says you are
 // in it.
 import type { BillboardBuffer } from "./billboards";
-import { cloudDensity, cloudPosition, cloudRadius, gasStrikeRules } from "./gas";
+import { cloudDensity, cloudPosition, cloudRadius, gasAgent, gasStrikeRules } from "./gas";
 import type { Quality } from "./graphics-quality";
 import { groundHeight, type MapDefinition } from "./map";
 import type { Game } from "./simulation";
@@ -18,11 +19,9 @@ export interface GasViewHooks {
   enable(on: boolean): void;
 }
 export const gasLook = {
-  cloud: "#c3bd52",
   cloudOpacity: 0.6,
   // Each shell's burst: a dense jet of gas thrown up from the hole, over a
   // quick spit of earth from the bursting charge.
-  burst: "#cfc95a",
   burstOpacity: 0.85,
   earth: "#4b4130",
   earthOpacity: 0.9,
@@ -42,8 +41,9 @@ export class GasView {
   private bursts: Batch;
   private earth: Batch;
   constructor(private hooks: GasViewHooks) {
-    this.clouds = hooks.billboards("gas shell clouds", 160, gasLook.cloud, gasLook.cloudOpacity);
-    this.bursts = hooks.billboards("gas shell bursts", 96, gasLook.burst, gasLook.burstOpacity);
+    const agent = gasAgent(hooks.map);
+    this.clouds = hooks.billboards("gas shell clouds", 160, agent.cloud, gasLook.cloudOpacity);
+    this.bursts = hooks.billboards("gas shell bursts", 96, agent.burst, gasLook.burstOpacity);
     this.earth = hooks.billboards("gas shell earth", 48, gasLook.earth, gasLook.earthOpacity);
   }
   hide() { this.hooks.enable(false); }
