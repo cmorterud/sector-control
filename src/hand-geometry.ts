@@ -1,8 +1,31 @@
 import {characterGeometry} from './character-geometry';
 import {modelUV} from './model-surfaces';
-// A fixed grip pose with separate thumb and four curled fingers, merged into one
+// How far each finger (index to little) and the thumb open from the full grip:
+// 0 wraps the rifle's wrist, 1 lies straight. The first-person right hand
+// swaps between these as it fires, works the bolt, feeds a clip or holds a grenade.
+export const handPoses = {
+  grip: { fingers: [0, 0, 0, 0], thumb: 0 },
+  trigger: { fingers: [.55, 0, 0, 0], thumb: .1 },
+  pinch: { fingers: [.4, .12, .05, 0], thumb: .55 },
+  open: { fingers: [.8, .72, .66, .6], thumb: .6 },
+  grenade: { fingers: [.28, .25, .22, .2], thumb: .3 },
+} as const;
+export type HandPose = keyof typeof handPoses;
+// A point path bent `open` of the way toward the straight line its first
+// segment points along, keeping each segment's length.
+function opened(points:number[][],open:number){
+  if(!open)return points;
+  const d=points[1].map((v,i)=>v-points[0][i]),length=Math.hypot(...d);
+  let along=0;
+  return points.map((p,i)=>{
+    if(i)along+=Math.hypot(...p.map((v,k)=>v-points[i-1][k]));
+    return p.map((v,k)=>v+(points[0][k]+d[k]/length*along-v)*open);
+  });
+}
+// A grip pose with separate thumb and four curled fingers, merged into one
 // shared mesh. Wrist anchors remain owned by the existing two-bone arm solver.
-export function gripHandGeometry(side:'left'|'right',detail:'world'|'view'|'far'='world') {
+export function gripHandGeometry(side:'left'|'right',detail:'world'|'view'|'far'='world',pose:HandPose='grip') {
+  const shape=handPoses[pose];
   const result={positions:[] as number[],normals:[] as number[],indices:[] as number[],uvs:[] as number[]};
   const sign=side==='left'?1:-1,sides=detail==='view'?14:detail==='far'?5:8;
   const palm=characterGeometry('palm',sides);
@@ -24,9 +47,10 @@ export function gripHandGeometry(side:'left'|'right',detail:'world'|'view'|'far'
     }
   }
   for(let n=0;n<4;n++){
+    // n=3 lies beside the thumb: the index finger.
     const z=(n-1.5)*.019;
-    finger([[-.037,-.035,z],[-.008,-.055,z],[.026,-.049,z],[.046,-.025,z],[.04,.001,z]],.0095-(n===3?.001:0));
+    finger(opened([[-.037,-.035,z],[-.008,-.055,z],[.026,-.049,z],[.046,-.025,z],[.04,.001,z]],shape.fingers[3-n]),.0095-(n===3?.001:0));
   }
-  finger([[-.045,.014,.035],[-.031,.035,.025],[.003,.042,.015],[.021,.028,.005]],.012);
+  finger(opened([[-.045,.014,.035],[-.031,.035,.025],[.003,.042,.015],[.021,.028,.005]],shape.thumb),.012);
   return result;
 }

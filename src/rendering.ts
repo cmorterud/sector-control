@@ -30,7 +30,8 @@ import { verdunBackdropScenery, verdunDeadZoneTrees } from "./verdun-backdrop";
 import { villageGardenProps } from "./village-outdoors";
 import {movementWeight,advanceMovementWeight,type MovementWeight} from "./movement-weight";
 import {footRules,footCycle,gaitFrequency,updateFootContact,type FootContact} from "./foot-placement";
-import {gripHandGeometry} from "./hand-geometry";
+import {gripHandGeometry, type HandPose} from "./hand-geometry";
+import {viewCuffParts} from "./soldier-kit";
 import {modelSurfaceAtlas,modelAtlasSize,modelUV,modelSurfaceFor,type ModelSurface} from "./model-surfaces";
 import {farmPropParts} from "./farm-props";
 import { battlePerformance } from "./battle-performance";
@@ -227,7 +228,7 @@ type FallingTree = {
 };
 type FirstPersonRig = Pick<SoldierRig,
   "arms" | "rifle" | "supportHand" | "bolt" | "magazine" | "reloadMagazine"
-> & { root: pc.Entity; grenade: pc.Entity; explosive: pc.Entity; smoke: pc.Entity; pullback: number; ads?: number; heatGlow: pc.Entity };
+> & { root: pc.Entity; grenade: pc.Entity; explosive: pc.Entity; smoke: pc.Entity; pullback: number; ads?: number; heatGlow: pc.Entity; rightHand?: pc.Entity; handPose?: HandPose };
 
 type EmplacementMesh = { root: pc.Entity; yaw: pc.Entity; barrel: pc.Entity; slide: pc.Entity; glow?: pc.Entity; name: string };
 export class Renderer implements CollisionWorld {
@@ -3851,6 +3852,14 @@ export class Renderer implements CollisionWorld {
     this.riflePart("held smoke canister", 0, 0.025, 0, 0.085, 0.16, 0.085, "edge", smoke, "shroud");
     this.cube("held smoke cap", 0, 0.115, 0, 0.05, 0.025, 0.05, "#414d29", false, smoke);
     grenade.enabled = false;
+    // Your own sleeves fill the bottom of the screen: faction cuffs and a
+    // wrist, which the world model is too small to need.
+    const player = this.activeGame?.players[0];
+    if (isKitFaction(player?.faction))
+      for (const arm of arms) for (const cuff of viewCuffParts(player.faction, factions[player.faction].shirt, soldierLooks[source.look ?? 0].skin)) {
+        const e = this.organic(cuff.name, cuff.at[0], -armLengths.forearm + cuff.at[1], cuff.at[2], ...cuff.size, cuff.tint, arm.elbow, cuff.shape, modelSurfaceFor(cuff.name));
+        if (cuff.rotation) e.setLocalEulerAngles(...cuff.rotation);
+      }
     // These moving meshes are independent of the world actor batches.
     for (const component of root.findComponents("render") as pc.RenderComponent[]) {
       component.batchGroupId = -1;
@@ -3863,6 +3872,16 @@ export class Renderer implements CollisionWorld {
       const side=tags.find(t=>t.startsWith("hand-side:"))?.slice(10) as "left"|"right"|undefined;
       if(shape)component.meshInstances[0].mesh=this.modelMesh(`rifle-${shape}-view`,()=>rifleGeometry(shape,"view"));
       if(side)component.meshInstances[0].mesh=this.modelMesh(`hand-${side}-view`,()=>gripHandGeometry(side,"view"));
+      // Sleeves and cloth at close range: the same profiles with many more sides.
+      const organic=tags.find(t=>t.startsWith("model-near:organic-"))?.slice(11,-5);
+      if(organic&&!side){
+        const [,shape,surface]=organic.split("-") as [string,CharacterShape,ModelSurface|"coarse"|undefined];
+        component.meshInstances[0].mesh=this.modelMesh(`${organic}-view`,()=>{
+          const data=characterGeometry(shape,28);
+          if(surface&&surface!=="coarse")data.uvs=data.uvs.flatMap((_,i,a)=>i%2?[]:modelUV(a[i],a[i+1],surface));
+          return data;
+        });
+      }
     }
     for(const spec of source.design?.viewParts??[]){
       const e=this.riflePart(spec.name,...spec.at,...spec.size,spec.tint,rifle,spec.shape);
@@ -3878,6 +3897,7 @@ export class Renderer implements CollisionWorld {
       bolt: rifle.findByName("bolt") as pc.Entity,
       magazine: rifle.findByName("weapon magazine") as pc.Entity,
       reloadMagazine: arms[1].shoulder.findByName(source.reloadMagazine.name) as pc.Entity,
+      rightHand: arms[1].elbow.findByName("hand") as pc.Entity, handPose: "grip",
     };
     root.enabled = false;
   }
@@ -3966,6 +3986,18 @@ export class Renderer implements CollisionWorld {
     rig.smoke.enabled = !!p.throwAction?.smoke;
     if (throwing?.held) rig.grenade.setLocalPosition(right.x, right.y + 0.035, right.z - 0.025);
     this.poseArm(rig, 1, right, armLengths.upper, armLengths.forearm);
+    // The right hand's fingers follow the action: index on the trigger,
+    // thumb and finger on the bolt knob, open to press a clip, round a grenade.
+    if (rig.rightHand?.tags.has("hand-side:right")) {
+      const cycling = boltMotion(p, tick), service = p.weapon === "serviceRifle";
+      const wanted: HandPose = throwing?.held ? "grenade"
+        : loading ? (service && loading.progress > .3 && loading.progress < .7 ? "open" : service ? "pinch" : "grip")
+        : cycling ? "pinch" : sprint > .5 || change.active || p.melee ? "grip" : "trigger";
+      if (wanted !== rig.handPose) {
+        rig.handPose = wanted;
+        rig.rightHand.render!.meshInstances[0].mesh = this.modelMesh(`hand-right-view-${wanted}`, () => gripHandGeometry("right", "view", wanted));
+      }
+    }
     this.alignGripHand(rig,p,tick);
   }
   private plantFeet(p:Soldier,rig:SoldierRig,dt:number,tick:number,teleported:boolean) {
