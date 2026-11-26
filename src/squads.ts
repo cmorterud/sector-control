@@ -14,6 +14,7 @@ import {
   grenadeBlastRadius,
   grenadeGravity,
   grenadeSpeed,
+  minThrowSpeed,
   idle,
   rifleHeight,
   type Command,
@@ -649,7 +650,7 @@ function throwArc(g: Game, from: V3, to: V3, yaw: number) {
       reach = range * Math.tan(elevation) - rise;
     if (reach <= 0.05) continue;
     const speed = Math.sqrt((grenadeGravity * range * range) / (2 * cos * cos * reach));
-    if (speed > grenadeSpeed || speed < 4) continue;
+    if (speed > grenadeSpeed || speed < minThrowSpeed) continue;
     const flight = range / (speed * cos);
     let last: V3 = from,
       clear = true;

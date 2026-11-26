@@ -39,7 +39,8 @@ export const artilleryRules = {
   shellCount: shellsPerBarrage,
   barrageDuration,
   interval: barrageDuration / (shellsPerBarrage - 1),
-  flightTicks: 24,
+  // 1.5x the old 24-tick drop: shells fall faster, impacts stay on schedule.
+  flightTicks: 16,
   scatterRadius: 14,
   dangerRadius: 14 + artilleryExplosionProfile.radius,
   minRange: 15,
