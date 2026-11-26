@@ -44,7 +44,7 @@ function command(g: Game) {
 const east = Math.PI / 2;
 
 describe("tanks", () => {
-  it("only spawn when switched on, on Trench front and Verdun", () => {
+  it("only spawn when switched on, on Ypres and Verdun", () => {
     expect(supportsTanks(trenchMap) && supportsTanks(verdunMap)).toBe(true);
     expect(supportsTanks(villageMap)).toBe(false);
     const off = scene(trenchMap, false);
@@ -101,7 +101,7 @@ describe("tanks", () => {
   it("cross an ordinary trench and flatten wire without ditching", () => {
     const g = scene();
     const t = command(g);
-    place(g, t, -36, -20, east);
+    place(g, t, -36, -30, east);
     const events = run(g, 30 * 30, { drive: { throttle: 1, turn: 0 }, yaw: east });
     expect(t.x).toBeGreaterThan(-8);
     expect(tankEvents(events, "ditched").filter((e) => e.type === "tank" && e.tank === t.id)).toHaveLength(0);
@@ -112,9 +112,9 @@ describe("tanks", () => {
     const g = scene();
     const t = command(g);
     // Shellfire widens the fire trench where the tank will cross it.
-    for (const x of [-25, -21, -17]) g.explode({ x, y: groundHeight(x, -20, g.map), z: -20 }, -1, null, artilleryExplosionProfile);
-    expect(tankPose(g.map, -19, -20, east).gap).toBeGreaterThanOrEqual(tankRules.ditchGap);
-    place(g, t, -34, -20, east);
+    for (const x of [-25, -21, -17]) g.explode({ x, y: groundHeight(x, -34, g.map), z: -34 }, -1, null, artilleryExplosionProfile);
+    expect(tankPose(g.map, -19, -34, east).gap).toBeGreaterThanOrEqual(tankRules.ditchGap);
+    place(g, t, -34, -34, east);
     const events = run(g, 30 * 20, { drive: { throttle: 1, turn: 0 }, yaw: east });
     expect(tankEvents(events, "ditched")).toHaveLength(1);
     expect(t.state).toBe("ditched");
@@ -232,7 +232,7 @@ describe("tanks", () => {
     const g = scene();
     const t = command(g);
     // Beside the sandbags at C, aiming down past them from the low sponson.
-    place(g, t, 8, -20, east);
+    place(g, t, 8, -30, east);
     const keys = { interact: "E", forward: "W", backward: "S", left: "A", right: "D" };
     expect(tankEvents(run(g, 20, { yaw: t.yaw - 1.5, pitch: -0.2, aim: true }), "cannon")).toHaveLength(0);
     expect(t.cannon.ammo).toBe(tankRules.cannonAmmo);

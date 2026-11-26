@@ -36,17 +36,18 @@ export interface CtfLayout {
   pickups: CtfPoint[];
   drops: Record<Team, Vec & { name: string }>;
 }
-// Blue (west) and red (east) lines. Trench front's pickups stand on the front
-// trench floors at its north end, centre and south end, about 34 m apart; the
+// Blue (west) and red (east) lines. Ypres's pickups stand on the front
+// trench floors north of, at and south of the centre, about 33 m apart: closer
+// in than the domination flags, since carries die on longer runs; the
 // drop point is the rear trench's centre bay behind them.
 const trenchLayout: CtfLayout = {
   pickups: [
     { id: "A", team: "blue", name: "North bay", x: -21, z: -33 },
     { id: "B", team: "blue", name: "Centre bay", x: -21, z: -1 },
-    { id: "C", team: "blue", name: "South bay", x: -21, z: 35 },
-    { id: "D", team: "red", name: "North bay", x: 27, z: -27 },
+    { id: "C", team: "blue", name: "South bay", x: -24, z: 33 },
+    { id: "D", team: "red", name: "North bay", x: 22, z: -27 },
     { id: "E", team: "red", name: "Centre bay", x: 21, z: -1 },
-    { id: "F", team: "red", name: "South bay", x: 23, z: 31 },
+    { id: "F", team: "red", name: "South bay", x: 28, z: 31 },
   ],
   drops: {
     blue: { name: "Support trench", x: -37, z: -1 },

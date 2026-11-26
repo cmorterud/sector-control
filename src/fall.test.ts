@@ -93,11 +93,11 @@ describe("walking off terrain edges", () => {
     expect(p.y).toBe(0);
   });
   it("still blocks walking uphill through the bank and through the rear wooden screen", () => {
-    const { g, p } = scene(-18.6, -27);
+    const { g, p } = scene(-18.6, -37);
     for (let i = 0; i < 30; i++) g.step({ ...idle(), x: 1 });
     expect(p.x).toBeLessThan(-17.8);
     expect(p.y).toBeLessThan(0.23);
-    Object.assign(p, { x: -53, z: -9, y: 2.4, vx: 0, vz: 0 });
+    Object.assign(p, { x: -53, z: -19, y: 2.4, vx: 0, vz: 0 });
     for (let i = 0; i < 30; i++) g.step({ ...idle(), x: 1 });
     expect(p.x).toBeLessThan(-51.5);
   });

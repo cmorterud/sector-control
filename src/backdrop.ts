@@ -226,6 +226,18 @@ function trenchFrontScenery(map: MapDefinition, boxes: BackdropBox[], lines: num
   boxes.push({ x: -152, y: churchY, z: 78, w: 3.2, h: 10.5, d: 3.2, color: "#615c54" },
     { x: -152.7, y: churchY + 10.5, z: 77.4, w: 1.4, h: 2.6, d: 1.6, color: "#58534c" },
     { x: -151.3, y: churchY + 10.5, z: 78.8, w: 1.1, h: 1.5, d: 1.2, lean: 0.2, color: "#58534c" });
+  // Ypres on the western skyline, behind the British: the roofless Cloth Hall
+  // with the broken stump of its belfry, and St Martin's tower beyond it.
+  stone(-228, -22, 9, 44, 8, 0, 131);
+  const belfryY = ground(-224, -22) - 0.2;
+  boxes.push({ x: -224, y: belfryY, z: -22, w: 8, h: 17, d: 8, color: "#5f5a52" },
+    { x: -225.6, y: belfryY + 17, z: -24.2, w: 2.2, h: 3.4, d: 2.4, color: "#57524b" },
+    { x: -222.3, y: belfryY + 17, z: -20.1, w: 1.8, h: 2.1, d: 2, lean: 0.15, color: "#57524b" },
+    { x: -224.4, y: belfryY + 17, z: -19.4, w: 1.4, h: 1.2, d: 1.5, color: "#57524b" });
+  stone(-240, 12, 10, 18, 7, 0.1, 137);
+  const cathedralY = ground(-236, 6) - 0.2;
+  boxes.push({ x: -236, y: cathedralY, z: 6, w: 6, h: 14, d: 6, color: "#615c54" },
+    { x: -237.2, y: cathedralY + 14, z: 4.6, w: 1.6, h: 2.6, d: 1.8, color: "#58534c" });
   // A ruined château and a windmill skeleton behind Red.
   stone(188, -60, 30, 10, 9, 0.08, 101);
   stone(205, -51, 9, 8, 6, 0.08, 113);
@@ -375,7 +387,7 @@ export function distantFlares(from: number, to: number): DistantFlare[] {
     const tick = slot * 600 + Math.floor(hash(slot * 5.17) * 420);
     if (tick < from || tick >= to) continue;
     const north = hash(slot * 6.3) < 0.5 ? -1 : 1;
-    out.push({ tick, x: (hash(slot * 7.9) - 0.5) * 90, z: north * (110 + hash(slot * 8.7) * 90), drift: (hash(slot * 9.1) - 0.5) * 6 });
+    out.push({ tick, x: (hash(slot * 7.9) - 0.5) * 90, z: north * (120 + hash(slot * 8.7) * 80), drift: (hash(slot * 9.1) - 0.5) * 6 });
   }
   return out;
 }

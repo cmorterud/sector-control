@@ -1,4 +1,4 @@
-// Tanks on Trench front and Verdun sector (briefing toggle, or ?tanks=1).
+// Tanks on Ypres and Verdun sector (briefing toggle, or ?tanks=1).
 //
 // One tank a side at a time. A bot crews it by default; a human who climbs in
 // takes command and the bot climbs out. Tanks are slow, cross ordinary

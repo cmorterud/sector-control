@@ -147,7 +147,7 @@ export function groundField(map: MapDefinition, x: number, z: number) {
     (0.35 + smooth(8, 42, Math.abs(x)) * 0.65) * (1 - litter * .85);
   const indoors=map.buildings?.some(b=>Math.abs(x-b.x)<b.w/2 && Math.abs(z-b.z)<b.d/2);
   const yard=villageYardSurface(map,x,z),gravel=indoors?0:Math.max(yard.gravel,yard.path),garden=indoors?0:yard.garden;
-  // The Trench front is churned: no-man's land between the front lines is
+  // Ypres is churned: no-man's land between the front lines is
   // bare, wet earth, and the ground within a few metres of any trench is
   // trodden mud. Grass survives only on the rear ground.
   const churn = trenchGround(map) ? trenchChurn(map, x, z) : map.noMansLand ? fieldChurn(map, x, z) : 0;
@@ -238,7 +238,7 @@ export function groundSurfacePixels(map: MapDefinition, size = 1024) {
       const shade =
         0.83 + dry * 0.18 - wet * 0.25 - wear * 0.12 + detail * 0.52;
       const i = (row * size + col) * 4;
-      // Trench front grass is winter-dead straw rather than green.
+      // Ypres grass is winter-dead straw rather than green.
       const tint = trenchGround(map) ? [0.05, 0.03, 0.17] : [0.15, -0.015, 0.105];
       diffuse.set(
         [
