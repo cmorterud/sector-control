@@ -1,4 +1,5 @@
 import { forwardDeployment } from "./deployment";
+import { frontSpawn } from "./spawn-front";
 import { advanceEmplacements, checkEmplacementSupport, damageEmplacements, dismount, emplacementCommand, emplacementView, mountedGun, operateGun, type Emplacement } from "./emplacements";
 import { damageAt, soldierHealth, type HitZone } from "./weapon-stats";
 import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
@@ -1222,7 +1223,12 @@ export class Game {
       p.x = s.x + ((p.teamIndex % columns) - (columns - 1) / 2) * 1.8;
       p.z = s.z + (Math.floor(p.teamIndex / columns) - (rows - 1) / 2) * 1.8;
     }
-    const deployment = villageSpawn(this, p);
+    const line = frontSpawn(this, p);
+    if (line) {
+      p.x = line.x;
+      p.z = line.z;
+    }
+    const deployment = line ? null : villageSpawn(this, p);
     if (deployment) {
       p.x = deployment.x;
       p.z = deployment.z;
@@ -2707,9 +2713,10 @@ export function pathfind(
     let i = candidates.find(({ i }) => walkSegment(p, nodes[i], map))?.i;
     // A soldier can stand nearer a wall than the planner's clearance allows,
     // and then no route leaves its feet. Plan from the nearest clear spot
-    // beside it instead; it walks there on the way to the first node. Only
-    // the airship's narrow stairs and catwalks need this so far.
-    for (const reach of map.sky && i === undefined ? [0.2, 0.4] : []) {
+    // beside it instead; it walks there on the way to the first node. The
+    // airship's narrow stairs and catwalks need it, and so does a soldier
+    // pressed against the corner of a prop on open ground.
+    for (const reach of i === undefined ? [0.2, 0.4] : []) {
       for (let k = 0; k < 8 && i === undefined; k++) {
         const q = { ...p, x: p.x + Math.cos(k * Math.PI / 4) * reach, z: p.z + Math.sin(k * Math.PI / 4) * reach };
         i = candidates.find(({ i }) => walkSegment(q, nodes[i], map))?.i;

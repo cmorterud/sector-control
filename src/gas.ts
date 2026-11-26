@@ -8,6 +8,7 @@
 import { artillerySector } from "./artillery-sectors";
 import { artilleryRules, artilleryTargetReason, launchShell, teamHasHuman } from "./artillery";
 import { sightLimit } from "./night";
+import { spawnLineDistance } from "./spawn-front";
 import { blocked, dist, playArea, walkSegment, type MapDefinition, type Vec } from "./map";
 import { idle, pathfind, safeBotDestination, type Command, type Game, type Soldier, type Team } from "./simulation";
 
@@ -159,7 +160,7 @@ export function gasStrikeReason(g: Game, p: Soldier, target: Vec & { area?: bool
   const reason = artilleryTargetReason(g, p, target);
   if (reason) return reason;
   const at = target.area ? artillerySector(g.map, target) : target;
-  if ((["blue", "red"] as const).some((team) => dist(at, g.map.spawn[team]) < gasStrikeRules.deployClearance))
+  if ((["blue", "red"] as const).some((team) => spawnLineDistance(g.map, team, at) < gasStrikeRules.deployClearance))
     return "Too close to a deployment area";
   return null;
 }

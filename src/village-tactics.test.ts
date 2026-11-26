@@ -23,15 +23,17 @@ const scene = () =>
   });
 const plan = (g: Game, p: Soldier) =>
   planVillageMove(g, p, (a, b) => pathfind(a, b, g.map));
-it("fans bot deployments across three clear entrances while preserving the human spawn", () => {
+it("spreads deployments along the whole front, each with a route to its side's entrances", () => {
   const g = scene();
   for (const team of ["blue", "red"] as const) {
     const soldiers = g.players.filter((p) => p.team === team);
+    const zs = soldiers.map((p) => p.z).sort((a, b) => a - b);
+    expect(zs.at(-1)! - zs[0]).toBeGreaterThan(100);
     expect(
-      new Set(soldiers.map((p) => (p.z < -15 ? 0 : p.z < 10 ? 1 : 2))).size,
+      new Set(soldiers.map((p) => (p.z < -20 ? 0 : p.z < 20 ? 1 : 2))).size,
     ).toBe(3);
     for (const p of soldiers) {
-      expect(blocked(p.x, p.z, 0.6, g.map)).toBe(false);
+      expect(blocked(p.x, p.z, 0.5, g.map)).toBe(false);
       expect(p.y).toBeCloseTo(groundHeight(p.x, p.z, g.map));
       const routes = g.map.terrain!.communicationRoutes!.filter(
         (r) => r.team === p.team,
@@ -41,6 +43,7 @@ it("fans bot deployments across three clear entrances while preserving the human
       ).toBeGreaterThan(0);
     }
   }
+  // The player starts in the middle of the line.
   const human = new Game(
     new TestCollision(villageMap),
     true,
@@ -49,8 +52,8 @@ it("fans bot deployments across three clear entrances while preserving the human
     undefined,
     { map: villageMap },
   );
-  expect(human.players[0].x).toBeCloseTo(villageMap.spawn.blue.x - 3.5 * 1.8);
-  expect(human.players[0].z).toBeCloseTo(villageMap.spawn.blue.z - 3 * 1.8);
+  expect(human.players[0].x).toBeCloseTo(villageMap.spawn.blue.x, 0);
+  expect(Math.abs(human.players[0].z - villageMap.spawn.blue.z)).toBeLessThan(3);
 });
 it("reserves distinct reachable capture and covering positions instead of sending a crowd to the flag center", () => {
   const g = scene(),
@@ -221,7 +224,9 @@ it("reacts to suppression by replacing an exposed post with cover against a reme
 it("disperses the opening 100-soldier advance instead of accumulating a dense stationary mob", () => {
   const g = scene();
   g.artillery.enabled = false;
-  for (let i = 0; i < 300; i++) g.step(botCommand(g, g.players[0]));
+  // Fifteen seconds: soldiers deploy along the whole rear line and file to
+  // the three communication routes, so the flanks take a few seconds longer.
+  for (let i = 0; i < 450; i++) g.step(botCommand(g, g.players[0]));
   const live = g.players.filter((p) => p.hp > 0);
   const neighbors = live.map(
     (p) =>

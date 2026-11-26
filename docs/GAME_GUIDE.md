@@ -49,6 +49,10 @@ npm run build
 npm run preview
 ```
 
+### Spawning along the front
+
+On Ypres (by day and at night), Verdun sector, Spring Offensive, Village front and Lighthouse point each side deploys in a line along the whole length of its front, at its spawn's distance from the enemy, instead of in one group. At the start of a match the soldiers stand roughly 2.5 m apart from one flank to the other, and each soldier respawns at their own place in that line, so respawns come in all along it too. You start in the middle; your squadmates stand beside you. No place is on a flag (within 9 m of one), in a wall, the wire, the sea or beside a tank. Stray heavy shells keep 20 m off the line and gas shells 24 m. Fort Vaux, the Zeppelin, Training and the Industrial district keep their own spawns.
+
 Use **Redeploy** in the pause menu to die at your current position and return to your team spawn after the normal five-second delay. It adds one death without awarding a kill or changing domination team scores. In a domination match's final phase it spends a reinforcement like any other respawn, and it is unavailable once your team has none left.
 
 Use **Select map** in the pause menu to leave the current match and open another battlefield’s start screen. The results screen also offers map choices. Your selected camera view carries over.
@@ -117,13 +121,13 @@ Each uncontested flag earns its owner **one point every three seconds**. First t
 
 Playtesters found the end of a close match could become an endless trade of charges with nothing at stake. So the last two minutes are a **final phase** on every domination map except Training. It also starts the moment either side reaches **240 points** (80% of the limit). A shortened match (`?duration=`) uses its last quarter, so `?duration=30` starts it with 7.5 seconds left. Before then the HUD notes when it will come.
 
-When it starts, a banner announces it and each side gets a reinforcement pool of **one respawn per soldier**: 50 on the 50v50 maps, 25 on Lighthouse point, 24 on Night raid and 6 in Fort Vaux and the Zeppelin. Each respawn from then on spends one, including a death just before the phase whose five-second wait ends after it. The pools are shown under the score. Your side's count blinks and a banner warns you when it reaches a quarter of the pool (at least 3, and never at the start). Banners also tell you when either side runs dry. At zero, a side's dead stay dead. Flags keep scoring as normal, and the score or the clock still decides the match unless a side with nobody standing has no reinforcements left: it **loses immediately**, whatever the score. If both sides fall on the same tick, the score decides. The results screen gives the reason, for example "Imperial Germany ran out of reinforcements".
+When it starts, a banner announces it and each side gets a reinforcement pool of **one respawn per soldier**: 50 on the 50v50 maps, 25 on Lighthouse point and 6 in Fort Vaux and the Zeppelin. Each respawn from then on spends one, including a death just before the phase whose five-second wait ends after it. The pools are shown under the score. Your side's count blinks and a banner warns you when it reaches a quarter of the pool (at least 3, and never at the start). Banners also tell you when either side runs dry. At zero, a side's dead stay dead. Flags keep scoring as normal, and the score or the clock still decides the match unless a side with nobody standing has no reinforcements left: it **loses immediately**, whatever the score. If both sides fall on the same tick, the score decides. The results screen gives the reason, for example "Imperial Germany ran out of reinforcements".
 
 When you die with nothing left, the death card reads **No reinforcements** in place of the countdown and says how many of your side still stand. Once the five-second death report has run, the camera follows a living teammate; left-click switches to the next. Redeploy is unavailable from then on.
 
 A side at or below its low mark stops launching over-the-top trench assaults and holds what it has. One respawn per soldier was chosen from seven seeded 8-minute all-bot matches, one per combat map. Bots lose roughly one to three soldiers per man over two minutes, so in five matches the first side ran dry 49 to 90 seconds into the phase, leaving the last minute as a fight that losses decide. That side usually finished outnumbered (12 standing against 44 on Ypres), but no side was wiped out. On Verdun and Village front the score reached 240 early and a side reached 300 with 44 to 68 percent of each pool unspent. Rerun the audit with `tools/reinforcement-audit.ts`; its header explains how to bundle it. Tune the rule in `reinforcementRules` (`src/reinforcements.ts`).
 
-Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench. Industrial retains its original three-sector rules. This is an initial balance prototype.
+Bots still cover from firing steps and cross in small smoke-screened squads. Assaults target enemy flags; survivors capture them on the floor, then defend nearby steps. Nearby riflemen retake threatened home flags while machine gunners keep covering. Respawns remain behind each team’s rear trench, spread in a line along the whole front rather than in one group (see [Spawning along the front](#spawning-along-the-front)). Industrial retains its original three-sector rules. This is an initial balance prototype.
 
 Each side has a wire belt about five meters in front of its front-line parapet, following the trench's zigzag in 4 m segments. Gaps are left opposite the defenders' two flags and the center. A side's own soldiers pass through its belt freely; the enemy is slowed to a walk and cannot sprint, hop or mantle there. A shell cuts any segment within about 2.4 m and a grenade within 1.4 m; cut segments stay cut and show as broken stakes and a low tangle. The six starting craters hold standing water you splash through.
 
@@ -131,9 +135,9 @@ A barbed-wire belt surrounds the sector, just outside the playable area. Inside 
 
 ## Capture the flag
 
-Ypres, Night raid and Verdun sector offer a second mode beside domination. Choose **Capture the flag** under the map cards in the briefing, or add `?mode=ctf` to the URL (`?map=trenches&mode=ctf`). Domination stays the default, and other maps ignore the parameter. The mode came from playtest feedback that a domination match on Ypres invites camping one flag: here each side has **three flag pickup points** spread along its own line, so no single spot can be held against every raid, and one **drop point** in its own base.
+Ypres, Ypres at night and Verdun sector offer a second mode beside domination. Choose **Capture the flag** under the map cards in the briefing, or add `?mode=ctf` to the URL (`?map=trenches&mode=ctf`). Domination stays the default, and other maps ignore the parameter. The mode came from playtest feedback that a domination match on Ypres invites camping one flag: here each side has **three flag pickup points** spread along its own line, so no single spot can be held against every raid, and one **drop point** in its own base.
 
-| | Ypres and Night raid | Verdun sector |
+| | Ypres (by day or at night) | Verdun sector |
 | --- | --- | --- |
 | Blue pickup points | A North bay, B Centre bay, C South bay, on the front trench floor | A Chapitre Wood, B front trench centre, C Fleury |
 | Red pickup points | D North bay, E Centre bay, F South bay | D Dame Ravine, E front trench centre, F Hardaumont Work |
@@ -155,9 +159,9 @@ Bots: every half second each team's orders are redrawn from public flag state (w
 
 `tools/ctf-audit.ts` plays seeded full matches (bundle it with esbuild for Node; see its header). `src/ctf.test.ts` covers the rules, and a short seeded battle in which both teams capture.
 
-## Night raid
+## Ypres at night
 
-Choose **Night raid** in the start menu or open `?map=night-raid`. It is Ypres's ground after dark, with 24 soldiers a side: the same trenches, wire and four flags, so knowing the day map is knowing this one.
+Choose **Ypres at night** in the start menu or open `?map=night-raid`. It is Ypres's ground after dark, 160 by 160 m with 50 soldiers a side as by day: the same trenches, wire and four flags, so knowing the day map is knowing this one.
 
 - **You see about fifteen meters.** Beyond that the ground is black. Bots follow the same rule: a soldier in the dark is seen only within 15 m, however clear the line to them.
 - **A fire gives you away.** Braziers burn in the rear trenches and light about seven meters around them. A soldier standing in that light is seen from across the field, by players and bots alike.
@@ -251,7 +255,7 @@ St. Quentin, 21 March 1918, authored for play rather than reconstructed: Britain
 
 Seven-flag domination: A Battle-zone keep (a half-depth earthwork with a concrete machine-gun post) and B Railway cutting (wagons and stores in a shallow cutting) for Britain; C Hill Redoubt (a ring trench round a ruined blockhouse), D Ruined village (eight shelled houses and a roofless church round the square) and E Windmill crossroads (the broken mill on the open plain) in no-man's land; F Chalk quarry (a two-step pit) and G Sunken road (a lane cut into the chalk with ramps up either bank) for Germany. The home flags sit between each side's second and third lines, so taking them means breaking the battle zone.
 
-**Forward deployment.** While your side holds one of its own home flags it opens a deployment point 14 m behind that flag, outside its capture ring, so nobody deploys onto a flag that is being fought over. While you are down the death card lists the main spawn and every open point; press **1** for the rear lines or **2**–**3** for a point. Bots deploy at the open point nearest their objective. Lose the flag and the point closes.
+**Forward deployment.** While your side holds one of its own home flags it opens a deployment point 14 m behind that flag, outside its capture ring, so nobody deploys onto a flag that is being fought over. Soldiers deploying there spread along a 32 m line across the flag's sector, never within 9 m of any flag. While you are down the death card lists the main spawn and every open point; press **1** for the rear lines or **2**–**3** for a point. Bots deploy at the open point nearest their objective. Lose the flag and the point closes.
 
 **Morning fog.** The match opens in thick white fog that lifts over the first three minutes, from about 55 m of visibility to 300 m. It is presentation only: bots see as usual. Gas comes only from the gas artillery shell.
 

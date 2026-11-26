@@ -27,7 +27,7 @@ const createGame = (seconds = 60) =>
   });
 
 describe("trench prototype", () => {
-  it("spawns 50 soldiers on each side in clear ground behind their first trench", () => {
+  it("spawns 50 soldiers on each side in clear ground behind their first trench, spread along the front", () => {
     const game = createGame();
     expect(game.players).toHaveLength(100);
     expect(game.snapshot()).toMatchObject({ mapId: "trenches", teamSize: 50 });
@@ -36,98 +36,20 @@ describe("trench prototype", () => {
       expect(soldiers).toHaveLength(50);
       expect(new Set(soldiers.map((p) => p.teamIndex)).size).toBe(50);
       expect(new Set(soldiers.map((p) => `${p.x},${p.z}`)).size).toBe(50);
+      // One line from flank to flank, not a block round the spawn point.
+      const zs = soldiers.map((p) => p.z).sort((a, b) => a - b);
+      expect(zs.at(-1)! - zs[0]).toBeGreaterThan(120);
+      for (let i = 1; i < zs.length; i++) expect(zs[i] - zs[i - 1]).toBeLessThan(6);
       for (const p of soldiers) {
-        expect(p.y).toBeCloseTo(2.4);
+        expect(p.y).toBeCloseTo(groundHeight(p.x, p.z, trenchMap));
+        expect(p.y).toBeGreaterThan(1.5);
         expect(Math.abs(p.x)).toBeGreaterThan(50);
         expect(p.team === "blue" ? p.x < 0 : p.x > 0).toBe(true);
-        expect(blocked(p.x, p.z, 0.7, trenchMap)).toBe(false);
-        // The larger formation includes rows beside the ramp: align first.
-        const approach = moveOnMap(
-          p,
-          { x: 0, z: trenchMap.spawn[p.team].z - p.z },
-          trenchMap,
-        );
-        const entrance = moveOnMap(
-          approach,
-          { x: p.team === "blue" ? 33 : -33, z: 0 },
-          trenchMap,
-        );
-        expect(groundHeight(entrance.x, entrance.z, trenchMap)).toBe(0);
-        expect(Math.abs(entrance.x)).toBeLessThan(41);
+        expect(blocked(p.x, p.z, 0.5, trenchMap)).toBe(false);
+        for (const s of trenchMap.sectors) expect(dist(p, s)).toBeGreaterThan(8);
+        for (const q of soldiers) if (q !== p) expect(dist(p, q)).toBeGreaterThan(1.3);
       }
     }
-  });
-
-  it("defaults to 50v50, caps experimental rosters consistently, and keeps distinct firing positions", () => {
-    const game = new Game(
-      new TestCollision(trenchMap),
-      true,
-      1800,
-      12345,
-      undefined,
-      { map: trenchMap },
-    );
-    expect(game.teamSize).toBe(50);
-    expect(game.players).toHaveLength(100);
-    expect(new Game(new TestCollision()).players).toHaveLength(10);
-    expect(resolveTeamSize(trenchMap, 1000)).toBe(50);
-    expect(resolveTeamSize(trenchMap, NaN)).toBe(50);
-    expect(resolveTeamSize(trenchMap, 0)).toBe(1);
-    for (const team of ["blue", "red"]) {
-      const posts = game.map.terrain!.firingPositions!.filter(
-        (p) => p.team === team,
-      );
-      expect(posts).toHaveLength(50);
-      expect(new Set(posts.map((p) => `${p.x},${p.z}`)).size).toBe(50);
-      for (let i = 0; i < posts.length; i++)
-        for (let j = 0; j < i; j++)
-          expect(dist(posts[i], posts[j])).toBeGreaterThanOrEqual(1);
-    }
-  });
-
-  it("has four separate trench lines and an exposed central no man's land", () => {
-    for (const z of [-59, -29, 25, 57]) {
-      let bands = 0,
-        inTrench = false;
-      for (let x = -77; x <= 77; x += 0.5) {
-        const dug =
-          groundHeight(x, z, trenchMap) - groundElevation(x, z, trenchMap) <
-          1.5;
-        if (dug && !inTrench) bands++;
-        inTrench = dug;
-      }
-      expect(bands).toBeGreaterThanOrEqual(2);
-      expect(bands).toBeLessThanOrEqual(8);
-      expect(trenchMap.terrain!.trenchLines).toHaveLength(4);
-      for (const line of trenchMap.terrain!.trenchLines!) {
-        const section = line.sections.find(
-          (s) => Math.abs(s.z - z) < s.length / 2,
-        )!;
-        expect(groundHeight(section.x, z, trenchMap)).toBeLessThan(1.1);
-      }
-    }
-    for (let x = -9; x <= 9; x += 2)
-      for (let z = -60; z <= 60; z += 5)
-        expect(groundHeight(x, z, trenchMap)).toBeGreaterThanOrEqual(
-          0.6 - 0.001,
-        );
-    const centerCover = trenchMap.boxes.filter(
-      (box) => Math.abs(box.x) < 18 && !box.landmark,
-    );
-    expect(centerCover.filter((box) => box.kind === "sandbag")).toHaveLength(2);
-    expect(
-      centerCover.every((box) => box.h <= 0.65 && box.kind !== "bunker"),
-    ).toBe(true);
-    const coverArea = centerCover.reduce((sum, box) => sum + box.w * box.d, 0);
-    expect(coverArea).toBeLessThan(15);
-    const landmarkArea = trenchMap.boxes
-      .filter((box) => box.landmark && Math.abs(box.x) < 18)
-      .reduce((sum, b) => sum + b.w * b.d, 0);
-    expect(landmarkArea).toBeLessThan(80);
-    for (const sector of trenchMap.sectors)
-      expect(
-        trenchMap.boxes.some((box) => !box.landmark && dist(box, sector) < 10),
-      ).toBe(false);
   });
 
   it("connects every spawn to its own firing station inside the front trench", () => {

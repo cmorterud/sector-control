@@ -1,6 +1,7 @@
 import { auditArtilleryCall } from "./artillery-audit";
 import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
+import { spawnLineDistance } from "./spawn-front";
 import { beyondPlayArea, blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
 import {
   idle,
@@ -26,6 +27,8 @@ export const ambientArtilleryRules = {
   maxInterval: 22 * 30,
   edgeMargin: 8,
   spawnClearance: 34,
+  // Beyond a stray shell's 18 m reach of the line a side spreads along to deploy.
+  spawnLineClearance: 20,
 };
 const shellsPerBarrage = 8;
 const barrageDuration = 4 * 30;
@@ -217,6 +220,9 @@ function advanceAmbient(g: Game) {
     if (
       Object.values(g.map.spawn).some(
         (s) => dist(s, target) < ambientArtilleryRules.spawnClearance,
+      ) ||
+      (["blue", "red"] as const).some(
+        (team) => spawnLineDistance(g.map, team, target) < ambientArtilleryRules.spawnLineClearance,
       )
     )
       continue;
