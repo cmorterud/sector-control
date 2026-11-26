@@ -1,4 +1,6 @@
-type VisualJob = { kind: "terrain" | "casualty"; run: () => void };
+// `ready`, when given, holds a job back until it returns true (a death fall
+// still playing before its ragdoll is built).
+type VisualJob = { kind: "terrain" | "casualty"; run: () => void; ready?: () => boolean };
 
 // Only presentation belongs here. Simulation damage must finish before
 // enqueueing; terrain colliders are queued separately (Renderer.terrainWork). A job cannot be interrupted, so the time budget
@@ -15,6 +17,7 @@ export class VisualWorkQueue {
     let completed = 0, casualties = 0;
     for (const [key, job] of this.jobs) {
       if (job.kind === "casualty" && casualties) continue;
+      if (job.ready && !job.ready()) continue;
       if (completed >= maxJobs || (completed && now() - start >= budgetMs)) break;
       this.jobs.delete(key);
       job.run();

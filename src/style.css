@@ -237,6 +237,22 @@ em {
 #ammo small.warn {
   color: #f3b27b;
 }
+.barrel-heat {
+  position: relative;
+  height: 5px;
+  width: 126px;
+  margin: 6px 0 4px auto;
+  background: #bdc9b633;
+  box-shadow: inset 0 0 0 1px #8e9b8b88;
+}
+.barrel-heat i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #d8c58f, #e8a050 60%, #f06a32);
+}
+.barrel-heat.hot i { animation: heat-pulse 0.5s ease-in-out infinite alternate; }
+.barrel-heat.overheated i { background: #ff4a26; animation: heat-pulse 0.25s ease-in-out infinite alternate; }
+@keyframes heat-pulse { to { filter: brightness(1.45); } }
 .gun-traverse {
   position: relative;
   height: 5px;

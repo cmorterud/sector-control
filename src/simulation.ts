@@ -54,6 +54,7 @@ import { smokeBlocks, smokeRules, type SmokeCloud } from "./smoke";
 import { burstRadius, sightLimit, type Burst } from "./night";
 import { advanceFlares, botFlareTarget, createFlareState, requestFlare } from "./flares";
 import { weaponAim, recoverRecoil, kickRecoil } from "./recoil";
+import { addShotHeat, barrelReady, botHoldsFire, canOverheat, coolBarrel, type BarrelHeat } from "./weapon-heat";
 import { hipFireOffset, maskBlocksAim, maskedBotAim } from "./hip-fire";
 import { firstPersonView, viewMuzzle } from "./player-view";
 import {
@@ -444,6 +445,8 @@ export interface Soldier extends Vec {
   recoilYaw: number;
   recoilShots: number;
   lastShotAt: number;
+  // Heat of the carried primary's barrel (src/weapon-heat.ts).
+  barrel: BarrelHeat;
   respawnAt: number;
   protectedUntil: number;
   // Set while outside the play area; see boundary.ts.
@@ -672,7 +675,11 @@ export type Event = { id: number; tick: number } & (
       from: V3;
       to: V3;
       recoil: { pitch: number; yaw: number };
+      // Barrel heat after this round, and the owner of the mounted gun that fired it.
+      heat?: number;
+      emplacement?: number;
     }
+  | { type: "overheat"; actor: number; at: V3; emplacement?: number }
   | {
       type: "impact";
       actor: number;
@@ -1109,6 +1116,7 @@ export class Game {
         recoilYaw: 0,
         recoilShots: 0,
         lastShotAt: -1000,
+        barrel: { heat: 0, overheated: false },
         respawnAt: 0,
         protectedUntil: 0,
         kills: 0,
@@ -1273,6 +1281,7 @@ export class Game {
     p.aimBloom = 0;
     p.recoilPitch = p.recoilYaw = p.recoilShots = 0;
     p.lastShotAt = -1000;
+    p.barrel = { heat: 0, overheated: false };
     p.protectedUntil = this.tick + 60;
     p.path = [];
     p.artilleryEvade = null;
@@ -1304,6 +1313,7 @@ export class Game {
     const failure = advanceStructuralFailures(this.map, this.tick);
     if (failure) this.structuralFailure(failure);
     advanceEmplacements(this);
+    for (const p of this.players) coolBarrel(p.barrel);
     advanceTanks(this);
     advanceNavigation(this.map, this.players.filter(p => p.hp > 0), navigationChecksPerTick, this.navigationDeadline);
     this.smokeClouds = this.smokeClouds.filter((s) => {
@@ -1521,14 +1531,15 @@ export class Game {
         p.triggerPressed &&
         !p.reloadAt &&
         p.ammo > 0 &&
-        this.tick >= p.nextShot
+        this.tick >= p.nextShot &&
+        (!canOverheat(p.weapon) || barrelReady(p.barrel))
       )
         this.fire(p);
     for (const gun of this.emplacements.values()) {
       if (gun.operator === undefined) continue;
       const p = this.players[gun.operator];
       if (p.hp > 0 && p.command.fire && gun.ammo > 0 && !gun.reloadAt &&
-          this.tick >= gun.nextShot && this.tick >= p.staggerUntil) this.fire(p, gun);
+          this.tick >= gun.nextShot && this.tick >= p.staggerUntil && barrelReady(gun.barrel)) this.fire(p, gun);
     }
     advanceFlames(this,(p,n,source,team)=>this.damage(p,n,source,team,{kind:"burn",weapon:"Flamethrower burn",from:p.burnFrom}));
     this.advanceProjectiles();
@@ -1841,6 +1852,8 @@ export class Game {
       remaining: weapon === "pistol" && !equippedStats(p) ? 25 : projectileRange,
       bornAt: this.tick,
     };
+    const barrel = gun?.barrel ?? p.barrel;
+    const overheated = addShotHeat(barrel, gun ? "emplaced" : p.weapon);
     this.emit({
       type: "fire",
       weapon,
@@ -1848,6 +1861,8 @@ export class Game {
       actor: p.id,
       projectile: shot.id,
       recoil: { pitch: p.recoilPitch, yaw: p.recoilYaw },
+      heat: barrel.heat,
+      ...(gun ? { emplacement: gun.owner } : {}),
       from,
       to: {
         x: from.x + (shot.vx / speed) * projectileRange,
@@ -1855,6 +1870,7 @@ export class Game {
         z: from.z + (shot.vz / speed) * projectileRange,
       },
     });
+    if (overheated) this.emit({ type: "overheat", actor: p.id, at: { ...from }, ...(gun ? { emplacement: gun.owner } : {}) });
     let obstruction = this.collision.ray(pivot, from);
     // Native mesh rays can miss a muzzle starting exactly on a bank face.
     // A crouched barrel must also clear the authoritative height field/cover.
@@ -3085,6 +3101,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     if (p.combatReaction && g.tick < p.combatReaction.pauseUntil) c.fire = false;
     if (c.fire) {
       c.fire = semiAutoIntent(g, p);
+      if (c.fire && p.weapon === "machineGun" && botHoldsFire(p.barrel)) c.fire = false;
       if (c.fire && g.botSettings.awareness) {
         const scatter =
           maskedBotAim(p) *

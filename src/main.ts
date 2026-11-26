@@ -1,4 +1,8 @@
 import { emplacementRules, emplacementWeapon, mountedGun, nearbyGun, placementFor } from "./emplacements";
+import { heatRules, ventSeconds, type BarrelHeat } from "./weapon-heat";
+// Barrel heat for machine guns: fills as the barrel warms, red once it seizes.
+const heatGauge = (b: BarrelHeat) =>
+  `<div class="barrel-heat${b.overheated ? " overheated" : b.heat > 0.8 ? " hot" : ""}" aria-label="Barrel heat" title="Barrel heat · jams at full, fires again below ${Math.round(heatRules.resumeAt * 100)}%"><i style="width:${Math.round(b.heat * 100)}%"></i></div>`;
 import { frameSeconds } from "./frame-timing";
 import {CombatFeedback} from "./combat-feedback";
 import {scoreboardTable} from "./scoreboard";
@@ -732,9 +736,9 @@ function hud(now: number) {
   const deployKey = keyLabel(settings.bindings.emplace), useKey = keyLabel(settings.bindings.interact);
   const placement = renderer.machineGunPreview;
   if (gun) {
-    const loading = gun.reloadAt ? `RELOADING · ${((gun.reloadAt - game.tick) / 30).toFixed(1)}s` : "90° TRAVERSE · HOLD FIRE";
+    const loading = gun.reloadAt ? `RELOADING · ${((gun.reloadAt - game.tick) / 30).toFixed(1)}s` : gun.barrel.overheated ? `BARREL OVERHEATED · COOLING ${ventSeconds(gun.barrel).toFixed(1)}s` : "90° TRAVERSE · HOLD FIRE";
     const traverse = 50 + (gun.yaw - gun.baseYaw) / emplacementRules.traverse * 50;
-    staged.ammo = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small><div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
+    staged.ammo = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small>${heatGauge(gun.barrel)}<div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
   } else if (placement) {
     staged.capture = placement.valid
       ? `<small>LMB · SET UP ${emplacementWeapon(p).toUpperCase()}　 ${deployKey} · CANCEL</small>`
@@ -751,6 +755,10 @@ function hud(now: number) {
   }
   const pickup = !gun && !nearby && !placement && p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
   if (pickup) staged.capture = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
+  if (!gun && p.weapon === "machineGun" && p.hp > 0) {
+    staged.ammo = staged.ammo.replace("<small>AUTO · HOLD TO FIRE / BRACE FOR ACCURACY</small>",
+      `<small>${p.barrel.overheated ? `BARREL OVERHEATED · COOLING ${ventSeconds(p.barrel).toFixed(1)}s` : "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY"}</small>${heatGauge(p.barrel)}`);
+  }
   const crewed = p.hp > 0 ? crewTank(game, p) : undefined;
   if (crewed) {
     const key = (action: ControlAction) => keyLabel(settings.bindings[action]);

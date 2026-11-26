@@ -25,29 +25,22 @@ const palette: Record<TankModel, { body: string; frame: string; dark: string; tr
   "saint-chamond": { body: "#6f6a4c", frame: "#57543d", dark: "#282620", trim: "#625e45" },
 };
 const treadSpacing = 0.5;
-// Pooled effects, kept simple so they can move onto shared gun effects later.
-const shellPool = 4, smokePool = 32, puffsPerShot = 8, smokeSeconds = 2.6;
-interface Puff { e: pc.Entity; born: number; x: number; y: number; z: number; dx: number; dz: number; size: number }
+// Shells in flight, from a small fixed pool. The main gun's flash and barrel
+// smoke come from the shared weapon effects (src/weapon-fx.ts).
+const shellPool = 4;
 
 export class TankView {
   private meshes = new Map<number, TankMesh>();
   private shells: pc.Entity[] = [];
-  private puffs: Puff[] = [];
-  private smokeLevels: pc.StandardMaterial[] = [];
-  private nextPuff = 0;
-  private fired = new Map<number, number>();
   constructor(private app: pc.Application, private cube: Cube, private material: Material) {}
 
   reset() {
     for (const mesh of this.meshes.values()) mesh.root.destroy();
     this.meshes.clear();
     for (const e of this.shells) e.enabled = false;
-    for (const puff of this.puffs) puff.e.enabled = false;
-    this.fired.clear();
   }
 
-  // A glowing streak for each shell in flight, and grey smoke that rolls off
-  // the barrel after each shot and drifts and fades over a couple of seconds.
+  // A glowing streak for each shell in flight.
   private effects(g: Game, alpha: number) {
     if (!this.shells.length) {
       const glow = new pc.StandardMaterial();
@@ -64,23 +57,6 @@ export class TankView {
         this.app.root.addChild(e);
         this.shells.push(e);
       }
-      for (let level = 0; level < 4; level++) {
-        const m = new pc.StandardMaterial();
-        m.diffuse = new pc.Color(0.5, 0.5, 0.48);
-        m.emissive = new pc.Color(0.18, 0.18, 0.17);
-        m.opacity = 0.7 * (1 - level / 4);
-        m.blendType = pc.BLEND_NORMAL;
-        m.depthWrite = false;
-        m.update();
-        this.smokeLevels.push(m);
-      }
-      for (let i = 0; i < smokePool; i++) {
-        const e = new pc.Entity("barrel smoke");
-        e.addComponent("render", { type: "sphere", material: this.smokeLevels[0], castShadows: false, receiveShadows: false });
-        e.enabled = false;
-        this.app.root.addChild(e);
-        this.puffs.push({ e, born: -1e9, x: 0, y: 0, z: 0, dx: 0, dz: 0, size: 1 });
-      }
     }
     const shells = g.tanks?.shells ?? [];
     this.shells.forEach((e, i) => {
@@ -96,34 +72,6 @@ export class TankView {
       e.rotateLocal(90, 0, 0);
       e.setLocalScale(0.2, length, 0.2);
     });
-    const now = g.tick + alpha;
-    for (const t of g.tanks?.list ?? []) {
-      if (t.cannon.firedAt < 0 || this.fired.get(t.id) === t.cannon.firedAt) continue;
-      const fresh = this.fired.has(t.id) || g.tick - t.cannon.firedAt < 3;
-      this.fired.set(t.id, t.cannon.firedAt);
-      if (!fresh) continue;
-      for (let k = 0; k < puffsPerShot; k++) {
-        const puff = this.puffs[this.nextPuff++ % smokePool];
-        const spread = (k / puffsPerShot) * 1.6;
-        const dx = t.cannon.muzzle.x - t.x, dz = t.cannon.muzzle.z - t.z, n = Math.hypot(dx, dz) || 1;
-        Object.assign(puff, {
-          born: t.cannon.firedAt + k * 0.5,
-          x: t.cannon.muzzle.x + (dx / n) * spread, y: t.cannon.muzzle.y, z: t.cannon.muzzle.z + (dz / n) * spread,
-          dx: (dx / n) * 0.6 + Math.sin(k * 2.3) * 0.3, dz: (dz / n) * 0.6 + Math.cos(k * 1.7) * 0.3, size: 0.7 + (k % 3) * 0.25,
-        });
-      }
-    }
-    for (const puff of this.puffs) {
-      const age = (now - puff.born) / 30;
-      puff.e.enabled = age >= 0 && age < smokeSeconds;
-      if (!puff.e.enabled) continue;
-      const f = age / smokeSeconds;
-      puff.e.render!.material = this.smokeLevels[Math.min(3, Math.floor(f * 4))];
-      const size = puff.size * (1.2 + age * 1.1);
-      // Rising fast enough to clear the hull from the far side within a second.
-      puff.e.setPosition(puff.x + puff.dx * age, puff.y + age * 1.4, puff.z + puff.dz * age);
-      puff.e.setLocalScale(size, size, size);
-    }
   }
 
   private joint(name: string, parent: pc.Entity, x = 0, y = 0, z = 0) {

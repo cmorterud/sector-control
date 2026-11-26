@@ -294,3 +294,27 @@ it("drops unavailable speech without disrupting effects or replaying stale calls
   a.play({ ...cue, kind: "voice", line: "smoke" });
   expect(a.stats.byKind.voice).toBe(1);
 });
+it("gives mounted guns a deep report with belt clatter, and never drops the player's own burst", () => {
+  const { a, c } = setup();
+  const before = c.nodes.length;
+  a.play({ ...cue, kind: "heavyGun", local: true, weaponId: "MG 08" });
+  const local = c.nodes.length - before;
+  expect(c.nodes.some((n) => n.frequency.starts.some((f) => Math.abs(f - 72 * 0.84) < 0.01))).toBe(true);
+  const middle = c.nodes.length;
+  a.play({ ...cue, kind: "heavyGun", weaponId: "Vickers" });
+  // The operator alone hears the feed: three more nodes for the clatter layer.
+  expect(local).toBeGreaterThan(c.nodes.length - middle - 1);
+  a.reset();
+  // A full mix: distant rifles and the cracks of rounds passing close.
+  for (let i = 0; i < 28; i++) a.play({ ...cue, kind: "rifle" });
+  for (let i = 0; i < 12; i++) a.play({ ...cue, kind: "crack" });
+  a.play({ ...cue, kind: "heavyGun", local: true, weaponId: "Vickers" });
+  expect(a.stats.byKind.heavyGun).toBe(1);
+  expect(a.stats.stolen).toBe(1);
+});
+it("delays a spent case's ring to land after its shot", () => {
+  const { a, c } = setup();
+  a.play({ ...cue, kind: "brass", local: true, delay: 0.4 });
+  expect(a.stats.byKind.brass).toBe(1);
+  expect(c.nodes.some((n) => n.gain.ramps.some((r) => r.time > 0.4 && r.time < 0.5))).toBe(true);
+});
