@@ -5,7 +5,7 @@ import { groundHeight, playArea, type MapDefinition, type Vec } from "./map";
 // ground mist, smoke from trench braziers and fresh craters, and scraps of
 // cloth caught on the boundary wire. Mist values are billboard opacities.
 // fieldWidth is how far across x the field mist lies, centred on the map:
-// no-man's land on Trench front (the default 64 m), the whole wooded field on Verdun.
+// no-man's land on Ypres (the default 64 m), the whole wooded field on Verdun.
 export type Atmosphere = { fieldMist: number; trenchMist: number; fieldWidth?: number };
 
 const hash = (n: number) => {

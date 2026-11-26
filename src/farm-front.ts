@@ -5,9 +5,9 @@ export interface FarmFront {
   pools: Vec[];
 }
 export const farmDrainage:Depression[] = [
-  {x:-2,z:-34,radiusX:2.4,radiusZ:6,depth:.28},
-  {x:1,z:-24,radiusX:2.8,radiusZ:7,depth:.38},
-  {x:-1,z:-12,radiusX:2.4,radiusZ:6,depth:.27},
+  {x:-2,z:-44,radiusX:2.4,radiusZ:6,depth:.28},
+  {x:1,z:-34,radiusX:2.8,radiusZ:7,depth:.38},
+  {x:-1,z:-22,radiusX:2.4,radiusZ:6,depth:.27},
 ];
 export function buildFarmFront(map:MapDefinition):{parts:Box[];farm:FarmFront} {
   const parts:Box[]=[];
@@ -25,13 +25,13 @@ export function buildFarmFront(map:MapDefinition):{parts:Box[];farm:FarmFront} {
     parts.push({id:`farm-${id}`,landmark:'farm',kind,x,z,w,d,h:h+groundHeight(x,z,map)-bottom,baseY:bottom+lift,...(farmProp?{farmProp,footingY:bottom}:{})});
   };
   // The supply districts are asymmetric, behind each force's front line.
-  for(const [group,cx,cz] of [['west',-55,-39],['east',55,33]] as const){
+  for(const [group,cx,cz] of [['west',-55,-49],['east',55,43]] as const){
     for(let i=0;i<7;i++)place(`${group}-crate-${i}`,cx+(i%3)*2.1-2.2,cz+Math.floor(i/3)*2.4,1.1,.9,.65+(i%2)*.13,'wood','crate');
     place(`${group}-cart`,cx+2,cz-4,2.8,1.5,.85,'wood','cart');
     for(let i=0;i<6;i++)place(`${group}-orchard-${i}`,cx-8+(i%3)*4.2,cz-8+Math.floor(i/3)*4.6,.45,.45,2.9+(i%3)*.45,'tree');
   }
   // Broken farm boundaries offer crouched pauses without screening standing fire.
-  for(const [group,cx,cz] of [['north',-8,-45],['south',8,42],['west-yard',-33,-33],['east-yard',34,39],['drain-edge',-10,-14],['ruined-garden',9,18],['west-orchard',-66,-46],['east-orchard',63,45],['west-reserve',-34,12],['east-reserve',34,-18]] as const){
+  for(const [group,cx,cz] of [['north',-8,-55],['south',8,52],['west-yard',-33,-43],['east-yard',34,49],['drain-edge',-10,-24],['ruined-garden',9,28],['west-orchard',-66,-56],['east-orchard',63,55],['west-reserve',-34,22],['east-reserve',34,-28]] as const){
     for(let i=0;i<5;i++){
       const z=cz+(i-2)*3.3;
       place(`${group}-post-${i}`,cx,z,.16,.16,.9,'wood','fence');
@@ -55,8 +55,8 @@ export function buildFarmFront(map:MapDefinition):{parts:Box[];farm:FarmFront} {
   for(const b of parts)if(b.kind==='tree')b.treeStyle='bare';
   return {parts,farm:{
     tracks:[
-      {width:2.8,points:[{x:-65,z:-27},{x:-54,z:-36},{x:-34,z:-39},{x:-12,z:-43}]},
-      {width:2.7,points:[{x:66,z:24},{x:55,z:34},{x:35,z:39},{x:12,z:44}]},
+      {width:2.8,points:[{x:-65,z:-37},{x:-54,z:-46},{x:-34,z:-49},{x:-12,z:-53}]},
+      {width:2.7,points:[{x:66,z:34},{x:55,z:44},{x:35,z:49},{x:12,z:54}]},
     ],
     pools:(map.terrain?.shelterBays??[]).filter((_,i)=>i%2===0).slice(0,4).map(p=>({x:p.x,z:p.z})),
   }};

@@ -511,13 +511,13 @@ describe("covered squad advances", () => {
     expect(m.route[2]).toEqual({ x: flag.x, z: flag.z });
     const other = fronts
       .find((l) => l.team === "blue")!
-      .sections.find((s) => (s.stepZ ?? s.z) === 35)!;
-    g.smokeClouds.push({ ...cloud(g), x: -7, z: 24 });
+      .sections.find((s) => (s.stepZ ?? s.z) === -43)!;
+    g.smokeClouds.push({ ...cloud(g), x: -4, z: -53 });
     g.assaults.readyAt.blue = g.tick;
     advanceAssaults(g);
     const wave = g.assaults.missions.find((q) => q.team === "blue" && q !== m)!;
-    expect(wave.launch).toEqual({ x: other.x + 2, z: 35 });
-    expect(wave.route[0]).toEqual({ x: -7, z: 24 });
+    expect(wave.launch).toEqual({ x: other.x + 2, z: -43 });
+    expect(wave.route[0]).toEqual({ x: -4, z: -53 });
   });
   it("keeps assault behavior disabled for industrial combat and resets squad membership on respawn", () => {
     const g = scene();
@@ -618,12 +618,13 @@ describe("covered squad advances", () => {
     // Rounds at 288 m/s end exchanges sooner, so a little less fire overall.
     expect(summary.shots / 90).toBeGreaterThan(9);
     expect(summary.machineGunShots).toBeGreaterThan(100);
+    // The first 15 s include filing along the 160 m line to the firing posts.
     for (let start = 0; start < 2700; start += 450)
       expect(
         log.events.filter(
           (e) => e.type === "fire" && e.tick > start && e.tick <= start + 450,
         ).length,
-      ).toBeGreaterThan(50);
+      ).toBeGreaterThan(start === 0 ? 25 : 50);
     expect(
       log.events.some((e) => e.type === "mantle" && e.phase === "start"),
     ).toBe(true);

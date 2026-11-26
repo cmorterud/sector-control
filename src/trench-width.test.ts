@@ -17,8 +17,8 @@ it("keeps two-meter floor lanes and a compact four-meter firing bay with a real 
     true,
   );
   for (const [x, z] of [
-    [-45, -19],
-    [-31, -33],
+    [-45, -25],
+    [-31, -43],
   ]) {
     expect(groundHeight(x, z, trenchMap)).toBe(0);
     expect(groundHeight(x - 0.8, z, trenchMap)).toBe(0);

@@ -22,7 +22,7 @@ export const chargeRules = {
   squadRadius: 30,
   recruitRadius: 18,
   maxRecruits: 10,
-  // Long enough to cross Trench front's 45 m of no man's land at a sprint.
+  // Long enough to cross Ypres's 45 m of no man's land at a sprint.
   durationTicks: 7 * 30,
   arriveRadius: 2.5,
   // Chargers lower bayonets for the final rush, inside this range of the goal or an enemy.

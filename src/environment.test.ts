@@ -155,7 +155,7 @@ it("creates a persistent artillery bowl that actually shields a crouched soldier
     { map: trenchMap },
   );
   // A low crest has a useful rim; cover still depends on the surrounding slope.
-  const z = 32,
+  const z = 42,
     y = groundHeight(0, z, g.map);
   g.explode({ x: 0, y: y + 0.025, z }, 0, "blue", {
     ...artilleryExplosionProfile,

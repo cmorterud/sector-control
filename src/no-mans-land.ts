@@ -155,7 +155,7 @@ export function noMansLandDebris(map: MapDefinition): BackdropBox[] {
     { w: 0.09, h: 0.09, d: 0.3, color: "#7d6838" },
   ];
   const out: BackdropBox[] = [], wet = craterPonds(map), belts = map.wireBelts ?? [];
-  // Seventy pieces across Trench front's 32 m band; the same density on a wider one.
+  // Seventy pieces across Ypres's 32 m band; the same density on a wider one.
   const width = map.noMansLand?.width ?? 32, count = Math.round((70 * width) / 32);
   for (let i = 0; out.length < count && i < count * 6; i++) {
     const x = (hash(i * 1.3) - 0.5) * width, z = (hash(i * 2.1) - 0.5) * 118;

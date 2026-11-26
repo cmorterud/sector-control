@@ -22,8 +22,10 @@ const spawnDistance = 60,
 // edge: a barbed-wire belt marks the line, and soldiers past it are shelled.
 // Terrain patches are 8 m and start at whole multiples of 8, so both half
 // extents must be multiples of 8 or the outer patches overhang the edge.
+// The sector is as long along the line as it is deep: each half of the line
+// sits 10 m out from the centre crossing, and the end stretches run on 8 m.
 const playWidth = 160,
-  playDepth = 128,
+  playDepth = 160,
   deadZone = 16;
 const width = playWidth + deadZone * 2,
   depth = playDepth + deadZone * 2,
@@ -43,53 +45,53 @@ const trenchLines: TrenchLine[] = [
     team: "blue",
     role: "front",
     sections: [
-      { x: -29, z: -49, length: 16 },
-      { x: -21, z: -29, length: 24, stepZ: -33 },
-      { x: -27, z: -13, length: 8 },
-      { x: -21, z: -1, length: 16 },
-      { x: -25, z: 17, length: 20 },
-      { x: -21, z: 35, length: 16 },
-      { x: -29, z: 51, length: 16 },
+      { x: -29, z: -63, length: 24 },
+      { x: -21, z: -39, length: 24, stepZ: -43 },
+      { x: -27, z: -23, length: 8 },
+      { x: -21, z: -1, length: 36 },
+      { x: -25, z: 27, length: 20 },
+      { x: -21, z: 45, length: 16 },
+      { x: -29, z: 65, length: 24 },
     ],
   },
   {
     team: "blue",
     role: "rear",
     sections: [
-      { x: -45, z: -49, length: 16 },
-      { x: -41, z: -31, length: 20 },
-      { x: -45, z: -13, length: 16 },
-      { x: -37, z: -1, length: 8 },
-      { x: -41, z: 13, length: 20 },
-      { x: -39, z: 31, length: 16 },
-      { x: -45, z: 49, length: 20 },
+      { x: -45, z: -63, length: 24 },
+      { x: -41, z: -41, length: 20 },
+      { x: -45, z: -23, length: 16 },
+      { x: -37, z: -1, length: 28 },
+      { x: -41, z: 23, length: 20 },
+      { x: -39, z: 41, length: 16 },
+      { x: -45, z: 63, length: 28 },
     ],
   },
   {
     team: "red",
     role: "front",
     sections: [
-      { x: 25, z: -51, length: 12 },
-      { x: 21, z: -39, length: 12 },
-      { x: 27, z: -27, length: 12 },
-      { x: 23, z: -15, length: 12 },
-      { x: 21, z: -1, length: 16 },
-      { x: 29, z: 15, length: 16 },
-      { x: 23, z: 31, length: 16 },
-      { x: 27, z: 47, length: 16 },
+      { x: 25, z: -65, length: 20 },
+      { x: 21, z: -49, length: 12 },
+      { x: 27, z: -37, length: 12 },
+      { x: 23, z: -25, length: 12 },
+      { x: 21, z: -1, length: 36 },
+      { x: 29, z: 25, length: 16 },
+      { x: 23, z: 41, length: 16 },
+      { x: 27, z: 61, length: 24 },
     ],
   },
   {
     team: "red",
     role: "rear",
     sections: [
-      { x: 43, z: -49, length: 16 },
-      { x: 39, z: -33, length: 16 },
-      { x: 45, z: -17, length: 16 },
-      { x: 37, z: -1, length: 16 },
-      { x: 45, z: 15, length: 16 },
-      { x: 41, z: 33, length: 20 },
-      { x: 43, z: 51, length: 16 },
+      { x: 43, z: -63, length: 24 },
+      { x: 39, z: -43, length: 16 },
+      { x: 45, z: -27, length: 16 },
+      { x: 37, z: -1, length: 36 },
+      { x: 45, z: 25, length: 16 },
+      { x: 41, z: 43, length: 20 },
+      { x: 43, z: 65, length: 24 },
     ],
   },
 ];
@@ -165,7 +167,7 @@ for (const line of trenchLines) {
 // Wire belts 5 m in front of each front line's parapet, following its zigzag
 // in 4 m segments. Gaps face the defenders' own flags and the centre, where
 // assaults close in; shells and grenades cut more.
-const beltGaps = { blue: [-33, 35, -1], red: [-27, 31, -1] };
+const beltGaps = { blue: [-43, 45, -1], red: [-37, 41, -1] };
 const wireBelts: WireSegment[] = [];
 for (const line of trenchLines) {
   if (line.role !== "front") continue;
@@ -202,7 +204,7 @@ for (const team of ["blue", "red"] as const) {
   const side = team === "blue" ? -1 : 1;
   const front = trenchLines.find((l) => l.team === team && l.role === "front")!;
   const rear = trenchLines.find((l) => l.team === team && l.role === "rear")!;
-  for (const z of team === "blue" ? [-33, -1, 35] : [-39, -1, 31]) {
+  for (const z of team === "blue" ? [-43, -1, 45] : [-45, -1, 41]) {
     const near = (line: TrenchLine) =>
       line.sections.find((s) => Math.abs(s.z - z) < s.length / 2)!.x;
     const f = near(front),
@@ -304,14 +306,14 @@ for (const route of communicationRoutes) {
   const sites =
     route.team === "blue"
       ? [
-          { x: -53, z: -53 },
-          { x: -49, z: 17 },
-          { x: -51, z: 49 },
+          { x: -53, z: -62 },
+          { x: -49, z: 27 },
+          { x: -51, z: 59 },
         ]
       : [
-          { x: 53, z: -55 },
-          { x: 53, z: -15 },
-          { x: 53, z: 49 },
+          { x: 53, z: -65 },
+          { x: 53, z: -25 },
+          { x: 53, z: 59 },
         ];
   const bay = {
       ...sites[shelterBays.filter((b) => b.team === route.team).length],
@@ -342,7 +344,7 @@ for (const side of [-1, 1])
   cover.push({
     id: `rear-wood-${side}`,
     x: side * (rearCoverDistance - 4),
-    z: side * 9,
+    z: side * 19,
     w: 0.25,
     d: 2.5,
     h: 1.2,
@@ -353,7 +355,7 @@ for (const side of [-1, 1])
 for (const side of [-1, 1] as const) {
   cover.push({
     x: side * 4,
-    z: side * 18,
+    z: side * 28,
     w: 3.2,
     d: 0.8,
     h: 0.65,
@@ -362,7 +364,7 @@ for (const side of [-1, 1] as const) {
   });
   cover.push({
     x: side * 4,
-    z: side * 48,
+    z: side * 58,
     w: 6,
     d: 0.7,
     h: 0.65,
@@ -424,7 +426,7 @@ for (let row = 0; row < rows; row++)
   }
 export const trenchMap: MapDefinition = {
   id: "trenches",
-  name: "Trench front",
+  name: "Ypres",
   width,
   depth,
   playArea: { width: playWidth, depth: playDepth },
@@ -438,10 +440,10 @@ export const trenchMap: MapDefinition = {
     red: { x: spawnDistance, z: -1 },
   },
   sectors: [
-    { id: "A", x: -21, z: -33, home: "blue" },
-    { id: "B", x: -21, z: 35, home: "blue" },
-    { id: "C", x: 27, z: -27, home: "red" },
-    { id: "D", x: 23, z: 31, home: "red" },
+    { id: "A", x: -21, z: -43, home: "blue" },
+    { id: "B", x: -21, z: 45, home: "blue" },
+    { id: "C", x: 27, z: -37, home: "red" },
+    { id: "D", x: 23, z: 41, home: "red" },
   ],
   boxes: cover,
   terrain: {
@@ -459,20 +461,20 @@ export const trenchMap: MapDefinition = {
     ramps,
     lining: [],
     craters: [
-      { x: -4, z: -43, radius: 3.6, depth: 0.6 },
-      { x: 9, z: -25, radius: 3, depth: 0.55 },
-      { x: -10, z: -9, radius: 3.2, depth: 0.65 },
-      { x: 8, z: 10, radius: 3.5, depth: 0.6 },
-      { x: -7, z: 24, radius: 3, depth: 0.7 },
-      { x: 3, z: 42, radius: 4, depth: 0.65 },
+      { x: -4, z: -53, radius: 3.6, depth: 0.6 },
+      { x: 9, z: -35, radius: 3, depth: 0.55 },
+      { x: -10, z: -19, radius: 3.2, depth: 0.65 },
+      { x: 8, z: 20, radius: 3.5, depth: 0.6 },
+      { x: -7, z: 34, radius: 3, depth: 0.7 },
+      { x: 3, z: 52, radius: 4, depth: 0.65 },
     ],
     depressions: [
       ...farmDrainage,
-      { x: -3, z: -39, radiusX: 10, radiusZ: 14, depth: 0.16 },
-      { x: 4, z: -17, radiusX: 9, radiusZ: 12, depth: 0.14 },
-      { x: -2, z: 3, radiusX: 12, radiusZ: 15, depth: 0.18 },
-      { x: 3, z: 29, radiusX: 10, radiusZ: 14, depth: 0.15 },
-      { x: -1, z: 51, radiusX: 10, radiusZ: 10, depth: 0.12 },
+      { x: -3, z: -49, radiusX: 10, radiusZ: 14, depth: 0.16 },
+      { x: 4, z: -27, radiusX: 9, radiusZ: 12, depth: 0.14 },
+      { x: -2, z: -1, radiusX: 12, radiusZ: 22, depth: 0.18 },
+      { x: 3, z: 39, radiusX: 10, radiusZ: 14, depth: 0.15 },
+      { x: -1, z: 61, radiusX: 10, radiusZ: 10, depth: 0.12 },
     ],
   },
 };
@@ -489,15 +491,15 @@ trenchMap.terrain!.shellScars = [
     phase: i * 2.39,
   })),
   ...[
-    { x: -7, z: -38, radiusX: 2.2, radiusZ: 1.5, depth: 0.22 },
-    { x: 8, z: -42, radiusX: 1.8, radiusZ: 2.3, depth: 0.18 },
-    { x: -1, z: -32, radiusX: 2.4, radiusZ: 1.6, depth: 0.24 },
-    { x: -3, z: -20, radiusX: 1.6, radiusZ: 2.2, depth: 0.2 },
-    { x: 3, z: -5, radiusX: 2.1, radiusZ: 1.4, depth: 0.18 },
-    { x: -1, z: 15, radiusX: 2.2, radiusZ: 1.7, depth: 0.24 },
-    { x: 7, z: 29, radiusX: 1.5, radiusZ: 2.1, depth: 0.18 },
-    { x: -6, z: 46, radiusX: 2.3, radiusZ: 1.5, depth: 0.22 },
-    { x: 5, z: 54, radiusX: 1.8, radiusZ: 2.4, depth: 0.2 },
+    { x: -7, z: -48, radiusX: 2.2, radiusZ: 1.5, depth: 0.22 },
+    { x: 8, z: -52, radiusX: 1.8, radiusZ: 2.3, depth: 0.18 },
+    { x: -1, z: -42, radiusX: 2.4, radiusZ: 1.6, depth: 0.24 },
+    { x: -3, z: -30, radiusX: 1.6, radiusZ: 2.2, depth: 0.2 },
+    { x: 3, z: -15, radiusX: 2.1, radiusZ: 1.4, depth: 0.18 },
+    { x: -1, z: 25, radiusX: 2.2, radiusZ: 1.7, depth: 0.24 },
+    { x: 7, z: 39, radiusX: 1.5, radiusZ: 2.1, depth: 0.18 },
+    { x: -6, z: 56, radiusX: 2.3, radiusZ: 1.5, depth: 0.22 },
+    { x: 5, z: 64, radiusX: 1.8, radiusZ: 2.4, depth: 0.2 },
   ].map((scar, i) => ({
     ...scar,
     rotation: i * 1.39,

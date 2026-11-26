@@ -26,10 +26,10 @@ function scene() {
 }
 it("covers the battlefield with broad stable sectors and quantizes fine coordinates", () => {
   const sectors = artillerySectors(trenchMap);
-  expect(sectors).toHaveLength(80);
-  expect(new Set(sectors.map((s) => s.name)).size).toBe(80);
-  expect(artillerySector(trenchMap, { x: 17, z: 2 }).name).toBe("G5");
-  expect(artillerySector(trenchMap, { x: 29, z: 14 }).name).toBe("G5");
+  expect(sectors).toHaveLength(100);
+  expect(new Set(sectors.map((s) => s.name)).size).toBe(100);
+  expect(artillerySector(trenchMap, { x: 17, z: 2 }).name).toBe("G6");
+  expect(artillerySector(trenchMap, { x: 29, z: 14 }).name).toBe("G6");
 });
 it("allows a blind call from the trench floor with bounded extra dispersion and normal warning/charge", () => {
   const g = scene(),
@@ -75,7 +75,7 @@ it("retains ownership/range/death/finite bounds rules and allows map-edge sector
   expect(requestArtillery(g, p, { x: 72, z: 56, area: true })).toBe(true);
   expect(
     g.artillery.missions[0].impacts.every(
-      (v) => Math.abs(v.x) <= 79 && Math.abs(v.z) <= 63,
+      (v) => Math.abs(v.x) <= 79 && Math.abs(v.z) <= 79,
     ),
   ).toBe(true);
 });

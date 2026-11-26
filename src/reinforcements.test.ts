@@ -13,7 +13,7 @@ import { trenchMap } from "./trench-map";
 import { trainingMap } from "./training-map";
 import { fortVauxMap } from "./fort-vaux-map";
 
-// Small idle sides on Trench front: the rule only needs bodies, not tactics.
+// Small idle sides on Ypres: the rule only needs bodies, not tactics.
 function scene(teamSize = 3, duration = 14400) {
   const g = new Game(new TestCollision(trenchMap), true, duration, 12345, undefined, {
     map: trenchMap,

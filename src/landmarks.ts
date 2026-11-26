@@ -93,17 +93,17 @@ export function buildLandmarks(map: MapDefinition): {
     return boxes;
   };
   const choices = [
-    { x: -32, z: -35 },
-    { x: -32, z: -43 },
-    { x: -33, z: -39 },
-    { x: -32, z: -29 },
+    { x: -32, z: -45 },
+    { x: -32, z: -53 },
+    { x: -33, z: -49 },
+    { x: -32, z: -39 },
   ];
   const selected = choices
     .map((c) => ({ c, parts: house(c) }))
     .sort((a, b) => b.parts.length - a.parts.length)[0];
   landmarks.push({
     id: "A",
-    name: "Farmhouse",
+    name: "Hanebeek Farm",
     kind: "farmhouse",
     radius: 6,
     ...selected.c,
@@ -126,10 +126,10 @@ export function buildLandmarks(map: MapDefinition): {
       supports: houseSupports.map((b) => b.id!),
     });
 
-  const wood = { x: -13, z: 36 };
+  const wood = { x: -13, z: 46 };
   landmarks.push({
     id: "B",
-    name: "Shattered Wood",
+    name: "Frezenberg Copse",
     kind: "woodland",
     radius: 6,
     ...wood,
@@ -170,10 +170,10 @@ export function buildLandmarks(map: MapDefinition): {
     if (log) parts.push(log);
   }
 
-  const pit = { x: 9, z: -25 };
+  const pit = { x: 9, z: -35 };
   landmarks.push({
     id: "C",
-    name: "Gun Pit",
+    name: "Beck House",
     kind: "gunpit",
     radius: 5,
     ...pit,
@@ -241,13 +241,13 @@ export function buildLandmarks(map: MapDefinition): {
   };
   const bunkerSites: Vec[] = [];
   for (let x = 31; x <= 35; x++)
-    for (let z = 25; z <= 38; z++) bunkerSites.push({ x, z });
+    for (let z = 35; z <= 48; z++) bunkerSites.push({ x, z });
   const site = bunkerSites
     .map((c) => ({ c, parts: bunker(c) }))
     .sort((a, b) => b.parts.length - a.parts.length)[0];
   landmarks.push({
     id: "D",
-    name: "Broken Bunker",
+    name: "Borry Farm",
     kind: "bunker",
     radius: 5,
     ...site.c,

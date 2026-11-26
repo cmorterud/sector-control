@@ -1202,7 +1202,7 @@ try {
       }
       // Across the boundary wire behind Blue's spawn, and up Blue's front line to its trench block.
       // "no-mans-land" looks from the centre over a crater pond to Blue's wire belt.
-      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,54,-28,72],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-15,-12,-7]};
+      const trenchDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-76,30,-84,42],"trench-block":[-28,70,-28,88],"boundary-walk":[-76,22,-92,22],"no-mans-land":[-3,-25,-12,-17]};
       // Along a rear trench to its first dugout, and in front of the first signboard.
       const dressed=map.backdrop&&!!map.terrain?.trenchLines?.length,dugout=dressed?dugouts(map)[0]:undefined,sign=dressed?signboards(map)[0]:undefined;
       // From the trench floor behind a Blue firing step, east toward the parapet
@@ -1273,9 +1273,9 @@ try {
       : map.id === "village"
       ? `Fight through orchard gardens, workyards and paved courtyards to hold Saint-Martin Manor. Use low destructible cover between the houses; smoke screens the streets and artillery opens new routes. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "night-raid"
-        ? `Trench front after dark. You can see about fifteen meters; beyond that, only what a lamp, a flare or a shell burst shows. Capture flags A–D and hold them to score. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
+        ? `Ypres after dark. You can see about fifteen meters; beyond that, only what a lamp, a flare or a shell burst shows. Capture flags A–D and hold them to score. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
       : map.id === "trenches"
-        ? `Capture flags A–D in the front trenches and hold them to score. Use smoke and advancing squads to take enemy flags. Step down when pinned. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
+        ? `Frezenberg, east of Ypres, 16 August 1917. British battalions go over the top across the flooded Hanebeek toward the German pillboxes at Beck House and Borry Farm. Capture flags A–D in the front trenches and hold them to score. Use smoke and advancing squads to take enemy flags. Step down when pinned. ${teamSize} soldiers per team · domination · first to 300 or eight minutes.`
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,

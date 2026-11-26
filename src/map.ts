@@ -136,7 +136,7 @@ export interface TrenchLine {
   role: "front" | "rear";
   sections: (Vec & { length: number; stepZ?: number })[];
   // The floor's centre, as an offset from each section's x toward the enemy,
-  // and its half width. By default front lines are Trench front's firing-step
+  // and its half width. By default front lines are Ypres's firing-step
   // lines (1 m toward the enemy, 2 m half width) and rear lines are centred, 1 m.
   floor?: { offset: number; half: number };
 }
@@ -901,5 +901,5 @@ export function mantleLanding(
   return mantleRoute(p, direction, map)?.landing ?? null;
 }
 
-// Trench front's ground, by day or by night: the same trenches, wire and churned mud.
+// Ypres's ground, by day or by night: the same trenches, wire and churned mud.
 export const trenchGround = (map: Pick<MapDefinition, "id">) => map.id === "trenches" || map.id === "night-raid";

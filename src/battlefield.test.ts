@@ -235,7 +235,7 @@ describe("battlefield presentation", () => {
   });
   it("uses the same visible duckboard footprints for wood steps, and excavation removes that surface", () => {
     const { g, p } = scene();
-    const board = duckboards(g.map).find((b) => b.x === -41 && b.z === 8)!;
+    const board = duckboards(g.map).find((b) => b.x === -41 && b.z === 18)!;
     expect(board).toBeDefined();
     expect(intactBoard(board, g.map)).toBe(true);
     expect(footSurface(board, g.map)).toBe("wood");

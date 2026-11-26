@@ -389,7 +389,7 @@ describe("capture the flag presentation", () => {
 describe("capture the flag bots", () => {
   // A seeded five-minute Night raid at its own 24 a side: the smallest real
   // roster, so the battle stays quick enough to run with the other tests.
-  // Full 50v50 Trench front and Verdun matches are in tools/ctf-audit.ts.
+  // Full 50v50 Ypres and Verdun matches are in tools/ctf-audit.ts.
   // Seed 2: since bots aim down sights to fire accurately and masked bots
   // scatter their shots (hip-fire spread), seed 5 sees only one team capture.
   // Seed 4: since hip spread scales with speed, seed 2 sees only one team capture.

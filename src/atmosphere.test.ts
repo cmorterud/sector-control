@@ -46,7 +46,7 @@ it("spreads Verdun's mist across its whole wooded field at the same density, and
   const look = mapLooks.verdun.atmosphere!, banks = mistBanks(verdunMap, look.fieldWidth);
   const field = banks.filter((b) => !b.trench), trench = banks.filter((b) => b.trench);
   expect(look.fieldWidth).toBe(132);
-  // About twice Trench front's no-man's land, so about twice its sixty banks.
+  // About twice Ypres's no-man's land, so about twice its sixty banks.
   expect(field).toHaveLength(Math.round((60 * 132) / 64));
   for (const b of field) expect(Math.abs(b.x)).toBeLessThanOrEqual(66);
   expect(field.some((b) => b.x < -45) && field.some((b) => b.x > 45)).toBe(true);

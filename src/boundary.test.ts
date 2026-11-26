@@ -23,9 +23,9 @@ const run = (g: Game, ticks: number, command: Partial<Command> = {}) => {
 const boundaryEvents = (events: GameEvent[]) =>
   events.flatMap((e) => (e.type === "boundary" ? [e.phase] : []));
 
-it("rings the unchanged 160 by 128 m sector with a 16 m dead zone", () => {
-  expect(area).toEqual({ width: 160, depth: 128 });
-  expect([trenchMap.width, trenchMap.depth]).toEqual([192, 160]);
+it("rings the 160 by 160 m sector with a 16 m dead zone", () => {
+  expect(area).toEqual({ width: 160, depth: 160 });
+  expect([trenchMap.width, trenchMap.depth]).toEqual([192, 192]);
   // Whole 8 m terrain patches tile the map exactly, edge to edge.
   expect((trenchMap.width / 2) % 8).toBe(0);
   expect((trenchMap.depth / 2) % 8).toBe(0);
@@ -38,11 +38,11 @@ it("rings the unchanged 160 by 128 m sector with a 16 m dead zone", () => {
   ];
   for (const point of inside) expect(beyondPlayArea(point.x, point.z, trenchMap)).toBeLessThan(-4);
   expect(inBoundaryWire(-81.5, 0, trenchMap)).toBe(true);
-  expect(inBoundaryWire(0, 65, trenchMap)).toBe(true);
+  expect(inBoundaryWire(0, 81, trenchMap)).toBe(true);
   expect(inBoundaryWire(-79.5, 0, trenchMap)).toBe(false);
   expect(inBoundaryWire(-86, 0, trenchMap)).toBe(false);
   // The dead zone beyond the wire is level, open ground.
-  for (const [x, z] of [[-88, 0], [88, 20], [0, -72], [-60, 72]])
+  for (const [x, z] of [[-88, 0], [88, 20], [0, -88], [-60, 88]])
     expect(groundHeight(x, z, trenchMap)).toBeCloseTo(trenchMap.terrain!.bankHeight, 1);
 });
 
