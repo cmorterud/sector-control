@@ -212,7 +212,7 @@ try {
  if(!visualOnly&&(map==='trenches'||map==='verdun')) {
   // Walk out through the boundary wire: the warning must appear and count down,
   // and staying out must end in the boundary salvo rather than a soldier's kill.
-  // The west wire starts at the play area's edge: x -80 on Trench front, -104 on Verdun.
+  // The west wire starts at the play area's edge: x -80 on Ypres, -104 on Verdun.
   const edge=map==='verdun'?-104:-80;
   report.boundary=await client.evaluate(`(()=>{
    const review=window.sectorRenderReview;

@@ -6,8 +6,8 @@ export const battlefieldInfo = {
   training: {setting:"Field training camp",factions:"British, French & German equipment",description:"Eight guided exercises: movement, every weapon, grenades, bayonets, artillery, destruction and squad combat. Free practice and resettable stations."},
   verdun: {setting:"Verdun · June 1916", factions:"France · Imperial Germany", description:"Fleury and Thiaumont under a phosgene barrage: cratered woods, five flags and the Thiaumont crossroads at the center."},
   industrial: { setting: "Industrial skirmish", factions: "Training teams", description: "Close lanes and industrial cover. Three control points." },
-  trenches: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Flooded farmland, broken farmyards and exposed trench crossings. Four flags." },
-  "night-raid": { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Trench front after dark. You see fifteen meters; lamps, flares and shell bursts show the rest. Four flags." },
+  trenches: { setting: "Ypres salient · August 1917", factions: "Britain · Imperial Germany", description: "Frezenberg, east of Ypres: flooded farmland, farm pillboxes and exposed trench crossings. Four flags." },
+  "night-raid": { setting: "Ypres salient · 1917", factions: "Britain · Imperial Germany", description: "Ypres after dark. You see fifteen meters; lamps, flares and shell bursts show the rest. Four flags." },
   headland: { setting: "Atlantic coast · 1917", factions: "France · Imperial Germany", description: "Graybox preview. A lighthouse headland with a town square between cliff-top parks. Three flags." },
   village: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Nine village buildings, sheltered gardens and a destructible two-story manor. Five flags, including the manor." },
 };

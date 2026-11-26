@@ -10,7 +10,7 @@ import { villageMap } from "./village-map";
 
 const game = () => new Game(new TestCollision(trenchMap), false, 3000, 12345, undefined, { map: trenchMap, ambientArtillery: false });
 const belts = trenchMap.wireBelts!;
-const gaps = { blue: [-33, 35, -1], red: [-27, 31, -1] };
+const gaps = { blue: [-43, 45, -1], red: [-37, 41, -1] };
 
 it("lays a belt in front of each front line, with gaps at the defenders' flags and the centre", () => {
   for (const team of ["blue", "red"] as const) {

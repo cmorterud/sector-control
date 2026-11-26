@@ -86,7 +86,7 @@ describe("trench prototype", () => {
   });
 
   it("has four separate trench lines and an exposed central no man's land", () => {
-    for (const z of [-49, -19, 15, 47]) {
+    for (const z of [-59, -29, 25, 57]) {
       let bands = 0,
         inTrench = false;
       for (let x = -77; x <= 77; x += 0.5) {
@@ -107,7 +107,7 @@ describe("trench prototype", () => {
       }
     }
     for (let x = -9; x <= 9; x += 2)
-      for (let z = -50; z <= 50; z += 5)
+      for (let z = -60; z <= 60; z += 5)
         expect(groundHeight(x, z, trenchMap)).toBeGreaterThanOrEqual(
           0.6 - 0.001,
         );

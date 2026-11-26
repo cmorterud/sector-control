@@ -9,7 +9,7 @@ import { terrainGeometry } from "./terrain-geometry";
 it("rounds both earth shoulders without narrowing the floor or turning banks into walkable exits", () => {
   for (const side of [-1, 1]) {
     const heights = [0, 0.25, 0.5, 0.75, 1].map((d) =>
-      groundHeight(-45 + side * (1 + d), -9, trenchMap),
+      groundHeight(-45 + side * (1 + d), -19, trenchMap),
     );
     expect(heights[0]).toBe(0);
     expect(heights[1]).toBeGreaterThan(0.3);
@@ -19,11 +19,11 @@ it("rounds both earth shoulders without narrowing the floor or turning banks int
     expect(heights[4]).toBeCloseTo(2.4);
     expect(heights.every((h, i) => !i || h >= heights[i - 1])).toBe(true);
     expect(
-      walkSegment({ x: -45, z: -9 }, { x: -45 + side * 3, z: -9 }, trenchMap),
+      walkSegment({ x: -45, z: -19 }, { x: -45 + side * 3, z: -19 }, trenchMap),
     ).toBe(false);
   }
   for (const x of [-45.8, -45, -44.2])
-    expect(groundHeight(x, -9, trenchMap)).toBe(0);
+    expect(groundHeight(x, -19, trenchMap)).toBe(0);
   expect(groundHeight(-19.5, -1, trenchMap)).toBeCloseTo(0.425);
   expect(groundHeight(-18.5, -1, trenchMap)).toBeCloseTo(0.85);
   const entry = trenchMap.terrain!.ramps.find(
@@ -38,14 +38,14 @@ it("seals rounded shoulders and corners with actual Ammo triangles, leaving remo
   const physics = new TerrainPhysics(),
     root = new Entity("rounded banks");
   const sites = [
-    [-46.13, -9.17],
-    [-46.37, -9.17],
-    [-46.62, -9.17],
-    [-46.84, -9.17],
-    [-43.86, -9.17],
-    [-43.59, -9.17],
-    [-46.37, -22.41],
-    [-46.61, -22.19],
+    [-46.13, -19.17],
+    [-46.37, -19.17],
+    [-46.62, -19.17],
+    [-46.84, -19.17],
+    [-43.86, -19.17],
+    [-43.59, -19.17],
+    [-46.37, -32.41],
+    [-46.61, -32.19],
     [-22.42, -1.17],
     [-17.59, -1.17],
     [-48.2, -1.17],
@@ -61,7 +61,7 @@ it("seals rounded shoulders and corners with actual Ammo triangles, leaving remo
         `${x},${z}`,
       ).toBeCloseTo(groundHeight(x, z, trenchMap), 3);
     expect(
-      physics.ray({ x: -45, z: -9, y: 1.2 }, { x: -48, z: -9, y: 1.2 }),
+      physics.ray({ x: -45, z: -19, y: 1.2 }, { x: -48, z: -19, y: 1.2 }),
     ).toBeLessThan(1);
     expect(terrainGeometry(trenchMap, "8,0").positions.length).toBe(192);
   } finally {

@@ -10,7 +10,7 @@ import { Game, TestCollision, botCommand, resolveTeamSize, rifleHeight } from ".
 const match = (map = nightRaidMap) => new Game(new TestCollision(map), true, 3600, 12345, undefined,
   { map, teamSize: 6, humanPlayerIds: [], ambientArtillery: false });
 
-it("is Trench front's ground after dark, with a raiding party each side", () => {
+it("is Ypres's ground after dark, with a raiding party each side", () => {
   expect(nightRaidMap.id).toBe("night-raid");
   expect(nightRaidMap.name).toBe("Night raid");
   expect(resolveTeamSize(nightRaidMap)).toBe(24);
@@ -93,7 +93,7 @@ it("limits sight to fifteen meters in the dark and restores it in lamplight", ()
 });
 
 // One soldier looks at another across open, level ground with a clear line between them.
-function facing(map: typeof nightRaidMap, distance: number, at = { x: 0, z: 12 }) {
+function facing(map: typeof nightRaidMap, distance: number, at = { x: 0, z: 22 }) {
   const g = match(map), p = g.players[0], enemy = g.players[g.teamSize];
   for (const q of g.players) if (q !== p && q !== enemy) Object.assign(q, { x: q.team === "blue" ? -70 : 70, z: 55, hp: 0 });
   Object.assign(enemy, { x: at.x, z: at.z, y: groundHeight(at.x, at.z, g.map) });

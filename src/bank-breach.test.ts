@@ -17,7 +17,8 @@ it("takes a rounded side chunk out of either bank, keeps distant walls, and open
   for (const side of [-1, 1]) {
     const g = scene(),
       at = { x: side * 18.5, y: 1.2, z: -1 };
-    const before = groundHeight(side * 17.5, -1, g.map);
+    const before = groundHeight(side * 17.5, -1, g.map),
+      distant = groundHeight(side * 17.5, 10, g.map);
     g.explode(at, 0, "blue", { ...grenadeExplosionProfile, damage: 0 });
     const chipped = groundHeight(side * 17.5, -1, g.map);
     expect(chipped).toBeLessThan(before - 0.5);
@@ -30,7 +31,9 @@ it("takes a rounded side chunk out of either bank, keeps distant walls, and open
     for (let i = 0; i < 3; i++)
       g.explode(at, 0, "blue", { ...grenadeExplosionProfile, damage: 0 });
     expect(groundHeight(side * 17.5, -1, g.map)).toBeLessThan(0.5);
-    expect(groundHeight(side * 17.5, 10, g.map)).toBeGreaterThan(2);
+    // The same bank shoulder 11 m along the trench is untouched.
+    expect(distant).toBeGreaterThan(1.5);
+    expect(groundHeight(side * 17.5, 10, g.map)).toBeCloseTo(distant, 5);
   }
 });
 it("an artillery side strike makes a real walkable opening with matching Ammo terrain collision", () => {

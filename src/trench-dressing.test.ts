@@ -109,7 +109,7 @@ it("dresses Verdun's narrow trenches: parados bags, props, dugouts and French si
     const id = sign.text.split("\n")[1].split(" ")[1];
     expect(verdunMap.sectors.find((f) => f.id === id)?.home).toBe(sign.x < 0 ? "blue" : "red");
   }
-  // The French side is mostly woven hurdles; Trench front's British side is unchanged.
+  // The French side is mostly woven hurdles; Ypres's British side is unchanged.
   const french = Array.from({ length: 12 }, (_, i) => revetmentStyle(i, -60, "french"));
   expect(french.filter((s) => s === "wicker").length).toBeGreaterThanOrEqual(6);
   expect(revetmentStyle(1, -60)).toBe("corrugated");

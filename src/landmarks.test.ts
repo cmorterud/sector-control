@@ -17,10 +17,10 @@ import { PlaytestLog } from "./playtest";
 
 it("gives each flag a named, distinct destructible neighborhood without obstructing any flag or firing post", () => {
   expect(trenchMap.landmarks!.map((l) => l.name)).toEqual([
-    "Farmhouse",
-    "Shattered Wood",
-    "Gun Pit",
-    "Broken Bunker",
+    "Hanebeek Farm",
+    "Frezenberg Copse",
+    "Beck House",
+    "Borry Farm",
   ]);
   expect(trenchMap.boxes.some((b) => b.kind === "gun")).toBe(true);
   for (const sector of trenchMap.sectors) {
