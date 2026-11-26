@@ -332,6 +332,8 @@ export const springOffensiveMap: MapDefinition = {
   defaultTeamSize: 50, maxTeamSize: 64,
   navigationPoints: [],
   spawn: { blue: { x: -132, z: 0 }, red: { x: 132, z: 0 } },
+  // The Mark IV and the A7V come up the open plain to the south, on the tank lane.
+  tankDepot: { blue: { x: -130, z: 62 }, red: { x: 130, z: 62 } },
   boxes, vegetation, terrain, sectors,
   streets: [
     { points: [{ x: -60, z: -3 }, { x: -20, z: -2 }, { x: 20, z: 2 }, { x: 60, z: 3 }], width: 5 },
@@ -616,3 +618,5 @@ export const springOffensiveCtf = {
     red: { name: "Battle-zone trench", ...floorNear(lineOf("red", 1), -2) },
   },
 };
+
+springOffensiveMap.ctfLayout = springOffensiveCtf;

@@ -150,7 +150,7 @@ export interface TankState {
   destroy: (actor: number, change: DestructionChange) => void;
 }
 
-export const supportsTanks = (map: Pick<MapDefinition, "id">) => map.id === "trenches" || map.id === "verdun";
+export const supportsTanks = (map: Pick<MapDefinition, "id">) => map.id === "trenches" || map.id === "verdun" || map.id === "spring-offensive";
 
 const models: Record<FactionId, { model: TankModel; name: string }> = {
   british: { model: "mark-iv", name: "Mark IV" },
@@ -342,7 +342,8 @@ function obstacle(g: Game, self: Tank | undefined, x: number, z: number, yaw: nu
 // ---- Life cycle ------------------------------------------------------------
 
 function spawnTank(g: Game, team: Team) {
-  const spawn = g.map.spawn[team], ahead = team === "blue" ? 1 : -1;
+  // A map's tank depot, else beside the infantry's formation and a few metres behind it.
+  const depot = g.map.tankDepot?.[team], spawn = depot ? { x: depot.x, z: depot.z - 14 } : g.map.spawn[team], ahead = team === "blue" ? 1 : -1;
   const yaw = team === "blue" ? Math.PI / 2 : -Math.PI / 2;
   // Beside the infantry's formation and a few metres behind it.
   const candidates: Vec[] = [];

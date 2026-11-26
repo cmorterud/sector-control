@@ -6,7 +6,6 @@
 // Plain serializable state on Game.ctf, advanced once a tick after movement
 // and damage. Bots get their CTF orders from ctfGoal; see docs/GAME_GUIDE.md.
 import { dist, groundHeight, mantleLanding, playArea, type MapDefinition, type Vec } from "./map";
-import { springOffensiveCtf } from "./spring-offensive-map";
 import type { Command, Game, Soldier, Team, V3 } from "./simulation";
 
 export const ctfRules = {
@@ -74,10 +73,10 @@ const layouts: Partial<Record<MapDefinition["id"], CtfLayout>> = {
   trenches: trenchLayout,
   "night-raid": trenchLayout,
   verdun: verdunLayout,
-  "spring-offensive": springOffensiveCtf,
 };
-export const ctfLayout = (map: Pick<MapDefinition, "id">) => layouts[map.id];
-export const supportsCtf = (map: Pick<MapDefinition, "id">) => !!layouts[map.id];
+// A map can also carry its own layout (MapDefinition.ctfLayout).
+export const ctfLayout = (map: Pick<MapDefinition, "id" | "ctfLayout">): CtfLayout | undefined => layouts[map.id] ?? map.ctfLayout;
+export const supportsCtf = (map: Pick<MapDefinition, "id" | "ctfLayout">) => !!ctfLayout(map);
 
 // The same battlefield with the pickup points as its objectives. They are the
 // map's sectors so everything that reads objectives (labels, the minimap,

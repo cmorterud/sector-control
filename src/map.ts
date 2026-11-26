@@ -182,6 +182,13 @@ export interface MapDefinition {
   // Forward deployment points. While a side holds the named home flag, its
   // soldiers may deploy here instead of at the main spawn (src/deployment.ts).
   deployments?: { sector: string; x: number; z: number }[];
+  // Where each side's tank arrives, when not beside its infantry spawn (src/tanks.ts).
+  tankDepot?: Record<"blue" | "red", Vec>;
+  // Capture the flag pickups and drop points, for maps not listed in src/ctf.ts.
+  ctfLayout?: {
+    pickups: (Vec & { id: string; team: "blue" | "red"; name: string })[];
+    drops: Record<"blue" | "red", Vec & { name: string }>;
+  };
   artillery?: false;
   fort?: FortLayout;
   // A battlefield in the air. There is no ground: every height query off the

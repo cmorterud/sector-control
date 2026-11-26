@@ -18,7 +18,7 @@ The checks must run once before they can be selected in protection settings. A `
 
 ## Publication sequence
 
-`ci.yml` runs with read-only repository access. The type-checked Vite build and publisher regressions run alongside three independent game-test shards. All seven browser jobs start once the build artifact is ready. The artifact includes `revision.json` with the tested merge SHA, PR head SHA, CI run and attempt, deployment base and asset hashes. The `pr-ready` job requires the build, all three test shards, and all seven browser jobs to succeed. A new revision cancels the previous in-flight CI for that PR. Branches without a PR can run the workflow manually.
+`ci.yml` runs with read-only repository access. The type-checked Vite build and publisher regressions run alongside three independent game-test shards. All eight browser jobs start once the build artifact is ready. The artifact includes `revision.json` with the tested merge SHA, PR head SHA, CI run and attempt, deployment base and asset hashes. The `pr-ready` job requires the build, all three test shards, and all eight browser jobs to succeed. A new revision cancels the previous in-flight CI for that PR. Branches without a PR can run the workflow manually.
 
 `pages.yml` runs only trusted automation from `main`. It validates the originating workflow, source repository, live PR/head or current main revision, and successful CI conclusion before downloading its `production-build` artifact. Ordinary branch pushes and fork PRs never publish automatically. Old CI completions cannot revive a closed preview or overwrite a newer PR revision. Main must publish once before the first preview, so a PR cannot become the production site.
 

@@ -70,7 +70,7 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     sun: { color: "#f4dcb8", intensity: 1.05, elevation: 18, azimuth: 80, shadowStrength: 0.5 },
     sky: { zenith: "#7d8a98", horizon: "#c3c6c2", ground: "#55564b", clouds: 0.7, cloud: "#b9bcba", glow: "#f1d6ae" },
     fog: { start: 40, end: 300 },
-    fogLift: { start: 6, end: 75, seconds: 180 },
+    fogLift: { start: 4, end: 55, seconds: 180 },
     grade: { brightness: 0, contrast: 1.05, saturation: 0.8, tint: "#eef0ee" },
     vignette: 0.34, exposure: 1.1, ambient: 1.8, farClip: 440,
     atmosphere: { fieldMist: 0.26, trenchMist: 0.2, fieldWidth: 140 },

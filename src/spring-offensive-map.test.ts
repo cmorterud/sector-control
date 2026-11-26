@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { springOffensiveMap as map, springOffensiveCtf } from "./spring-offensive-map";
 import { blocked, groundHeight, walkSegment, dist } from "./map";
 import { Game, TestCollision, pathfind, botCommand, resolveTeamSize } from "./simulation";
@@ -7,6 +7,10 @@ import { dominationRules } from "./domination";
 import { trenchMap } from "./trench-map";
 import { verdunMap } from "./verdun-map";
 import { ctfLayout } from "./ctf";
+import { supportsTanks } from "./tanks";
+
+// Building the navigation graph for a field this size takes a few seconds on a busy machine.
+vi.setConfig({ testTimeout: 60000 });
 
 const scene = (bots = true, teamSize?: number, humanPlayerIds: number[] = []) =>
   new Game(new TestCollision(map), bots, 3600, 2103, undefined, { map, humanPlayerIds, ambientArtillery: false, teamSize });
@@ -157,4 +161,21 @@ it("plays a 100-soldier battle in which both sides fight, capture and deploy for
   expect(deaths).toBeGreaterThan(5);
   expect(g.sectors.some((s) => s.owner === "blue")).toBe(true);
   expect(g.sectors.some((s) => s.owner === "red")).toBe(true);
+}, 240000);
+
+it("brings the Mark IV and the A7V up the tank lane, and they drive through the line crossings", () => {
+  expect(supportsTanks(map)).toBe(true);
+  const g = new Game(new TestCollision(map), true, 30 * 600, 2103, undefined, { map, teamSize: 12, ambientArtillery: false, tanks: true });
+  g.artillery.enabled = false;
+  for (let i = 0; i < 2; i++) g.step(botCommand(g, g.players[0]));
+  expect(g.tanks.list.map((t) => t.model).sort()).toEqual(["a7v", "mark-iv"]);
+  for (const t of g.tanks.list) {
+    expect(Math.abs(t.z - map.tankDepot![t.team].z)).toBeLessThan(10);
+    expect(Math.abs(t.x - map.tankDepot![t.team].x)).toBeLessThan(12);
+  }
+  const start = new Map(g.tanks.list.map((t) => [t.id, Math.abs(t.x)]));
+  for (let i = 0; i < 60 * 30; i++) g.step(botCommand(g, g.players[0]));
+  // Both crews have pushed toward the centre past their own rear line.
+  for (const t of g.tanks.list) if (t.hp > 0) expect(start.get(t.id)! - Math.abs(t.x), t.name).toBeGreaterThan(15);
+  expect(g.tanks.list.every((t) => Number.isFinite(t.x + t.z))).toBe(true);
 }, 240000);
