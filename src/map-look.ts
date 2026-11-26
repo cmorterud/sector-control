@@ -128,7 +128,22 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
   },
 };
 
-export const lookFor = (map: Pick<MapDefinition, "id">) => mapLooks[map.id] ?? mapLooks.training;
+// The same ground under rain (src/weather.ts): the sun lost behind a low,
+// dark deck, flat light with faint shadows, the distance closed in by the
+// downpour and the colour washed out of everything.
+export const rainLooks: Partial<Record<MapDefinition["id"], MapLook>> = {
+  trenches: {
+    sun: { color: "#d3d2cc", intensity: 0.8, elevation: 30, azimuth: 70, shadowStrength: 0.22 },
+    sky: { zenith: "#4c5560", horizon: "#8a9196", ground: "#3c3d37", clouds: 1, cloud: "#6f767c", glow: "#a5abae" },
+    fog: { start: 14, end: 190 },
+    grade: { brightness: 0, contrast: 1.05, saturation: 0.76, tint: "#eaeceb" },
+    vignette: 0.38, exposure: 1.2, ambient: 2.35, farClip: 420,
+    atmosphere: { fieldMist: 0.2, trenchMist: 0.16 },
+  },
+};
+
+export const lookFor = (map: Pick<MapDefinition, "id">, rain = false) =>
+  (rain ? rainLooks[map.id] : undefined) ?? mapLooks[map.id] ?? mapLooks.training;
 
 // Unit vector pointing toward the sun.
 export function sunDirection(look: MapLook): [number, number, number] {

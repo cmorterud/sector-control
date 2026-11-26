@@ -85,6 +85,8 @@ import {
   type Debris,
   type DebrisKind,
 } from "./environment-effects";
+import { RainView } from "./rain-view";
+import { floodAt, rainIntensity } from "./weather";
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse, recoilFeel, recoilBuzz } from "./recoil";
@@ -372,6 +374,10 @@ export class Renderer implements CollisionWorld {
   private objectVisuals = new Map<string, pc.Entity>();
   private objectStates = new Map<string, string>();
   private waterMeshes: pc.Mesh[] = [];
+  // Rain over the maps that have weather, when the match turns it on (src/weather.ts).
+  private rainView?: RainView;
+  private raining = false;
+  private dryPonds?: pc.MeshInstance;
   private groundDecor: {
     root: pc.Entity;
     x: number;
@@ -414,36 +420,19 @@ export class Renderer implements CollisionWorld {
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
     // Each map's mood (src/map-look.ts): sun, generated sky, fog and grade.
-    const look = this.look = lookFor(map);
-    this.app.scene.ambientLight = color(look.sky.horizon);
-    this.app.scene.exposure = look.exposure;
-    this.app.scene.fog.type = "linear";
-    this.app.scene.fog.color = color(look.sky.horizon);
-    this.app.scene.fog.start = look.fog.start;
-    this.app.scene.fog.end = look.fog.end;
+    this.look = lookFor(map);
     this.camera = new pc.Entity("camera");
-    this.camera.addComponent("camera", {
-      clearColor: color(look.sky.horizon),
-      fov: 70,
-      nearClip: 0.08,
-      farClip: look.farClip ?? (trenches ? 210 : 180),
-    });
+    this.camera.addComponent("camera", { fov: 70, nearClip: 0.08 });
     this.app.root.addChild(this.camera);
     const sun = this.sun = new pc.Entity("sun");
     sun.addComponent("light", {
       type: "directional",
-      color: color(look.sun.color),
-      intensity: look.sun.intensity,
-      shadowIntensity: look.sun.shadowStrength,
       shadowType: pc.SHADOW_PCF3,
-      // A night sky casts no shadows, which also spares the shadow pass.
-      castShadows: look.sun.shadowStrength > 0,
       shadowBias: 0.25,
       normalOffsetBias: 0.05,
     });
-    sun.setEulerAngles(90 - look.sun.elevation, look.sun.azimuth, 0);
     this.app.root.addChild(sun);
-    this.buildSky();
+    this.applyLook();
     this.setQuality(quality);
     this.buildMap();
     window.addEventListener("resize", () => this.app.resizeCanvas());
@@ -820,6 +809,8 @@ export class Renderer implements CollisionWorld {
     for (const mesh of this.waterMeshes) mesh.destroy();
     this.waterMeshes = [];
     this.boardVisuals = [];
+    this.rainView?.destroy();
+    this.rainView = undefined;
     this.mapRoot.destroy();
     this.dirtyWorldBatches?.clear();
     this.sceneryBatches?.clear();
@@ -2167,6 +2158,7 @@ export class Renderer implements CollisionWorld {
   }
   // Standing water in old craters and flat debris, then the wire belts.
   private buildNoMansLand() {
+    this.dryPonds = undefined;
     const device = this.app.graphicsDevice, root = this.joint("no-man's land", this.mapRoot);
     const pond = new pc.Mesh(device), positions: number[] = [], normals: number[] = [], indices: number[] = [];
     for (const p of craterPonds(this.map)) {
@@ -2194,7 +2186,9 @@ export class Renderer implements CollisionWorld {
       pond.setNormals(normals);
       pond.setIndices(indices);
       pond.update(pc.PRIMITIVE_TRIANGLES);
-      instances.push(new pc.MeshInstance(pond, this.sumpWater(), root));
+      instances.push((this.dryPonds = new pc.MeshInstance(pond, this.sumpWater(), root)));
+      // Under rain the flooded shell holes take their place.
+      this.dryPonds.visible = !this.raining;
     }
     root.addComponent("render", { meshInstances: instances, castShadows: false });
     this.buildWireBelts();
@@ -2765,6 +2759,30 @@ export class Renderer implements CollisionWorld {
   }
   // The visible sky and the ambient light come from one generated cubemap,
   // so shade facing the sky is bluer and surfaces facing the ground warmer.
+  // The scene's light, fog and sky from this.look; again when the weather changes.
+  private applyLook() {
+    const look = this.look, trenches = this.map.id !== "industrial";
+    this.app.scene.ambientLight = color(look.sky.horizon);
+    this.app.scene.exposure = look.exposure;
+    this.app.scene.fog.type = "linear";
+    this.app.scene.fog.color = color(look.sky.horizon);
+    this.app.scene.fog.start = look.fog.start;
+    this.app.scene.fog.end = look.fog.end;
+    const camera = this.camera.camera!;
+    camera.clearColor = color(look.sky.horizon);
+    camera.farClip = look.farClip ?? (trenches ? 210 : 180);
+    const light = this.sun.light!;
+    light.color = color(look.sun.color);
+    light.intensity = look.sun.intensity;
+    light.shadowIntensity = look.sun.shadowStrength;
+    // A night sky casts no shadows, which also spares the shadow pass.
+    light.castShadows = look.sun.shadowStrength > 0;
+    this.sun.setEulerAngles(90 - look.sun.elevation, look.sun.azimuth, 0);
+    const skybox = this.app.scene.skybox, atlas = this.app.scene.envAtlas;
+    this.buildSky();
+    if (skybox && skybox !== this.app.scene.skybox) skybox.destroy();
+    if (atlas && atlas !== this.app.scene.envAtlas) atlas.destroy();
+  }
   private buildSky() {
     const up = this.sun.up, sun: [number, number, number] = [up.x, up.y, up.z], device = this.app.graphicsDevice;
     // Both cubemaps are stored dimmer by skyIntensity, which the scene restores.
@@ -2790,6 +2808,7 @@ export class Renderer implements CollisionWorld {
     this.quality = quality;
     if (this.backdrop) this.backdrop.life.enabled = quality !== "low";
     if (this.atmosphere) this.atmosphere.root.enabled = quality !== "low";
+    this.rainView?.setQuality(quality);
     const profile = qualityProfiles[quality], light = this.sun.light!, look = this.look;
     light.numCascades = profile.cascades;
     light.cascadeDistribution = 0.6;
@@ -4720,7 +4739,27 @@ export class Renderer implements CollisionWorld {
       return true;
     });
   }
+  // Rain changes the light and sky, wets the ground and floods the holes.
+  setRain(on: boolean) {
+    if (on === this.raining && (!on || this.rainView)) return;
+    this.raining = on;
+    this.look = lookFor(this.map, on);
+    this.applyLook();
+    this.setQuality(this.quality);
+    const ground = this.materials.get("surface-mud-#ffffff");
+    if (ground) {
+      // Darker, and the sheen of water over the whole field.
+      ground.diffuse = color(on ? "#c4b8a8" : "#ffffff");
+      ground.gloss = on ? 0.52 : 0.35;
+      ground.specular = color(on ? "#4a524b" : "#343b30");
+      ground.update();
+    }
+    if (this.dryPonds) this.dryPonds.visible = !on;
+    if (on && !this.rainView) this.rainView = new RainView(this.app, this.mapRoot, this.map, this.quality);
+    if (this.rainView) this.rainView.root.enabled = on;
+  }
   reset(g: Game) {
+    this.setRain(g.rain);
     this.visualWork.clear();
     this.machineGunPreview = undefined;
     for (const mesh of this.emplacementMeshes.values()) mesh.root.destroy();
@@ -5376,6 +5415,11 @@ export class Renderer implements CollisionWorld {
     this.drawEnvironmentEffects(dt);
     this.drawBackdrop(g, alpha);
     this.drawAtmosphere(g, alpha);
+    if (this.raining && this.rainView && !overview) {
+      const rainStart = battlePerformance.begin(), seconds = (g.tick + alpha) / 30;
+      this.rainView.draw(this.camera.getPosition(), this.camera.right, this.camera.up, seconds, floodAt(g.tick + alpha - g.rainSince), rainIntensity(seconds), dt);
+      battlePerformance.end("rain", rainStart);
+    }
     if (g.gas.clouds.length || this.gasView) (this.gasView ??= this.createGasView()).draw(g, alpha, this.camera.getPosition(), this.quality);
     if (this.map.night) this.drawNight(g, alpha);
     this.drawWeaponHeat(g, dt);
