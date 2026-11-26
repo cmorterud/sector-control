@@ -5297,6 +5297,13 @@ export class Renderer implements CollisionWorld {
     this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (this.fortRoof) this.fortRoof.enabled = !overview;
+    // A morning fog that thins over the opening minutes (MapLook.fogLift).
+    const lift = this.look.fogLift;
+    if (lift) {
+      const t = Math.min(1, Math.max(0, (g.tick + alpha) / 30 / lift.seconds)), k = t * t * (3 - 2 * t);
+      this.app.scene.fog.start = lift.start + (this.look.fog.start - lift.start) * k;
+      this.app.scene.fog.end = lift.end + (this.look.fog.end - lift.end) * k;
+    }
     if (overview) {
       // Opt-in observer view for reviewing whole-map layouts and bot routes.
       this.camera.camera!.projection = pc.PROJECTION_ORTHOGRAPHIC;

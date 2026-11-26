@@ -6,6 +6,7 @@
 // Plain serializable state on Game.ctf, advanced once a tick after movement
 // and damage. Bots get their CTF orders from ctfGoal; see docs/GAME_GUIDE.md.
 import { dist, groundHeight, mantleLanding, playArea, type MapDefinition, type Vec } from "./map";
+import { springOffensiveCtf } from "./spring-offensive-map";
 import type { Command, Game, Soldier, Team, V3 } from "./simulation";
 
 export const ctfRules = {
@@ -73,6 +74,7 @@ const layouts: Partial<Record<MapDefinition["id"], CtfLayout>> = {
   trenches: trenchLayout,
   "night-raid": trenchLayout,
   verdun: verdunLayout,
+  "spring-offensive": springOffensiveCtf,
 };
 export const ctfLayout = (map: Pick<MapDefinition, "id">) => layouts[map.id];
 export const supportsCtf = (map: Pick<MapDefinition, "id">) => !!layouts[map.id];
