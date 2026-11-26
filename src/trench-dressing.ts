@@ -129,9 +129,11 @@ export function dugoutBoxes(d: Dugout): BackdropBox[] {
 export type Signboard = { x: number; y: number; z: number; facing: 1 | -1; text: string };
 const names: Partial<Record<FactionId, string[]>> = {
   british: ["PICCADILLY", "OXFORD ST", "HAYMARKET", "STRAND", "BOND ST", "REGENT ST", "THE MALL"],
-  french: ["TR. DES SAPINS", "BOYAU DU RAVIN", "TR. DES CHÊNES", "BOYAU DE LA SOURCE", "TR. DU MOULIN", "BOYAU DES PINS", "TR. DE L'ÉTANG"],
+  // Verdun, June 1916: named for the places of the Fleury and Thiaumont sector.
+  french: ["TR. DE FLEURY", "BOYAU DES VIGNES", "TR. DE THIAUMONT", "BOYAU DE SOUVILLE", "TR. DE FROIDETERRE", "BOYAU DE LA DAME", "TR. DES FONTAINES"],
   german: ["KAISERWEG", "LANGER GRABEN", "HINDENBURGWEG", "MÜHLENGRABEN", "WALDGRABEN", "FELDWEG", "BRUNNENGRABEN"],
 };
+const verdunGerman = ["DOUAUMONTGRABEN", "CAILLETTEGRABEN", "HARDAUMONTWEG", "BAYERNGRABEN", "KRONPRINZWEG", "THIAUMONTGRABEN", "ALPENWEG"];
 // Painted boards on the rear wall naming each trench, with an arrow along the
 // trench toward the team's nearest flag, as a soldier reading the board sees it.
 export function signboards(map: MapDefinition): Signboard[] {
@@ -146,7 +148,8 @@ export function signboards(map: MapDefinition): Signboard[] {
     // The board faces into the trench. Its reader faces the wall, along
     // (rear, 0, 0), so their right hand points along (0, 0, rear).
     const arrow = (flag.z - z) * s.rear > 0 ? "→" : "←";
-    const list = names[factionFor(map, s.team)] ?? names[s.team === "blue" ? "british" : "german"]!;
+    const faction = factionFor(map, s.team);
+    const list = (map.id === "verdun" && faction === "german" ? verdunGerman : names[faction]) ?? names[s.team === "blue" ? "british" : "german"]!;
     const label = list[used[s.team]++ % list.length];
     out.push({ x: s.floorX + s.rear * (s.half - 0.06), y: groundHeight(s.floorX, z, map) + 1.65, z, facing: -s.rear as 1 | -1, text: `${label}\n${arrow} ${flag.id}` });
   });

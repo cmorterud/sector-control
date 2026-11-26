@@ -44,20 +44,26 @@ function command(g: Game) {
 const east = Math.PI / 2;
 
 describe("tanks", () => {
-  it("only spawn when switched on, on Trench front and Verdun", () => {
-    expect(supportsTanks(trenchMap) && supportsTanks(verdunMap)).toBe(true);
+  it("only spawn when switched on, and only on Trench front", () => {
+    expect(supportsTanks(trenchMap)).toBe(true);
     expect(supportsTanks(villageMap)).toBe(false);
+    // No tanks fought at Verdun, so it offers no tank toggle and spawns none.
+    expect(supportsTanks(verdunMap)).toBe(false);
+    expect(tankChoice(verdunMap, true)).toBe("");
+    const verdun = scene(verdunMap, true);
+    run(verdun, 5);
+    expect(verdun.tanks.list).toHaveLength(0);
     const off = scene(trenchMap, false);
     run(off, 5);
     expect(off.tanks.list).toHaveLength(0);
     const village = scene(villageMap, true);
     run(village, 5);
     expect(village.tanks.list).toHaveLength(0);
-    for (const map of [trenchMap, verdunMap, ctfMap(trenchMap)]) {
+    for (const map of [trenchMap, ctfMap(trenchMap)]) {
       const g = scene(map);
       run(g, 2);
       expect(g.tanks.list.map((t) => t.team).sort()).toEqual(["blue", "red"]);
-      expect(g.tanks.list.map((t) => t.model).sort()).toEqual(map.id === "verdun" ? ["a7v", "saint-chamond"] : ["a7v", "mark-iv"]);
+      expect(g.tanks.list.map((t) => t.model).sort()).toEqual(["a7v", "mark-iv"]);
     }
     expect(tankChoice(villageMap, true)).toBe("");
     expect(tankChoice(trenchMap, true)).toContain("checked");

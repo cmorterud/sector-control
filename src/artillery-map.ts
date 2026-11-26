@@ -1,7 +1,7 @@
 import { artillerySector, artillerySectors } from "./artillery-sectors";
 import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import { flareRules, flareTargetReason } from "./flares";
-import { gasStrikeReason, gasStrikeRules } from "./gas";
+import { gasAgent, gasStrikeReason, gasStrikeRules } from "./gas";
 
 // What a click on the map asks for. Flares exist only on night maps; gas
 // shells are an alternate artillery strike wherever artillery is offered.
@@ -78,14 +78,14 @@ export class ArtilleryMap {
   }
   private describe() {
     const g = this.game(), artillery = g.map.artillery !== false, flare = this.mode === "flare", gas = this.mode === "gas";
-    this.heading.textContent = !artillery ? "FORT VAUX · FLOOR PLAN" : flare ? "FLARE · CHOOSE A SECTOR" : gas ? "GAS SHELLS · CHOOSE A SECTOR" : "ARTILLERY · CHOOSE A SECTOR";
+    this.heading.textContent = !artillery ? "FORT VAUX · FLOOR PLAN" : flare ? "FLARE · CHOOSE A SECTOR" : gas ? `${gasAgent(g.map).shells} · CHOOSE A SECTOR` : "ARTILLERY · CHOOSE A SECTOR";
     this.intro.textContent = !artillery ? "Barracks, cistern and east casemate. Battle continues."
       : flare ? `Lights about ${flareRules.radius} m of ground for ${flareRules.burnTicks / 30} seconds. Its own cooldown. Battle continues.`
       : gas ? `A low cloud about ${gasStrikeRules.radius * 2} m across for ${gasStrikeRules.lifetime / 30} seconds, drifting slowly along the front. It harms anyone unmasked, your own side too. Uses the artillery cooldown. Battle continues.`
       : "Broad coordinates, imperfect fire. Battle continues.";
     const modes = this.modes(), next = modes[(modes.indexOf(this.mode) + 1) % modes.length];
     this.modeButton.hidden = modes.length < 2;
-    this.modeButton.textContent = `F · SWITCH TO ${next === "flare" ? "FLARE" : next === "gas" ? "GAS SHELLS" : "ARTILLERY"}`;
+    this.modeButton.textContent = `F · SWITCH TO ${next === "flare" ? "FLARE" : next === "gas" ? gasAgent(g.map).shells : "ARTILLERY"}`;
     this.modeButton.setAttribute("aria-pressed", String(this.mode !== "shell"));
   }
   toggle() {
@@ -246,7 +246,7 @@ export class ArtilleryMap {
       const error = artilleryUncertainty(g, p, selected);
       this.status.textContent = flare
         ? `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO SEND A FLARE"} · light in ${flareRules.flightTicks / 30}s`
-        : gas ? `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO FIRE GAS SHELLS"} · cloud in ${gasStrikeRules.flightTicks / 30}s`
+        : gas ? `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : `CLICK TO FIRE ${gasAgent(g.map).shells}`} · cloud in ${gasStrikeRules.flightTicks / 30}s`
         : `${selected.name} · ${reason ? reason + (ready ? ` · ${ready}s` : "") : "CLICK TO REQUEST"} · ${error === 10 ? "BLIND" : "OBSERVED"} ±${error}m drift + shell scatter`;
       this.marker.style.left = `${this.cursor.x * 100}%`;
       this.marker.style.top = `${this.cursor.z * 100}%`;

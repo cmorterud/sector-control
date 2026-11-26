@@ -82,7 +82,7 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
   const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
   const place = (b: Box, clearance: number): boolean => {
     if (Object.values(map.spawn).some((s) => dist(s, b) < 15)) return false;
-    if (map.sectors.some((s) => dist(s, b) < (s.name === "Broken Relay" ? 8 : 5))) return false;
+    if (map.sectors.some((s) => dist(s, b) < (s.id === "C" ? 8 : 5))) return false;
     if (map.terrain?.ramps.some((r) => Math.abs(r.x - b.x) < (r.w + b.w) / 2 + .9 && Math.abs(r.z - b.z) < (r.d + b.d) / 2 + .9)) return false;
     if (map.terrain?.rectangles.some(r => r.h < map.terrain!.bankHeight &&
       Math.abs(r.x-b.x) < (r.w+b.w)/2+.8 && Math.abs(r.z-b.z) < (r.d+b.d)/2+.8)) return false;
@@ -149,6 +149,21 @@ export function buildVerdunForest(map: MapDefinition): Box[] {
       const h = treeStyle === "snapped" ? 3 + random() * 1.7 : 6 + random() * 2.5;
       if (place({ id: `verdun-wood-central-${groveIndex}-${count}`, kind: "tree", x, z, w: diameter, d: diameter, h, treeStyle }, .5)) count++;
     }
+  }
+  // June 1916: the ground between the lines has been shelled for four months.
+  // Most crowns there are gone, leaving bare trunks; a few more survive toward
+  // each side's own line. Trunks keep their place and height, so cover is
+  // unchanged, but stripped crowns no longer hide soldiers from bots. The roll
+  // hashes the tree's id, so the battle's random stream is untouched.
+  const front = Math.min(...(map.terrain?.trenchLines ?? []).filter((l) => l.role === "front").flatMap((l) => l.sections.map((s) => Math.abs(s.x))), Infinity);
+  for (const b of parts) {
+    if (b.kind !== "tree" || b.treeStyle === "bare" || b.treeStyle === "snapped" || Math.abs(b.x) > front - 4) continue;
+    let h = 2166136261;
+    for (const c of b.id!) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    const roll = (h >>> 0) / 4294967296;
+    const survive = Math.abs(b.x) < 30 ? 0.25 : 0.5;
+    if (roll >= survive) b.treeStyle = "bare";
+    else if (b.treeStyle === "pine" && roll > survive / 2) b.treeStyle = "sparse";
   }
   return parts;
 }
