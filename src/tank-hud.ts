@@ -61,11 +61,8 @@ export function tankNotice(g: Game, e: Event, p: Soldier): string | undefined {
     case "stalled": return mine ? "ENGINE STALLED · RESTARTING" : undefined;
     case "restarted": return mine ? "ENGINE RUNNING" : undefined;
     case "unditched": return mine ? "CLEAR OF THE DITCH" : undefined;
-    case "pierced": {
-      if (mine) return "ROUND THROUGH THE PLATE · ANTI-TANK RIFLE";
-      const t = g.tanks.list.find(o => o.id === e.tank);
-      return e.actor === p.id && t ? `THROUGH THE PLATE · ENEMY ${name} ${Math.ceil((t.hp / tankRules.hp) * 100)}% HULL` : undefined;
-    }
+    // The shooter reads the hit at the crosshair (src/tank-hit-feedback.ts).
+    case "pierced": return mine ? "ROUND THROUGH THE PLATE · ANTI-TANK RIFLE" : undefined;
     default: return undefined;
   }
 }

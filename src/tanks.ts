@@ -125,6 +125,12 @@ export type TankEvent = {
   actor?: number;
   at: V3;
   to?: V3;
+  // "pierced": hull points the round took, the round, whether it went in at
+  // the vision slits and whether it wounded the crew.
+  damage?: number;
+  projectile?: number;
+  slit?: boolean;
+  crew?: boolean;
 };
 type Hurt = (p: Soldier, amount: number, source: number, team: Team | null, details: DamageDetails) => void;
 // A main-gun shell in flight: flat and fast, it bursts on whatever it meets
@@ -548,9 +554,10 @@ export function bulletOnTank(g: Game, t: Tank, shot: Projectile) {
   if (!armour || !alive(t) || shot.team === t.team) return;
   const crew = t.driver === undefined ? undefined : g.players[t.driver];
   const wounds = !!crew && crew.hp > 0 && g.random() < armour.crew * (slit ? 2 : 1);
-  g.emit({ type: "tank", tank: t.id, team: t.team, phase: "pierced", actor: shot.actor, at: { x: shot.x, y: shot.y, z: shot.z } });
+  const damage = Math.min(t.hp, armour.hull * (slit ? armour.slit : 1));
+  g.emit({ type: "tank", tank: t.id, team: t.team, phase: "pierced", actor: shot.actor, at: { x: shot.x, y: shot.y, z: shot.z }, damage, projectile: shot.id, slit, crew: wounds });
   if (wounds) g.tanks.hurt(crew, armour.crewDamage, shot.actor, shot.team, { kind: "bullet", weapon: shot.weaponId ?? "Armour-piercing round", from: shot.origin ? { ...shot.origin } : { x: shot.x, y: shot.y, z: shot.z } });
-  damageTank(g, t, armour.hull * (slit ? armour.slit : 1), shot.actor, shot.team);
+  damageTank(g, t, damage, shot.actor, shot.team);
 }
 
 // ---- Movement ------------------------------------------------------------

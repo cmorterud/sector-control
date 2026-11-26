@@ -11,7 +11,7 @@ import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction,
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
-import { antiTankBotAim } from "./anti-tank";
+import { antiTankBotAim, antiTankHunt } from "./anti-tank";
 import { emplacementBotCommand } from "./bot-emplacement";
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
@@ -693,6 +693,8 @@ export type Event = { id: number; tick: number } & (
       at: V3;
       target: number | null;
       hit: boolean;
+      // A round that struck a tank's plates.
+      tank?: number;
     }
   | {
       type: "melee";
@@ -2013,7 +2015,7 @@ export class Game {
         if (shot.remaining > 0) active.push(shot);
       } else if (nearest < 1 && !victim && armour.tank && nearest === armour.t) {
         bulletOnTank(this, armour.tank, shot);
-        this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false });
+        this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false, tank: armour.tank.id });
       } else if (nearest < 1)
         this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim, from);
       else if (shot.remaining > 0) active.push(shot);
@@ -2866,8 +2868,9 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     (p.ammo < (p.weapon === "serviceRifle" ? 2 : 15) && p.target < 0);
   c.yaw = p.yaw;
   c.pitch = p.pitch;
-  // A capture-the-flag order outranks the bot's firing step or flag.
-  const raid = ctfGoal(g, p);
+  // A capture-the-flag order, or for the anti-tank kit an enemy tank to hunt
+  // down (src/anti-tank.ts), outranks the firing step or the flag.
+  const raid = ctfGoal(g, p) ?? antiTankHunt(g, p);
   const station = raid ? undefined : firingPosition(g, p);
   if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;

@@ -169,6 +169,25 @@ nav {
   font-size: 38px;
   opacity: 0;
 }
+/* A round on an enemy tank: amber when it goes through the plate, a grey
+   line when it only rings off. */
+#hit.armour { color: #f0b04a; text-shadow: 0 0 6px #000a; }
+#tank-hit {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 30px);
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+  opacity: 0;
+}
+#tank-hit.pierced, #tank-hit.knockedOut { opacity: 1; color: #f0b04a; }
+#tank-hit.knockedOut { font-size: 14px; }
+#tank-hit.ricochet { opacity: .85; color: #c9cdc2; font-weight: 600; }
 #capture {
   position: absolute;
   top: 62%;
@@ -563,7 +582,7 @@ a.armory-link:hover { background: #3f5856; }
 }
 @keyframes boundary-pulse { from { opacity: .55; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #ui.out-of-bounds::before { animation: none; } }
-.dead #reticle,.dead #spread-ring,.dead #ammo,.dead .controls,.dead #labels,.dead #hit,.dead #capture { display:none!important; }
+.dead #reticle,.dead #spread-ring,.dead #ammo,.dead .controls,.dead #labels,.dead #hit,.dead #tank-hit,.dead #capture { display:none!important; }
 .map-death { position:absolute;transform:translate(-50%,-50%);font:700 24px/1 sans-serif;color:#f4b09b;text-shadow:0 1px 3px #000,-1px -1px 1px #182522;pointer-events:none; }
 .map-death[hidden] { display:none; }
 @media(max-height:600px) {
