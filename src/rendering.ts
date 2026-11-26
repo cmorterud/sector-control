@@ -5290,7 +5290,11 @@ export class Renderer implements CollisionWorld {
         if (!rig.standIn) {
           rig.standIn = true;
           rig.gait = { phase: rig.phase, x, z, crouch: rig.crouch, amplitude: Math.min(1, rig.motion) };
+          // The hidden model is also put far below the field: collapsed in
+          // place, its thousands of triangles would all land on one spot of
+          // the screen, while out of view the GPU drops them before drawing.
           e.setLocalScale(0, 0, 0);
+          e.setPosition(x, -10000, z);
         }
         const swing = advanceGait(rig.gait!, x, z, p.crouched, dt);
         this.distantSoldiers.add(standKey, x, y, z, yaw, swing, rig.gait!.crouch, crouchRules.drop);
@@ -5945,7 +5949,7 @@ export class Renderer implements CollisionWorld {
     if (e.type === "death" && this.activeGame) {
       const p = this.activeGame.players[e.actor], rig = this.soldiers[e.actor], actor = this.people[e.actor];
       if (p && rig && actor && !rig.remnantCreated) {
-        if (rig.standIn) { rig.standIn = false; rig.gait = undefined; rig.placed = undefined; }
+        if (rig.standIn) { rig.standIn = false; rig.gait = undefined; rig.placed = undefined; actor.setPosition(p.x, p.y, p.z); }
         actor.setLocalScale(pc.Vec3.ONE);
         this.queueCasualty(p);
         rig.deathAt = e.tick; rig.alive = false;
