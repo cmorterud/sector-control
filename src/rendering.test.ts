@@ -396,7 +396,7 @@ it("exposes the helmet and rifle while keeping the torso below the firing-step p
           ys.push(e.getWorldTransform().transformPoint(new Vec3(x, y, z)).y);
     return { min: Math.min(...ys), max: Math.max(...ys) };
   };
-  for (const name of ["torso", "vest", "backpack", "pelvis"])
+  for (const name of ["torso", "web belt", "backpack", "pelvis"])
     expect(bounds(name).max).toBeLessThan(2.4);
   expect(bounds("helmet").max).toBeGreaterThan(2.65);
   expect(bounds("barrel").min).toBeGreaterThan(2.4);
