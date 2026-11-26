@@ -126,3 +126,21 @@ export function factionKit(faction: KitFaction, shirt: string, helmet: string): 
   }
   return parts;
 }
+
+// First person only: the cuffs and wrists of your own arms, which fill the
+// bottom of the screen. y is measured up the forearm from the wrist.
+export function viewCuffParts(faction: KitFaction, shirt: string, skin: string): KitPart[] {
+  const cuff = {
+    // Field-grey Brandenburg cuff, a shade darker than the sleeve.
+    german: { at: .046, size: [.164, .08, .184], tint: "#56665c", rotation: [0, 0, 0] },
+    // Horizon blue, cut at a slant.
+    french: { at: .04, size: [.162, .06, .182], tint: "#7d96a3", rotation: [0, 0, 9] },
+    // Plain khaki band.
+    british: { at: .044, size: [.16, .05, .18], tint: "#6c6749", rotation: [0, 0, 0] },
+  }[faction];
+  return [
+    { name: "wrist", at: [0, .004, 0], size: [.074, .07, .068], tint: skin, shape: "limb" },
+    { name: "turned cuff", at: [0, cuff.at, 0], size: cuff.size as [number, number, number], tint: cuff.tint, shape: "pouch", rotation: cuff.rotation as [number, number, number] },
+    { name: "cuff seam", at: [0, cuff.at + cuff.size[1] / 2, 0], size: [cuff.size[0] * 1.01, .008, cuff.size[2] * 1.01], tint: shirt, shape: "disc", rotation: cuff.rotation as [number, number, number] },
+  ];
+}

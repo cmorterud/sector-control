@@ -11,7 +11,7 @@ export function modelSurfaceFor(name:string):ModelSurface {
   if(/eye|cartridge|recognition|armband|brow|moustache/.test(name))return 'solid';
   if(/helmet|button|buckle|canister/.test(name))return 'metal';
   if(/helve|haft/.test(name))return 'walnut';
-  if(/hand|head|nose|ear|chin|neck/.test(name))return 'skin';
+  if(/hand|head|nose|ear|chin|neck|wrist/.test(name))return 'skin';
   if(/boot|pouch|strap|flap|scabbard|spade/.test(name))return 'leather';
   if(/belt|pack|blanket|webbing|bag|bottle|canteen|sling|carrier/.test(name))return 'webbing';
   return 'cloth';
