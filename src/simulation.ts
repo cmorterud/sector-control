@@ -28,6 +28,7 @@ import {
   type VillagePlan,
 } from "./village-tactics";
 import { nearestCandidates } from "./navigation-nearest";
+import { searchGraph } from "./navigation-search";
 import {
   startMelee,
   cancelMelee,
@@ -2737,41 +2738,13 @@ export function pathfind(
   // every node it can reach before failing.
   const component = navigationComponents(available);
   if (component[start] !== component[goal]) return [];
-  const open = new Set([start]),
-    came = new Map<number, number>(),
-    cost = new Map([[start, 0]]);
-  while (open.size) {
-    let u = -1,
-      best = Infinity;
-    for (const index of open) {
-      const score = cost.get(index)! + dist(nodes[index], nodes[goal]);
-      if (score < best) {
-        best = score;
-        u = index;
-      }
-    }
-    if (u === goal) {
-      const out = [{ ...b }, nodes[u]];
-      while (came.has(u)) {
-        u = came.get(u)!;
-        out.push(nodes[u]);
-      }
-      const route = out.reverse();
-      // Do not walk back to a nearby lattice anchor when the next one is clear.
-      while (route.length > 1 && walkSegment(a, route[1], map)) route.shift();
-      return route;
-    }
-    open.delete(u);
-    for (const v of edges[u]) {
-      const next = cost.get(u)! + dist(nodes[u], nodes[v]) + (extra ? extra(nodes[u], nodes[v]) : 0);
-      if (next < (cost.get(v) ?? Infinity)) {
-        came.set(v, u);
-        cost.set(v, next);
-        open.add(v);
-      }
-    }
-  }
-  return [];
+  const found = searchGraph(nodes, edges, start, goal, extra);
+  if (!found) return [];
+  const route: Vec[] = found.map((i) => nodes[i]);
+  route.push({ ...b });
+  // Do not walk back to a nearby lattice anchor when the next one is clear.
+  while (route.length > 1 && walkSegment(a, route[1], map)) route.shift();
+  return route;
 }
 export function botAimOffset(p: Soldier, tick: number, baseSpread: number) {
   const sample = (index: number) => {
