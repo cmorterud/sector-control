@@ -4,7 +4,7 @@
 import * as pc from "playcanvas";
 import { angleDelta } from "./awareness";
 import type { Game } from "./simulation";
-import type { Tank, TankModel } from "./tanks";
+import { machineGunMounts, mountAt, type Tank, type TankModel } from "./tanks";
 
 type Cube = (name: string, x: number, y: number, z: number, w: number, h: number, d: number, c: string, solid?: boolean, parent?: pc.Entity) => pc.Entity;
 type Material = (c: string) => pc.StandardMaterial;
@@ -12,6 +12,8 @@ interface TankMesh {
   root: pc.Entity;
   hull: pc.Entity;
   guns: { pivot: pc.Entity; side: number }[];
+  // One per entry in machineGunMounts, in the same order.
+  mgs: pc.Entity[];
   treads: { e: pc.Entity; z0: number }[];
   wrecked: boolean;
   model: TankModel;
@@ -62,10 +64,17 @@ export class TankView {
     const root = this.joint(`${t.name} tank`, this.app.root);
     const hull = this.joint("hull", root);
     const colors = palette[t.model];
-    const mesh: TankMesh = { root, hull, guns: [], treads: [], wrecked: false, model: t.model };
+    const mesh: TankMesh = { root, hull, guns: [], mgs: [], treads: [], wrecked: false, model: t.model };
     if (t.model === "mark-iv") this.markIV(mesh, colors);
     else if (t.model === "a7v") this.a7v(mesh, colors);
     else this.saintChamond(mesh, colors);
+    // The machine guns, where the simulation fires them from.
+    for (const m of machineGunMounts[t.model]) {
+      this.cube("gun mount", m.s, m.y, -m.f, 0.26, 0.26, 0.26, colors.frame, false, hull);
+      const pivot = this.joint(m.name, hull, m.s, m.y, -m.f);
+      this.barrel("machine gun", pivot, 0.6, 0.05, colors.dark);
+      mesh.mgs.push(pivot);
+    }
     return mesh;
   }
 
@@ -99,7 +108,6 @@ export class TankView {
     for (const x of [-0.95, 0.95]) this.cube("beam rail", x, 2.62, 0.6, 0.1, 0.1, 6.0, c.dark, false, h);
     this.cube("unditching beam", 0, 2.83, 2.6, 3.0, 0.3, 0.3, "#5a4630", false, h);
     this.cube("exhaust", 0.55, 2.64, 0.9, 0.14, 0.14, 2.2, "#3a2e25", false, h);
-    this.cube("hull machine gun", 0, 1.3, -3.25, 0.2, 0.2, 0.3, c.dark, false, h);
   }
 
   // The German box on a tractor chassis: a 57 mm gun in the nose and
@@ -113,11 +121,6 @@ export class TankView {
       this.cube("cross ground", side * 1.56, 1.9, 0.8, 0.02, 0.62, 0.62, "#d8d4c6", false, h);
       this.cube("cross bar", side * 1.57, 1.9, 0.8, 0.02, 0.44, 0.12, "#1c1c1a", false, h);
       this.cube("cross bar", side * 1.57, 1.9, 0.8, 0.02, 0.12, 0.44, "#1c1c1a", false, h);
-      for (const z of [-1.6, 0.2, 2.0]) {
-        const mg = this.joint("side machine gun", h, side * 1.62, 1.45, z);
-        mg.setLocalEulerAngles(0, side * -90, 0);
-        this.barrel("MG 08", mg, 0.5, 0.05, c.dark);
-      }
     }
     this.cube("skirt", 0, 0.95, 0, 3.05, 0.75, 7.0, c.frame, false, h);
     this.cube("upper hull", 0, 1.85, 0.15, 3.1, 1.05, 6.4, c.body, false, h);
@@ -179,6 +182,17 @@ export class TankView {
         if (t.state === "wreck") local = 0;
         gun.pivot.setLocalEulerAngles((t.aimPitch * 180) / Math.PI, (-(local + (gun.side ? gun.side * Math.PI / 2 : 0)) * 180) / Math.PI, 0);
       }
+      // The machine gun that bears follows the crosshair; the rest sit square.
+      machineGunMounts[t.model].forEach((m, i) => {
+        let yaw = m.bearing, pitch = 0;
+        if (i === t.mg.mount && t.driver !== undefined && t.state !== "wreck") {
+          const at = mountAt(t, m), dx = t.aim.x - at.x, dz = t.aim.z - at.z;
+          const rel = angleDelta(t.yaw + m.bearing, Math.atan2(dx, -dz));
+          yaw = m.bearing + Math.max(-m.arc, Math.min(m.arc, rel));
+          pitch = Math.max(-0.4, Math.min(0.4, Math.atan2(t.aim.y - at.y, Math.hypot(dx, dz))));
+        }
+        mesh.mgs[i].setLocalEulerAngles((pitch * 180) / Math.PI, (-yaw * 180) / Math.PI, 0);
+      });
       // Shoes slide back along the track as it moves.
       const shift = ((t.travel % treadSpacing) + treadSpacing) % treadSpacing;
       for (const tread of mesh.treads) {

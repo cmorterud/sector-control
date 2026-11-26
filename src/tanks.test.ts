@@ -7,8 +7,8 @@ import { villageMap } from "./village-map";
 import { artilleryExplosionProfile, grenadeExplosionProfile } from "./destruction";
 import { ctfMap } from "./ctf";
 import { flagOccupant } from "./domination";
-import { activeTank, crewTank, rayHull, supportsTanks, tankPose, tankRules, toWorld, type Tank } from "./tanks";
-import { tankChoice, tankNotice } from "./tank-hud";
+import { activeTank, bearingMount, crewTank, machineGunMounts, mountAt, rayHull, supportsTanks, tankPose, tankRules, toLocal, toWorld, type Tank } from "./tanks";
+import { tankChoice, tankNotice, tankPanel } from "./tank-hud";
 
 function scene(map = trenchMap, tanks = true, teamSize = 3) {
   const g = new Game(new TestCollision(map), true, 30 * 600, 12345, undefined, { map, teamSize, ambientArtillery: false, tanks });
@@ -207,6 +207,65 @@ describe("tanks", () => {
     Object.assign(red, { x: t.x + 0.5, z: t.z + 0.3, y: t.y, vx: 0, vz: 0 });
     run(g, 2);
     expect(rayHull(t, { x: red.x, y: red.y + 1, z: red.z }, { x: red.x, y: red.y + 1.01, z: red.z })).toBe(1);
+  });
+
+  it("keep firing the main gun while the button is held, once it bears and is loaded", () => {
+    const g = scene();
+    const t = command(g);
+    place(g, t, -70, -45, east);
+    expect(t.model).toBe("mark-iv");
+    const keys = { interact: "E", forward: "W", backward: "S", left: "A", right: "D" };
+    const shots = (rel: number, ticks: number) =>
+      tankEvents(run(g, ticks, { yaw: t.yaw + rel, aim: true }), "cannon").length;
+    // The Mark IV's 6-pounders are in the sponsons: dead ahead they cannot
+    // bear, and the panel says so rather than staying quiet.
+    expect(shots(0, 60)).toBe(0);
+    expect(tankPanel(g, g.players[0], keys)).toContain('class="warn">SPONSONS FIRE TO THE SIDES');
+    // Abeam, holding the button fires every time the gun is loaded.
+    const n = shots(Math.PI / 2, tankRules.cannonReloadTicks * 4 + 5);
+    expect(n).toBe(5);
+    expect(t.cannon.ammo).toBe(tankRules.cannonAmmo - 5);
+    expect(tankPanel(g, g.players[0], keys)).toContain("FIRES WHEN LOADED");
+  });
+
+  it("fire the machine gun that can swing onto the crosshair", () => {
+    const g = scene();
+    const t = command(g);
+    place(g, t, -70, -45, east);
+    const origin = (rel: number) => {
+      t.mg.nextShot = 0;
+      const shot = run(g, 1, { yaw: t.yaw + rel, fire: true }).find(e => e.type === "fire" && e.actor === 0);
+      expect(shot).toBeDefined();
+      return toLocal(t, (shot as Extract<Event, { type: "fire" }>).from);
+    };
+    const mounts = machineGunMounts["mark-iv"];
+    const named = (name: string) => mounts.findIndex(m => m.name === name);
+    // Ahead: the front gun; to either side: that side's sponson gun; astern:
+    // the rear door gun. Each shot leaves from its own mount.
+    expect(origin(0).f).toBeGreaterThan(tankRules.length / 2);
+    expect(t.mg.mount).toBe(named("front gun"));
+    expect(origin(Math.PI / 2).s).toBeGreaterThan(tankRules.width / 2);
+    expect(t.mg.mount).toBe(named("right sponson gun"));
+    expect(origin(-Math.PI / 2).s).toBeLessThan(-tankRules.width / 2);
+    expect(t.mg.mount).toBe(named("left sponson gun"));
+    expect(origin(Math.PI).f).toBeLessThan(-tankRules.length / 2);
+    expect(t.mg.mount).toBe(named("rear gun"));
+    // The shot starts beside the mount it came from.
+    const from = origin(Math.PI / 2), mount = toLocal(t, mountAt(t, mounts[named("right sponson gun")]));
+    expect(Math.hypot(from.f - mount.f, from.s - mount.s)).toBeLessThan(1);
+  });
+
+  it("have a machine gun that can reach every bearing round the hull", () => {
+    const g = scene();
+    run(g, 2);
+    const t = activeTank(g, "red")!;
+    for (const model of ["mark-iv", "a7v", "saint-chamond"] as const) {
+      t.model = model;
+      for (let a = -Math.PI; a < Math.PI; a += 0.05) {
+        const target = { ...toWorld(t, Math.cos(a) * 40, Math.sin(a) * 40), y: t.y + 1.2 };
+        expect(bearingMount(t, target), `${model} at ${a.toFixed(2)}`).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 
   it("tell the player what happens to them", () => {

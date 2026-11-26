@@ -102,8 +102,12 @@ export interface Tank extends V3 {
   splash: number;
   aimYaw: number;
   aimPitch: number;
-  mg: { ammo: number; reserve: number; nextShot: number; reloadAt: number; weaponId: string };
-  cannon: { ammo: number; nextShot: number; held: boolean };
+  // Where the commander's crosshair rests, and which machine-gun mount
+  // (an index into machineGunMounts) can bear on it, or -1 when none can.
+  aim: V3;
+  mg: { ammo: number; reserve: number; nextShot: number; reloadAt: number; weaponId: string; mount: number };
+  // refused: the last tick the trigger was held while the gun could not fire.
+  cannon: { ammo: number; nextShot: number; held: boolean; refused: number };
   knockedOutAt?: number;
   bot: { objective?: Vec; nextPlan: number; target: number; nextScan: number; check: Vec & { tick: number }; reverseUntil: number; turn: number; heading?: number; nextSteer: number };
 }
@@ -139,6 +143,38 @@ const models: Record<FactionId, { model: TankModel; name: string }> = {
 export const tankModelFor = (map: Pick<MapDefinition, "id">, team: Team) => models[factionFor(map, team)];
 export const tankGun = (model: TankModel) =>
   model === "mark-iv" ? "6-pounder" : model === "a7v" ? "57 mm gun" : "75 mm gun";
+
+// The machine guns each tank carries, in its own frame: f metres forward of
+// the centre, s to the right, y above the tracks' bottom. Each swings `arc`
+// radians either side of its rest `bearing` (0 ahead, positive to the right).
+// Whichever mount can bear on the crosshair and is nearest to it fires, so
+// the gun the player sees firing is a real one, and a target no mount can
+// reach (dead astern of the Mark IV, dead ahead of nothing) needs the hull
+// turned. The renderer draws the same mounts.
+export interface GunMount { name: string; f: number; s: number; y: number; bearing: number; arc: number }
+const side = (name: string, f: number, s: number, y: number, bearing: number, arc: number): GunMount[] =>
+  [{ name: `left ${name}`, f, s: -s, y, bearing: -bearing, arc }, { name: `right ${name}`, f, s, y, bearing, arc }];
+export const machineGunMounts: Record<TankModel, GunMount[]> = {
+  // A male Mark IV: a gun in the front plate, one at the back of each
+  // sponson and one in the rear door.
+  "mark-iv": [
+    { name: "front gun", f: 3.25, s: 0, y: 1.3, bearing: 0, arc: 0.65 },
+    ...side("sponson gun", -0.1, 2.05, 1.25, Math.PI / 2 + 0.25, 1.3),
+    { name: "rear gun", f: -3.3, s: 0, y: 1.45, bearing: Math.PI, arc: 0.6 },
+  ],
+  // The A7V: six Maxims, two down each side and two in the rear plate.
+  a7v: [
+    ...side("bow gun", 1.6, 1.62, 1.45, 1.05, 1.2),
+    ...side("waist gun", -0.8, 1.62, 1.45, Math.PI / 2 + 0.2, 0.9),
+    ...side("stern gun", -3.35, 0.8, 1.6, Math.PI, 0.75),
+  ],
+  // The Saint-Chamond: a bow gun beside the 75, one each side and one astern.
+  "saint-chamond": [
+    { name: "bow gun", f: 3.6, s: 0.75, y: 1.6, bearing: 0, arc: 0.8 },
+    ...side("side gun", 0.5, 1.4, 1.6, Math.PI / 2, 1.1),
+    { name: "stern gun", f: -3.85, s: 0, y: 1.6, bearing: Math.PI, arc: 0.85 },
+  ],
+};
 
 export function createTanks(g: Game, enabled: boolean, hurt: Hurt, destroy: TankState["destroy"]): TankState {
   const state: TankState = {
@@ -305,9 +341,9 @@ function spawnTank(g: Game, team: Team) {
       x: c.x, y: pose.y, z: c.z, yaw, pitch: pose.pitch, roll: pose.roll,
       previous: { x: c.x, y: pose.y, z: c.z, yaw, pitch: pose.pitch, roll: pose.roll },
       speed: 0, travel: 0, hp: tankRules.hp, state: "mobile", until: 0, gap: 0, splash: 0,
-      aimYaw: yaw, aimPitch: 0,
-      mg: { ammo: tankRules.mgBelt, reserve: tankRules.mgReserve, nextShot: 0, reloadAt: 0, weaponId },
-      cannon: { ammo: tankRules.cannonAmmo, nextShot: 0, held: false },
+      aimYaw: yaw, aimPitch: 0, aim: { ...toWorld({ x: c.x, z: c.z, yaw }, 30, 0), y: pose.y + 1.3 },
+      mg: { ammo: tankRules.mgBelt, reserve: tankRules.mgReserve, nextShot: 0, reloadAt: 0, weaponId, mount: -1 },
+      cannon: { ammo: tankRules.cannonAmmo, nextShot: 0, held: false, refused: -1 },
       bot: { nextPlan: 0, target: -1, nextScan: 0, check: { x: c.x, z: c.z, tick: g.tick }, reverseUntil: 0, turn: 1, nextSteer: 0 },
     };
     g.tanks.list.push(tank);
@@ -635,17 +671,46 @@ export function cannonBears(t: Tank, yaw: number) {
   return t.model === "mark-iv" ? rel > 0.35 && rel < 2.75 : rel < (t.model === "a7v" ? 0.8 : 0.55);
 }
 
-function muzzle(t: Tank, yaw: number, pitch: number, cannon: boolean): V3 {
-  if (cannon) {
-    const rel = angleDelta(t.yaw, yaw);
-    const mount = t.model === "mark-iv" ? toWorld(t, 0.6, Math.sign(rel) * (halfW + 0.15)) : toWorld(t, halfL + 0.15, t.model === "saint-chamond" ? 0 : 0.3);
-    const d = lookDir(yaw, pitch);
-    return { x: mount.x + d.x * 0.6, y: t.y + 1.25 + d.y * 0.6, z: mount.z + d.z * 0.6 };
-  }
-  // The machine gun nearest the bearing: out of the hull along it.
-  const d = lookDir(yaw, 0), l = toLocal(t, { x: t.x + d.x, z: t.z + d.z });
-  const exit = Math.min(Math.abs(l.f) > 1e-6 ? halfL / Math.abs(l.f) : Infinity, Math.abs(l.s) > 1e-6 ? halfW / Math.abs(l.s) : Infinity) + 0.25;
-  return { x: t.x + d.x * exit, y: t.y + 1.35, z: t.z + d.z * exit };
+function cannonMuzzle(t: Tank, yaw: number, pitch: number): V3 {
+  const rel = angleDelta(t.yaw, yaw);
+  const mount = t.model === "mark-iv" ? toWorld(t, 0.6, Math.sign(rel) * (halfW + 0.15)) : toWorld(t, halfL + 0.15, t.model === "saint-chamond" ? 0 : 0.3);
+  const d = lookDir(yaw, pitch);
+  return { x: mount.x + d.x * 0.6, y: t.y + 1.25 + d.y * 0.6, z: mount.z + d.z * 0.6 };
+}
+
+// A mount's position in the world.
+export function mountAt(t: Tank, m: GunMount): V3 {
+  const at = toWorld(t, m.f, m.s);
+  return { x: at.x, y: t.y + m.y, z: at.z };
+}
+
+// The machine gun that fires at a point: of the mounts whose arc covers it
+// with a clear line past the hull, the nearest. -1 when none can bear.
+export function bearingMount(t: Tank, target: V3) {
+  let best = -1, nearest = Infinity;
+  machineGunMounts[t.model].forEach((m, i) => {
+    const at = mountAt(t, m);
+    const d = Math.hypot(target.x - at.x, target.z - at.z);
+    if (d < 0.5 || d >= nearest) return;
+    const bearing = Math.atan2(target.x - at.x, at.z - target.z);
+    if (Math.abs(angleDelta(t.yaw + m.bearing, bearing)) > m.arc) return;
+    if (rayHull(t, mgMuzzle(t, m, target), target) < 1) return;
+    best = i;
+    nearest = d;
+  });
+  return best;
+}
+
+// Where a machine gun's bullets start: just outside the plates along its line.
+function mgMuzzle(t: Tank, m: GunMount, target: V3): V3 {
+  const at = mountAt(t, m);
+  const len = Math.max(0.001, Math.hypot(target.x - at.x, target.y - at.y, target.z - at.z));
+  const d = { x: (target.x - at.x) / len, y: (target.y - at.y) / len, z: (target.z - at.z) / len };
+  const reach = 6;
+  const out = { x: at.x + d.x * reach, y: at.y + d.y * reach, z: at.z + d.z * reach };
+  // rayHull from outside back in finds where the line leaves the hull.
+  const exit = reach * (1 - rayHull(t, out, at)) + 0.2;
+  return { x: at.x + d.x * exit, y: at.y + d.y * exit, z: at.z + d.z * exit };
 }
 
 // What lies first along a ray: the world, a soldier outside a tank, or a tank.
@@ -679,13 +744,13 @@ function aimPoint(g: Game, t: Tank, p: Soldier, yaw: number, pitch: number, rang
   return firstHit(g, near, far, t).at;
 }
 
-function fireMachineGun(g: Game, t: Tank, p: Soldier, yaw: number, pitch: number) {
+function fireMachineGun(g: Game, t: Tank, p: Soldier) {
   const gun = t.mg;
-  if (gun.reloadAt || gun.ammo <= 0 || g.tick < gun.nextShot) return;
+  if (gun.reloadAt || gun.ammo <= 0 || g.tick < gun.nextShot || gun.mount < 0) return;
   const profile = weaponProfile({ weapon: "machineGun", weaponId: gun.weaponId });
   const spread = 0.012 + t.splash * 0.05;
-  const target = aimPoint(g, t, p, yaw, pitch, 70);
-  const from = muzzle(t, yaw, pitch, false);
+  const target = t.aim;
+  const from = mgMuzzle(t, machineGunMounts[t.model][gun.mount], target);
   const len = Math.max(0.001, Math.hypot(target.x - from.x, target.y - from.y, target.z - from.z));
   let d = { x: (target.x - from.x) / len, y: (target.y - from.y) / len, z: (target.z - from.z) / len };
   d = { x: d.x + (g.random() - 0.5) * spread, y: d.y + (g.random() - 0.5) * spread, z: d.z + (g.random() - 0.5) * spread };
@@ -713,7 +778,7 @@ function fireCannon(g: Game, t: Tank, p: Soldier, yaw: number, pitch: number) {
   const gun = t.cannon;
   if (gun.ammo <= 0 || g.tick < gun.nextShot || !cannonBears(t, yaw)) return false;
   const target = aimPoint(g, t, p, yaw, pitch, tankRules.cannonRange);
-  const from = muzzle(t, yaw, pitch, true);
+  const from = cannonMuzzle(t, yaw, pitch);
   const spread = 0.006 + t.splash * 0.03;
   const len = Math.max(0.001, Math.hypot(target.x - from.x, target.y - from.y, target.z - from.z));
   const range = Math.min(tankRules.cannonRange, len + 2);
@@ -749,10 +814,13 @@ export function operateTank(g: Game, p: Soldier, t: Tank, c: Command) {
   const slowed = human ? 1 : 1 - 0.5 * t.splash;
   drive(g, t, (c.drive?.throttle ?? 0) * slowed, c.drive?.turn ?? 0);
   seat(t, p);
-  if (c.fire) fireMachineGun(g, t, p, p.yaw, p.pitch);
-  const cannon = !!c.aim;
-  if (cannon && !t.cannon.held) fireCannon(g, t, p, p.yaw, p.pitch);
-  t.cannon.held = cannon;
+  t.aim = aimPoint(g, t, p, p.yaw, p.pitch, 70);
+  t.mg.mount = bearingMount(t, t.aim);
+  if (c.fire) fireMachineGun(g, t, p);
+  // Holding the right button keeps the main gun firing each time it is
+  // loaded and bears, so a press during the reload is not lost.
+  t.cannon.held = !!c.aim;
+  if (t.cannon.held && !fireCannon(g, t, p, p.yaw, p.pitch)) t.cannon.refused = g.tick;
 }
 
 // Whether the tank could drive a few metres along a heading without being
