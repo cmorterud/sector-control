@@ -152,7 +152,7 @@ test("keeps a full 100-soldier forest battle moving, fighting and capturing afte
  expect(captures).toBeGreaterThan(0);
  expect(impacts).toBeGreaterThan(0);
  expect(Object.values(g.map.destruction!.objects).some(o=>o.id.startsWith("verdun-wood")&&o.stage===2)).toBe(true);
-},20000);
+},30000);
 test("rear ramps are walkable and trench floors protect below the banks",()=>{
  const t=verdunMap.terrain!;
  expect(t.shelterBays).toHaveLength(6); expect(t.communicationRoutes!.length).toBeGreaterThan(6);

@@ -10,13 +10,16 @@ export const hitZones: { id: HitZone; label: string; where: string }[] = [
   { id: "legs", label: "Legs", where: "below the hips" },
 ];
 export const soldierHealth = 100;
+// A tank's hull points (src/tanks.ts), and the share below which it has thrown a track.
+export const tankHullPoints = 600;
+export const tankImmobilizedBelow = 0.35;
 
 // Bullets fly well below real speed (about two fifths) so moving targets need
 // leading. One scale for every weapon keeps their real differences: it puts
 // the SMLE at the game's 288 m/s.
 export const bulletSpeedScale = 288 / 744;
 
-export type WeaponRole = "rifle" | "carbine" | "scoped" | "pistol" | "machineGun" | "emplaced";
+export type WeaponRole = "rifle" | "carbine" | "scoped" | "pistol" | "machineGun" | "emplaced" | "antiTank";
 export const roleLabels: Record<WeaponRole, string> = {
   rifle: "Bolt-action rifle",
   carbine: "Bolt-action carbine",
@@ -24,6 +27,7 @@ export const roleLabels: Record<WeaponRole, string> = {
   pistol: "Pistol",
   machineGun: "Light machine gun",
   emplaced: "Emplaced machine gun",
+  antiTank: "Anti-tank",
 };
 
 export interface WeaponStats {
@@ -49,6 +53,11 @@ export interface WeaponStats {
   // Pistols and carbines lose damage past this range (metres).
   falloff?: { start: number; end: number; minimum: number };
   summary: string;
+  // Anti-tank weapons: what a round that strikes a tank's plates does. Hull
+  // points come off the tank's 600; a round through the vision slits counts
+  // `slit` times over. `crew` is the chance a round wounds the crewman inside
+  // by `crewDamage` (splinters off the inside of the plate).
+  armour?: { hull: number; slit: number; crew: number; crewDamage: number };
 }
 
 // A rifle chest hit leaves a full-health soldier standing; the head still kills (#31).
@@ -165,6 +174,28 @@ export const weaponStats: WeaponStats[] = [
     roundsPerMinute: 600, magazine: 30, reserve: 300, reloadSeconds: 3.5, damage: machineGunDamage,
     summary: "Shorter bursts and a quicker reload than the other emplacements.",
   },
+  // Support's anti-tank kit (src/anti-tank.ts), offered where tanks fight.
+  {
+    id: "smle-ap", name: "SMLE Mk III · AP", faction: "british", role: "antiTank", round: ".303 Mk VII.W armour-piercing",
+    historical: { muzzleVelocity: 762, rate: [15, 30], note: "Steel-cored .303, approved in November 1917; proofed to put 70% of rounds through 10 mm of plate at 100 yards." },
+    roundsPerMinute: 55, magazine: 10, reserve: 50, reloadSeconds: 2.2, damage: rifleDamage,
+    armour: { hull: 16, slit: 1.6, crew: 0.08, crewDamage: 25 },
+    summary: "A service rifle loaded with steel-cored rounds: many hits wear a tank down, and the vision slits are its weak spot.",
+  },
+  {
+    id: "tankgewehr", name: "Tankgewehr M1918", faction: "german", role: "antiTank", round: "13.2 mm TuF",
+    historical: { muzzleVelocity: 780, rate: [10, 10], note: "Single-shot Mauser anti-tank rifle, 18.5 kg on its bipod; it went through 15 mm of plate at 300 m. Gunners were taught to aim for drivers and machine gunners." },
+    roundsPerMinute: 10, magazine: 1, reserve: 20, reloadSeconds: 3.2, damage: { head: 250, chest: 200, stomach: 180, arms: 110, legs: 110 },
+    armour: { hull: 55, slit: 1.5, crew: 0.35, crewDamage: 40 },
+    summary: "One heavy round at a time. It punches through tank plate and often wounds the crew inside.",
+  },
+  {
+    id: "berthier-ap", name: "Berthier Mle 1916 · AP", faction: "french", role: "antiTank", round: "8 mm Lebel armour-piercing",
+    historical: { muzzleVelocity: 700, rate: [12, 15], note: "French steel-cored 8 mm; the British copied its design for their .303 Mk VII.F in 1916." },
+    roundsPerMinute: 55, magazine: 5, reserve: 50, reloadSeconds: 1.6, damage: rifleDamage,
+    armour: { hull: 16, slit: 1.6, crew: 0.08, crewDamage: 25 },
+    summary: "The service rifle with steel-cored rounds: many hits wear a tank down, and the vision slits are its weak spot.",
+  },
 ];
 
 export const armoryFactions: FactionId[] = ["british", "german", "french"];
@@ -193,4 +224,14 @@ export function timeToKill(w: WeaponStats, zone: HitZone, distance = 0) {
   const reloads = Math.floor(intervals / w.magazine);
   const ticks = intervals * shotInterval(w) + reloads * Math.max(0, 1 + reloadDuration(w) - shotInterval(w));
   return ticks / weaponTicksPerSecond;
+}
+
+// Anti-tank rounds against a tank's side plates, and through its vision slits.
+export function tankHits(w: WeaponStats, slit = false) {
+  if (!w.armour) return undefined;
+  const hull = w.armour.hull * (slit ? w.armour.slit : 1);
+  return {
+    immobilize: Math.ceil(tankHullPoints * (1 - tankImmobilizedBelow) / hull),
+    knockOut: Math.ceil(tankHullPoints / hull),
+  };
 }

@@ -87,7 +87,7 @@ import {
 } from "./environment-effects";
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
-import { weaponAim, recoilPulse, recoilFeel, recoilBuzz } from "./recoil";
+import { weaponAim, recoilPulse, recoilFeel, feelFor, recoilBuzz } from "./recoil";
 import { WeaponFx } from "./weapon-fx";
 import { tankGunMuzzle, tracerRound } from "./muzzle-blast";
 import { heatRules } from "./weapon-heat";
@@ -3933,7 +3933,7 @@ export class Renderer implements CollisionWorld {
     const sway = (1-rig.ads)*Math.sin(source.phase)*source.motion*.008;
     // The weapon's own kick: driven back, muzzle up, rolled, and for automatic
     // weapons a buzz that jumps side to side with each round.
-    const feel = recoilFeel[p.weapon] ?? recoilFeel.rifle, kick = recoilPulse(p, tick);
+    const feel = feelFor(p) ?? recoilFeel.rifle, kick = recoilPulse(p, tick);
     const buzz = feel.buzz ? recoilBuzz(p.recoilShots, p.id) : 1;
     const hipBob=!p.command.sprint&&!p.melee&&!loading&&!throwing?(1-rig.ads)*(Math.cos(source.phase*2)-1)*source.motion*.004:0;
     rig.rifle.setLocalPosition(
@@ -4139,7 +4139,7 @@ export class Renderer implements CollisionWorld {
       (1 - rig.motion);
     rig.upper.setLocalPosition(0, 0.08 + breath * 0.003 * (1 - rig.motion), 0);
     rig.upper.setLocalEulerAngles(
-      lean - kick * 2 * (recoilFeel[p.weapon]?.shoulder ?? 1) + breath * 0.35 * (1 - rig.motion),
+      lean - kick * 2 * (feelFor(p)?.shoulder ?? 1) + breath * 0.35 * (1 - rig.motion),
       stride * (ready ? 1.5 : 4) * rig.style.sway + idleTurn + weight.turn.value*.3,
       -stride * 1.5 * rig.style.sway,
     );
@@ -4177,13 +4177,13 @@ export class Renderer implements CollisionWorld {
     rig.rifle.setLocalPosition(
       weaponMount.x,
       weaponMount.y - rig.sprint * 0.08 + rifleHeight(this.map) - 1.45,
-      weaponMount.z + kick * 0.09 * (recoilFeel[p.weapon]?.shoulder ?? 1),
+      weaponMount.z + kick * 0.09 * (feelFor(p)?.shoulder ?? 1),
     );
     rig.rifle.setLocalEulerAngles(
       -rig.sprint * 20 +
         stride * 2 +
         (weaponAim(p).pitch * 180) / Math.PI - lean +
-        kick * 5 * (recoilFeel[p.weapon]?.shoulder ?? 1),
+        kick * 5 * (feelFor(p)?.shoulder ?? 1),
       (p.recoilYaw * 180) / Math.PI,
       p.reloadAt ? 12 : 0,
     );
@@ -5336,7 +5336,7 @@ export class Renderer implements CollisionWorld {
     // A shot jolts the eye back and rolls the view about its own axis; the
     // centre of the sight stays on the line the round takes.
     if (firstPerson && p.hp > 0) {
-      const feel = gun ? recoilFeel.emplaced : recoilFeel[p.weapon] ?? recoilFeel.rifle;
+      const feel = gun ? recoilFeel.emplaced : feelFor(p) ?? recoilFeel.rifle;
       const last = gun ? gun.lastShotAt : p.lastShotAt, age = (g.tick - 1 + alpha - last) / 30;
       const kick = age >= 0 ? Math.exp(-20 * age) : 0;
       if (kick > 0.002) {

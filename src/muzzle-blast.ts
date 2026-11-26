@@ -49,6 +49,7 @@ export function muzzleProfile(weapon: WeaponKind | undefined, weaponId: string |
   // A revolver keeps its empties in the cylinder; a short carbine barrel
   // burns more powder in the open air.
   if (weaponId === "Webley Mk VI") return { ...base, brass: 0, flash: base.flash * 1.25 };
+  if (weaponId === "Tankgewehr M1918") return { ...base, flash: base.flash * 1.8, jet: base.jet * 2, smoke: 6, smokeSize: base.smokeSize * 1.6, dust: 4, brass: 0.1, light: base.light * 1.5, lightRange: 14 };
   if (weaponId === "Karabiner 98AZ" || weaponId === "Berthier Mle 1892 M16") return { ...base, flash: base.flash * 1.2, jet: base.jet * 1.15 };
   return base;
 }

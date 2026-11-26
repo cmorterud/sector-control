@@ -29,7 +29,8 @@ export function kickRecoil(p: Soldier, tick: number) {
   const brace =
     (p.command.aim ? 0.8 : 1) *
     (p.crouched ? 0.85 : 1) *
-    (p.weapon === "serviceRifle" ? 1.8 : 1);
+    (p.weapon === "serviceRifle" ? 1.8 : 1) *
+    (heavyRecoil(p) ? 2.4 : 1);
   p.recoilPitch = Math.min(
     recoilRules.maxPitch,
     p.recoilPitch + recoilRules.pitchKick * brace,
@@ -65,6 +66,12 @@ export const recoilFeel: Record<string, RecoilFeel> = {
   // A mounted gun's sight picture: the whole gun shudders on its mount.
   emplaced: { push: 0.045, rise: 0, roll: 0.45, jolt: 0.012, shoulder: 0, buzz: 1 },
   flamethrower: { push: 0, rise: 0, roll: 0, jolt: 0, shoulder: 0, buzz: 0 },
+  // The Tankgewehr's 13.2 mm round: a shove that rocks the whole body back.
+  antiTankRifle: { push: 0.16, rise: 13, roll: 3.6, jolt: 0.05, shoulder: 3.2, buzz: 0 },
 };
+// Weapons that kick far harder than a service rifle.
+export const heavyRecoil = (p: Pick<Soldier, "weapon" | "weaponId">) => p.weapon === "serviceRifle" && p.weaponId === "Tankgewehr M1918";
+export const feelFor = (p: Pick<Soldier, "weapon" | "weaponId">): RecoilFeel | undefined =>
+  heavyRecoil(p) ? recoilFeel.antiTankRifle : recoilFeel[p.weapon];
 // A signed shake that changes every round, for buzzing automatic weapons.
 export const recoilBuzz = (shots: number, salt = 0) => Math.sin(shots * 12.9898 + salt * 78.233) >= 0 ? 1 : -1;
