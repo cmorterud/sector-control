@@ -73,10 +73,12 @@ import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, rein
 import { soldierName } from "./soldier-names";
 import { rainChoice, rainIntensity, rainStorageKey, supportsRain } from "./weather";
 import { crewTank, supportsTanks, takeCommand, tankRules, toWorld } from "./tanks";
+import { TankHitFeedback } from "./tank-hit-feedback";
 import { tankBrief, tankChoice, tankNotice, tankPanel, tankPrompt, tankStorageKey } from "./tank-hud";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
-root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="spread-ring" class="hidden"></div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
+root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="spread-ring" class="hidden"></div><div id="hit">×</div><div id="tank-hit"></div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
+const tankHits=new TankHitFeedback();let tankHit:{kind:string;text:string;until:number}|undefined;
 const combatFeedback=new CombatFeedback(),combatOverlay=document.createElement("div");
 combatOverlay.id="combat-feedback";el("hud").append(combatOverlay);
 const battleSidebar = document.createElement("aside");
@@ -436,7 +438,7 @@ function start() {
   if (bots||training) prepareNavigation(game.map);
   renderer.reset(game);
   battlefield.reset(game);
-  combatFeedback.reset();
+  combatFeedback.reset();tankHits.reset();tankHit=undefined;
   ctfAnnouncer.reset();
   reinforcementNotices.reset();
   displayedScoreboard = "";
@@ -576,6 +578,14 @@ function handle(e: Event) {
   if (e.type === "grenadeExplosion") {
     if (e.actor === 0 && e.hits.some((hit) => hit.target !== 0))
       hitUntil = performance.now() + 200;
+  }
+  // A round on an enemy tank: through the plate, or rung off it.
+  const plate = tankHits.event(game, e, 0);
+  if (plate) {
+    // Timed in match ticks, so a pause holds it.
+    tankHit = { ...plate, until: game.tick + (plate.kind === "ricochet" ? 18 : 42) };
+    if (plate.kind === "ricochet") sound(2300, 0.05, 0.012);
+    else { sound(190, 0.12, 0.06); sound(900, 0.06, 0.03); }
   }
   if (e.type === "impact" && e.hit && e.actor === 0) {
     hitUntil = performance.now() + 150;
@@ -800,7 +810,12 @@ function hud(now: number) {
   if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(Math.max(p.suppression * 0.22, (crewed?.splash ?? 0) * 0.55)) : "0";
-  el("hit").style.opacity = now < hitUntil ? "1" : "0";
+  const plate = tankHit && game.tick < tankHit.until ? tankHit : undefined;
+  el("hit").style.opacity = now < hitUntil || (plate && plate.kind !== "ricochet") ? "1" : "0";
+  el("hit").classList.toggle("armour", !!plate && plate.kind !== "ricochet" && now >= hitUntil);
+  const plateLabel = el("tank-hit");
+  plateLabel.textContent = plate?.text ?? "";
+  plateLabel.className = plate ? plate.kind : "";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
   const scoreboard = el("scoreboard");
   const showScoreboard = held("scoreboard");
