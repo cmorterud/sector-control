@@ -6,7 +6,8 @@ import { springOffensiveMap } from "./spring-offensive-map";
 import { equipLoadout, factions, rosterRoles } from "./loadouts";
 import { activeTank, tankRules, toWorld, type Tank } from "./tanks";
 import { tankNotice } from "./tank-hud";
-import { antiTankBotAim, antiTankTarget } from "./anti-tank";
+import { antiTankBotAim, antiTankHunt, antiTankRules, antiTankTarget } from "./anti-tank";
+import { TankHitFeedback } from "./tank-hit-feedback";
 import { tankHits, weaponStats } from "./weapon-stats";
 
 function scene(map = trenchMap, teamSize = 3) {
@@ -71,10 +72,56 @@ describe("anti-tank kit", () => {
     expect(t.hp).toBe(tankRules.hp - stats.armour!.hull);
     const pierced = events.filter((e) => e.type === "tank" && e.phase === "pierced");
     expect(pierced).toHaveLength(1);
-    expect(tankNotice(g, pierced[0], shooter)).toMatch(/THROUGH THE PLATE/);
+    // The shooter reads the hit at the crosshair; the crew get the strip notice.
+    const feedback = new TankHitFeedback();
+    expect(feedback.event(g, pierced[0], shooter.id)).toEqual({ kind: "pierced", text: expect.stringMatching(/^−55 HULL · 91%/) });
+    expect(tankNotice(g, pierced[0], g.players[t.driver!])).toMatch(/THROUGH THE PLATE/);
+    const impact = events.find((e) => e.type === "impact" && e.tank === t.id)!;
+    expect(feedback.event(g, impact, shooter.id)).toBeUndefined();
     const later = volley(g, shooter, tankHits(stats)!.knockOut);
     expect(t.state).toBe("wreck");
     expect(later.some((e) => e.type === "tank" && e.phase === "knockedOut")).toBe(true);
+    const last = later.filter((e) => e.type === "tank" && e.phase === "pierced").at(-1)!;
+    expect(feedback.event(g, last, shooter.id)?.kind).toBe("knockedOut");
+  });
+
+  it("marks ordinary rounds that ring off an enemy tank's plate as no penetration", () => {
+    const g = scene();
+    run(g, 2);
+    const t = activeTank(g, "blue")!;
+    const shooter = flank(g, t);
+    const feedback = new TankHitFeedback();
+    const marks = volley(g, shooter, 3).map((e) => feedback.event(g, e, shooter.id)).filter(Boolean);
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks.every((m) => m!.kind === "ricochet" && m!.text === "NO PENETRATION")).toBe(true);
+    expect(t.hp).toBe(tankRules.hp);
+  });
+
+  it("sends anti-tank bots after an enemy tank they cannot yet reach, ahead of their flag", () => {
+    const g = scene();
+    run(g, 2);
+    const t = activeTank(g, "blue")!;
+    const bot = g.players.find((p) => p.team === "red" && p.tank === undefined)!;
+    equipLoadout(bot, "antiTank");
+    // 110 m off: out of range, so it closes in to the standoff distance.
+    const far = toWorld(t, 0, 110);
+    Object.assign(bot, { ...far, y: groundHeight(far.x, far.z, g.map) });
+    const goal = antiTankHunt(g, bot)!;
+    expect(goal).toBeDefined();
+    expect(Math.hypot(goal.x - t.x, goal.z - t.z)).toBeCloseTo(antiTankRules.huntStandoff, 1);
+    // A rifleman keeps to his orders.
+    equipLoadout(bot, "rifleman");
+    expect(antiTankHunt(g, bot)).toBeUndefined();
+    // In range with a clear shot, the bot stops hunting and fires.
+    equipLoadout(bot, "antiTank");
+    flank(g, t);
+    const near = g.players.find((p) => p.team === "red" && p.tank === undefined)!;
+    expect(near).toBe(bot);
+    expect(antiTankHunt(g, bot)).toBeUndefined();
+    // Only a soldier at bayonet reach comes before the tank.
+    const enemy = g.players.find((p) => p.team === "blue" && p.tank === undefined)!;
+    Object.assign(enemy, { x: bot.x + 8, z: bot.z, y: bot.y });
+    expect(antiTankBotAim(g, bot, { ...idle() }, enemy)).toBe(true);
   });
 
   it("lets armour-piercing service rounds wear a tank down slowly, while ball only splashes", () => {

@@ -7,7 +7,7 @@
 // (src/weapon-stats.ts armour). Bots carrying the kit (src/loadouts.ts
 // antiTankSlots) turn their rifle on an enemy tank they can see.
 import { angleDelta, semiAutoIntent, turnToward } from "./awareness";
-import { dist } from "./map";
+import { dist, type Vec } from "./map";
 import { eyeHeightOf } from "./crouch";
 import { botAimOffset, type Command, type Game, type Soldier } from "./simulation";
 import { tankRules, type Tank } from "./tanks";
@@ -15,8 +15,12 @@ import { tankRules, type Tank } from "./tanks";
 export const antiTankRules = {
   // How far a bot will engage a tank from, in metres.
   range: 75,
-  // A soldier closer than this still comes first.
-  closeThreat: 12,
+  // Only a soldier this close (at bayonet reach) comes before a tank.
+  closeThreat: 5,
+  // A bot carrying the kit goes after an enemy tank this far off that it
+  // cannot yet see or reach, closing to `huntStandoff` metres.
+  huntRange: 150,
+  huntStandoff: 35,
   // Where on the hull a bot aims, above the bottom of the tracks: the cab and
   // the slits on a tank coming on, the side plates otherwise.
   aimHeight: 1.5,
@@ -35,6 +39,22 @@ export function antiTankTarget(g: Game, p: Soldier): Tank | undefined {
     .filter(t => t.team !== p.team && t.state !== "wreck" && dist(p, t) < antiTankRules.range)
     .sort((a, b) => dist(p, a) - dist(p, b))
     .find(t => g.collision.ray(eye, { x: t.x, y: t.y + antiTankRules.aimHeight, z: t.z }) > 0.99);
+}
+
+// Where a kit-carrying bot should go to get a shot at an enemy tank it can't
+// yet see or reach: a spot short of the tank, on its own side of it. Nothing
+// once it has a shot (antiTankBotAim takes over) or no tank is in the field.
+export function antiTankHunt(g: Game, p: Soldier): Vec | undefined {
+  if (!carriesAntiTank(p) || p.tank !== undefined || p.hp <= 0 || !g.tanks?.list.length) return undefined;
+  const tank = g.tanks.list
+    .filter(t => t.team !== p.team && t.state !== "wreck" && dist(p, t) < antiTankRules.huntRange)
+    .sort((a, b) => dist(p, a) - dist(p, b))[0];
+  if (!tank) return undefined;
+  const d = dist(p, tank);
+  if (d < antiTankRules.range && antiTankTarget(g, p) === tank) return undefined;
+  if (d <= antiTankRules.huntStandoff) return { x: tank.x + (p.x - tank.x) * 0.8, z: tank.z + (p.z - tank.z) * 0.8 };
+  const k = antiTankRules.huntStandoff / d;
+  return { x: tank.x + (p.x - tank.x) * k, z: tank.z + (p.z - tank.z) * k };
 }
 
 // Turns a bot's command onto an enemy tank. Returns whether it did.
