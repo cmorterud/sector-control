@@ -19,7 +19,10 @@ it("offers three-flag 25v25 domination between France and Germany with clear spa
   expect(new Set(g.players.map((p) => p.faction))).toEqual(new Set(["french", "german"]));
   for (const p of g.players) {
     expect(blocked(p.x, p.z, 0.6, g.map), JSON.stringify([p.x, p.z])).toBe(false);
-    expect(p.y).toBeGreaterThan(2);
+    // Up on the headland, not the beach: the line runs along the land,
+    // through a dip to about 1.5 m behind the German end.
+    expect(p.y).toBeGreaterThan(1.2);
+    expect(coastDistance(p.x, p.z, g.map)).toBeGreaterThan(4);
   }
   for (const flag of g.sectors) expect(blocked(flag.x, flag.z, 0.5, g.map)).toBe(false);
 });

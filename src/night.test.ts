@@ -12,8 +12,8 @@ const match = (map = nightRaidMap) => new Game(new TestCollision(map), true, 360
 
 it("is Ypres's ground after dark, with a raiding party each side", () => {
   expect(nightRaidMap.id).toBe("night-raid");
-  expect(nightRaidMap.name).toBe("Night raid");
-  expect(resolveTeamSize(nightRaidMap)).toBe(24);
+  expect(nightRaidMap.name).toBe("Ypres at night");
+  expect(resolveTeamSize(nightRaidMap)).toBe(50);
   expect(resolveTeamSize(trenchMap)).toBe(50);
   // The same trenches, wire, flags and spawns: knowing the day map is knowing this one.
   for (const key of ["terrain", "sectors", "spawn", "wireBelts", "playArea", "boundary", "boxes", "width", "depth"] as const)

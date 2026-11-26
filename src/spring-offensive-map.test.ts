@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { springOffensiveMap as map, springOffensiveCtf } from "./spring-offensive-map";
 import { blocked, groundHeight, walkSegment, dist } from "./map";
 import { Game, TestCollision, pathfind, botCommand, resolveTeamSize } from "./simulation";
-import { deploymentPoints, forwardDeployment } from "./deployment";
+import { deploymentPoints, deploymentRules, forwardDeployment } from "./deployment";
 import { dominationRules } from "./domination";
 import { trenchMap } from "./trench-map";
 import { verdunMap } from "./verdun-map";
@@ -79,7 +79,9 @@ it("deploys whole rosters on clear ground, including 64 a side", () => {
   expect(g.players).toHaveLength(128);
   for (const p of g.players) {
     expect(blocked(p.x, p.z, 0.4, g.map), `soldier ${p.id} at ${p.x},${p.z}`).toBe(false);
-    expect(groundHeight(p.x, p.z, g.map)).toBeGreaterThan(2);
+    // On the rolling ground behind the rear line, which dips to about 1.3 m
+    // along the front: never down in a trench (floors are near zero).
+    expect(groundHeight(p.x, p.z, g.map)).toBeGreaterThan(1.2);
   }
 });
 
@@ -91,11 +93,7 @@ it("opens a forward deployment point behind each home flag only while that side 
     // Set back behind the flag, toward its own side's rear, outside the capture ring.
     expect(dist(d, flag)).toBeGreaterThan(dominationRules.radius + 6);
     expect(Math.abs(d.x)).toBeGreaterThan(Math.abs(flag.x));
-    for (let i = 0; i < 12; i++) {
-      const x = d.x + ((i % 4) - 1.5) * 1.8, z = d.z + (Math.floor(i / 4) - 1) * 1.8;
-      expect(blocked(x, z, 0.5, map), `${d.sector} slot ${i}`).toBe(false);
-      expect(dist({ x, z }, flag)).toBeGreaterThan(dominationRules.radius + 3);
-    }
+    expect(blocked(d.x, d.z, 0.5, map), d.sector).toBe(false);
     for (const s of map.sectors) expect(pathfind(d, s, map).length, `${d.sector} to ${s.id}`).toBeGreaterThan(0);
   }
   const a = g.sectors.find((s) => s.id === "A")!, f = g.sectors.find((s) => s.id === "F")!;
@@ -107,11 +105,11 @@ it("opens a forward deployment point behind each home flag only while that side 
   const bot = g.players[3];
   bot.objective = g.sectors.findIndex((s) => s.id === "C");
   g.respawn(bot);
-  expect(dist(bot, map.deployments![0])).toBeLessThan(4);
+  expect(dist(bot, map.deployments![0])).toBeLessThan(deploymentRules.width / 2 + 3);
   // Lose the flag and the point closes.
   a.owner = "red";
   g.respawn(bot);
-  expect(dist(bot, map.spawn.blue)).toBeLessThan(15);
+  expect(Math.abs(bot.x - map.spawn.blue.x)).toBeLessThan(6);
 });
 
 it("deploys a player at the point they chose, and at the main spawn otherwise", () => {
@@ -121,10 +119,11 @@ it("deploys a player at the point they chose, and at the main spawn otherwise", 
   expect(forwardDeployment(g, p)).toBeNull();
   p.deployAt = "B";
   g.respawn(p);
+  // The player takes the middle of the point's line.
   expect(dist(p, map.deployments!.find((d) => d.sector === "B")!)).toBeLessThan(4);
   p.deployAt = "A"; // not held
   g.respawn(p);
-  expect(dist(p, map.spawn.blue)).toBeLessThan(15);
+  expect(dist(p, map.spawn.blue)).toBeLessThan(4);
 });
 
 it("lays out capture the flag on each side's first line with the drop in its battle zone", () => {

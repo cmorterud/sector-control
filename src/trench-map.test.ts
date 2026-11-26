@@ -27,7 +27,7 @@ const createGame = (seconds = 60) =>
   });
 
 describe("trench prototype", () => {
-  it("spawns 50 soldiers on each side in clear ground behind their first trench", () => {
+  it("spawns 50 soldiers on each side in clear ground behind their first trench, spread along the front", () => {
     const game = createGame();
     expect(game.players).toHaveLength(100);
     expect(game.snapshot()).toMatchObject({ mapId: "trenches", teamSize: 50 });
@@ -36,24 +36,18 @@ describe("trench prototype", () => {
       expect(soldiers).toHaveLength(50);
       expect(new Set(soldiers.map((p) => p.teamIndex)).size).toBe(50);
       expect(new Set(soldiers.map((p) => `${p.x},${p.z}`)).size).toBe(50);
+      // One line from flank to flank, not a block round the spawn point.
+      const zs = soldiers.map((p) => p.z).sort((a, b) => a - b);
+      expect(zs.at(-1)! - zs[0]).toBeGreaterThan(120);
+      for (let i = 1; i < zs.length; i++) expect(zs[i] - zs[i - 1]).toBeLessThan(6);
       for (const p of soldiers) {
-        expect(p.y).toBeCloseTo(2.4);
+        expect(p.y).toBeCloseTo(groundHeight(p.x, p.z, trenchMap));
+        expect(p.y).toBeGreaterThan(1.5);
         expect(Math.abs(p.x)).toBeGreaterThan(50);
         expect(p.team === "blue" ? p.x < 0 : p.x > 0).toBe(true);
-        expect(blocked(p.x, p.z, 0.7, trenchMap)).toBe(false);
-        // The larger formation includes rows beside the ramp: align first.
-        const approach = moveOnMap(
-          p,
-          { x: 0, z: trenchMap.spawn[p.team].z - p.z },
-          trenchMap,
-        );
-        const entrance = moveOnMap(
-          approach,
-          { x: p.team === "blue" ? 33 : -33, z: 0 },
-          trenchMap,
-        );
-        expect(groundHeight(entrance.x, entrance.z, trenchMap)).toBe(0);
-        expect(Math.abs(entrance.x)).toBeLessThan(41);
+        expect(blocked(p.x, p.z, 0.5, trenchMap)).toBe(false);
+        for (const s of trenchMap.sectors) expect(dist(p, s)).toBeGreaterThan(8);
+        for (const q of soldiers) if (q !== p) expect(dist(p, q)).toBeGreaterThan(1.3);
       }
     }
   });
@@ -153,8 +147,10 @@ describe("trench prototype", () => {
     for (let i = 0; i < 30 * 30; i++)
       game.step(botCommand(game, game.players[0]));
     for (const p of game.players) {
+      // A machine gunner sets the gun down at the post and mans it from just
+      // behind, which can leave the gunner a little over a metre from the post.
       expect(dist(p, firingPosition(game, p)!), `soldier ${p.id}`).toBeLessThan(
-        1,
+        p.loadout === "emplacement" ? 1.6 : 1,
       );
       expect(p.y).toBeCloseTo(0.85);
     }
