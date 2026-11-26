@@ -1190,6 +1190,8 @@ function frame(now: number) {
 }
 try {
   renderer = new Renderer(document.querySelector("#game")!, map, activeQuality());
+  // ?standIns=0 draws every soldier in full; ?standIns=<metres> moves the switch.
+  if (params.has("standIns")) renderer.standInDistance = Number(params.get("standIns")) > 0 ? Number(params.get("standIns")) : Infinity;
   let renderStart: number | undefined;
   renderer.app.on("prerender", () => { renderStart = started && !paused ? battlePerformance.begin() : undefined; });
   // Copy the WebGL surface while its drawing buffer is still available.
