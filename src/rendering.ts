@@ -47,6 +47,7 @@ import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./envi
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
 import { RagdollPhysics, type Ragdoll, type RagdollPart } from "./ragdoll";
+import { factionKit, faceParts, isKitFaction, soldierLookFor, soldierLooks, type KitFaction } from "./soldier-kit";
 import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfaceMaps, rifleTextureSize, type RifleShape } from "./rifle-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
@@ -58,6 +59,9 @@ import {
   soldierStyle,
   reloadMotion,
   chargePresentation,
+  throwBody,
+  deathFall,
+  deathFallRules,
   throwPresentation,
   casualtyRules,
 } from "./soldier-presentation";
@@ -185,6 +189,17 @@ type SoldierRig = {
   magazineScale: pc.Vec3;
   reloadMagazineScale: pc.Vec3;
   style: ReturnType<typeof soldierStyle>;
+  // A grenade in the right hand while winding up a throw; scaled away otherwise.
+  heldGrenade?: pc.Entity;
+  // Degrees the torso leans with the aim, eased (the rifle takes the rest).
+  aimLean?: number;
+  // Death: false while the fall plays, true once the ragdoll may take over.
+  fallReady?: boolean;
+  // Died beyond ragdoll range: the rig itself falls and lies there.
+  downAtRange?: boolean;
+  settled?: boolean;
+  // Which of the army's faces (soldier-kit.ts) is merged into this rig's torso.
+  look?: number;
   forward: number;
   sideways: number;
   deathAt: number | null;
@@ -2990,15 +3005,17 @@ export class Renderer implements CollisionWorld {
     parent: pc.Entity,
     shape: CharacterShape = "soft",
     surface?: ModelSurface,
+    coarse = false,
   ) {
     const entity = this.cube(name, x, y, z, w, h, d, tint, false, parent);
     if (this.app.graphicsDevice && entity.render) {
       this.kitMeshes ??= new Map();
-      const key = `organic-${shape}${surface?`-${surface}`:""}`;
+      // Small kit (pouches, buttons, brows) reads as round with half the sides.
+      const key = `organic-${shape}${surface?`-${surface}`:""}${coarse?"-coarse":""}`;
       for(const detail of ["near","far"] as const){
         const meshKey=`${key}-${detail}`;
         this.modelMesh(meshKey,()=>{
-          const data=characterGeometry(shape,surface?(detail==="near"?16:8):10);
+          const data=characterGeometry(shape,surface?(detail==="near"?(coarse?8:16):6):10);
           if(surface)data.uvs=data.uvs.flatMap((_,i,a)=>i%2?[]:modelUV(a[i],a[i+1],surface));
           return data;
         });
@@ -3058,10 +3075,10 @@ export class Renderer implements CollisionWorld {
     const hips = this.joint("hips", body);
     const upper = this.joint("upper body", body, 0, 0.08);
     const faction = factions[p.faction ?? (p.team === "blue" ? "trainingBlue" : "trainingRed")];
-    const refined=p.faction==="french"||p.faction==="german";
+    const refined=isKitFaction(p.faction), look=soldierLookFor(p.id);
     const shirt = faction.shirt, trousers = faction.trousers;
     const equipment = "#68634d",
-      skin = "#bba185",
+      skin = refined ? soldierLooks[look].skin : "#bba185",
       leather = "#403b30";
     const part = (
       name: string,
@@ -3074,9 +3091,10 @@ export class Renderer implements CollisionWorld {
       c: string,
       parent: pc.Entity,
       shape: CharacterShape = "soft",
+      coarse = false,
     ) => {
-      const shaped:Record<string,CharacterShape>={torso:"coat","upper arm":"sleeve",forearm:"sleeve",thigh:"trouser",shin:"trouser",boot:"boot",head:"face",backpack:"pouch","ammunition pouch":"pouch",helmet:p.faction==="french"?"adrian":"stahlhelm"};
-      return this.organic(name,x,y,z,w,h,d,c,parent,refined?(shaped[name]??shape):shape,refined?modelSurfaceFor(name):undefined);
+      const shaped:Record<string,CharacterShape>={torso:"coat","upper arm":"sleeve",forearm:"sleeve",thigh:"trouser",shin:"trouser",boot:"boot",head:"face",backpack:"pouch","ammunition pouch":"pouch",helmet:p.faction==="french"?"adrian":p.faction==="british"?"brodie":"stahlhelm"};
+      return this.organic(name,x,y,z,w,h,d,c,parent,refined?(shaped[name]??shape):shape,refined?modelSurfaceFor(name):undefined,coarse);
     };
     part("pelvis", 0, -0.015, 0, 0.43, 0.24, 0.3, trousers, hips);
     part("torso", 0, 0.25, 0, 0.55, 0.55, 0.34, shirt, upper, "tunic");
@@ -3112,7 +3130,9 @@ export class Renderer implements CollisionWorld {
       );
     }
     const helmetTint = faction.helmet;
-    part("helmet", 0, refined?.86:.83, 0, refined?.4:.375, refined?.265:.2, refined?.46:.395, helmetTint, upper, "helmet");
+    const brodie = p.faction === "british" && refined;
+    if (brodie) part("helmet", 0, .815, -.008, .34, .155, .36, helmetTint, upper, "helmet");
+    else part("helmet", 0, refined?.86:.83, 0, refined?.4:.375, refined?.265:.2, refined?.46:.395, helmetTint, upper, "helmet");
     if(!refined)part(
       "helmet brim",
       0,
@@ -3145,9 +3165,14 @@ export class Renderer implements CollisionWorld {
       }
       // A single short hem overlaps the waist. Separate thigh-shaped panels
       // stayed vertical during the gait and looked like extra dangling legs.
-      part("coat hem",0,.015,0,.51,p.faction==="french"?.18:.14,.34,shirt,hips,"coatHem");
+      part("coat hem",0,.015,0,.51,p.faction==="french"?.18:p.faction==="british"?.12:.14,.34,shirt,hips,"coatHem");
       for(let i=0;i<5;i++)part("coat button",p.faction==="french"?.045:0,.09+i*.073,-.185,.017,.017,.009,"#515345",upper,"disc");
       part("belt buckle",0,.025,-.201,.085,.057,.022,"#767867",upper,"pouch");
+      for (const kit of [...factionKit(p.faction as KitFaction, shirt, helmetTint), ...faceParts(look)]) {
+        const e = part(kit.name, ...kit.at, ...kit.size, kit.tint, kit.parent === "hips" ? hips : upper, kit.shape, Math.max(...kit.size) < .13);
+        if (kit.rotation) e.setLocalEulerAngles(...kit.rotation);
+        if (kit.small) e.tags.add("far-omit");
+      }
     }
     part("team recognition band", .278, .25, 0, .018, .09, .29, p.team === "blue" ? "#5c9bb5" : "#b47c6c", upper);
     part("web belt", 0, 0.025, 0, 0.56, 0.075, 0.38, equipment, upper, "disc");
@@ -3164,7 +3189,7 @@ export class Renderer implements CollisionWorld {
         upper,
         "limb",
       );
-      part(
+      if (!refined) part(
         "ammunition pouch",
         side * 0.2,
         0.07,
@@ -3266,6 +3291,9 @@ export class Renderer implements CollisionWorld {
       if(refined)part("sleeve cuff",0,-armLengths.forearm+.024,0,.15,.07,.17,shirt,elbow,"pouch");
       return { shoulder, elbow };
     });
+    const heldGrenade = this.joint("held grenade", arms[1].elbow, 0, -armLengths.forearm - .055, -.025);
+    part("held grenade body", 0, 0, 0, .07, .11, .07, "#3e4236", heldGrenade, "limb");
+    heldGrenade.setLocalScale(0, 0, 0);
     const rifle = this.joint(
       "weapon",
       upper,
@@ -3557,7 +3585,7 @@ export class Renderer implements CollisionWorld {
     );
     if(refined)this.gripHand("left hand",supportHand,"left");
     else part("left hand", 0, 0, 0, 0.115, 0.15, 0.15, skin, supportHand);
-    if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p);
+    if (this.app.graphicsDevice) this.mergeSoldierKit(upper, p, refined ? look : undefined);
     // The gas mask: rubberised facepiece, two eyepieces and a filter tin under
     // the chin. A joint of its own, scaled away while it is not worn, so
     // masking never rebuilds the soldier's batched kit.
@@ -3585,6 +3613,8 @@ export class Renderer implements CollisionWorld {
       magazineScale: magazine.getLocalScale().clone(),
       reloadMagazineScale: reloadMagazine.getLocalScale().clone(),
       style: soldierStyle(p.id),
+      look: refined ? look : undefined,
+      heldGrenade,
       forward: 0,
       sideways: 0,
       deathAt: null,
@@ -3601,7 +3631,7 @@ export class Renderer implements CollisionWorld {
     // the first-person rifle is cloned from.
     if (p.id !== 0) {
       const legJoints = legs.flatMap((leg) => [leg.hip, leg.knee, leg.ankle]), armJoints = arms.flatMap((arm) => [arm.shoulder, arm.elbow]);
-      this.mergeRigidParts(root, new Set<pc.GraphNode>([body, hips, upper, rifle, supportHand, bolt, magazine, reloadMagazine, ...legJoints, ...armJoints]));
+      this.mergeRigidParts(root, new Set<pc.GraphNode>([body, hips, upper, rifle, supportHand, bolt, magazine, reloadMagazine, heldGrenade, ...legJoints, ...armJoints]));
     }
   }
   // A warm-up soldier put back as it would be built: at the player's spawn,
@@ -3611,6 +3641,7 @@ export class Renderer implements CollisionWorld {
     root.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
     root.setLocalScale(1, 1, 1);
     rig.gasMask?.setLocalScale(0, 0, 0);
+    rig.heldGrenade?.setLocalScale(0, 0, 0);
     rig.magazine.setLocalScale(rig.magazineScale);
     rig.rifle.enabled = true;
     this.people.push(root);
@@ -3619,7 +3650,7 @@ export class Renderer implements CollisionWorld {
       gasMask: rig.gasMask, maskShown: 0, body: rig.body, design: rig.design, hips: rig.hips, upper: rig.upper,
       legs: rig.legs, arms: rig.arms, rifle: rig.rifle, supportHand: rig.supportHand, bolt: rig.bolt,
       magazine: rig.magazine, reloadMagazine: rig.reloadMagazine, magazineScale: rig.magazineScale,
-      reloadMagazineScale: rig.reloadMagazineScale, style: soldierStyle(p.id),
+      reloadMagazineScale: rig.reloadMagazineScale, style: soldierStyle(p.id), look: rig.look, heldGrenade: rig.heldGrenade,
       forward: 0, sideways: 0, deathAt: null, remnantCreated: false, x: p.x, z: p.z,
       phase: p.id * 1.7, motion: 0, sprint: 0, crouch: 0, alive: p.hp > 0,
     });
@@ -3704,10 +3735,10 @@ export class Renderer implements CollisionWorld {
       }
     });
   }
-  private mergeSoldierKit(upper: pc.Entity, p: Soldier) {
+  private mergeSoldierKit(upper: pc.Entity, p: Soldier, look?: number) {
     this.kitMeshes ??= new Map();
-    const key = `${p.team}-${p.faction}-${p.weapon}-${p.weaponId}`;
-    const textured=p.faction==="french"||p.faction==="german";
+    const key = `${p.team}-${p.faction}-${p.weapon}-${p.weaponId}${look === undefined ? "" : `-look${look}`}`;
+    const textured=isKitFaction(p.faction);
     const parts=upper.children.filter(e=>(e as pc.Entity).render) as pc.Entity[];
     for(const detail of (textured?["near","far"]:["near"]) as ("near"|"far")[]){
       const meshKey=`${key}-${detail}`;
@@ -3715,6 +3746,7 @@ export class Renderer implements CollisionWorld {
       const positions:number[]=[],normals:number[]=[],indices:number[]=[],colors:number[]=[],uvs:number[]=[];
       const basis=upper.getWorldTransform().clone().invert();
       for(const e of parts){
+        if(detail==="far"&&e.tags.has("far-omit"))continue;
         const matrix=new pc.Mat4().mul2(basis,e.getWorldTransform()),normalMatrix=matrix.clone().invert().transpose();
         const tag=e.tags.list().find(t=>t.startsWith(`model-${detail}:`));
         for(const instance of e.render!.meshInstances){
@@ -3734,7 +3766,9 @@ export class Renderer implements CollisionWorld {
       }
       this.modelMesh(meshKey,()=>({positions,normals,indices,uvs,colors}));
     }
-    for(const part of parts)part.removeComponent("render");
+    // Merged parts stay as named markers, but disabled ones skip the
+    // per-frame transform sync; the head is still read when a soldier falls.
+    for(const part of parts){part.removeComponent("render");if(part.name!=="head"&&!part.children.length)part.enabled=false;}
     let material=textured?this.modelMaterial("#ffffff",true):this.materials.get("soldier-kit");
     if(!material){material=new pc.StandardMaterial();material.diffuse=new pc.Color(1,1,1);material.diffuseVertexColor=true;material.gloss=.1;material.update();this.materials.set("soldier-kit",material);}
     upper.addComponent("render",{meshInstances:[new pc.MeshInstance(this.kitMeshes.get(`${key}-near`)!,material,upper)],batchGroupId:textured?-1:this.actorBatch,castShadows:true,receiveShadows:true});
@@ -4053,6 +4087,14 @@ export class Renderer implements CollisionWorld {
       -Math.atan2(sideways, Math.abs(forward) + 0.001) * 40 * rig.motion + weight.turn.value*1.5,
       0,
     );
+    // The torso takes part of the aim pitch, so a soldier firing uphill leans
+    // back and one firing down into a trench bends over it. The rifle keeps the
+    // exact aim; the lean eases out for reloads, throws, melee and climbing.
+    const reloading = reloadMotion(p, tick);
+    const leanTarget = p.mantle || p.hop || p.melee || p.throwUntil > tick ? 0
+      : Math.max(-16, Math.min(18, weaponAim(p).pitch * 180 / Math.PI * .4)) * (ready ? 1 : .5) * (1 - (reloading?.lower ?? 0));
+    rig.aimLean = rig.alive ? (rig.aimLean ?? leanTarget) + (leanTarget - (rig.aimLean ?? leanTarget)) * (1 - Math.exp(-10 * dt)) : 0;
+    const lean = rig.aimLean;
     const breath = Math.sin((tick / 30) * 1.7 + rig.style.phase);
     const idleTurn =
       Math.sin((tick / 30) * 0.65 + rig.style.phase) *
@@ -4061,7 +4103,7 @@ export class Renderer implements CollisionWorld {
       (1 - rig.motion);
     rig.upper.setLocalPosition(0, 0.08 + breath * 0.003 * (1 - rig.motion), 0);
     rig.upper.setLocalEulerAngles(
-      -kick * 2 * (recoilFeel[p.weapon]?.shoulder ?? 1) + breath * 0.35 * (1 - rig.motion),
+      lean - kick * 2 * (recoilFeel[p.weapon]?.shoulder ?? 1) + breath * 0.35 * (1 - rig.motion),
       stride * (ready ? 1.5 : 4) * rig.style.sway + idleTurn + weight.turn.value*.3,
       -stride * 1.5 * rig.style.sway,
     );
@@ -4104,7 +4146,7 @@ export class Renderer implements CollisionWorld {
     rig.rifle.setLocalEulerAngles(
       -rig.sprint * 20 +
         stride * 2 +
-        (weaponAim(p).pitch * 180) / Math.PI +
+        (weaponAim(p).pitch * 180) / Math.PI - lean +
         kick * 5 * (recoilFeel[p.weapon]?.shoulder ?? 1),
       (p.recoilYaw * 180) / Math.PI,
       p.reloadAt ? 12 : 0,
@@ -4201,7 +4243,7 @@ export class Renderer implements CollisionWorld {
         0.36 - 0.14 * lower + rifleHeight(this.map) - 1.45,
         weaponMount.z + 0.15 * lower,
       );
-      rig.rifle.setLocalEulerAngles(-24 * lower, 10 * lower, -28 * lower);
+      rig.rifle.setLocalEulerAngles(-24 * lower - lean, 10 * lower, -28 * lower);
       const trigger = rig.rifle
         .getLocalTransform()
         .transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
@@ -4292,12 +4334,16 @@ export class Renderer implements CollisionWorld {
         cycling.reach,
       );
     }
-    if (p.throwUntil > tick && !p.mantle) {
-      const t = clamp01(1 - (p.throwUntil - tick) / 15);
+    const throwing = !p.mantle ? throwBody(p, tick) : null;
+    if (throwing) {
+      // Rifle down in the left hand; the body winds up and comes through.
+      rig.body.rotateLocal(throwing.lean * throwing.weight, 0, 0);
+      rig.upper.rotateLocal(0, throwing.twist * throwing.weight, 0);
       rig.rifle.setLocalEulerAngles(-30, 0, 15);
-      rig.arms[1].shoulder.setLocalEulerAngles(150 - 110 * smooth(t), 0, -15);
-      rig.arms[1].elbow.setLocalEulerAngles(55 * (1 - t), 0, 0);
+      rig.arms[1].shoulder.setLocalEulerAngles(throwing.shoulder, 0, -15);
+      rig.arms[1].elbow.setLocalEulerAngles(throwing.elbow, 0, 0);
     }
+    rig.heldGrenade?.setLocalScale(throwing?.held ? pc.Vec3.ONE : pc.Vec3.ZERO);
     if (p.melee && p.hp > 0 && !p.mantle) {
       const pose = meleePose(p.melee, tick);
       const charge = chargePresentation(p, tick, rig.phase, rig.motion);
@@ -4407,20 +4453,47 @@ export class Renderer implements CollisionWorld {
   private releaseCasualty(c: (typeof this.casualties)[number]) {
     c.ragdoll.destroy(); c.entity.destroy();
   }
+  // Knees give and the body drops and twists away from the hit. The ragdoll
+  // starts from this pose once the fall has played (`fallReady`).
+  private poseDeathFall(p: Soldier, rig: SoldierRig, age: number, lieDown: boolean) {
+    if (rig.settled) return;
+    const hit = this.deathHits.get(p.id);
+    const local = hit ? this.people[p.id].getRotation().clone().invert().transformVector(hit) : pc.Vec3.ZERO;
+    const fall = deathFall(lieDown ? age : Math.min(age, deathFallRules.fallTicks), local);
+    rig.body.setLocalPosition(0, 0.94 - fall.drop, 0);
+    rig.body.setLocalEulerAngles(fall.pitch, 0, fall.roll);
+    rig.hips.setLocalEulerAngles(0, 0, 0);
+    rig.upper.setLocalEulerAngles(fall.slump, fall.twist, 0);
+    for (const leg of rig.legs) {
+      leg.hip.setLocalEulerAngles(fall.hip, 0, 0);
+      leg.knee.setLocalEulerAngles(fall.knee, 0, 0);
+      leg.ankle.setLocalEulerAngles(fall.ankle, 0, 0);
+    }
+    // The rifle sags out of the aim, still in the left hand.
+    rig.rifle.setLocalEulerAngles(-35 * fall.arm, 0, 20 * fall.arm);
+    rig.arms[1].shoulder.setLocalEulerAngles(65 - 45 * fall.arm, 0, -8);
+    rig.arms[1].elbow.setLocalEulerAngles(25 - 15 * fall.arm, 0, 0);
+    this.attachSupportArm(rig);
+    if (fall.fallen) rig.fallReady = true;
+    if (lieDown ? fall.lying : fall.fallen) rig.settled = true;
+  }
   private queueCasualty(p: Soldier) {
     this.visualWork ??= new VisualWorkQueue();
     this.pendingCasualties ??= new Map();
     const rig = this.soldiers[p.id], actor = this.people[p.id];
     if (rig.remnantCreated) return;
     rig.remnantCreated = true;
+    rig.fallReady = false;
+    rig.settled = false;
     if (Math.hypot(p.x - this.camera.getPosition().x, p.z - this.camera.getPosition().z) > casualtyRules.range) {
-      actor.setLocalScale(pc.Vec3.ZERO); return;
+      // Too far for a ragdoll: the rig falls and stays down instead of vanishing.
+      rig.downAtRange = true; return;
     }
     const pending = { rig, blasts: [] as { at: pc.Vec3; radius: number; power: number }[] };
     this.pendingCasualties.set(p.id, pending);
     const impulse = this.deathHits.get(p.id)?.clone();
     const game = this.activeGame;
-    this.visualWork.set(`casualty:${p.id}`, { kind: "casualty", run: () => {
+    this.visualWork.set(`casualty:${p.id}`, { kind: "casualty", ready: () => rig.fallReady !== false, run: () => {
       this.pendingCasualties.delete(p.id);
       // A respawn, kit replacement or map reset invalidates the old death.
       if (this.activeGame !== game || this.soldiers[p.id] !== rig || p.hp > 0) return;
@@ -4485,13 +4558,15 @@ export class Renderer implements CollisionWorld {
   }
   private casualtyMesh(p: Soldier, pose = this.ragdollPose(p)) {
     this.casualtyTemplates ??= new Map();
-    const key = `${p.team}-${this.actorKits?.get(p.id) ?? `${p.faction}-${p.weapon}-${p.weaponId}`}`;
+    const look = this.soldiers[p.id]?.look;
+    const key = `${p.team}-${this.actorKits?.get(p.id) ?? `${p.faction}-${p.weapon}-${p.weaponId}`}${look === undefined ? "" : `-look${look}`}`;
     const existing = this.casualtyTemplates.get(key);
     if (existing) return existing;
     const positions: number[] = [],
       normals: number[] = [],
       indices: number[] = [],
       colors: number[] = [], uvs:number[]=[], weights: number[] = [], blendIndices: number[] = [];
+    const scratch = new pc.Vec3();
     for (const component of this.people[p.id].findComponents(
       "render",
     ) as pc.RenderComponent[]) {
@@ -4528,31 +4603,28 @@ export class Renderer implements CollisionWorld {
           new pc.Color(0.4, 0.4, 0.35);
         if (instance.material === this.materials.get("rifle-material-walnut")) tint = color("#715037");
         if (instance.material === this.materials.get("rifle-material-steel")) tint = color("#353c3a");
+        // Per-vertex work only: one army's kit is merged several times at
+        // deployment (once per face), so nothing here allocates or searches.
+        const material=instance.material as pc.StandardMaterial,atlas=this.textures?.get("model-atlas-diffuse");
+        const tile=material===this.materials.get("rifle-material-walnut")?"walnut":material===this.materials.get("rifle-material-steel")?"steel":"solid";
+        const atlased=!!atlas&&material.diffuseMap===atlas, torso=component.entity === this.soldiers[p.id].upper;
+        const boneIndex=pose.parts.findIndex(part => part.name === bone), headIndex=pose.parts.findIndex(part => part.name === "head");
+        const r=tint.r ** 2.2, g=tint.g ** 2.2, b=tint.b ** 2.2;
         for (let i = 0; i < points.length; i += 3) {
-          const v = world.transformPoint(
-            new pc.Vec3(points[i], points[i + 1], points[i + 2]),
-          );
+          const v = world.transformPoint(scratch.set(points[i], points[i + 1], points[i + 2]), scratch);
           positions.push(v.x, v.y, v.z);
-          const vertexBone = component.entity === this.soldiers[p.id].upper && v.clone().sub(pose.head).dot(pose.up) > -0.17 ? "head" : bone;
-          blendIndices.push(pose.parts.findIndex(part => part.name === vertexBone), 0, 0, 0);
+          const head = torso && (v.x - pose.head.x) * pose.up.x + (v.y - pose.head.y) * pose.up.y + (v.z - pose.head.z) * pose.up.z > -0.17;
+          blendIndices.push(head ? headIndex : boneIndex, 0, 0, 0);
           weights.push(1, 0, 0, 0);
-          const n = normalMatrix
-            .transformVector(new pc.Vec3(ns[i], ns[i + 1], ns[i + 2]))
-            .normalize();
+          const n = normalMatrix.transformVector(scratch.set(ns[i], ns[i + 1], ns[i + 2]), scratch).normalize();
           normals.push(n.x, n.y, n.z);
-          const material=instance.material as pc.StandardMaterial,atlas=this.textures?.get("model-atlas-diffuse");
           const sourceU=sourceUV[i/3*2]??.5,sourceV=sourceUV[i/3*2+1]??.5;
-          const tile=material===this.materials.get("rifle-material-walnut")?"walnut":material===this.materials.get("rifle-material-steel")?"steel":"solid";
-          uvs.push(...(atlas&&material.diffuseMap===atlas?[sourceU,sourceV]:modelUV(sourceU,sourceV,tile)));
+          if(atlased)uvs.push(sourceU,sourceV);
+          else{const [u,w]=modelUV(sourceU,sourceV,tile);uvs.push(u,w);}
           const ci = (i / 3) * 4;
-          colors.push(
-            tint.r ** 2.2 * (sourceColors[ci] ?? 1),
-            tint.g ** 2.2 * (sourceColors[ci + 1] ?? 1),
-            tint.b ** 2.2 * (sourceColors[ci + 2] ?? 1),
-            1,
-          );
+          colors.push(r * (sourceColors[ci] ?? 1), g * (sourceColors[ci + 1] ?? 1), b * (sourceColors[ci + 2] ?? 1), 1);
         }
-        indices.push(...is.map((i) => i + base));
+        for (const index of is) indices.push(index + base);
       }
     }
     if (!indices.length) return;
@@ -5097,6 +5169,7 @@ export class Renderer implements CollisionWorld {
         if (e.getLocalScale().x !== 1) e.setLocalScale(1, 1, 1);
         rig.deathAt = null;
         rig.remnantCreated = false;
+        rig.fallReady = undefined; rig.downAtRange = false; rig.settled = false;
         this.visualWork.delete(`casualty:${p.id}`);
         this.pendingCasualties.delete(p.id);
         this.animateSoldier(visible, x, z, owed, tick);
@@ -5114,13 +5187,10 @@ export class Renderer implements CollisionWorld {
           this.queueCasualty(p);
         }
         const pending = this.pendingCasualties.has(p.id);
-        e.setLocalScale(pending ? pc.Vec3.ONE : pc.Vec3.ZERO);
-        if (pending) {
-          // Immediate, allocation-free collapse while physical setup waits.
-          const fall = Math.min(1, Math.max(0, (tick - rig.deathAt) / 9));
-          rig.body.setLocalPosition(0, 0.94 - fall * 0.35, 0);
-          rig.body.setLocalEulerAngles(fall * 30, 0, fall * 12);
-        }
+        // A distant body lies where it fell for as long as a ragdoll would last.
+        const down = !!rig.downAtRange && tick - rig.deathAt < casualtyRules.lifetime * 30;
+        e.setLocalScale(pending || down ? pc.Vec3.ONE : pc.Vec3.ZERO);
+        if (pending || down) this.poseDeathFall(p, rig, tick - rig.deathAt, down);
       }
     }
     this.drawCasualties(dt);

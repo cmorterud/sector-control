@@ -8,11 +8,12 @@ export function modelUV(u:number,v:number,surface:ModelSurface):[number,number] 
   return [(tile%4+pad+u*(1-2*pad))/4,(Math.floor(tile/4)+pad+v*(1-2*pad))/2];
 }
 export function modelSurfaceFor(name:string):ModelSurface {
-  if(/eye|cartridge|recognition|armband/.test(name))return 'solid';
-  if(/helmet|button|buckle/.test(name))return 'metal';
+  if(/eye|cartridge|recognition|armband|brow|moustache/.test(name))return 'solid';
+  if(/helmet|button|buckle|canister/.test(name))return 'metal';
+  if(/helve|haft/.test(name))return 'walnut';
   if(/hand|head|nose|ear|chin|neck/.test(name))return 'skin';
-  if(/boot|pouch|strap|flap/.test(name))return 'leather';
-  if(/belt|pack|blanket|webbing/.test(name))return 'webbing';
+  if(/boot|pouch|strap|flap|scabbard|spade/.test(name))return 'leather';
+  if(/belt|pack|blanket|webbing|bag|bottle|canteen|sling|carrier/.test(name))return 'webbing';
   return 'cloth';
 }
 export function modelSurfaceAtlas() {

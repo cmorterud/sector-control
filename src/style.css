@@ -842,9 +842,21 @@ a.armory-link:hover { background: #3f5856; }
 .loadout-choice select {background:#263a38; color:#e3e6d9; padding:8px; width:100%; border:1px solid #8e9b86;}
 #ui.scoped::after {content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle closest-side,transparent 78%,#131b18 79%); z-index:2;}
 #ui.scoped #reticle {z-index:3; font-size:24px; opacity:.8;}
+/* Through the scope the view is the sight picture alone: every HUD element
+   steps aside until the rifle comes down. Only the scope's own crosshair and
+   the full-screen effects of being hit, suppressed or masked stay. The build
+   label sits outside #ui on purpose, so scoped screenshots still name their build. */
+#ui.scoped #hud > :not(#reticle, #damage, #suppression, .gas-lens, .gas-haze),
+#ui.scoped #training-lesson {display:none !important;}
 .panel {width:min(760px,90vw);}
 :is(.map-choice, .mode-choice) {grid-template-columns:repeat(2,minmax(0,1fr));}
 @media(max-width:650px) {:is(.map-choice, .mode-choice) {grid-template-columns:1fr;}}
+/* The landing and pause card spends the screen's width on content instead of
+   empty margins: wider, with three battlefield cards per row on wide screens,
+   so less of it sits below the fold. */
+#menu > .panel {width:min(1440px,96vw); max-height:96vh; box-sizing:border-box; padding:28px 36px;}
+@media(min-width:1100px) {#menu :is(.map-choice, .mode-choice) {grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(min-width:1400px) {#menu :is(.map-choice, .mode-choice) {grid-template-columns:repeat(4,minmax(0,1fr));}}
 /* Shown on phones and tablets without a mouse, before the game loads. */
 .device-gate {
   position: fixed;

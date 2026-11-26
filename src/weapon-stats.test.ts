@@ -48,7 +48,7 @@ it("derives hits and time to kill, and game velocity, from the stats", () => {
   const smle = weaponStats.find(w => w.id === "smle")!;
   expect(timeToKill(smle, "head")).toBe(0);
   expect(timeToKill(smle, "chest")).toBe(shotInterval(smle) / weaponTicksPerSecond);
-  expect(gameMuzzleVelocity(weaponStats.find(w => w.id === "smle")!)).toBe(192);
+  expect(gameMuzzleVelocity(weaponStats.find(w => w.id === "smle")!)).toBe(288);
   const fastest = [...weaponStats].sort((a, b) => gameMuzzleVelocity(b) - gameMuzzleVelocity(a))[0];
   expect(fastest.faction).toBe("german");
 });
