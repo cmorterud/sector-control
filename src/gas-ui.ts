@@ -2,7 +2,7 @@
 // minimap and tactical map, the mask's lens, the haze of standing in gas, and
 // the alarm gong and breathing. Plain DOM and Web Audio only.
 import "./gas.css";
-import { cloudDensity, cloudPosition, cloudRadius, cloudExposure, gasRules, maskProgress, masked } from "./gas";
+import { cloudDensity, cloudPosition, cloudRadius, cloudExposure, gasAgent, gasRules, maskProgress, masked } from "./gas";
 import { playArea } from "./map";
 import type { Game, Soldier } from "./simulation";
 
@@ -10,7 +10,7 @@ import type { Game, Soldier } from "./simulation";
 // Empty when there is nothing to say.
 export function gasNotice(g: Game, p: Soldier, maskKey: string) {
   if (p.hp <= 0 || g.phase !== "playing" || !cloudExposure(g, p)) return { text: "", danger: false };
-  if (masked(p, g.tick)) return { text: "IN GAS · MASK ON · STILL BURNING · LEAVE THE CLOUD", danger: true };
+  if (masked(p, g.tick)) return { text: `IN GAS · MASK ON · ${gasAgent(g.map).masked} · LEAVE THE CLOUD`, danger: true };
   return { text: `GAS! · ${maskKey} · MASK ON · LEAVE THE CLOUD`, danger: true };
 }
 

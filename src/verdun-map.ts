@@ -1,9 +1,11 @@
 import { groundHeight, type MapDefinition, type Vec, type Box, type WireSegment } from "./map";
 import { buildTrenchBanks } from "./trench-banks";
 import { buildTrenchElevation, buildTrenchRelief } from "./terrain-relief";
-import { buildVerdunForest, verdunWoodland, verdunFlankX } from "./verdun-forest";
+import { buildVerdunForest, verdunWoodland, verdunFlankX, woodlandDensity } from "./verdun-forest";
 
-// An authored, battle-inspired sector, rather than a reconstruction of a specific fort.
+// Fleury and Thiaumont, 23 June 1916: the German push toward Fort Souville under
+// the first big phosgene barrage. The flags carry the names of real positions in
+// the sector, but the ground is authored for play rather than surveyed.
 // The fought-over 208 x 128 m area sits inside a 16 m dead zone: a barbed-wire
 // belt marks its edge, and soldiers who stay past it are shelled. Terrain patches
 // are 8 m and start at whole multiples of 8, so both half extents stay multiples of 8.
@@ -85,18 +87,18 @@ export const verdunMap:MapDefinition={
  navigationPoints:[],
  spawn:{blue:{x:-93,z:0},red:{x:93,z:0}}, boxes,vegetation,terrain,woodland:verdunWoodland,
  sectors:[
-  {id:"A",name:"Supply Ruin",x:-45,z:25,home:"blue"},
-  {id:"B",name:"Shattered Wood",x:-42,z:-31,home:"blue"},
-  {id:"C",name:"Broken Relay",x:0,z:0},
-  {id:"D",name:"Gun Pit",x:44,z:-17,home:"red"},
-  {id:"E",name:"Fortification",x:49,z:29,home:"red"},
+  {id:"A",name:"Fleury",x:-45,z:25,home:"blue"},
+  {id:"B",name:"Chapitre Wood",x:-42,z:-31,home:"blue"},
+  {id:"C",name:"Thiaumont",x:0,z:0},
+  {id:"D",name:"Dame Ravine",x:44,z:-17,home:"red"},
+  {id:"E",name:"Hardaumont Work",x:49,z:29,home:"red"},
  ],
  landmarks:[
-  {id:"A",name:"Supply Ruin",kind:"farmhouse",x:-45,z:25,radius:8},
-  {id:"B",name:"Shattered Wood",kind:"woodland",x:-42,z:-31,radius:10},
-  {id:"C",name:"Broken Relay",kind:"relay",x:0,z:0,radius:12},
-  {id:"D",name:"Gun Pit",kind:"gunpit",x:44,z:-17,radius:8},
-  {id:"E",name:"Fortification",kind:"bunker",x:49,z:29,radius:9},
+  {id:"A",name:"Fleury",kind:"farmhouse",x:-45,z:25,radius:8},
+  {id:"B",name:"Chapitre Wood",kind:"woodland",x:-42,z:-31,radius:10},
+  {id:"C",name:"Thiaumont",kind:"relay",x:0,z:0,radius:12},
+  {id:"D",name:"Dame Ravine",kind:"gunpit",x:44,z:-17,radius:8},
+  {id:"E",name:"Hardaumont Work",kind:"bunker",x:49,z:29,radius:9},
  ],
 };
 const add=(id:string,x:number,z:number,w:number,d:number,h:number,kind:Box["kind"]="masonry")=>{
@@ -143,6 +145,31 @@ for(let i=0;i<12;i++) {
 for(let i=0;i<17;i++) terrain.shellScars!.push({x:verdunFlankX(-31+(i%6)*12+(i%2)*2),z:-23+Math.floor(i/6)*19,radiusX:2.6+(i%3)*.5,radiusZ:2.3+(i%4)*.3,depth:.65+(i%3)*.18,rotation:i*.7,irregularity:.13,phase:i*1.4});
 for (const [x,z] of [[-24,-3],[24,3],[-23,21],[24,-23],[0,-21],[3,22]])
  terrain.shellScars!.push({x,z,radiusX:3.2,radiusZ:2.8,depth:.7,rotation:x*.1,irregularity:.15,phase:z});
+// By June 1916 the ground between the lines was a field of overlapping craters.
+// More shell holes go only where no tree can grow (outside every belt and grove)
+// and clear of flags, cover, trenches and the wire, so the woods, routes and
+// objectives are unchanged; the woods themselves are stripped in buildVerdunForest.
+{
+ const clear=(x:number,z:number,r:number)=>{
+  for(let a=0;a<12;a++)for(const f of [0,.5,1]){
+   const px=x+Math.cos(a*Math.PI/6)*(r+1.5)*f,pz=z+Math.sin(a*Math.PI/6)*(r+1.5)*f;
+   if(woodlandDensity(verdunWoodland,px,pz)>0)return false;
+  }
+  if(verdunMap.sectors.some(f=>Math.hypot(f.x-x,f.z-z)<r+8))return false;
+  if(boxes.some(b=>Math.abs(b.x-x)<b.w/2+r+1.5&&Math.abs(b.z-z)<b.d/2+r+1.5))return false;
+  if([...terrain.rectangles,...terrain.ramps].some(q=>Math.abs(q.x-x)<q.w/2+r+3&&Math.abs(q.z-z)<q.d/2+r+3))return false;
+  return terrain.shellScars!.every(s=>Math.hypot(s.x-x,s.z-z)>Math.max(s.radiusX,s.radiusZ)+r-.8);
+ };
+ let n=0;
+ for(let i=0;i<400&&n<24;i++){
+  // A fixed scatter, independent of the battle's random seed.
+  const x=Math.round((((i*0.618034)%1)-.5)*104),z=Math.round((((i*0.754877)%1)-.5)*116);
+  const r=2.4+(i%4)*.45;
+  if(!clear(x,z,r))continue;
+  terrain.shellScars!.push({x,z,radiusX:r,radiusZ:r*(.82+(i%3)*.08),depth:.55+(i%3)*.15,rotation:i*.9,irregularity:.16,phase:i*1.7});
+  n++;
+ }
+}
 terrain.banks=buildTrenchBanks(verdunMap);
 terrain.elevation=buildTrenchElevation(verdunMap);
 terrain.relief=buildTrenchRelief(verdunMap,terrain.shellScars!);

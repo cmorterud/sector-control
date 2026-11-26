@@ -1,4 +1,5 @@
-// Mustard gas shells and gas masks. Gas shells are an alternate artillery
+// Gas shells and gas masks: mustard on the 1917 maps, phosgene at Verdun in
+// June 1916 (see gasAgent). Gas shells are an alternate artillery
 // strike: the tactical map switches a fire mission between high explosive
 // and gas, and both share the team's artillery cooldown and targeting rules.
 // Gas damage over time is credited to the caller only when it burns the
@@ -7,8 +8,15 @@
 import { artillerySector } from "./artillery-sectors";
 import { artilleryRules, artilleryTargetReason, launchShell, teamHasHuman } from "./artillery";
 import { sightLimit } from "./night";
-import { blocked, dist, playArea, walkSegment, type Vec } from "./map";
+import { blocked, dist, playArea, walkSegment, type MapDefinition, type Vec } from "./map";
 import { idle, pathfind, safeBotDestination, type Command, type Game, type Soldier, type Team } from "./simulation";
+
+// Which gas a map's shells carry. Mustard first came in July 1917; Verdun is set
+// in June 1916, when the German "Green Cross" shells were phosgene. The rules are
+// the same either way; only the names and the cloud's colour change.
+export const gasAgent = (map: Pick<MapDefinition, "id">) => map.id === "verdun"
+  ? { shells: "PHOSGENE SHELLS", weapon: "Phosgene shell", masked: "MASK LEAKING", cloud: "#c9ccb4", burst: "#d8dac6" }
+  : { shells: "GAS SHELLS", weapon: "Gas shell", masked: "STILL BURNING", cloud: "#c3bd52", burst: "#cfc95a" };
 
 export const gasRules = {
   damageInterval: 15,
@@ -239,7 +247,7 @@ export function advanceGas(g: Game, damage: Damage) {
     // own side is the wind's doing.
     const caller = g.players.find((q) => q.id === cloud.cloud.actor && q.team !== p.team);
     const perSecond = masked(p, g.tick) ? gasStrikeRules.maskedPerSecond : gasStrikeRules.damagePerSecond * cloud.strength;
-    damage(p, perSecond * seconds, caller?.id ?? -1, caller?.team ?? null, "Gas shell");
+    damage(p, perSecond * seconds, caller?.id ?? -1, caller?.team ?? null, gasAgent(g.map).weapon);
   }
 }
 
