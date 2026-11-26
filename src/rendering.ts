@@ -86,6 +86,7 @@ import {
   type DebrisKind,
 } from "./environment-effects";
 import { RainView } from "./rain-view";
+import { SoldierStandIns, standInDue, standInRules, advanceGait, type StandInGait, type BakePart } from "./soldier-standins";
 import { floodAt, rainIntensity } from "./weather";
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
@@ -173,6 +174,9 @@ type SoldierRig = {
   placed?: { x: number; y: number; z: number; yaw: number };
   owedSeconds?: number;
   farDetail?: boolean;
+  // Drawn as a distant stand-in (src/soldier-standins.ts) with its own gait.
+  standIn?: boolean;
+  gait?: StandInGait;
   shoulderReady?: number;
   feetActive?: boolean;
   weight?: MovementWeight;
@@ -376,6 +380,8 @@ export class Renderer implements CollisionWorld {
   private waterMeshes: pc.Mesh[] = [];
   // Rain over the maps that have weather, when the match turns it on (src/weather.ts).
   private rainView?: RainView;
+  // Distant soldiers drawn as instanced stand-ins.
+  private distantSoldiers?: SoldierStandIns;
   private raining = false;
   private dryPonds?: pc.MeshInstance;
   private groundDecor: {
@@ -4611,6 +4617,38 @@ export class Renderer implements CollisionWorld {
     );
     return corpse;
   }
+  // Bake a kit's stand-in from this soldier as it is posed now: its far-detail
+  // parts split into the body above the hips and each leg.
+  private bakeStandIn(p: Soldier, key: string) {
+    const rig = this.soldiers[p.id], root = this.people[p.id];
+    if (!rig || !root || !this.distantSoldiers) return;
+    const atlas = this.textures?.get("model-atlas-diffuse");
+    const walnut = this.materials.get("rifle-material-walnut"), steel = this.materials.get("rifle-material-steel");
+    const parts: BakePart[] = [];
+    for (const component of root.findComponents("render") as pc.RenderComponent[]) {
+      const entity = component.entity;
+      if (!entity.enabled || !component.enabled || entity.tags.has("far-omit")) continue;
+      let piece: BakePart["piece"] = "torso", skip = false;
+      for (let node: pc.GraphNode | null = entity; node && node !== root; node = node.parent) {
+        if (node === rig.reloadMagazine || node === rig.gasMask || node === rig.heldGrenade) { skip = true; break; }
+        if (node === rig.legs[0].hip) piece = "left";
+        else if (node === rig.legs[1].hip) piece = "right";
+      }
+      if (skip) continue;
+      const farTag = entity.tags.list().find((t) => t.startsWith("model-far:"));
+      for (const instance of component.meshInstances) {
+        const material = instance.material as pc.StandardMaterial;
+        const mesh = (farTag && this.kitMeshes.get(farTag.slice("model-far:".length))) || instance.mesh;
+        if (!mesh || !material) continue;
+        const tile = material === walnut ? "walnut" : material === steel ? "steel" : "solid";
+        const tint = material === walnut ? color("#715037") : material === steel ? color("#353c3a") : material.diffuse ?? new pc.Color(0.4, 0.4, 0.35);
+        parts.push({ mesh, world: entity.getWorldTransform(), tint, atlased: !!atlas && material.diffuseMap === atlas, tile: (u, v) => modelUV(u, v, tile), piece });
+      }
+    }
+    const inverseRoot = root.getWorldTransform().clone().invert();
+    const hip = inverseRoot.transformPoint(rig.legs[0].hip.getPosition(), new pc.Vec3());
+    this.distantSoldiers.bake(key, { root: root.getWorldTransform(), body: rig.body.getWorldTransform(), left: rig.legs[0].hip.getWorldTransform(), right: rig.legs[1].hip.getWorldTransform() }, parts, hip.y);
+  }
   private casualtyMesh(p: Soldier, pose = this.ragdollPose(p)) {
     this.casualtyTemplates ??= new Map();
     const look = this.soldiers[p.id]?.look;
@@ -4852,6 +4890,15 @@ export class Renderer implements CollisionWorld {
     this.boundSoldiers();
     this.createFirstPersonRig();
     for (const rig of this.soldiers) rig.reloadMagazine.setLocalScale(0, 0, 0);
+    this.soldiers.forEach((rig, i) => {
+      if (!rig.standIn) return;
+      rig.standIn = false; rig.gait = undefined; rig.placed = undefined;
+      this.people[i].setLocalScale(1, 1, 1);
+    });
+    this.distantSoldiers?.destroy();
+    this.distantSoldiers = this.app.graphicsDevice
+      ? new SoldierStandIns(this.app, this.app.root, this.modelMaterial("#ffffff", true), g.players.length)
+      : undefined;
     this.ctfMarkers.reset(g);
     for (const s of g.scoring !== "eliminations" && g.scoring !== "ctf" ? g.sectors : []) {
       const ring = new pc.Entity(s.id);
@@ -4974,6 +5021,8 @@ export class Renderer implements CollisionWorld {
     );
   }
   machineGunPreview?: Placement;
+  // Metres past which living soldiers become stand-ins; Infinity turns them off (?standIns=).
+  standInDistance = standInRules.enter;
   private emplacementMeshes = new Map<number, EmplacementMesh>();
   private gunGhost?: EmplacementMesh;
   private tankView?: TankView;
@@ -5199,6 +5248,7 @@ export class Renderer implements CollisionWorld {
     this.drawCount++;
     this.scheduleShadowCascades();
     const eye = this.camera.getPosition(), look = this.camera.forward, zoomed = this.camera.camera!.fov < 45;
+    this.distantSoldiers?.begin();
     for (const p of g.players) {
       const visible=visualWeapon(p,g.tick-1+alpha);
       const kit = `${p.faction}-${visible.weapon}-${visible.weaponId}`;
@@ -5231,13 +5281,38 @@ export class Renderer implements CollisionWorld {
       const rig = this.soldiers[p.id],
         tick = g.tick - 1 + alpha;
       rig.bounds?.center.set(x, y + 1, z);
+      // Far enough away, a living soldier is drawn as a stand-in and its
+      // jointed model is hidden and left alone (src/soldier-standins.ts).
+      const standKey = `${p.team}|${kit}`;
+      if (this.distantSoldiers && p.id !== 0 && p.hp > 0 && rig.alive && p.mountedGun === undefined
+        && standInDue(Math.hypot(x - eye.x, y + 1 - eye.y, z - eye.z), !!rig.standIn, zoomed, this.standInDistance)) {
+        if (!this.distantSoldiers.has(standKey)) this.bakeStandIn(p, standKey);
+        if (!rig.standIn) {
+          rig.standIn = true;
+          rig.gait = { phase: rig.phase, x, z, crouch: rig.crouch, amplitude: Math.min(1, rig.motion) };
+          // The hidden model is also put far below the field: collapsed in
+          // place, its thousands of triangles would all land on one spot of
+          // the screen, while out of view the GPU drops them before drawing.
+          e.setLocalScale(0, 0, 0);
+          e.setPosition(x, -10000, z);
+        }
+        const swing = advanceGait(rig.gait!, x, z, p.crouched, dt);
+        this.distantSoldiers.add(standKey, x, y, z, yaw, swing, rig.gait!.crouch, crouchRules.drop);
+        continue;
+      }
+      let woke = false;
+      if (rig.standIn) {
+        rig.standIn = false; rig.gait = undefined; rig.placed = undefined; rig.owedSeconds = 0;
+        if (p.hp > 0) e.setLocalScale(1, 1, 1);
+        woke = true;
+      }
       // Posing a soldier re-derives every one of its parts' transforms, which is
       // the largest per-frame cost of a big battle. Soldiers the camera cannot
       // see are posed one frame in four, and distant ones every other frame;
       // the time skipped is owed to the next pose, so nothing runs slow.
       const { every, inView } = soldierCadence(p.id === 0 || p.hp <= 0 || !rig.alive, x - eye.x, y + 1 - eye.y, z - eye.z, look, zoomed);
       rig.owedSeconds = (rig.owedSeconds ?? 0) + dt;
-      const pose = every === 1 || (this.drawCount + p.id) % every === 0;
+      const pose = woke || every === 1 || (this.drawCount + p.id) % every === 0;
       // A soldier in view moves every frame, so a runner never judders. One
       // standing still keeps its transforms: moving the root would mark every
       // part for recalculation.
@@ -5277,6 +5352,7 @@ export class Renderer implements CollisionWorld {
         if (pending || down) this.poseDeathFall(p, rig, tick - rig.deathAt, down);
       }
     }
+    this.distantSoldiers?.end();
     this.drawCasualties(dt);
     const objectiveRevision = g.map.destruction?.terrainRevision ?? 0;
     const positionObjectives =
@@ -5458,7 +5534,7 @@ export class Renderer implements CollisionWorld {
     for (const q of g.players) {
       if (q.hp <= 0 || q.mountedGun !== undefined || q.weapon === "pistol" || q.barrel.heat < 0.3 || (q.id === 0 && firstPersonView(q))) continue;
       const rig = this.soldiers[q.id];
-      if (!rig || Math.hypot(q.x - eye.x, q.z - eye.z) > 60) continue;
+      if (!rig || rig.standIn || Math.hypot(q.x - eye.x, q.z - eye.z) > 60) continue;
       const m = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(q.weapon, q.weaponId))), f = rig.rifle.forward;
       this.weaponFx.heat({ key: `soldier-${q.id}`, at: { x: m.x, y: m.y, z: m.z }, dir: { x: f.x, y: f.y, z: f.z }, length: 0.45, heat: q.barrel.heat, overheated: q.barrel.overheated, water: this.waterCooled(q.weaponId, false), near: false }, dt);
     }
@@ -5866,12 +5942,14 @@ export class Renderer implements CollisionWorld {
     }
     if (e.type === "respawn") this.deathHits.delete(e.actor);
     if (e.type === "damage" && this.activeGame) {
-      const target = this.people[e.actor]?.getPosition(), source = this.people[e.source]?.getPosition();
+      const at = (id: number) => this.soldiers[id]?.standIn ? new pc.Vec3(this.activeGame!.players[id].x, this.activeGame!.players[id].y, this.activeGame!.players[id].z) : this.people[id]?.getPosition();
+      const target = at(e.actor), source = at(e.source);
       if (target && source) this.deathHits.set(e.actor, target.clone().sub(source).normalize().mulScalar(7));
     }
     if (e.type === "death" && this.activeGame) {
       const p = this.activeGame.players[e.actor], rig = this.soldiers[e.actor], actor = this.people[e.actor];
       if (p && rig && actor && !rig.remnantCreated) {
+        if (rig.standIn) { rig.standIn = false; rig.gait = undefined; rig.placed = undefined; actor.setPosition(p.x, p.y, p.z); }
         actor.setLocalScale(pc.Vec3.ONE);
         this.queueCasualty(p);
         rig.deathAt = e.tick; rig.alive = false;
