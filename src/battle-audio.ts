@@ -158,11 +158,13 @@ export class BattleAudio {
         : ["whistle", "timber"].includes(cue.kind)
           ? 1
           : 0;
+    // The player's own gunfire must never drop out of a long burst.
+    const ownShot = !!cue.local && ["rifle", "serviceRifle", "machineGun", "pistol", "heavyGun"].includes(cue.kind);
     if (this.voices.size >= (important ? 40 : 28)) {
       const victim = [...this.voices.entries()]
         .sort((a, b) => a[1] - b[1])
         .find(([, rank]) => rank < priority);
-      if (victim && (priority === 3 || speech)) {
+      if (victim && (priority === 3 || speech || ownShot)) {
         victim[0]();
         this.stats.stolen++;
       } else {
@@ -178,10 +180,12 @@ export class BattleAudio {
     const explosion = cue.kind === "artillery" || cue.kind === "grenade";
     const wet = cue.kind === "splash" || cue.kind === "drip";
     const foot = wet || ["mud", "wood", "concrete", "leaves"].includes(cue.kind);
+    const heavy = cue.kind === "heavyGun";
     const rifle =
       cue.kind === "rifle" ||
       cue.kind === "serviceRifle" ||
-      cue.kind === "machineGun" || cue.kind === "pistol";
+      cue.kind === "machineGun" || cue.kind === "pistol" || heavy;
+    const brass = cue.kind === "brass", steam = cue.kind === "steam";
     const melee = cue.kind === "meleeSwing" || cue.kind === "meleeHit";
     const mechanism = ["bolt","clip","equip","magazine"].includes(cue.kind);
     const mechanical=mechanism?mechanicalVoice(cue.kind,cue.action,cue.weaponId):undefined;
@@ -189,7 +193,7 @@ export class BattleAudio {
     const whistle = cue.kind === "whistle";
     const crack = cue.kind === "crack";
     const distant = Math.min(1, cue.distance / 100);
-    const length = forest?.length ?? (mechanical ? mechanical.length : cue.kind === "flame" ? .14 : melee
+    const length = forest?.length ?? (mechanical ? mechanical.length : brass ? .26 : steam ? 1.4 : heavy ? .2 + distant * .4 : cue.kind === "flame" ? .14 : melee
       ? cue.kind === "meleeSwing"
         ? 0.17
         : 0.11
@@ -216,16 +220,16 @@ export class BattleAudio {
                     : cue.kind === "timber"
                       ? 1.5
                       : 0.65);
-    const delay =
+    const delay = (cue.delay ?? 0) + (
       cue.local || crack || foot || whistle
         ? 0
-        : Math.min(0.35, cue.distance / 343);
+        : Math.min(0.35, cue.distance / 343));
     const start = c.currentTime + delay;
     const end = start + length;
     const filter = c.createBiquadFilter();
-    filter.type = forest ? forest.band ? "bandpass" : "lowpass" : crack || whistle || mechanism ? "bandpass" : "lowpass";
-    filter.Q.value = whistle ? 7 : cue.kind === "wireWind" ? 9 : cue.kind === "wireSnag" ? 6 : cue.kind === "crow" ? 5 : crack ? 0.8 : 0.5;
-    filter.frequency.value = forest?.frequency ?? (mechanical ? mechanical.frequency : cue.kind === "flame" ? 1500 : melee
+    filter.type = forest ? forest.band ? "bandpass" : "lowpass" : crack || whistle || mechanism || brass || steam ? "bandpass" : "lowpass";
+    filter.Q.value = brass ? 9 : steam ? 0.6 : whistle ? 7 : cue.kind === "wireWind" ? 9 : cue.kind === "wireSnag" ? 6 : cue.kind === "crow" ? 5 : crack ? 0.8 : 0.5;
+    filter.frequency.value = forest?.frequency ?? (mechanical ? mechanical.frequency : brass ? 4600 + (Math.abs(cue.seed * 37) % 7) * 160 : steam ? 5200 : heavy ? 9000 * shotPitch * (1 - distant * 0.85) : cue.kind === "flame" ? 1500 : melee
       ? cue.kind === "meleeSwing"
         ? 2400
         : 650
@@ -270,7 +274,7 @@ export class BattleAudio {
     const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1) * (mud ? 0.5 : 1);
     envelope.gain.exponentialRampToValueAtTime(
       Math.max(0.0002, volume),
-      start + (forest?.attack ?? (whistle ? 0.1 : explosion ? 0.001 : mud ? 0.014 : 0.004)),
+      start + (forest?.attack ?? (whistle ? 0.1 : steam ? 0.04 : explosion ? 0.001 : mud ? 0.014 : 0.004)),
     );
     if (explosion) {
       envelope.gain.exponentialRampToValueAtTime(
@@ -282,7 +286,7 @@ export class BattleAudio {
         start + 0.45,
       );
     }
-    if (rifle) {
+    if (rifle && !heavy) {
       envelope.gain.exponentialRampToValueAtTime(
         Math.max(0.0001, volume * 0.025),
         start + 0.055,
@@ -291,6 +295,13 @@ export class BattleAudio {
         Math.max(0.0001, volume * (0.08 + distant * 0.18)),
         start + 0.09,
       );
+    }
+    if (heavy) {
+      // A fuller report that holds, then the slap-back off the trench walls.
+      envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.22), start + 0.05);
+      envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.05), start + 0.085);
+      envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * (0.2 + distant * 0.2)), start + 0.11);
+      envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.06), start + 0.16);
     }
     if (cue.kind === "timber") {
       envelope.gain.exponentialRampToValueAtTime(
@@ -317,6 +328,14 @@ export class BattleAudio {
     }
     if (mud)
       envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * .3), start + .06);
+    // A case rings on landing, bounces once and rattles to rest.
+    if (brass)
+      for (const [offset, level] of [[.03, .08], [.07, .7], [.1, .06], [.15, .35], [.2, .03]])
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * level), start + offset);
+    if (steam) {
+      envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * .8), start + .25);
+      envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * .35), start + .9);
+    }
     if (cue.kind === "leaves") {
       for(const [offset,level] of [[.045,.28],[.08,.7],[.15,.18]])
         envelope.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*level),start+offset);
@@ -432,7 +451,9 @@ export class BattleAudio {
       body.frequency.setValueAtTime(
         whistle
           ? 1600
-          : cue.kind === "machineGun"
+          : heavy
+            ? 72 * shotPitch
+            : cue.kind === "machineGun"
             ? 115
             : explosion
               ? 95
@@ -444,11 +465,11 @@ export class BattleAudio {
         start,
       );
       body.frequency.exponentialRampToValueAtTime(
-        whistle ? 380 : explosion ? 32 : 70,
+        whistle ? 380 : explosion || heavy ? 32 : 70,
         end,
       );
       gain.gain.setValueAtTime(
-        Math.max(0.0001, volume * (whistle ? 0.12 : explosion ? 0.6 : 0.3)),
+        Math.max(0.0001, volume * (whistle ? 0.12 : explosion ? 0.6 : heavy ? 0.62 : 0.3)),
         start,
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, end);
@@ -457,6 +478,26 @@ export class BattleAudio {
       body.stop(end);
       sources.push(body);
       nodes.push(gain, body);
+    }
+    if (heavy && cue.local) {
+      // The operator also hears the lock work and the belt jerk through.
+      const clatter = c.createBufferSource(), band = c.createBiquadFilter(), gain = c.createGain();
+      clatter.buffer = this.noise;
+      clatter.loop = true;
+      clatter.playbackRate.value = 1.3 * shotPitch;
+      band.type = "bandpass";
+      band.frequency.value = 3100 * shotPitch;
+      band.Q.value = 3.5;
+      gain.gain.setValueAtTime(0.0001, start + 0.035);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.32), start + 0.045);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.04), start + 0.075);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.18), start + 0.09);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      clatter.connect(band).connect(gain).connect(output);
+      clatter.start(start, Math.abs(Math.sin(cue.seed * 3.1)) * 0.2);
+      clatter.stop(end);
+      sources.push(clatter);
+      nodes.push(clatter, band, gain);
     }
     nodes.push(noise);
     let cleaned = false;

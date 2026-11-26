@@ -4,6 +4,7 @@ import { viewDirection } from "./player-view";
 import type { Command, Game, Soldier, Team, V3 } from "./simulation";
 import { weaponStats } from "./weapon-stats";
 import { weaponProfile } from "./weapons";
+import { coolBarrel, type BarrelHeat } from "./weapon-heat";
 
 export const emplacementRules = {
   setupTicks: 45,
@@ -31,6 +32,7 @@ export interface Emplacement extends EmplacementPose, GunSupply {
   nextShot: number;
   reloadAt: number;
   lastShotAt: number;
+  barrel: BarrelHeat;
 }
 export type Placement = EmplacementPose & { valid: boolean; reason?: string };
 
@@ -129,6 +131,7 @@ export function emplacementCommand(g: Game, p: Soldier, c: Command, interactPres
         at, seat, baseYaw, owner: p.id, team: p.team, weaponId, hp: emplacementRules.durability,
         readyAt: g.tick + emplacementRules.setupTicks, yaw: baseYaw, pitch: 0,
         ...(p.packedEmplacement ?? supply(weaponId)), reloadAt: 0, nextShot: g.tick, lastShotAt: -1000,
+        barrel: { heat: 0, overheated: false },
       });
       p.packedEmplacement = undefined;
       p.protectedUntil = 0;
@@ -175,6 +178,7 @@ export function operateGun(g: Game, p: Soldier, gun: Emplacement, c: Command) {
 
 export function advanceEmplacements(g: Game) {
   for (const gun of g.emplacements.values()) {
+    coolBarrel(gun.barrel);
     if (!gun.reloadAt || g.tick < gun.reloadAt) continue;
     const added = Math.min(gun.reserve, profileFor(gun).magazine - gun.ammo);
     gun.ammo += added;
@@ -210,7 +214,7 @@ export function resupplyEmplacement(g: Game, p: Soldier) {
   p.emplacementLost = false;
   p.packedEmplacement = undefined;
   const gun = g.emplacements.get(p.id);
-  if (gun) Object.assign(gun, supply(gun.weaponId), { hp: emplacementRules.durability, reloadAt: 0 });
+  if (gun) Object.assign(gun, supply(gun.weaponId), { hp: emplacementRules.durability, reloadAt: 0, barrel: { heat: 0, overheated: false } });
 }
 
 export function emplacementView(gun: Emplacement) {
