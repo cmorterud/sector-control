@@ -52,6 +52,50 @@ export class BattleAudio {
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
   }
+  // Rain: a steady bed of noise outside the voice budget, a high hiss of
+  // drops on mud and water over a low drumming on helmets and groundsheets.
+  // `level` follows the shower (src/weather.ts rainIntensity).
+  private rainBed?: { sources: AudioBufferSourceNode[]; gain: GainNode; hiss: GainNode };
+  rain(on: boolean, level = 1) {
+    const c = this.context;
+    if (!on) {
+      if (this.rainBed) {
+        const bed = this.rainBed;
+        this.rainBed = undefined;
+        bed.gain.gain.setTargetAtTime(0, c.currentTime, 0.2);
+        for (const source of bed.sources) source.stop(c.currentTime + 1.2);
+      }
+      return;
+    }
+    if (!this.rainBed) {
+      const gain = c.createGain(), hiss = c.createGain();
+      gain.gain.value = 0;
+      const voice = (rate: number, type: BiquadFilterType, frequency: number, q: number, level: number, out: AudioNode) => {
+        const source = c.createBufferSource(), filter = c.createBiquadFilter(), g = c.createGain();
+        source.buffer = this.noise;
+        source.loop = true;
+        source.playbackRate.value = rate;
+        filter.type = type;
+        filter.frequency.value = frequency;
+        filter.Q.value = q;
+        g.gain.value = level;
+        source.connect(filter).connect(g).connect(out);
+        source.start(c.currentTime, Math.random() * 7);
+        return source;
+      };
+      hiss.connect(gain);
+      const sources = [
+        voice(1, "bandpass", 5200, 0.35, 0.55, hiss),
+        voice(0.83, "highpass", 2400, 0.5, 0.28, hiss),
+        voice(0.61, "lowpass", 700, 0.6, 0.6, gain),
+      ];
+      gain.connect(this.world);
+      this.rainBed = { sources, gain, hiss };
+    }
+    const t = c.currentTime;
+    this.rainBed.gain.gain.setTargetAtTime(0.05 + 0.07 * level, t, 0.6);
+    this.rainBed.hiss.gain.setTargetAtTime(0.7 + 0.5 * level, t, 0.6);
+  }
   // For effects synthesized elsewhere (src/charge-audio.ts): the spatial mix
   // bus, and whether the battle is running.
   get bus(): AudioNode { return this.world; }
@@ -179,7 +223,9 @@ export class BattleAudio {
     const c = this.context;
     const explosion = cue.kind === "artillery" || cue.kind === "grenade";
     const wet = cue.kind === "splash" || cue.kind === "drip";
-    const foot = wet || ["mud", "wood", "concrete", "leaves"].includes(cue.kind);
+    // A stride through rain-soaked mud: a heavy squelch, then the boot sucked free.
+    const sludge = cue.kind === "sludge";
+    const foot = wet || sludge || ["mud", "wood", "concrete", "leaves"].includes(cue.kind);
     const heavy = cue.kind === "heavyGun";
     const rifle =
       cue.kind === "rifle" ||
@@ -216,7 +262,7 @@ export class BattleAudio {
                 : crack
                   ? 0.065
                   : foot
-                    ? wet ? 0.23 : 0.16
+                    ? wet ? 0.23 : sludge ? 0.3 : 0.16
                     : cue.kind === "timber"
                       ? 1.5
                       : 0.65);
@@ -249,6 +295,8 @@ export class BattleAudio {
                   : 8500
                 : cue.kind === "mud"
                   ? 420
+                  : sludge
+                    ? 360
                   : cue.kind === "wood"
                     ? 1900
                     : wet ? 3700 : foot
@@ -271,10 +319,10 @@ export class BattleAudio {
     // Mud is the default ground on trench maps, so it is heard on nearly every
     // stride: keep it a soft, dull squelch that sits under the battle.
     const mud = cue.kind === "mud";
-    const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1) * (mud ? 0.5 : 1);
+    const volume = cue.volume * (mechanical?.volume??1) * (cue.occluded ? 0.48 : 1) * (mud ? 0.5 : sludge ? 0.62 : 1);
     envelope.gain.exponentialRampToValueAtTime(
       Math.max(0.0002, volume),
-      start + (forest?.attack ?? (whistle ? 0.1 : steam ? 0.04 : explosion ? 0.001 : mud ? 0.014 : 0.004)),
+      start + (forest?.attack ?? (whistle ? 0.1 : steam ? 0.04 : explosion ? 0.001 : mud ? 0.014 : sludge ? 0.022 : 0.004)),
     );
     if (explosion) {
       envelope.gain.exponentialRampToValueAtTime(
@@ -328,6 +376,11 @@ export class BattleAudio {
     }
     if (mud)
       envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * .3), start + .06);
+    if (sludge) {
+      for (const [offset, level] of [[.075, .22], [.17, .5], [.23, .1]])
+        envelope.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * level), start + offset);
+      filter.frequency.exponentialRampToValueAtTime(cue.occluded ? 140 : 190, end);
+    }
     // A case rings on landing, bounces once and rattles to rest.
     if (brass)
       for (const [offset, level] of [[.03, .08], [.07, .7], [.1, .06], [.15, .35], [.2, .03]])

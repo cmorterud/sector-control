@@ -11,6 +11,7 @@ import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction,
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
+import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
 import { equipLoadout, kitFor, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
@@ -967,6 +968,10 @@ export class Game {
   emplacements = new Map<number, Emplacement>();
   // Tanks, when the briefing turns them on (src/tanks.ts).
   tanks: TankState;
+  // Rain on the maps that have weather: rising water and heavy mud (src/weather.ts).
+  rain = false;
+  // The tick the water began rising from (the render review moves it back).
+  rainSince = 0;
   tick = 0;
   // A performance.now() time after which this frame's navigation rebuild
   // work stops. The browser sets it once per frame; headless games leave it
@@ -1021,8 +1026,10 @@ export class Game {
       assaults?: boolean;
       ambientArtillery?: boolean;
       tanks?: boolean;
+      rain?: boolean;
     } = {},
   ) {
+    this.rain = !!options.rain && supportsRain(options.map ?? industrialMap);
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
     this.map = runtimeMap(options.map ?? industrialMap);
     this.tanks = createTanks(this, !!options.tanks,
@@ -1478,7 +1485,8 @@ export class Game {
                   : c.sprint && !c.aim
                     ? 7
                     : 4.5)),
-          speed = inWire(p.x, p.z, this.map, p.team) ? Math.min(stride, boundaryRules.wireSpeed) : stride;
+          muddy = this.rain ? stride * rainPace(p, this.map, floodAt(this.tick - this.rainSince)) : stride,
+          speed = inWire(p.x, p.z, this.map, p.team) ? Math.min(muddy, boundaryRules.wireSpeed) : muddy;
         p.vx += ((c.x / len) * speed - p.vx) * 0.24;
         p.vz += ((c.z / len) * speed - p.vz) * 0.24;
         const pos = this.collision.move(p, { x: p.vx / 30, z: p.vz / 30 });

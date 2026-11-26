@@ -105,41 +105,53 @@ export function craterPonds(map: MapDefinition): CraterPond[] {
   const scars = map.noMansLand?.scarPonds
     ? (source.shellScars ?? []).map((s) => ({ x: s.x, z: s.z, radius: Math.min(s.radiusX, s.radiusZ) }))
     : [];
-  const step = 0.05;
   for (const c of [...(source.craters ?? []), ...scars]) {
-    // The bowl's floor: the lowest ground near the middle.
-    let floor = Infinity, fx = c.x, fz = c.z;
-    for (let r = 0; r <= c.radius * 0.5; r += 0.25)
-      for (let i = 0; i < (r ? 12 : 1); i++) {
-        const x = c.x + Math.cos((i / 12) * Math.PI * 2) * r, z = c.z + Math.sin((i / 12) * Math.PI * 2) * r, h = groundHeight(x, z, map);
-        if (h < floor) { floor = h; fx = x; fz = z; }
-      }
-    // Walk out from the floor in each direction to where the ground rises
-    // above the water. A side that never closes within the scar would spill,
-    // so lower the water and try again.
-    for (let depth = 0.16; depth >= 0.03; depth -= 0.01) {
-      const y = floor + depth, shore: number[] = [];
-      for (let i = 0; i < pondDirections; i++) {
-        const a = (i / pondDirections) * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a);
-        let r = 0;
-        while (r < c.radius * 1.5 && groundHeight(fx + dx * (r + step), fz + dz * (r + step), map) < y) r += step;
-        if (r >= c.radius * 1.5) break;
-        shore.push(r);
-      }
-      if (shore.length < pondDirections || Math.min(...shore) < 0.6) continue;
-      // Carry each edge vertex on until it is safely under the bank.
-      const edge = shore.map((r, i) => {
-        const a = (i / pondDirections) * Math.PI * 2;
-        let e = r + step;
-        while (e < r + 0.6 && groundHeight(fx + Math.cos(a) * e, fz + Math.sin(a) * e, map) < y + 0.05) e += step;
-        return e + 0.1;
-      });
-      cached.push({ x: fx, z: fz, y, radius: Math.min(...shore) - 0.05, edge });
-      break;
-    }
+    const pond = fillCrater(c, map, 0.16, 0.03);
+    if (pond) cached.push({ x: pond.x, z: pond.z, y: pond.y, radius: pond.radius, edge: pond.edge });
   }
   ponds.set(source, cached);
   return cached;
+}
+// Water standing in one bowl: the deepest level from `deepest` down to
+// `shallowest` above its floor at which the rim closes all round.
+// `strict` (rising water) also lowers the level until every edge vertex can
+// tuck in under a bank that stands clear of the water.
+export function fillCrater(c: Vec & { radius: number }, map: MapDefinition, deepest: number, shallowest: number, strict = false): (CraterPond & { floor: number }) | undefined {
+  const step = 0.05;
+  // The bowl's floor: the lowest ground near the middle.
+  let floor = Infinity, fx = c.x, fz = c.z;
+  for (let r = 0; r <= c.radius * 0.5; r += 0.25)
+    for (let i = 0; i < (r ? 12 : 1); i++) {
+      const x = c.x + Math.cos((i / 12) * Math.PI * 2) * r, z = c.z + Math.sin((i / 12) * Math.PI * 2) * r, h = groundHeight(x, z, map);
+      if (h < floor) { floor = h; fx = x; fz = z; }
+    }
+  // Walk out from the floor in each direction to where the ground rises
+  // above the water. A side that never closes within the scar would spill,
+  // so lower the water and try again.
+  for (let depth = deepest; depth >= shallowest; depth -= 0.01) {
+    const y = floor + depth, shore: number[] = [];
+    for (let i = 0; i < pondDirections; i++) {
+      const a = (i / pondDirections) * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a);
+      let r = 0;
+      while (r < c.radius * 1.5 && groundHeight(fx + dx * (r + step), fz + dz * (r + step), map) < y) r += step;
+      if (r >= c.radius * 1.5) break;
+      shore.push(r);
+    }
+    if (shore.length < pondDirections || Math.min(...shore) < 0.6) continue;
+    // Carry each edge vertex on until it is safely under the bank.
+    let open = false;
+    const edge = shore.map((r, i) => {
+      const a = (i / pondDirections) * Math.PI * 2;
+      let e = r + step;
+      while (e < r + 0.6 && groundHeight(fx + Math.cos(a) * e, fz + Math.sin(a) * e, map) < y + 0.05) e += step;
+      if (!strict) return e + 0.1;
+      if (groundHeight(fx + Math.cos(a) * e, fz + Math.sin(a) * e, map) < y + 0.03) open = true;
+      return e;
+    });
+    if (open) continue;
+    return { x: fx, z: fz, y, floor, radius: Math.min(...shore) - 0.05, edge };
+  }
+  return undefined;
 }
 export const inCraterPond = (p: Vec, map: MapDefinition) =>
   craterPonds(map).some((pond) => Math.hypot(p.x - pond.x, p.z - pond.z) < pond.radius && (p.y ?? groundHeight(p.x, p.z, map)) < pond.y + 0.1);
