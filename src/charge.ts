@@ -140,6 +140,7 @@ export function whistleRecruits(g: Game, p: Soldier) {
     !human(g, q) &&
     q.weapon === "serviceRifle" &&
     q.mountedGun === undefined &&
+    q.tank === undefined &&
     q.charge?.kind !== "squad";
   const near = g.players.filter((q) => able(q) && dist(p, q) <= chargeRules.squadRadius);
   const own = human(g, p)
@@ -155,7 +156,7 @@ export function whistleRecruits(g: Game, p: Soldier) {
 
 export function blowWhistle(g: Game, p: Soldier, aim: { yaw: number; pitch: number }, goal?: Vec) {
   const state = g.charges;
-  if (p.hp <= 0 || g.phase !== "playing" || p.mountedGun !== undefined || g.tick < state.readyAt[p.team]) return null;
+  if (p.hp <= 0 || g.phase !== "playing" || p.mountedGun !== undefined || p.tank !== undefined || g.tick < state.readyAt[p.team]) return null;
   state.readyAt[p.team] = g.tick + chargeRules.cooldownTicks;
   const target = goal ?? whistleTarget(g, p, aim.yaw, aim.pitch);
   const recruits = whistleRecruits(g, p);

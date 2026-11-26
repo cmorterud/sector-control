@@ -123,7 +123,7 @@ function contact(g: Game, p: Soldier, from = location(p)) {
   // Nearest body in the thrust cone wins; allies and protected lives block it too.
   return g.players
     .filter((q) => {
-      if (q === p || q.hp <= 0) return false;
+      if (q === p || q.hp <= 0 || q.tank !== undefined) return false;
       const d = Math.hypot(q.x - from.x, q.z - from.z);
       if (
         d > reach ||

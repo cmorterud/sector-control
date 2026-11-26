@@ -11,6 +11,7 @@ import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction,
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
+import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
 import { equipLoadout, kitFor, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
@@ -162,6 +163,8 @@ export interface Command {
   throwSpeed?: number;
   // Blow the whistle for a squad bayonet charge (src/charge.ts).
   whistle?: boolean;
+  // Raw drive keys for a tank commander: forward/back and steer (src/tanks.ts).
+  drive?: { throttle: number; turn: number };
 }
 export const idle = (): Command => ({
   x: 0,
@@ -379,6 +382,8 @@ export interface Soldier extends Vec {
   weaponChange?: {tick:number;from:WeaponKind;fromId?:string;fromSlot?:WeaponSlot;startLower?:number};
   faction?: FactionId;
   mountedGun?: number;
+  // The tank this soldier is crewing (src/tanks.ts).
+  tank?: number;
   emplacementLost?: boolean;
   packedEmplacement?: { ammo: number; reserve: number; hp: number };
   loadout?: Loadout;
@@ -726,6 +731,7 @@ export type Event = { id: number; tick: number } & (
   | import("./reinforcements").ReinforcementEvent
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
+  | TankEvent
   | CtfEvent
   | ChargeEvent
 );
@@ -959,6 +965,8 @@ export class Game {
   artilleryAudit = freshArtilleryAudit();
   flames: FlameState = {kits:[]};
   emplacements = new Map<number, Emplacement>();
+  // Tanks, when the briefing turns them on (src/tanks.ts).
+  tanks: TankState;
   tick = 0;
   // A performance.now() time after which this frame's navigation rebuild
   // work stops. The browser sets it once per frame; headless games leave it
@@ -1012,10 +1020,14 @@ export class Game {
       humanPlayerIds?: readonly number[];
       assaults?: boolean;
       ambientArtillery?: boolean;
+      tanks?: boolean;
     } = {},
   ) {
     this.humanPlayerIds = [...(options.humanPlayerIds ?? [0])];
     this.map = runtimeMap(options.map ?? industrialMap);
+    this.tanks = createTanks(this, !!options.tanks,
+      (p, n, source, team, details) => this.damage(p, n, source, team, details),
+      (actor, change) => this.applyDestruction(actor, change));
     this.flames = createFlames(this.map);
     this.artillery = createArtilleryState(
       seed,
@@ -1310,6 +1322,7 @@ export class Game {
     if (failure) this.structuralFailure(failure);
     advanceEmplacements(this);
     for (const p of this.players) coolBarrel(p.barrel);
+    advanceTanks(this);
     advanceNavigation(this.map, this.players.filter(p => p.hp > 0), navigationChecksPerTick, this.navigationDeadline);
     this.smokeClouds = this.smokeClouds.filter((s) => {
       if (this.tick < s.expiresAt) return true;
@@ -1325,6 +1338,7 @@ export class Game {
           const held = p.triggerHeld;
           const meleeHeld = p.meleeHeld;
           this.respawn(p);
+          crewOnRespawn(this, p);
           if (p.id === 0) {
             p.triggerHeld = held;
             p.meleeHeld = meleeHeld;
@@ -1341,21 +1355,31 @@ export class Game {
         0,
         p.suppression - suppressionRules.recoveryPerTick,
       );
-      p.command = p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
+      const crewed = crewTank(this, p);
+      p.command = crewed && !this.humanPlayerIds.includes(p.id) ? tankBotCommand(this, p, crewed) :
+        p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
       const c = p.command;
-      // No sights to the eye through a gas mask's eyepieces.
-      if (maskBlocksAim(p)) c.aim = false;
+      // No sights to the eye through a gas mask's eyepieces. A tank's main
+      // gun is laid from inside the hull and fired by the right button, so a
+      // masked commander can still fire it.
+      if (maskBlocksAim(p) && p.tank === undefined) c.aim = false;
       ctfCommand(this, p, c);
       if (p.id !== 0) evadeFlame(this,p);
       const interactPressed = !!c.interact && !p.commandInteractHeld;
       p.commandInteractHeld = !!c.interact;
-      const gunAction = emplacementCommand(this, p, c, interactPressed);
+      const tankAction = tankInteraction(this, p, interactPressed);
+      const tank = crewTank(this, p);
+      if (tank) {
+        operateTank(this, p, tank, c);
+        continue;
+      }
+      const gunAction = emplacementCommand(this, p, c, interactPressed && !tankAction);
       const gun = mountedGun(this, p);
       if (gun) {
         operateGun(this, p, gun, c);
         continue;
       }
-      if (interactPressed && !gunAction) pickupFlame(this,p);
+      if (interactPressed && !gunAction && !tankAction) pickupFlame(this,p);
       if (c.loadout) this.selectLoadout(p, c.loadout);
       const switched = c.equip ? switchWeapon(p, c.equip, this.tick) : false;
       if(switched)this.emit({type:"weaponAction",actor:p.id,action:"holster",weaponId:p.weaponChange?.fromId});
@@ -1461,6 +1485,7 @@ export class Game {
         p.x = pos.x;
         p.z = pos.z;
         if (pos.y !== undefined && !p.hop && !p.fall) p.y = pos.y;
+        keepClearOfTanks(this, p);
         const ground = supportHeight(p.x, p.z, this.map, p.y + 0.23, .45);
         if (p.hop) this.advanceHop(p);
         else {
@@ -1793,9 +1818,9 @@ export class Game {
       y: camera.y + dir.y * projectileRange,
       z: camera.z + dir.z * projectileRange,
     };
-    let first = this.collision.ray(camera, aim);
+    let first = Math.min(this.collision.ray(camera, aim), this.tanks.list.length ? rayTanks(this, camera, aim).t : 1);
     for (const q of this.players)
-      if (q !== p && q.hp > 0)
+      if (q !== p && q.hp > 0 && q.tank === undefined)
         for (const y of hitHeights(q))
           first = Math.min(
             first,
@@ -1864,7 +1889,7 @@ export class Game {
       );
     let muzzleVictim: Soldier | undefined;
     for (const q of this.players)
-      if (q !== p && q.hp > 0)
+      if (q !== p && q.hp > 0 && q.tank === undefined)
         for (const y of hitHeights(q)) {
           const t = raySphere(
             pivot,
@@ -1895,7 +1920,7 @@ export class Game {
     const active: Projectile[] = [];
     const cells = new Map<string, Soldier[]>();
     for (const p of this.players)
-      if (p.hp > 0) {
+      if (p.hp > 0 && p.tank === undefined) {
         const key = `${Math.floor(p.x / 4)},${Math.floor(p.z / 4)}`;
         const list = cells.get(key);
         if (list) list.push(p);
@@ -1918,6 +1943,9 @@ export class Game {
       };
       let nearest = this.collision.ray(from, to);
       let victim: Soldier | undefined;
+      // Rounds stop on a tank's plates and only splash it.
+      const armour = this.tanks.list.length ? rayTanks(this, from, to) : { t: 1 };
+      if (armour.t < nearest) nearest = armour.t;
       for (
         let cx = Math.floor((Math.min(from.x, to.x) - 0.38) / 4);
         cx <= Math.floor((Math.max(from.x, to.x) + 0.38) / 4);
@@ -1965,7 +1993,7 @@ export class Game {
             suppressNearMiss(this, q, shot, from, shot);
       const before = shot.remaining;
       shot.remaining = Math.max(0, shot.remaining - travel);
-      const through = nearest < 1 && !victim && !shot.penetrated
+      const through = nearest < 1 && !victim && !shot.penetrated && !(armour.tank && nearest === armour.t)
         ? timberPassage(this.map, shot, { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }) : null;
       if (through) {
         // Stone stops bullets, wood doesn't: one thin partition, at half damage.
@@ -1973,6 +2001,9 @@ export class Game {
         const crossed = travel * nearest + Math.hypot(through.x - shot.x, through.y - shot.y, through.z - shot.z);
         Object.assign(shot, through, { penetrated: true, damage: (shot.damage ?? 25) * timberPassDamage, remaining: Math.max(0, before - crossed) });
         if (shot.remaining > 0) active.push(shot);
+      } else if (nearest < 1 && !victim && armour.tank && nearest === armour.t) {
+        bulletOnTank(armour.tank, shot);
+        this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false });
       } else if (nearest < 1)
         this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim, from);
       else if (shot.remaining > 0) active.push(shot);
@@ -1998,6 +2029,7 @@ export class Game {
     this.emit({ type: "damage", actor: victim.id, source,amount:actual,at:{x:victim.x,y:victim.y,z:victim.z},kind:wound.kind,weapon:wound.weapon,from:wound.from });
     if (!victim.hp) {
       dismount(this, victim);
+      leaveTank(this, victim);
       dropFlame(this,victim);
       cancelMelee(this, victim);
       victim.meleeThreat = null;
@@ -2096,6 +2128,8 @@ export class Game {
           { x: to.x + offset.x, y: to.y + offset.y, z: to.z + offset.z },
         ),
       );
+    // Grenades bounce off tanks and can come to rest on the roof.
+    if (this.tanks.list.length) fraction = Math.min(fraction, rayTanks(this, from, to).t);
     return fraction;
   }
   private throwGrenade(p: Soldier, smoke = false, botSpeed?: number) {
@@ -2290,6 +2324,7 @@ export class Game {
       }
       if (
         p.hp <= 0 ||
+        p.tank !== undefined ||
         (p.team === team && p.id !== actor) ||
         this.tick < p.protectedUntil
       )
@@ -2319,13 +2354,14 @@ export class Game {
       );
       const capturing = this.scoring === "domination" && this.sectors.some(s=>s.owner!==p.team && flagOccupant(this,p,s));
       hits.push({ target: p.id, damage });
-      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":profile.kind==="artillery-boundary"?"Left the battlefield":"Artillery strike"):"Fragmentation grenade",from:{...at}});
+      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":profile.kind==="artillery-boundary"?"Left the battlefield":"Artillery strike"):profile.kind==="tank-shell"?"Tank gun":"Fragmentation grenade",from:{...at}});
       if(artillery) {
         this.artilleryAudit.damagePrevented+=rawDamage-damage;
         if(p.hp<=0) { this.artilleryAudit.deaths++; if(capturing)this.artilleryAudit.captureInterruptions++; }
       }
     }
     damageEmplacements(this, at, profile.radius, profile.damage);
+    explosionOnTanks(this, at, actor, team, profile);
     const deformStart = battlePerformance.begin();
     const change = deformExplosion(this.map, at, profile, (a, b) =>
       this.collision.ray(a, b),

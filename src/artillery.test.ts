@@ -167,9 +167,9 @@ describe("artillery missions", () => {
     const radii = mission.impacts.map((p) =>
       Math.hypot(p.x - mission.target.x, p.z - mission.target.z),
     );
-    expect(Math.max(...radii)).toBeGreaterThan(10);
-    expect(radii.every((r) => r <= 14)).toBe(true);
-    expect(artilleryRules.dangerRadius).toBe(23);
+    expect(Math.max(...radii)).toBeGreaterThan(15);
+    expect(radii.every((r) => r <= 21)).toBe(true);
+    expect(artilleryRules.dangerRadius).toBe(30);
     expect(impacts[0].tick).toBe(mission.firstImpactAt);
     expect(impacts[0].tick - launchedAt).toBe(16);
     impacts.forEach((e, i) =>

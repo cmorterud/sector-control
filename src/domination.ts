@@ -25,7 +25,7 @@ export function flagContains(g: Game, p: Vec & { y: number }, s: Vec): boolean {
 }
 
 export function flagOccupant(g: Game, p: Soldier, s: Sector): boolean {
-  return p.hp > 0 && !p.mantle && !p.hop && !p.fall && flagContains(g, p, s);
+  return p.hp > 0 && p.tank === undefined && !p.mantle && !p.hop && !p.fall && flagContains(g, p, s);
 }
 
 const floorPost = (p: Soldier, s: Sector): Vec => ({
