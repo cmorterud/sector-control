@@ -12,10 +12,12 @@ import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction,
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
+import { antiTankBotAim } from "./anti-tank";
+import { emplacementBotCommand } from "./bot-emplacement";
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
-import { equipLoadout, kitFor, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
+import { equipLoadout, kitFor, loadoutIds, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
   villageSpawn,
@@ -1195,7 +1197,7 @@ export class Game {
     this.events.push({ ...e, id: ++this.sequence, tick: this.tick } as Event);
   }
   selectLoadout(p: Soldier, loadout: Loadout) {
-    if (!["rifleman", "marksman", "support", "emplacement"].includes(loadout)) return;
+    if (!loadoutIds.includes(loadout)) return;
     p.pendingLoadout = loadout;
     if (this.tick === 0) equipLoadout(p, loadout, kitFor(this.map));
   }
@@ -1207,7 +1209,7 @@ export class Game {
     const retainedPrimary = p.pendingLoadout === p.loadout ? p.inventory?.primary : undefined;
     const legacyWeapon = p.inventory && p.inventory[p.equippedSlot ?? "primary"].kind !== p.weapon ? p.weapon : undefined;
     p.faction = factionFor(this.map, p.team);
-    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon)), kitFor(this.map));
+    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon, this.tanks.enabled)), kitFor(this.map));
     const retainedKind = legacyWeapon ?? (retainedPrimary?.kind !== "flamethrower" ? retainedPrimary?.kind : undefined);
     if (retainedKind && p.inventory && p.loadout !== "emplacement") {
       p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;
@@ -2016,7 +2018,7 @@ export class Game {
         Object.assign(shot, through, { penetrated: true, damage: (shot.damage ?? 25) * timberPassDamage, remaining: Math.max(0, before - crossed) });
         if (shot.remaining > 0) active.push(shot);
       } else if (nearest < 1 && !victim && armour.tank && nearest === armour.t) {
-        bulletOnTank(armour.tank, shot);
+        bulletOnTank(this, armour.tank, shot);
         this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false });
       } else if (nearest < 1)
         this.impact(shot, { x: shot.x, y: shot.y, z: shot.z }, victim, from);
@@ -2844,9 +2846,9 @@ export function safeBotDestination(g: Game, p: Soldier): Vec | undefined {
   return dest;
 }
 export function botCommand(g: Game, p: Soldier): Command {
-  if (!battlePerformance.enabled) return chooseBotCommand(g,p);
+  if (!battlePerformance.enabled) return emplacementBotCommand(g,p,chooseBotCommand(g,p));
   const start = battlePerformance.begin();
-  try { return chooseBotCommand(g,p); } finally { battlePerformance.end("bots",start); }
+  try { return emplacementBotCommand(g,p,chooseBotCommand(g,p)); } finally { battlePerformance.end("bots",start); }
 }
 function chooseBotCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);
@@ -3194,5 +3196,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     villageSteering(g, p, c, target ? dist(p, target) : Infinity);
     screenCrossing(g, p, c, objective);
   }
+  // The anti-tank kit turns on an enemy tank in sight (src/anti-tank.ts).
+  antiTankBotAim(g, p, c, target);
   return braceCommand(g, p, assaultCommand(g, p, ctfBotCommand(g, p, c)));
 }

@@ -132,6 +132,40 @@ function rifle(family: string, carbine = false): WeaponDesign {
     soundPitch: (smle ? 1.12 : berthier ? 1.03 : lebel ? .9 : .97) + (carbine ? .05 : 0),
   };
 }
+// The Tankgewehr M1918: a scaled-up single-shot Mauser, 1.69 m long. A long
+// heavy barrel, a pistol-grip stock and a bipod under the barrel's middle.
+// One round goes in by hand through the open bolt.
+function tankgewehr(): WeaponDesign {
+  const muzzle = -1.16, grip: V = [.125, 0, 0];
+  const receiver = round("receiver", [0, .03, .05], [.085, .32, .09]);
+  const parts: RiflePart[] = [
+    part("wooden stock", "gewehrStock", [0, -.05, .1], [.11, .86, .19], "walnut", [90, 0, 0]),
+    receiver,
+    round("heavy barrel", [0, .03, (muzzle + .03) / 2], [.042, Math.abs(muzzle - .03), .042]),
+    round("barrel reinforce", [0, .03, -.28], [.052, .3, .052]),
+    round("muzzle crown", [0, .03, muzzle + .02], [.05, .04, .05], "edge"),
+    part("upper handguard", "handguard", [0, .03, -.22], [.07, .3, .05], "walnut", [90, 0, 0]),
+    box("pistol grip", [0, -.135, .16], [.07, .16, .075], "walnut"),
+    guard(),
+    box("ejection port", [.03, .06, .04], [.01, .014, .1], "dark"),
+    box("rear sight leaf seat", [0, .062, -.17], [.036, .026, .12]),
+    box("tall front sight", [0, .072, muzzle + .07], [.01, .045, .018]),
+    ...band(-.42, [[.075, -.074, .007], [.068, .005, .058]]),
+    part("rear sling loop", "sling", [.034, -.105, .38], [.009, .04, .055]),
+    part("buttplate", "buttplate", [0, -.09, .53], [.1, .015, .18], "steel", [90, 0, 0]),
+  ];
+  // The bipod clamps round the barrel, legs splayed and folded forward.
+  parts.push(round("bipod clamp", [0, .03, -.62], [.075, .06, .075]));
+  for (const side of [-1, 1]) parts.push(part("bipod leg", "steel", [side * .07, -.13, -.68], [.022, .34, .022], "steel", [62, 0, side * 14]));
+  return {
+    family: "tankgewehr", kind: "serviceRifle", parts, viewParts: [], actionParts: rifleAction(true, grip),
+    magazine: round("weapon magazine", [0, .06, .03], [.03, .13, .03], "edge"),
+    reload: "clip", muzzle, front: muzzle + .07, rear: -.13,
+    feed: [.02, .15, .03], grip: [-.035, -.07, -.3],
+    actionOrigin: [.05, .05, .13], boltGrip: grip, lift: 80, travel: .16,
+    soundPitch: .62,
+  };
+}
 function support(family: string): WeaponDesign {
   const lewis = family === "lewis", chauchat = family === "chauchat";
   const parts: RiflePart[] = [stock(.46, .115, .18, .22), guard(),
@@ -206,12 +240,14 @@ const designs = {
   gewehrCarbine: rifle("gewehr", true), berthierCarbine: rifle("berthier", true),
   lewis: support("lewis"), mg08: support("mg08"), chauchat: support("chauchat"),
   webley: pistol("webley"), luger: pistol("luger"), ruby: pistol("ruby"),
+  tankgewehr: tankgewehr(),
 };
 const ids: Record<string, keyof typeof designs> = {
   "SMLE Mk III":"smle", "Scoped SMLE":"smle", "Gewehr 98":"gewehr", "Scoped Gewehr 98":"gewehr",
   "Karabiner 98AZ":"gewehrCarbine", "Berthier Mle 1892 M16":"berthierCarbine",
   "Berthier Mle 1916":"berthier", "Scoped Lebel":"lebel", "Lewis Mk I":"lewis", "MG 08/15":"mg08", "Chauchat":"chauchat",
-  "Webley Mk VI":"webley", "P08":"luger", "P08 Luger":"luger", "Ruby":"ruby",
+  "Webley Mk VI":"webley",
+  "SMLE Mk III · AP":"smle", "Berthier Mle 1916 · AP":"berthier", "Tankgewehr M1918":"tankgewehr", "P08":"luger", "P08 Luger":"luger", "Ruby":"ruby",
 };
 export function weaponDesign(p: {weapon: WeaponKind; weaponId?: string}): WeaponDesign | undefined {
   const key = p.weaponId && ids[p.weaponId], design = key ? designs[key] : undefined;

@@ -7,12 +7,12 @@ import { armoryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration,
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
 
-it("gives every Armory faction a rifle, scoped rifle, pistol and both machine-gun variants", () => {
+it("gives every Armory faction a rifle, scoped rifle, pistol, both machine-gun variants and an anti-tank kit", () => {
   for (const f of armoryFactions) {
     expect(factions[f].name).toBeTruthy();
     // The two armies that fight inside Fort Vaux also have a carbine.
     const carbine = f === "french" || f === "german" ? ["carbine"] : [];
-    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual([...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
+    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual(["antiTank", ...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
   }
   expect(new Set(weaponStats.map(w => w.id)).size).toBe(weaponStats.length);
 });
@@ -29,6 +29,16 @@ it("follows the damage design rules", () => {
       expect(shotsToKill(w, "head")).toBe(1);
       expect(shotsToKill(w, "chest")).toBe(2);
       expect(shotsToKill(w, "stomach")).toBe(2);
+    } else if (w.role === "antiTank") {
+      // Every anti-tank weapon goes through tank plate. Armour-piercing
+      // rounds in a service rifle hit soldiers like ball; the Tankgewehr's
+      // 13.2 mm round kills with any hit to the body.
+      expect(w.armour!.hull).toBeGreaterThan(0);
+      if (w.magazine === 1) for (const z of ["head", "chest", "stomach"] as const) expect(shotsToKill(w, z)).toBe(1);
+      else {
+        expect(shotsToKill(w, "head")).toBe(1);
+        expect(shotsToKill(w, "chest")).toBe(2);
+      }
     } else if (w.role === "scoped") {
       // A scoped rifle still kills with any hit to the head or chest.
       expect(shotsToKill(w, "head")).toBe(1);
@@ -66,7 +76,7 @@ function weaponRange() {
 it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armory profile when equipping, firing and reloading", w => {
   const { g, shooter } = weaponRange();
   shooter.faction = w.faction;
-  equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : "rifleman", w.role === "carbine" ? "carbine" : "service");
+  equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : w.role === "antiTank" ? "antiTank" : "rifleman", w.role === "carbine" ? "carbine" : "service");
   if (w.role === "pistol") {
     expect(switchWeapon(shooter, "sidearm", g.tick)).toBe(true);
     for (let i = 0; i < 10; i++) g.step(idle());
