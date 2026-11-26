@@ -28,6 +28,11 @@ export type SoundKind =
   | "clip"
   | "rifle"
   | "machineGun"
+  // A mounted gun: a deeper report with the trench's slap-back and, for the
+  // operator, the clatter of the belt through the feed.
+  | "heavyGun"
+  | "brass"
+  | "steam"
   | "crack"
   | "mud"
   | "wood"
@@ -60,6 +65,8 @@ export type SoundCue = {
   line?: VoiceLine;
   weaponId?: string;
   action?: string;
+  // Seconds after now; a spent case lands a moment after its shot.
+  delay?: number;
 };
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
@@ -194,7 +201,7 @@ export class BattlefieldFeedback {
     occlusion = true,
     seed = g.tick,
     line?: VoiceLine,
-    weapon?: {weaponId?:string;action?:string},
+    weapon?: {weaponId?:string;action?:string;delay?:number},
   ) {
     const p = g.players[0];
     const ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
@@ -259,21 +266,28 @@ export class BattlefieldFeedback {
           this.cue(g,"branchSnap",{x:tree.x,y:(tree.baseY??0)+tree.h*.6,z:tree.z},.24,false,true,e.id);
       }
     }
+    if (e.type === "overheat" && Math.hypot(p.x - e.at.x, p.z - e.at.z) < 40)
+      this.cue(g, "steam", e.at, e.actor === 0 ? 0.3 : 0.2, e.actor === 0, true, e.id);
     if (e.type === "fire" && Math.hypot(p.x - e.from.x, p.z - e.from.z) < 125) {
       this.cue(
         g,
-        e.weapon === "pistol" ? "pistol" : e.weapon === "machineGun"
+        e.emplacement !== undefined ? "heavyGun" : e.weapon === "pistol" ? "pistol" : e.weapon === "machineGun"
           ? "machineGun"
           : e.weapon === "serviceRifle"
             ? "serviceRifle"
             : "rifle",
         e.from,
-        e.actor === 0 ? (e.weapon === "serviceRifle" ? 0.5 : 0.4) : 0.3,
+        e.actor === 0 ? (e.emplacement !== undefined ? 0.55 : e.weapon === "serviceRifle" ? 0.5 : 0.4) : e.emplacement !== undefined ? 0.38 : 0.3,
         e.actor === 0,
         true,
         e.id,undefined,{weaponId:e.weaponId},
       );
       this.stats.rifles++;
+      // The player's spent case lands a moment later; a machine gun's every third.
+      const round = e.projectile ?? 0;
+      if (e.actor === 0 && e.weapon !== "flamethrower" && e.weaponId !== "Webley Mk VI" && (e.weapon !== "machineGun" || round % 3 === 0))
+        this.cue(g, "brass", { x: p.x, y: p.y + 0.1, z: p.z }, e.weapon === "machineGun" ? 0.07 : 0.09, true, false, e.id + 0.5, undefined,
+          { delay: 0.32 + (round % 5) * 0.045 + (e.weapon === "pistol" ? -0.08 : 0) });
       if (Math.hypot(p.x - e.from.x, p.z - e.from.z) > 35)
         this.stats.distantRifles++;
     }

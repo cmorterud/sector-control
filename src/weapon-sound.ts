@@ -1,6 +1,9 @@
 import {weaponDesign} from "./weapon-design";
 const designFor=(id?:string)=> (["serviceRifle","machineGun","pistol"] as const).map(weapon=>weaponDesign({weapon,weaponId:id})).find(Boolean);
-export const shotVoice=(id?:string)=>designFor(id)?.soundPitch??1;
+// Mounted guns have no handheld design: the Vickers barks, the MG 08 is the
+// deepest, and the Hotchkiss's slower air-cooled action sounds sharper.
+const mountedPitch:Record<string,number>={"Vickers":.96,"MG 08":.84,"Hotchkiss M1914":1.1};
+export const shotVoice=(id?:string)=>mountedPitch[id??""]??designFor(id)?.soundPitch??1;
 export function mechanicalVoice(kind:string,action?:string,id?:string) {
  const pitch=shotVoice(id);
  const spec = action === "holster" ? [.18,650,.8,.65] : action === "draw" ? [.16,1200,1,.8]
