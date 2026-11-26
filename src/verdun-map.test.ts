@@ -25,7 +25,12 @@ test("forms dense broken woods on both sides of the relay with low undergrowth a
  const trees = verdunMap.vegetation!.filter(b=>b.kind==="tree");
  expect(trees.length).toBeGreaterThanOrEqual(300);
  expect(trees.length).toBeLessThanOrEqual(330);
- expect(trees.filter(treeHasCrown).length).toBeGreaterThan(160);
+ // June 1916: most crowns between the front lines are shelled away, more
+ // survive toward each side's line, and behind the lines the woods stand.
+ const between = trees.filter(b=>Math.abs(b.x)<59), behind = trees.filter(b=>Math.abs(b.x)>=59);
+ expect(between.filter(treeHasCrown).length / between.length).toBeLessThan(.35);
+ expect(behind.filter(treeHasCrown).length / behind.length).toBeGreaterThan(.45);
+ expect(trees.filter(treeHasCrown).length).toBeGreaterThan(80);
  expect(new Set(trees.map(b=>b.treeStyle)).size).toBe(4);
  for(const side of [-1,1])expect(trees.filter(b=>b.z*side>28).length).toBeGreaterThan(90);
  const central = trees.filter(b=>b.id!.startsWith("verdun-wood-central"));

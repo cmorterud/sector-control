@@ -1,9 +1,10 @@
 import { expect, it } from "vitest";
 import { artilleryRules } from "./artillery";
-import { cloudDensity, cloudExposure, gasRules, gasStrikeReason, gasStrikeRules, maskProgress, masked } from "./gas";
+import { cloudDensity, cloudExposure, gasAgent, gasRules, gasStrikeReason, gasStrikeRules, maskProgress, masked } from "./gas";
 import { groundHeight } from "./map";
 import { Game, TestCollision, botCommand, idle, type Command, type Event as GameEvent } from "./simulation";
 import { trenchMap } from "./trench-map";
+import { verdunMap } from "./verdun-map";
 
 const place = (g: Game, x: number, z: number, id = 0) =>
   Object.assign(g.players[id], { x, z, y: groundHeight(x, z, g.map), vx: 0, vz: 0 });
@@ -149,3 +150,10 @@ it("finishes a seeded 20v20 battle by score with bots choosing gas shells someti
   expect(gasCalls).toBeGreaterThan(0);
   expect(shellCalls).toBeGreaterThan(0);
 }, 120_000);
+
+it("fires phosgene at Verdun in June 1916 and mustard on the 1917 maps", () => {
+  // Mustard was first used in July 1917; the rules stay the same, only names and colour change.
+  expect(gasAgent(verdunMap)).toMatchObject({ shells: "PHOSGENE SHELLS", weapon: "Phosgene shell", masked: "MASK LEAKING" });
+  expect(gasAgent(trenchMap)).toMatchObject({ shells: "GAS SHELLS", weapon: "Gas shell", masked: "STILL BURNING" });
+  expect(gasAgent(verdunMap).cloud).not.toBe(gasAgent(trenchMap).cloud);
+});

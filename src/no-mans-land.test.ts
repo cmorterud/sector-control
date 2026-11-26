@@ -59,6 +59,20 @@ it("cuts a segment with a nearby blast but not with a distant one", () => {
   expect(cut.boxes.length).toBeLessThan(intact.boxes.length);
 });
 
+// The drawn outline must run under the ground all the way round (vertices and
+// the chords between them), so no edge of the water floats over a lower bank.
+function pondEdgeBuried(p: ReturnType<typeof craterPonds>[number], map: typeof trenchMap) {
+  const n = p.edge.length;
+  for (let i = 0; i < n; i++)
+    for (const t of [0, 0.25, 0.5, 0.75]) {
+      const a = (i / n) * Math.PI * 2, b = ((i + 1) / n) * Math.PI * 2;
+      const x = p.x + Math.cos(a) * p.edge[i] * (1 - t) + Math.cos(b) * p.edge[(i + 1) % n] * t;
+      const z = p.z + Math.sin(a) * p.edge[i] * (1 - t) + Math.sin(b) * p.edge[(i + 1) % n] * t;
+      if (groundHeight(x, z, map) < p.y) return false;
+    }
+  return true;
+}
+
 it("fills the old craters with standing water you splash through", () => {
   const ponds = craterPonds(trenchMap);
   expect(ponds.length).toBeGreaterThanOrEqual(4);
@@ -69,6 +83,7 @@ it("fills the old craters with standing water you splash through", () => {
       expect(groundHeight(pond.x + Math.cos(a) * pond.radius, pond.z + Math.sin(a) * pond.radius, trenchMap)).toBeLessThan(pond.y + 0.02);
     }
     expect(inCraterPond({ x: pond.x, z: pond.z }, trenchMap)).toBe(true);
+    expect(pondEdgeBuried(pond, trenchMap)).toBe(true);
     expect(footSurface({ x: pond.x, z: pond.z }, trenchMap)).toBe("splash");
   }
   expect(footSurface({ x: -40, z: 0, y: 2.4 }, trenchMap)).not.toBe("splash");
@@ -130,9 +145,12 @@ it("stands water in Verdun's shell scars and strews debris across its whole fiel
   const ponds = craterPonds(verdunMap);
   expect(ponds.length).toBeGreaterThan(15);
   for (const p of ponds) {
-    const scar = verdunMap.terrain!.shellScars!.find((s) => s.x === p.x && s.z === p.z)!;
+    // The water sits on the bowl's floor, near its scar's middle.
+    const scar = verdunMap.terrain!.shellScars!.reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b));
+    expect(Math.hypot(scar.x - p.x, scar.z - p.z)).toBeLessThanOrEqual(Math.min(scar.radiusX, scar.radiusZ) * 0.5 + 0.01);
     expect(p.radius).toBeLessThanOrEqual(Math.min(scar.radiusX, scar.radiusZ));
     expect(groundHeight(p.x, p.z, verdunMap)).toBeLessThan(p.y);
+    expect(pondEdgeBuried(p, verdunMap)).toBe(true);
   }
   const debris = noMansLandDebris(verdunMap);
   expect(debris).toHaveLength(Math.round((70 * 112) / 32));

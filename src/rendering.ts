@@ -2173,11 +2173,13 @@ export class Renderer implements CollisionWorld {
       const centre = positions.length / 3;
       positions.push(p.x, p.y, p.z);
       normals.push(0, 1, 0);
-      for (let i = 0; i < 20; i++) {
-        const a = (i / 20) * Math.PI * 2, r = p.radius * (0.92 + 0.08 * Math.sin(i * 2.7));
-        positions.push(p.x + Math.cos(a) * r, p.y, p.z + Math.sin(a) * r);
+      // The outline runs just under the bank all round, so the ground clips it.
+      const n = p.edge.length;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        positions.push(p.x + Math.cos(a) * p.edge[i], p.y, p.z + Math.sin(a) * p.edge[i]);
         normals.push(0, 1, 0);
-        indices.push(centre, centre + 1 + ((i + 1) % 20), centre + 1 + i);
+        indices.push(centre, centre + 1 + ((i + 1) % n), centre + 1 + i);
       }
     }
     const debris = backdropBoxMesh(noMansLandDebris(this.map)), litter = new pc.Mesh(device);

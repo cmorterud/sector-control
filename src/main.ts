@@ -64,7 +64,7 @@ import { lightAt } from "./night";
 import { flareRules } from "./flares";
 import { carriedFlag, ctfMap, ctfRules, supportsCtf } from "./ctf";
 import { CtfAnnouncer, ctfBrief, ctfLabels, ctfPrompt, ctfStrip, modeChoice } from "./ctf-hud";
-import { masked } from "./gas";
+import { gasAgent, masked } from "./gas";
 import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
 import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
@@ -565,7 +565,7 @@ function handle(e: Event) {
   }
   if (e.type === "gasMask" && e.actor === 0) gasAudio.seal();
   if (e.type === "gasStrike" && e.phase === "call" && e.actor === 0) {
-    artilleryNotice = "GAS SHELLS AWAY · CLOUD IN 3s";
+    artilleryNotice = `${gasAgent(game.map).shells} AWAY · CLOUD IN 3s`;
     artilleryNoticeUntil = performance.now() + 3000;
     sound(520, 0.25, 0.06);
   }
@@ -1200,7 +1200,7 @@ try {
       // ridge; and south along the continuing front.
       const verdunDetails:Record<string,[number,number,number,number]>={"boundary-wire":[-99,22,-108,32],"boundary-walk":[-100,6,-116,6],
         "dead-zone-woods":[-52,-57,-58,-96],"west-horizon":[-97,30,-186,46],"east-horizon":[97,-36,222,-46],"south-front":[58,56,68,140],
-        // Through the woods to Shattered Wood (B), across Broken Relay (C), and along Blue's front trench.
+        // Through the woods to Chapitre Wood (B), across Thiaumont (C), and along Blue's front trench.
         "woods":[-36,-53,-54,-36],"relay":[-15,5,0,0],"front-trench":[-67,-28,-67,-48],
         // Past a flooded shell scar to Blue's wire in front of its front line.
         "no-mans-land":[-46,-12,-58,-21]};
@@ -1243,7 +1243,7 @@ try {
       : ctfMode
       ? `Capture the flag across the trench lines. Raid any of the enemy's three flags, carry it back to your support trench and defend your own. ${teamSize} soldiers per team · first to ${ctfRules.captureLimit} captures or eight minutes.${map.night ? " After dark you see about fifteen meters." : ""}`
       : map.id === "verdun"
-      ? `France faces Imperial Germany across a longer forest front. Capture the ruined Broken Relay between the trench systems. ${teamSize} soldiers per team · five-flag domination. Verdun-inspired, 1917.`
+      ? `Verdun, 23 June 1916. Under a phosgene barrage, Imperial Germany pushes through the shattered woods from Fort Douaumont toward Fleury; France holds the line in front of Fort Souville. Capture the ruined Thiaumont crossroads between the trench systems. ${teamSize} soldiers per team · five-flag domination.`
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
       : map.sky

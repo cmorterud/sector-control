@@ -12,7 +12,7 @@ import {farmPropParts} from "./farm-props";
 test("Broken Relay has four walkable shallow dogleg approaches and no high firing platform",()=>{
  const g=new Game(new TestCollision(verdunMap),false,1000,41,undefined,{map:verdunMap,ambientArtillery:false});
  const flag=g.sectors.find(s=>s.id==="C")!;
- expect(flag.name).toBe("Broken Relay");expect(flag.home).toBeUndefined();
+ expect(flag.name).toBe("Thiaumont");expect(flag.home).toBeUndefined();
  const paths=g.map.terrain!.branchRoutes!;expect(paths).toHaveLength(4);
  for(const route of paths){
   for(const p of route.points){expect(groundHeight(p.x,p.z,g.map)).toBeCloseTo(1.5,1);expect(blocked(p.x,p.z,.6,g.map)).toBe(false);}

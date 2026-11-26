@@ -1,4 +1,4 @@
-// Tanks on Trench front and Verdun sector (briefing toggle, or ?tanks=1).
+// Tanks on Trench front (briefing toggle, or ?tanks=1).
 //
 // One tank a side at a time. A bot crews it by default; a human who climbs in
 // takes command and the bot climbs out. Tanks are slow, cross ordinary
@@ -150,7 +150,9 @@ export interface TankState {
   destroy: (actor: number, change: DestructionChange) => void;
 }
 
-export const supportsTanks = (map: Pick<MapDefinition, "id">) => map.id === "trenches" || map.id === "verdun";
+// Not on Verdun: no tanks fought there. It is set in June 1916, and the French
+// Saint-Chamond first fought in May 1917. The model stays for a later map.
+export const supportsTanks = (map: Pick<MapDefinition, "id">) => map.id === "trenches";
 
 const models: Record<FactionId, { model: TankModel; name: string }> = {
   british: { model: "mark-iv", name: "Mark IV" },
