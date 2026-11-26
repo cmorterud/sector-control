@@ -1,5 +1,6 @@
 import type { MapDefinition } from "./map";
 import { publicAsset } from "./public-assets";
+import { supportsTanks } from "./tanks";
 export const battlefieldInfo = {
   "fort-vaux": { setting: "Verdun · 1916", factions: "France · Imperial Germany", description: "Fight through flooded chambers and vaulted galleries for three flags. No artillery." },
   zeppelin: { setting: "Western Front · 1917", factions: "France · Imperial Germany", description: "Board a German airship adrift above the clouds at dusk. Fight along its keel, gallery and top walk for both engine stations and the bomb bay. No artillery." },
@@ -15,6 +16,8 @@ export const battlefieldInfo = {
 export function battlefieldCard(map: MapDefinition, href?: string) {
   const info = battlefieldInfo[map.id];
   const roster = map.id === "fort-vaux" ? `Indoor ${map.defaultTeamSize}v${map.defaultTeamSize}. ` : map.sky ? `Airship ${map.defaultTeamSize}v${map.defaultTeamSize}. ` : "";
-  const content = `<img src="${publicAsset(`previews/${map.id}.jpg`)}" alt="${map.name} battlefield" width="320" height="180" loading="lazy"><strong>${map.name}</strong><small>${info.setting} · ${info.factions}</small><p>${roster}${info.description}</p>`;
+  // Maps that field tanks say so on their card, over the preview image.
+  const tanks = supportsTanks(map) ? `<em class="tank-badge">TANKS</em>` : "";
+  const content = `${tanks}<img src="${publicAsset(`previews/${map.id}.jpg`)}" alt="${map.name} battlefield" width="320" height="180" loading="lazy"><strong>${map.name}</strong><small>${info.setting} · ${info.factions}</small><p>${roster}${info.description}</p>`;
   return href ? `<a data-battlefield="${map.id}" href="${href}">${content}</a>` : `<span data-battlefield="${map.id}" aria-current="page">${content}</span>`;
 }
