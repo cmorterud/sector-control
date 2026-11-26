@@ -77,3 +77,56 @@ export function throwPresentation(p: Soldier, tick: number) {
     hand: { x: 0.16, y: -0.14 + (action ? Math.sin((1 - t) * Math.PI / 2) * 0.26 : -ease(t) * 0.28), z: -0.5 + ease(t) * 0.2 },
   };
 }
+
+// Third-person throw: the whole upper body winds up and comes through, not
+// only the arm. Humans wind up for six ticks before the grenade leaves the
+// hand; bots throw at once, so they start from the cocked pose and come
+// straight through. Angles in degrees; `held` shows the grenade in the hand.
+export function throwBody(p: Soldier, tick: number) {
+  if (p.hp <= 0 || tick >= p.throwUntil) return null;
+  const action = p.throwAction;
+  const cocked = { twist: -35, lean: 6, shoulder: 205, elbow: 100 };
+  if (action && !action.released) {
+    const w = ease((tick - action.startTick) / Math.max(1, action.releaseTick - action.startTick));
+    return {
+      held: true, weight: ease(w * 3),
+      twist: cocked.twist * w, lean: cocked.lean * w,
+      shoulder: 65 + (cocked.shoulder - 65) * w, elbow: cocked.elbow * w,
+    };
+  }
+  const t = clamp(1 - (p.throwUntil - tick) / 15);
+  const arc = ease(t / 0.35), settle = ease((t - 0.35) / 0.65);
+  return {
+    held: false, weight: 1 - settle,
+    twist: cocked.twist + (25 - cocked.twist) * arc - 25 * settle,
+    lean: cocked.lean + (-12 - cocked.lean) * arc + 12 * settle,
+    shoulder: cocked.shoulder + (25 - cocked.shoulder) * arc + 40 * settle,
+    elbow: cocked.elbow * (1 - arc) + 25 * settle,
+  };
+}
+
+// The first moments after death, before the ragdoll takes over: knees give,
+// the body drops and twists away from the hit. `hit` is the killing round's
+// direction in the soldier's own space (+z is backwards). Past `fallTicks`
+// a soldier too far away for a ragdoll keeps going down until it lies flat.
+export const deathFallRules = { fallTicks: 16, lieTicks: 14 };
+export function deathFall(age: number, hit: { x: number; z: number }) {
+  const t = clamp(age / deathFallRules.fallTicks), b = ease(t);
+  const lie = ease((age - deathFallRules.fallTicks) / deathFallRules.lieTicks);
+  const length = Math.hypot(hit.x, hit.z);
+  // No known shooter: slump forward.
+  const back = length > .1 ? hit.z / length : -.6, side = length > .1 ? hit.x / length : 0;
+  const pitchSign = back >= 0 ? 1 : -1;
+  return {
+    fallen: t >= 1, lying: lie >= 1,
+    drop: .42 * b + .3 * lie,
+    pitch: pitchSign * (10 + 25 * Math.abs(back)) * b + pitchSign * 50 * lie,
+    roll: -side * 18 * b,
+    twist: side * 22 * b,
+    slump: -14 * b * (1 - lie),
+    hip: 55 * b * (1 - lie) + 15 * lie,
+    knee: -100 * b * (1 - lie) - 20 * lie,
+    ankle: 45 * b * (1 - lie),
+    arm: b,
+  };
+}

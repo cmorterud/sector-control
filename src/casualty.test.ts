@@ -216,16 +216,28 @@ it("skins a live rig to physical ragdoll bones, bounds bodies, follows excavatio
   expect(r.casualties).toHaveLength(0);
   expect(r.visualWork.size).toBe(1);
   expect(r.people[0].getLocalScale().equals(pc.Vec3.ONE)).toBe(true);
+  // The ragdoll waits while the death fall plays, then starts from its pose.
+  r.visualWork.flush();
+  expect(r.casualties).toHaveLength(0);
+  expect(r.visualWork.size).toBe(1);
+  const fallen = r as unknown as { poseDeathFall(p: Soldier, rig: unknown, age: number, lieDown: boolean): void };
+  fallen.poseDeathFall(p, r.soldiers[0], 8, false);
+  r.visualWork.flush();
+  expect(r.casualties).toHaveLength(0);
+  fallen.poseDeathFall(p, r.soldiers[0], 16, false);
   r.visualWork.flush();
   expect(r.casualties).toHaveLength(1);
   expect(r.people[0].getLocalScale().equals(pc.Vec3.ZERO)).toBe(true);
   const visible: number[] = [];
   r.casualties[0].mesh.getPositions(visible);
-  expect(Math.max(...visible.filter((_, i) => i % 3 === 1)) - Math.min(...visible.filter((_, i) => i % 3 === 1))).toBeGreaterThan(1.8);
+  expect(Math.max(...visible.filter((_, i) => i % 3 === 1)) - Math.min(...visible.filter((_, i) => i % 3 === 1))).toBeGreaterThan(1.1);
   r.drawCasualties(30);
   expect(r.ragdollPhysics!.ragdolls.size).toBe(0);
   // Reusing a canonical mesh still follows a different death's world pose.
   r.people[0].setLocalScale(pc.Vec3.ONE);
+  // Stand the rig back up from its fall, as a respawn would.
+  const standing = r.soldiers[0] as { body: pc.Entity };
+  standing.body.setLocalPosition(0, .94, 0); standing.body.setLocalEulerAngles(0, 0, 0);
   r.people[0].setPosition(4, 0, 3);
   r.retainCasualty(p);
   const moved = r.casualties[0];
