@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import { Entity } from "playcanvas";
 import {
   baseGroundHeight,
+  rampsNear,
+  type Ramp,
   groundElevation,
   groundHeight,
   walkSegment,
@@ -148,4 +150,26 @@ it("excavates the uneven starting surface and restores it on a fresh match", () 
   expect(baseGroundHeight(x, z, g.map)).toBe(before);
   expect(groundHeight(x, z, create().map)).toBe(before);
   expect(groundHeight(x, z, trenchMap)).toBe(before);
+});
+it("finds the same ramp through the ramp grid as a scan of every ramp, edges included", async () => {
+  const { springOffensiveMap } = await import("./spring-offensive-map");
+  const { verdunMap } = await import("./verdun-map");
+  const contains = (r: Ramp, x: number, z: number) => Math.abs(x - r.x) <= r.w / 2 && Math.abs(z - r.z) < r.d / 2;
+  for (const map of [springOffensiveMap, verdunMap, trenchMap]) {
+    const ramps = map.terrain!.ramps;
+    expect(ramps.length).toBeGreaterThan(8);
+    const points: [number, number][] = [];
+    for (const r of ramps)
+      for (const fx of [-0.5000001, -0.5, -0.4999999, -0.25, 0, 0.25, 0.4999999, 0.5, 0.5000001])
+        for (const fz of [-0.5000001, -0.5, -0.4999999, 0, 0.4999999, 0.5, 0.5000001])
+          points.push([r.x + r.w * fx, r.z + r.d * fz]);
+    for (let i = 0; i < 4000; i++) points.push([Math.sin(i * 1.37) * map.width / 2, Math.cos(i * 2.11) * map.depth / 2]);
+    let inside = 0;
+    for (const [x, z] of points) {
+      const scanned = ramps.find((r) => contains(r, x, z));
+      expect(rampsNear(ramps, x, z).find((r) => contains(r, x, z))).toBe(scanned);
+      if (scanned) inside++;
+    }
+    expect(inside).toBeGreaterThan(ramps.length * 20);
+  }
 });

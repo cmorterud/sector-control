@@ -269,6 +269,32 @@ export const industrialMap: MapDefinition = {
   sectors,
   boxes,
 };
+// Ramps bucketed into four-metre cells, so a height query tests only the
+// ramps whose footprint touches its cell instead of every ramp on the map.
+// Each cell keeps the ramps in authored order, so the first ramp that
+// contains a point is the same one a scan of the whole list finds.
+const rampCell = 4;
+const noRamps: Ramp[] = [];
+const rampGrids = new WeakMap<Ramp[], { length: number; cells: Map<number, Ramp[]> }>();
+const rampKey = (col: number, row: number) => (col + 32768) * 65536 + (row + 32768);
+export function rampsNear(ramps: Ramp[], x: number, z: number): Ramp[] {
+  if (ramps.length < 8) return ramps;
+  let grid = rampGrids.get(ramps);
+  if (!grid || grid.length !== ramps.length) {
+    grid = { length: ramps.length, cells: new Map() };
+    for (const ramp of ramps) {
+      const c0 = Math.floor((ramp.x - ramp.w / 2 - 1e-6) / rampCell), c1 = Math.floor((ramp.x + ramp.w / 2 + 1e-6) / rampCell);
+      const r0 = Math.floor((ramp.z - ramp.d / 2 - 1e-6) / rampCell), r1 = Math.floor((ramp.z + ramp.d / 2 + 1e-6) / rampCell);
+      for (let c = c0; c <= c1; c++)
+        for (let r = r0; r <= r1; r++) {
+          const key = rampKey(c, r), list = grid.cells.get(key);
+          if (list) list.push(ramp); else grid.cells.set(key, [ramp]);
+        }
+    }
+    rampGrids.set(ramps, grid);
+  }
+  return grid.cells.get(rampKey(Math.floor(x / rampCell), Math.floor(z / rampCell))) ?? noRamps;
+}
 function authoredMapHeight(
   x: number,
   z: number,
@@ -276,7 +302,7 @@ function authoredMapHeight(
 ): number {
   const terrain = map.terrain;
   if (!terrain) return 0;
-  for (const ramp of terrain.ramps)
+  for (const ramp of rampsNear(terrain.ramps, x, z))
     if (
       Math.abs(x - ramp.x) <= ramp.w / 2 &&
       Math.abs(z - ramp.z) < ramp.d / 2
