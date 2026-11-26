@@ -1,3 +1,4 @@
+import { forwardDeployment } from "./deployment";
 import { advanceEmplacements, checkEmplacementSupport, damageEmplacements, dismount, emplacementCommand, emplacementView, mountedGun, operateGun, type Emplacement } from "./emplacements";
 import { damageAt, soldierHealth, type HitZone } from "./weapon-stats";
 import {rememberWound,reportDeath,type DamageDetails,type Wound,type DeathReport} from "./combat-history";
@@ -459,6 +460,8 @@ export interface Soldier extends Vec {
   captures: number;
   command: Command;
   objective: number;
+  // The forward deployment point (a home flag id) this player chose, if any.
+  deployAt?: string;
   villagePlan?: VillagePlan | null;
   path: Vec[];
   nextThink: number;
@@ -908,7 +911,7 @@ export function resolveTeamSize(map: MapDefinition, requested?: number) {
   return clamp(
     Number.isFinite(requested) ? Math.round(requested!) : fallback,
     1,
-    50,
+    map.maxTeamSize ?? 50,
   );
 }
 export function raySphere(a: V3, b: V3, c: V3, r: number): number {
@@ -1216,6 +1219,11 @@ export class Game {
     if (deployment) {
       p.x = deployment.x;
       p.z = deployment.z;
+    }
+    const forward = forwardDeployment(this, p);
+    if (forward) {
+      p.x = forward.x;
+      p.z = forward.z;
     }
     if (usesVillageTactics(this.map)) p.villagePlan = null;
     resetGas(p);

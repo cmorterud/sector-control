@@ -24,6 +24,8 @@ import { sighted } from "./player-view";
 import { spreadRingRadius } from "./spread-reticle";
 import { villageMap } from "./village-map";
 import { headlandMap } from "./headland-map";
+import { springOffensiveMap } from "./spring-offensive-map";
+import { deploymentPoints } from "./deployment";
 import { fortVauxMap } from "./fort-vaux-map";
 import { zeppelinMap } from "./zeppelin-map";
 import { weaponProfiles } from "./weapons";
@@ -226,7 +228,7 @@ let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
 // Maps offered in the briefing. Industrial is no longer offered, but ?map=industrial
 // still opens it for the CI combat and Armory browser checks.
-const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, headlandMap];
+const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, headlandMap];
 const requestedMap = params.get("map");
 const chosenMap = [...battlefields, industrialMap].find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
 // ?mode=ctf plays capture the flag on a map that lays it out; domination stays the default.
@@ -623,7 +625,7 @@ function hud(now: number) {
   const aimingScope = p.hp > 0 && !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick);
   const clearHUD = playing && !tacticalMap.open;
   root.classList.toggle("dead",p.hp<=0);
-  staged.combat=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw):"";
+  staged.combat=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw,p.hp<=0?deploymentChoice(p):""):"";
   battleSidebar.hidden = !clearHUD || aimingScope;
   if (!battleSidebar.hidden) {
     minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
@@ -853,6 +855,14 @@ function command(): Command {
   smoke = false;
   return c;
 }
+// The deploy choice shown while down: the main spawn and every open forward point.
+function deploymentChoice(p: Soldier) {
+  if (!map.deployments) return "";
+  const points = deploymentPoints(game, p.team);
+  if (p.deployAt && !points.some((q) => q.sector === p.deployAt)) p.deployAt = undefined;
+  const option = (key: number, label: string, chosen: boolean) => `<span class="deploy-option${chosen ? " chosen" : ""}">${key} · ${label}</span>`;
+  return `<small>DEPLOY AT</small><p class="deploy-choice">${[option(1, "Rear lines", !p.deployAt), ...points.map((q, i) => option(i + 2, `${q.sector} ${q.name}`, p.deployAt === q.sector))].join("")}</p>`;
+}
 window.addEventListener("keydown", (e) => {
   if (controlsPanel.key(e)) return;
   if (e.code === "Escape") {
@@ -878,6 +888,14 @@ window.addEventListener("keydown", (e) => {
      !mountedGun(game, game.players[0]) && !nearbyGun(game, game.players[0])){
     const index=training.interaction(game);
     if(index!==null){training.select(index);start();return;}
+  }
+  // While down on a map with forward deployment, number keys pick where to deploy.
+  if (game.players[0].hp <= 0 && map.deployments && /^Digit[1-5]$/.test(e.code)) {
+    if (!e.repeat) {
+      const p = game.players[0], n = Number(e.code.slice(5)) - 1;
+      p.deployAt = n === 0 ? undefined : deploymentPoints(game, p.team)[n - 1]?.sector ?? p.deployAt;
+    }
+    return;
   }
   if (mouseCaptureNeeded && !e.repeat && Object.values(settings.bindings).includes(e.code)) captureMouse();
   keys.add(e.code);
@@ -1174,7 +1192,7 @@ try {
       return {flag:f.id,state:f.state,carrier:f.carrier};
     },
     survey:(firstPerson:boolean,detail?:string)=>{
-      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],"night-raid":[-10,-16,8,-8],verdun:[-10,-18,8,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-6.4,5.6,5,-3]};
+      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],"night-raid":[-10,-16,8,-8],verdun:[-10,-18,8,0],"spring-offensive":[-30,-4,0,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-6.4,5.6,5,-3]};
       const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-3.3,-2.4,-6.8,-5.6]};
       const fortDetails:Record<string,[number,number,number,number]>={cistern:poses["fort-vaux"],barracks:[-35.4,2,-23,-1],casemate:[34.5,1,23,-1],yard:[-6,19,7,18]};
       if (map.fort) {
@@ -1244,6 +1262,8 @@ try {
       ? `Capture the flag across the trench lines. Raid any of the enemy's three flags, carry it back to your support trench and defend your own. ${teamSize} soldiers per team · first to ${ctfRules.captureLimit} captures or eight minutes.${map.night ? " After dark you see about fifteen meters." : ""}`
       : map.id === "verdun"
       ? `Verdun, 23 June 1916. Under a phosgene barrage, Imperial Germany pushes through the shattered woods from Fort Douaumont toward Fleury; France holds the line in front of Fort Souville. Capture the ruined Thiaumont crossroads between the trench systems. ${teamSize} soldiers per team · five-flag domination.`
+      : map.id === "spring-offensive"
+      ? `21 March 1918. Imperial Germany comes out of the morning fog against Britain's lines in depth: a broken outpost line, the battle zone and a rear switch line on each side. Take the Hill Redoubt, the ruined village and the windmill crossroads, then break through to the enemy's home flags. While your side holds one of its own home flags you may deploy behind it: choose with the number keys while down. ${teamSize} soldiers per team · seven-flag domination · first to 300 or eight minutes.`
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
       : map.sky

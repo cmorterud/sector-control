@@ -21,6 +21,8 @@ export const previewShots={
  zeppelin:{view:'third',ticks:420,survey:'top'},
  training:{view:'third',ticks:60,survey:true},
  verdun:{view:'third',ticks:540},
+ // Late enough that the morning fog has mostly lifted off the field.
+ 'spring-offensive':{view:'third',ticks:3300},
  trenches:{view:'third',ticks:540},
  'night-raid':{view:'third',ticks:540,survey:'trench-dugout'},
  headland:{view:'third',ticks:540},
@@ -45,7 +47,8 @@ const server=createServer(async(req,res)=>{
   if(page){res.writeHead(200,{'Content-Type':page.type});res.end(page.body);return;}
   const file=resolve(dist,decodeURIComponent(url.pathname.slice(sitePath.length))||'index.html');
   if(!url.pathname.startsWith(sitePath)||!file.startsWith(dist+sep))throw Error();
-  res.writeHead(200,{'Content-Type':mime[extname(file)]??'application/octet-stream'});res.end(await readFile(file));
+  const body=await readFile(file);
+  res.writeHead(200,{'Content-Type':mime[extname(file)]??'application/octet-stream'});res.end(body);
  }catch{res.writeHead(404);res.end();}
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));

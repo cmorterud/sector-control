@@ -75,8 +75,9 @@ const layouts: Partial<Record<MapDefinition["id"], CtfLayout>> = {
   "night-raid": trenchLayout,
   verdun: verdunLayout,
 };
-export const ctfLayout = (map: Pick<MapDefinition, "id">) => layouts[map.id];
-export const supportsCtf = (map: Pick<MapDefinition, "id">) => !!layouts[map.id];
+// A map can also carry its own layout (MapDefinition.ctfLayout).
+export const ctfLayout = (map: Pick<MapDefinition, "id" | "ctfLayout">): CtfLayout | undefined => layouts[map.id] ?? map.ctfLayout;
+export const supportsCtf = (map: Pick<MapDefinition, "id" | "ctfLayout">) => !!ctfLayout(map);
 
 // The same battlefield with the pickup points as its objectives. They are the
 // map's sectors so everything that reads objectives (labels, the minimap,

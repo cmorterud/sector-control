@@ -40,7 +40,7 @@ const forward = (g: Game, p: Soldier) =>
   Math.sign(g.map.spawn[p.team === "blue" ? "red" : "blue"].x - g.map.spawn[p.team].x) || (p.team === "blue" ? 1 : -1);
 // Maps whose bots pick individual cover posts around a flag.
 export const usesVillageTactics = (map: { id: string }) =>
-  map.id === "village" || map.id === "verdun" || map.id === "headland" || map.id === "fort-vaux" || map.id === "zeppelin";
+  map.id === "village" || map.id === "verdun" || map.id === "spring-offensive" || map.id === "headland" || map.id === "fort-vaux" || map.id === "zeppelin";
 
 // The next waypoint of a bot's lane aboard an airship: a third of each team
 // climbs to the gallery and a few go over the top to the bomb bay; the rest
@@ -154,7 +154,8 @@ const weakened = (g: Game, at: Post) =>
 // Spread computer-controlled lives behind all three entrances. Human spawn
 // remains unchanged. These are individual routes, not synchronized squads.
 export function villageSpawn(g: Game, p: Soldier): Vec | null {
-  if (!usesVillageTactics(g.map) || g.humanPlayerIds.includes(p.id)) return null;
+  // Maps with forward deployment points keep the spawn grid and their own points.
+  if (!usesVillageTactics(g.map) || g.map.deployments || g.humanPlayerIds.includes(p.id)) return null;
   const routes =
     g.map.terrain?.communicationRoutes?.filter((r) => r.team === p.team) ?? [];
   if (!routes.length) return null;

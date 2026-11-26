@@ -434,6 +434,9 @@ a.armory-link:hover { background: #3f5856; }
 .death-card { position:absolute;left:50%;bottom:108px;transform:translateX(-50%);width:min(430px,calc(100vw - 40px));box-sizing:border-box;background:#142323ed;border-left:3px solid #e39a80;padding:17px 22px;color:#eee8d7;box-shadow:0 5px 24px #0004; }
 .death-card h2 { margin:7px 0;font-size:23px;letter-spacing:.015em; }
 .death-card p { margin:5px 0;font-size:13px; }
+.death-card .deploy-choice { display:flex;flex-wrap:wrap;gap:6px;margin-top:10px; }
+.deploy-option { font-size:11px;padding:3px 7px;border:1px solid #c2c6b855;color:#c2c6b8; }
+.deploy-option.chosen { border-color:#e39a80;color:#fff3e4;background:#e39a8033; }
 .death-card small { display:block;font-size:9px;letter-spacing:.12em;color:#c2c6b8; }
 .death-damage { font-size:12px;color:#c9cdbf; }
 .death-countdown { margin:13px 0 8px;color:#e2c78a;font-size:13px; }

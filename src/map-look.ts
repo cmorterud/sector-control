@@ -24,6 +24,9 @@ export interface MapLook {
   // A map in the sky looks down on a sea of cloud instead of ground: sunlit
   // tops over shaded hollows, `scale` puffs per unit of view slope.
   cloudSea?: { top: string; shade: string; scale: number };
+  // Fog that starts this close and opens out to `fog` over `seconds` of match
+  // time: a morning fog lifting. Presentation only; bots see as usual.
+  fogLift?: { start: number; end: number; seconds: number };
 }
 
 export const mapLooks: Record<MapDefinition["id"], MapLook> = {
@@ -60,6 +63,17 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     vignette: 0.45, exposure: 1.4, ambient: 1.0, farClip: 420,
     atmosphere: { fieldMist: 0.03, trenchMist: 0.03 },
     nightVision: { color: "#a9bfe6", intensity: 1.5, range: 21 },
+  },
+  // 21 March 1918: thick white fog over the chalk at dawn, burning off as
+  // the sun climbs behind the German lines.
+  "spring-offensive": {
+    sun: { color: "#f4dcb8", intensity: 1.05, elevation: 18, azimuth: 80, shadowStrength: 0.5 },
+    sky: { zenith: "#7d8a98", horizon: "#c3c6c2", ground: "#55564b", clouds: 0.7, cloud: "#b9bcba", glow: "#f1d6ae" },
+    fog: { start: 40, end: 300 },
+    fogLift: { start: 4, end: 55, seconds: 180 },
+    grade: { brightness: 0, contrast: 1.05, saturation: 0.8, tint: "#eef0ee" },
+    vignette: 0.34, exposure: 1.1, ambient: 1.8, farClip: 440,
+    atmosphere: { fieldMist: 0.26, trenchMist: 0.2, fieldWidth: 140 },
   },
   // Overcast late morning; green-grey haze between the trees.
   verdun: {

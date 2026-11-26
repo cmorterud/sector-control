@@ -168,7 +168,7 @@ export interface KitRuntime {
   fallen: Record<string, number[]>;
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux" | "zeppelin";
+  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux" | "zeppelin" | "spring-offensive";
   // A night map (src/night.ts): an unlit soldier is seen only within `sight`
   // metres. Light from lamps, flares and bursts restores the usual range.
   night?: { sight: number };
@@ -177,6 +177,18 @@ export interface MapDefinition {
   depth: number;
   navSpacing: number;
   defaultTeamSize?: number;
+  // The largest roster this map allows a side; 50 when unset.
+  maxTeamSize?: number;
+  // Forward deployment points. While a side holds the named home flag, its
+  // soldiers may deploy here instead of at the main spawn (src/deployment.ts).
+  deployments?: { sector: string; x: number; z: number }[];
+  // Where each side's tank arrives, when not beside its infantry spawn (src/tanks.ts).
+  tankDepot?: Record<"blue" | "red", Vec>;
+  // Capture the flag pickups and drop points, for maps not listed in src/ctf.ts.
+  ctfLayout?: {
+    pickups: (Vec & { id: string; team: "blue" | "red"; name: string })[];
+    drops: Record<"blue" | "red", Vec & { name: string }>;
+  };
   artillery?: false;
   fort?: FortLayout;
   // A battlefield in the air. There is no ground: every height query off the
