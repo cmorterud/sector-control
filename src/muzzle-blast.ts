@@ -13,6 +13,11 @@ export interface MuzzleProfile {
   // Smoke puffs per shot, and how big they grow.
   smoke: number;
   smokeSize: number;
+  // Optional: how thick the smoke starts and how fast it climbs (m/s and
+  // m/s² of lift). A tank gun's cloud is thicker and rises over the hull.
+  smokeAlpha?: number;
+  smokeRise?: number;
+  smokeLift?: number;
   // How long the flash lasts, seconds.
   flashLife: number;
   // Dust thrown up from the ground under the muzzle.
@@ -33,7 +38,12 @@ const profiles: Record<WeaponKind | "emplaced", MuzzleProfile> = {
   flamethrower: { flash: 0, jet: 0, smoke: 0, smokeSize: 0, flashLife: 0, dust: 0, brass: 0, light: 0, lightRange: 0 },
 };
 
+// A tank's main gun: a big flash, a long jet and a heavy cloud off the barrel.
+export const tankGunMuzzle = "tank gun";
+const tankGun: MuzzleProfile = { flash: 1.5, jet: 1.9, smoke: 16, smokeSize: 3.6, smokeAlpha: 0.9, smokeRise: 2.2, smokeLift: 1.1, flashLife: 0.09, dust: 6, brass: 0, light: 6, lightRange: 16 };
+
 export function muzzleProfile(weapon: WeaponKind | undefined, weaponId: string | undefined, mounted: boolean): MuzzleProfile {
+  if (weaponId === tankGunMuzzle) return tankGun;
   if (mounted) return profiles.emplaced;
   const base = profiles[weapon ?? "rifle"];
   // A revolver keeps its empties in the cylinder; a short carbine barrel

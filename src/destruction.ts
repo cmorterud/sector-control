@@ -804,6 +804,15 @@ function applyCoverChanges(
   return collapses;
 }
 
+// A tank rolling over wire belt segments flattens them. Changes no collision.
+export function crushWire(map: MapDefinition, ids: string[], at: Point): DestructionChange | null {
+  const state = map.destruction;
+  if (!state || !ids.length) return null;
+  for (const id of ids) (state.wire ??= {})[id] = true;
+  state.revision++;
+  return { revision: state.revision, kind: "tank", geometry: false, at: { ...at }, crater: null, terrain: [], objects: [], patches: [], wire: [...ids] };
+}
+
 export function damageVegetation(
   map: MapDefinition,
   at: Point,

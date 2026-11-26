@@ -69,6 +69,8 @@ import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui"
 import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
 import { soldierName } from "./soldier-names";
+import { crewTank, supportsTanks, takeCommand } from "./tanks";
+import { tankBrief, tankChoice, tankNotice, tankPanel, tankPrompt, tankStorageKey } from "./tank-hud";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="spread-ring" class="hidden"></div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
@@ -235,6 +237,8 @@ root.classList.toggle("training-active",!!training);
 let trainingReset=false;
 const trainingOverlay=document.createElement("aside");trainingOverlay.id="training-lesson";trainingOverlay.hidden=true;
 document.querySelector("#ui")!.append(trainingOverlay);
+// Tanks on the maps that have them: ?tanks=1 or 0 wins, then the briefing's last choice.
+let tanksOn = params.has("tanks") ? params.get("tanks") !== "0" : params.get("tank") === "1" ? true : (() => { try { return localStorage.getItem(tankStorageKey) === "1"; } catch { return false; } })();
 const requestedTeamSize = params.has("teamSize")
   ? Number(params.get("teamSize"))
   : undefined;
@@ -309,6 +313,15 @@ function menu(
   loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
+  if (supportsTanks(map)) {
+    const armour = document.createElement("div"); armour.className = "loadout-choice";
+    armour.innerHTML = tankChoice(map, tanksOn) + (started ? "<small>Takes effect when you restart the match</small>" : "");
+    el("controls-settings").before(armour);
+    (el("tanks") as HTMLInputElement).onchange = (e) => {
+      tanksOn = (e.target as HTMLInputElement).checked;
+      try { localStorage.setItem(tankStorageKey, tanksOn ? "1" : "0"); } catch { /* per-viewer convenience only */ }
+    };
+  }
   select.onchange = () => { chosenLoadout = select.value as Loadout; if (game) game.selectLoadout(game.players[0], chosenLoadout); };
   if (bots) {
     const skill = document.createElement("div"); skill.className = "loadout-choice";
@@ -394,7 +407,7 @@ function start() {
     ),
     12345,
     training ? undefined : { difficulty },
-    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined },
+    { map, teamSize:training?4:teamSize, humanPlayerIds: autoplay&&!training ? [] : [0],ambientArtillery:training?false:undefined, tanks: !training && tanksOn },
   );
   game.selectLoadout(game.players[0], chosenLoadout);
   training?.begin(game);
@@ -500,6 +513,11 @@ function handle(e: Event) {
   }
   if (e.type === "grenadeThrow" && e.actor === 0) sound(320, 0.12, 0.035);
   const listener = game.players[0];
+  const armour = tankNotice(game, e, listener);
+  if (armour) {
+    callout = armour;
+    calloutUntil = performance.now() + 3000;
+  }
   const whistled = whistleNotice(game, e, listener);
   if (whistled) {
     callout = whistled;
@@ -746,9 +764,19 @@ function hud(now: number) {
     staged.ammo = staged.ammo.replace("<small>AUTO · HOLD TO FIRE / BRACE FOR ACCURACY</small>",
       `<small>${p.barrel.overheated ? `BARREL OVERHEATED · COOLING ${ventSeconds(p.barrel).toFixed(1)}s` : "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY"}</small>${heatGauge(p.barrel)}`);
   }
+  const crewed = p.hp > 0 ? crewTank(game, p) : undefined;
+  if (crewed) {
+    const key = (action: ControlAction) => keyLabel(settings.bindings[action]);
+    staged.ammo = tankPanel(game, p, { interact: useKey, forward: key("forward"), backward: key("backward"), left: key("left"), right: key("right") }) +
+      (game.map.artillery !== false ? `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>` : "");
+    staged.capture = "";
+  } else if (!gun && !nearby && !placement && !pickup && p.hp > 0 && game.tanks.list.length) {
+    const prompt = tankPrompt(game, p, useKey);
+    if (prompt) staged.capture = prompt;
+  }
   if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
-    p.hp > 0 ? String(p.suppression * 0.22) : "0";
+    p.hp > 0 ? String(Math.max(p.suppression * 0.22, (crewed?.splash ?? 0) * 0.55)) : "0";
   el("hit").style.opacity = now < hitUntil ? "1" : "0";
   el("damage").style.opacity = now < damageUntil ? ".65" : "0";
   const scoreboard = el("scoreboard");
@@ -789,13 +817,14 @@ function command(): Command {
   const c = idle();
   const x = Number(held("right")) - Number(held("left")),
     z = Number(held("forward")) - Number(held("backward"));
+  c.drive = { throttle: z, turn: x };
   c.x = x * Math.cos(yaw) + z * Math.sin(yaw);
   c.z = x * Math.sin(yaw) - z * Math.cos(yaw);
   c.yaw = yaw;
   c.pitch = pitch;
   c.crouch = crouchInput.active;
   c.sprint = settings.toggleSprint ? sprintInput.active : held("sprint");
-  c.fire = !placingGun && (fire || (triggerDown && (game.players[0].mountedGun !== undefined || game.players[0].weapon === "machineGun" || game.players[0].weapon === "flamethrower"))) && !tacticalMap.open;
+  c.fire = !placingGun && (fire || (triggerDown && (game.players[0].mountedGun !== undefined || game.players[0].tank !== undefined || game.players[0].weapon === "machineGun" || game.players[0].weapon === "flamethrower"))) && !tacticalMap.open;
   c.interact = !tacticalMap.open && (pendingInteract || held("interact"));
   pendingInteract = false;
   c.deployGun = kitCommand === "deploy";
@@ -968,6 +997,8 @@ function stepSimulation() {
   input.redeploy = pendingRedeploy; pendingRedeploy = false;
   const simStart = battlePerformance.begin();
   game.step(input);
+  // ?tank=1: begin in command of your side's tank.
+  if (game.tick === 1 && params.get("tank") === "1" && !autoplay) takeCommand(game, game.players[0]);
   training?.observe(game,input);
   battlePerformance.end("simulation",simStart);
   const player = game.players[0];
@@ -1228,7 +1259,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}${modeChoice(chosenMap, ctfMode, params)}<div class="brief"><b>01 / ${ctfMode ? "CAPTURE THE FLAG" : map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${ctfMode ? ctfBrief({ map }) : map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p></div>`,
+    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}${modeChoice(chosenMap, ctfMode, params)}<div class="brief"><b>01 / ${ctfMode ? "CAPTURE THE FLAG" : map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${ctfMode ? ctfBrief({ map }) : map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p>${supportsTanks(map) ? `<b>04 / TANKS</b><p>${tankBrief(keyLabel(settings.bindings.interact))}</p>` : ""}</div>`,
   );
   requestAnimationFrame(frame);
   // Build the bot navigation graph while the briefing is read rather than in

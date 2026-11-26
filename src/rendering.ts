@@ -1,4 +1,6 @@
 import { emplacementRules, emplacementView, mountedGun, type Placement } from "./emplacements";
+import { TankView } from "./tank-render";
+import { crewTank, tankCamera } from "./tanks";
 import {handlingPath,handlingWrist} from "./handling-pose";
 import { publicAsset } from "./public-assets";
 import { architectureGeometry, architectureKey, type ArchitectureSurface } from "./architecture-geometry";
@@ -86,7 +88,7 @@ import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse, recoilFeel, recoilBuzz } from "./recoil";
 import { WeaponFx } from "./weapon-fx";
-import { tracerRound } from "./muzzle-blast";
+import { tankGunMuzzle, tracerRound } from "./muzzle-blast";
 import { heatRules } from "./weapon-heat";
 import { firstPersonView, sighted, sightHeight, scopeFov, viewWeaponPosition, weaponPullback, barrelEnd, viewDirection } from "./player-view";
 import { smokeRules, smokeDensity } from "./smoke";
@@ -4689,6 +4691,7 @@ export class Renderer implements CollisionWorld {
     this.machineGunPreview = undefined;
     for (const mesh of this.emplacementMeshes.values()) mesh.root.destroy();
     this.emplacementMeshes.clear();
+    this.tankView?.reset();
     this.gunGhost?.root.destroy();
     this.gunGhost = undefined;
     this.pendingCasualties.clear();
@@ -4900,6 +4903,7 @@ export class Renderer implements CollisionWorld {
   machineGunPreview?: Placement;
   private emplacementMeshes = new Map<number, EmplacementMesh>();
   private gunGhost?: EmplacementMesh;
+  private tankView?: TankView;
   private gunGhostValid?: boolean;
   private previewMaterials = new Map<boolean, pc.StandardMaterial>();
 
@@ -5106,6 +5110,8 @@ export class Renderer implements CollisionWorld {
     this.flushWorldBatches();
     this.frameDt = dt;
     this.drawEmplacements(g, alpha);
+    if (g.tanks?.list.length || this.tankView)
+      (this.tankView ??= new TankView(this.app, (...a) => this.cube(...a), (c) => this.material(c))).draw(g, alpha);
     for (const kit of g.flames?.kits ?? []) {
       let marker=this.flamePickups.get(kit.id);
       if(!marker) {
@@ -5137,6 +5143,11 @@ export class Renderer implements CollisionWorld {
       }
       // Dead actors keep the kit actually rendered at death while setup waits.
       if (p.hp > 0) this.actorKits.set(p.id, kit);
+      // A tank's crew are out of sight inside it.
+      if (p.tank !== undefined && p.hp > 0) {
+        this.people[p.id].setLocalScale(pc.Vec3.ZERO);
+        continue;
+      }
       const e = this.people[p.id],
         previous = this.previous[p.id] ?? p,
         teleported = Math.hypot(previous.x - p.x, previous.z - p.z) > 2;
@@ -5245,7 +5256,8 @@ export class Renderer implements CollisionWorld {
     const p = g.players[0],
       watched = p.hp<=0&&!overview&&this.spectating!==null&&g.players[this.spectating]?.hp>0?g.players[this.spectating]:undefined,
       gun = mountedGun(g, p),
-      firstPerson = (firstPersonView(p) || !!gun) && !overview && !watched,
+      crewed = p.hp > 0 && !overview ? crewTank(g, p) : undefined,
+      firstPerson = (firstPersonView(p) || !!gun) && !overview && !watched && !crewed,
       deathView = p.hp<=0&&!overview&&!watched?this.deathView:null,
       baseView = deathView ?? gun ?? weaponAim(watched ?? p),
       view = {
@@ -5260,8 +5272,14 @@ export class Renderer implements CollisionWorld {
       };
     const visual = this.people[watched?.id ?? 0].getPosition();
     const cameraDrop = crouchRules.drop * (firstPerson ? Number(p.crouched) : this.soldiers[watched?.id ?? 0].crouch);
-    const pivot = gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z },
-      desired = {
+    // A tank commander looks on from behind and above the hull.
+    const tankEye = crewed ? tankCamera({
+      x: crewed.previous.x + (crewed.x - crewed.previous.x) * alpha,
+      y: crewed.previous.y + (crewed.y - crewed.previous.y) * alpha,
+      z: crewed.previous.z + (crewed.z - crewed.previous.z) * alpha,
+    }, view.yaw, view.pitch) : undefined;
+    const pivot = tankEye?.pivot ?? (gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z }),
+      desired = tankEye?.desired ?? {
         x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
         y: visual.y + 2.5 - cameraDrop - dir.y * d,
         z: visual.z - dir.z * d + Math.sin(view.yaw) * 0.65,
@@ -5294,7 +5312,7 @@ export class Renderer implements CollisionWorld {
       }
     }
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((crewed?65:p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (this.fortRoof) this.fortRoof.enabled = !overview;
     if (overview) {
@@ -5307,7 +5325,7 @@ export class Renderer implements CollisionWorld {
     }
     this.drawFirstPerson(visualWeapon(p,g.tick-1+alpha), g.tick - 1 + alpha, dt);
     if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
-    if (this.firstPersonRig && (overview || gun)) this.firstPersonRig.root.enabled = false;
+    if (this.firstPersonRig && (overview || gun || crewed)) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
     this.drawProjectiles(g, alpha);
     this.drawGrenades(g, alpha);
@@ -5864,6 +5882,13 @@ export class Renderer implements CollisionWorld {
       this.muzzleEffect(e);
       return;
     }
+    // A tank's main gun: flash and barrel smoke from the shared pools.
+    if (e.type === "tank" && e.phase === "cannon" && e.to) {
+      const d = { x: e.to.x - e.at.x, y: e.to.y - e.at.y, z: e.to.z - e.at.z }, n = Math.hypot(d.x, d.y, d.z) || 1;
+      const dir = { x: d.x / n, y: d.y / n, z: d.z / n }, flat = Math.hypot(dir.x, dir.z) || 1;
+      this.fx().shot({ at: e.at, dir, right: { x: -dir.z / flat, y: 0, z: dir.x / flat }, weaponId: tankGunMuzzle, mounted: true, heat: 0, seed: e.tank * 13.7 + e.at.x, near: false });
+      return;
+    }
     if (e.type === "overheat") {
       const g = this.activeGame, gun = e.emplacement === undefined ? undefined : g?.emplacements.get(e.emplacement);
       const shooter = g?.players[e.actor];
@@ -5901,9 +5926,11 @@ export class Renderer implements CollisionWorld {
   }
   private muzzleEffect(e: Extract<Event, { type: "fire" }>) {
     const g = this.activeGame, shooter = g?.players[e.actor];
-    const mounted = e.emplacement !== undefined;
+    // A tank's machine guns fire from their mounts, seen from outside.
+    const crewed = shooter?.tank !== undefined;
+    const mounted = e.emplacement !== undefined || crewed;
     let at = e.from, dir = { x: e.to.x - e.from.x, y: e.to.y - e.from.y, z: e.to.z - e.from.z };
-    const near = e.actor === 0 && !!shooter && (mounted || firstPersonView(shooter));
+    const near = e.actor === 0 && !!shooter && !crewed && (mounted || firstPersonView(shooter));
     // In first person the flash belongs on the weapon the player can see.
     if (near && !mounted && this.fpMuzzle) ({ at, dir } = this.fpMuzzle);
     const n = Math.hypot(dir.x, dir.y, dir.z) || 1;

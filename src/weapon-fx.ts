@@ -183,10 +183,10 @@ export class WeaponFx {
       const push = 1.4 + this.random() * 2.6, grey = 0.62 + this.random() * 0.14;
       this.particle({
         x: s.at.x + dir.x * 0.05, y: s.at.y + dir.y * 0.05, z: s.at.z + dir.z * 0.05,
-        vx: dir.x * push + (this.random() - 0.5) * 0.4, vy: dir.y * push + 0.15 + this.random() * 0.3, vz: dir.z * push + (this.random() - 0.5) * 0.4,
+        vx: dir.x * push + (this.random() - 0.5) * 0.4, vy: dir.y * push + (profile.smokeRise ?? 0.15) + this.random() * 0.3, vz: dir.z * push + (this.random() - 0.5) * 0.4,
         life: 1.3 + this.random() * 1.6 + s.heat, size: profile.smokeSize * 0.3, grow: profile.smokeSize * (0.7 + this.random() * 0.6),
         frame: smokeFrames.puff[Math.floor(this.random() * smokeFrames.puff.length)], roll: this.random() * Math.PI * 2, spin: (this.random() - 0.5) * 0.8,
-        r: grey, g: grey * 0.98, b: grey * 0.95, alpha: 0.42 + s.heat * 0.15, drag: 3.2, lift: 0.35, near: s.near,
+        r: grey, g: grey * 0.98, b: grey * 0.95, alpha: (profile.smokeAlpha ?? 0.42) + s.heat * 0.15, drag: 3.2, lift: profile.smokeLift ?? 0.35, near: s.near,
       });
     }
   }

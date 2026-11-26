@@ -506,9 +506,14 @@ export function botArtilleryTarget(g: Game, p: Soldier): Vec | null {
     teamHasHuman(g, p)
   )
     return null;
+  // An enemy tank in reach is worth a fire mission on its own.
+  const armour = g.tanks?.list.find((t) => t.team !== p.team && t.state !== "wreck" &&
+    dist(p, t) >= 35 && dist(p, t) <= 70 && dist(p, t) < sightLimit(g, t) && !artilleryTargetReason(g, p, t));
+  if (armour) return { x: armour.x, z: armour.z };
   const targets = g.players.filter(
     (q) =>
       q.hp > 0 &&
+      q.tank === undefined &&
       q.team !== p.team &&
       g.tick >= q.protectedUntil &&
       dist(p, q) >= 35 &&

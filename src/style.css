@@ -234,6 +234,23 @@ em {
 #ammo small {
   white-space: nowrap;
 }
+/* A tank commander's two weapons, side by side. */
+.tank-guns {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0 24px;
+  justify-content: end;
+  margin-bottom: 4px;
+}
+.tank-guns strong {
+  font-size: 30px;
+}
+.tank-guns .bar {
+  margin: 4px 0;
+}
+#ammo small.warn {
+  color: #f3b27b;
+}
 .barrel-heat {
   position: relative;
   height: 5px;
