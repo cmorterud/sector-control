@@ -241,6 +241,14 @@ describe("tanks", () => {
     expect(tankEvents(run(g, 5, { yaw: t.yaw - 1.5, pitch: 0.05, aim: true }), "cannon")).toHaveLength(1);
   });
 
+  it("let a commander in a gas mask still fire the main gun", () => {
+    const g = scene();
+    const t = command(g);
+    place(g, t, -70, -45, east);
+    g.players[0].gasMask = { worn: true, since: g.tick - 60, from: 1 };
+    expect(tankEvents(run(g, 5, { yaw: t.yaw + Math.PI / 2, aim: true }), "cannon")).toHaveLength(1);
+  });
+
   it("fire a fast shell that can be seen in flight and bursts where it lands", () => {
     const g = scene();
     const t = command(g);

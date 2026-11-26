@@ -754,7 +754,8 @@ function hud(now: number) {
   const crewed = p.hp > 0 ? crewTank(game, p) : undefined;
   if (crewed) {
     const key = (action: ControlAction) => keyLabel(settings.bindings[action]);
-    staged.ammo = tankPanel(game, p, { interact: useKey, forward: key("forward"), backward: key("backward"), left: key("left"), right: key("right") });
+    staged.ammo = tankPanel(game, p, { interact: useKey, forward: key("forward"), backward: key("backward"), left: key("left"), right: key("right") }) +
+      (game.map.artillery !== false ? `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>` : "");
     staged.capture = "";
   } else if (!gun && !nearby && !placement && !pickup && p.hp > 0 && game.tanks.list.length) {
     const prompt = tankPrompt(game, p, useKey);

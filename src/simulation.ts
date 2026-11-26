@@ -1341,8 +1341,10 @@ export class Game {
       p.command = crewed && !this.humanPlayerIds.includes(p.id) ? tankBotCommand(this, p, crewed) :
         p.id === 0 ? human : (this.commandOverride?.(this, p) ?? botCommand(this, p));
       const c = p.command;
-      // No sights to the eye through a gas mask's eyepieces.
-      if (maskBlocksAim(p)) c.aim = false;
+      // No sights to the eye through a gas mask's eyepieces. A tank's main
+      // gun is laid from inside the hull and fired by the right button, so a
+      // masked commander can still fire it.
+      if (maskBlocksAim(p) && p.tank === undefined) c.aim = false;
       ctfCommand(this, p, c);
       if (p.id !== 0) evadeFlame(this,p);
       const interactPressed = !!c.interact && !p.commandInteractHeld;

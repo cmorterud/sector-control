@@ -119,8 +119,9 @@ export class TankView {
       if (!puff.e.enabled) continue;
       const f = age / smokeSeconds;
       puff.e.render!.material = this.smokeLevels[Math.min(3, Math.floor(f * 4))];
-      const size = puff.size * (1 + age * 0.9);
-      puff.e.setPosition(puff.x + puff.dx * age, puff.y + age * 0.7, puff.z + puff.dz * age);
+      const size = puff.size * (1.2 + age * 1.1);
+      // Rising fast enough to clear the hull from the far side within a second.
+      puff.e.setPosition(puff.x + puff.dx * age, puff.y + age * 1.4, puff.z + puff.dz * age);
       puff.e.setLocalScale(size, size, size);
     }
   }
