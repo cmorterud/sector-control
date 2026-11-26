@@ -84,8 +84,11 @@ import {
 } from "./environment-effects";
 import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
-import { weaponAim, recoilPulse } from "./recoil";
-import { firstPersonView, sighted, sightHeight, scopeFov, viewWeaponPosition, weaponPullback, barrelEnd } from "./player-view";
+import { weaponAim, recoilPulse, recoilFeel, recoilBuzz } from "./recoil";
+import { WeaponFx } from "./weapon-fx";
+import { tracerRound } from "./muzzle-blast";
+import { heatRules } from "./weapon-heat";
+import { firstPersonView, sighted, sightHeight, scopeFov, viewWeaponPosition, weaponPullback, barrelEnd, viewDirection } from "./player-view";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
 import { dominationRules, flagContains } from "./domination";
@@ -224,12 +227,19 @@ type FallingTree = {
 };
 type FirstPersonRig = Pick<SoldierRig,
   "arms" | "rifle" | "supportHand" | "bolt" | "magazine" | "reloadMagazine"
-> & { root: pc.Entity; grenade: pc.Entity; explosive: pc.Entity; smoke: pc.Entity; pullback: number; ads?: number };
+> & { root: pc.Entity; grenade: pc.Entity; explosive: pc.Entity; smoke: pc.Entity; pullback: number; ads?: number; heatGlow: pc.Entity };
 
+type EmplacementMesh = { root: pc.Entity; yaw: pc.Entity; barrel: pc.Entity; slide: pc.Entity; glow?: pc.Entity; name: string };
 export class Renderer implements CollisionWorld {
   app: pc.Application;
   camera: pc.Entity;
   cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
+  // Muzzle blast, smoke, heat and brass (src/weapon-fx.ts), rebuilt with the map's look.
+  private weaponFx?: WeaponFx;
+  private weaponFxKey = "";
+  private frameDt = 1 / 60;
+  private fpMuzzle?: { at: V3; dir: V3 };
+  private heatGlowMaterial?: pc.StandardMaterial;
   deathView:DeathView|null=null;
   // A living teammate the camera follows once the player is out of reinforcements.
   spectating:number|null=null;
@@ -3860,8 +3870,10 @@ export class Renderer implements CollisionWorld {
       if(e.render){e.render.meshInstances[0].mesh=this.modelMesh(`rifle-${spec.shape}-view`,()=>rifleGeometry(spec.shape,"view"));
         e.render.batchGroupId=-1;e.render.castShadows=false;}
     }
+    // The last hand's breadth of barrel, which glows when it gets hot.
+    const heatGlow = this.heatGlow(rifle, (source.design?.muzzle ?? -0.7) + 0.07, 0.042, 0.14);
     this.firstPersonRig = {
-      root, rifle, arms, grenade, explosive, smoke, pullback: 0,
+      root, rifle, arms, grenade, explosive, smoke, pullback: 0, heatGlow,
       supportHand: rifle.findByName("left hand grip") as pc.Entity,
       bolt: rifle.findByName("bolt") as pc.Entity,
       magazine: rifle.findByName("weapon magazine") as pc.Entity,
@@ -3895,19 +3907,29 @@ export class Renderer implements CollisionWorld {
     const melee = p.melee ? meleePose(p.melee, tick) : null;
     const throwLower = throwing?.lower ?? 0;
     const sway = (1-rig.ads)*Math.sin(source.phase)*source.motion*.008;
+    // The weapon's own kick: driven back, muzzle up, rolled, and for automatic
+    // weapons a buzz that jumps side to side with each round.
+    const feel = recoilFeel[p.weapon] ?? recoilFeel.rifle, kick = recoilPulse(p, tick);
+    const buzz = feel.buzz ? recoilBuzz(p.recoilShots, p.id) : 1;
     const hipBob=!p.command.sprint&&!p.melee&&!loading&&!throwing?(1-rig.ads)*(Math.cos(source.phase*2)-1)*source.motion*.004:0;
     rig.rifle.setLocalPosition(
       position.x + sway + lower * 0.06 + sprint * (0.07 + Math.sin(source.phase) * 0.012) - charge.ready * 0.045 + charge.side * 0.016,
-      position.y + hipBob - change.lower*.55 - lower * 0.12 - throwLower * 0.15 - sprint * 0.09 + charge.ready * 0.11 + charge.bob * 0.006,
-      position.z + change.lower*.22 + sprint * 0.05 + recoilPulse(p, tick) * 0.045 - (melee?.thrust ?? 0) * 0.18 - charge.ready * 0.04 + charge.bob * 0.008,
+      position.y + hipBob - change.lower*.55 - lower * 0.12 - throwLower * 0.15 - sprint * 0.09 + charge.ready * 0.11 + charge.bob * 0.006 + kick * feel.push * 0.12,
+      position.z + change.lower*.22 + sprint * 0.05 + kick * feel.push - (melee?.thrust ?? 0) * 0.18 - charge.ready * 0.04 + charge.bob * 0.008,
     );
     rig.rifle.setLocalEulerAngles(
-      -30*change.lower -24 * lower - throwLower * 18 - sprint * 22 + charge.ready * 4 + charge.bob * 0.8,
-      10 * lower + charge.side,
-      20*change.lower -28 * lower - sprint * 18 - charge.ready * 5 + charge.side * 1.2,
+      -30*change.lower -24 * lower - throwLower * 18 - sprint * 22 + charge.ready * 4 + charge.bob * 0.8 + kick * feel.rise,
+      10 * lower + charge.side + kick * feel.buzz * buzz * 0.9,
+      20*change.lower -28 * lower - sprint * 18 - charge.ready * 5 + charge.side * 1.2 + kick * feel.roll * buzz,
     );
     const eye = this.camera.getPosition();
     const muzzle = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(p.weapon,p.weaponId)));
+    const along = rig.rifle.forward;
+    this.fpMuzzle = { at: { x: muzzle.x, y: muzzle.y, z: muzzle.z }, dir: { x: along.x, y: along.y, z: along.z } };
+    const hot = p.weapon === "pistol" ? 0 : p.barrel.heat;
+    this.showHeat(rig.heatGlow, hot, tick);
+    if (hot > 0.18)
+      this.fx().heat({ key: "first-person", at: this.fpMuzzle.at, dir: this.fpMuzzle.dir, length: 0.45, heat: hot, overheated: p.barrel.overheated, water: this.waterCooled(p.weaponId, false), near: true }, dt);
     let needed = weaponPullback(eye, muzzle, this.camera.forward, (a, b) => this.ray(a, b));
     if (p.weapon === "serviceRifle") {
       // The real point of this rifle's bayonet, wherever its muzzle puts it.
@@ -4081,7 +4103,7 @@ export class Renderer implements CollisionWorld {
       (1 - rig.motion);
     rig.upper.setLocalPosition(0, 0.08 + breath * 0.003 * (1 - rig.motion), 0);
     rig.upper.setLocalEulerAngles(
-      lean - kick * 2 + breath * 0.35 * (1 - rig.motion),
+      lean - kick * 2 * (recoilFeel[p.weapon]?.shoulder ?? 1) + breath * 0.35 * (1 - rig.motion),
       stride * (ready ? 1.5 : 4) * rig.style.sway + idleTurn + weight.turn.value*.3,
       -stride * 1.5 * rig.style.sway,
     );
@@ -4119,13 +4141,13 @@ export class Renderer implements CollisionWorld {
     rig.rifle.setLocalPosition(
       weaponMount.x,
       weaponMount.y - rig.sprint * 0.08 + rifleHeight(this.map) - 1.45,
-      weaponMount.z + kick * 0.09,
+      weaponMount.z + kick * 0.09 * (recoilFeel[p.weapon]?.shoulder ?? 1),
     );
     rig.rifle.setLocalEulerAngles(
       -rig.sprint * 20 +
         stride * 2 +
         (weaponAim(p).pitch * 180) / Math.PI - lean +
-        kick * 5,
+        kick * 5 * (recoilFeel[p.weapon]?.shoulder ?? 1),
       (p.recoilYaw * 180) / Math.PI,
       p.reloadAt ? 12 : 0,
     );
@@ -4715,6 +4737,7 @@ export class Renderer implements CollisionWorld {
     this.artilleryPreview = null;
     this.blastSequence = 0;
     this.cameraReaction = { pitch: 0, yaw: 0, roll: 0 };
+    this.weaponFx?.clear();
     this.deathView=null;
     this.previousGrenades.clear();
     for (const blast of this.blasts) {
@@ -4875,72 +4898,152 @@ export class Renderer implements CollisionWorld {
     );
   }
   machineGunPreview?: Placement;
-  private emplacementMeshes = new Map<number, { root: pc.Entity; yaw: pc.Entity; barrel: pc.Entity; name: string }>();
-  private gunGhost?: ReturnType<Renderer["buildEmplacement"]>;
+  private emplacementMeshes = new Map<number, EmplacementMesh>();
+  private gunGhost?: EmplacementMesh;
   private gunGhostValid?: boolean;
   private previewMaterials = new Map<boolean, pc.StandardMaterial>();
 
-  private buildEmplacement(name: string) {
+  // Each nation's mounted gun: the Vickers with its fluted water jacket and
+  // steam condenser, the MG 08 on its sled with a smooth jacket and muzzle
+  // booster, and the air-cooled Hotchkiss with brass fins and a feed strip.
+  private buildEmplacement(name: string): EmplacementMesh {
     const root = this.joint(name, this.app.root);
-    const steel = "#343d3a", plate = "#51584e";
-    const beam = (label: string, from: pc.Vec3, to: pc.Vec3, width: number) => {
+    const steel = "#343d3a", plate = "#51584e", brass = "#a8843c", canvas = "#6d6448";
+    const mg08 = name === "MG 08", hotchkiss = name === "Hotchkiss M1914";
+    const beam = (label: string, from: pc.Vec3, to: pc.Vec3, width: number, parent = root, tint = steel) => {
       const center = new pc.Vec3().add2(from, to).mulScalar(0.5);
-      const leg = this.cube(label, center.x, center.y, center.z, width, width, from.distance(to), steel, false, root);
-      leg.lookAt(root.getWorldTransform().transformPoint(to));
+      const leg = this.cube(label, center.x, center.y, center.z, width, width, from.distance(to), tint, false, parent);
+      leg.lookAt(parent.getWorldTransform().transformPoint(to));
     };
     const top = new pc.Vec3(0, emplacementRules.pivotHeight - 0.08, 0);
-    for (const [x, z] of [[-0.43, -0.39], [0.43, -0.39], [0, 0.47]]) {
-      beam("tripod leg", new pc.Vec3(x, 0.08, z), top, 0.068);
-      this.cube("tripod foot", x, 0.038, z, 0.16, 0.075, 0.18, plate, false, root);
+    if (mg08) {
+      // Schlitten 08: two runners on the ground, braced, with the front legs
+      // raised to put the gun at firing-step height.
+      for (const side of [-1, 1]) {
+        this.cube("sled runner", side * 0.27, 0.035, 0.05, 0.06, 0.05, 1.25, plate, false, root);
+        this.cube("runner tip", side * 0.27, 0.07, -0.6, 0.06, 0.05, 0.12, plate, false, root).setLocalEulerAngles(25, 0, 0);
+        beam("sled front leg", new pc.Vec3(side * 0.27, 0.06, -0.42), new pc.Vec3(side * 0.07, top.y, -0.04), 0.055);
+      }
+      beam("sled rear upright", new pc.Vec3(0, 0.06, 0.52), new pc.Vec3(0, top.y - 0.05, 0.06), 0.06);
+      for (const z of [-0.42, 0.1, 0.52]) this.cube("sled cross bar", 0, 0.06, z, 0.6, 0.035, 0.05, steel, false, root);
+      this.cube("sled cradle", 0, top.y - 0.02, 0, 0.18, 0.06, 0.22, plate, false, root);
+    } else {
+      for (const [x, z] of hotchkiss ? [[-0.48, -0.34], [0.48, -0.34], [0, 0.5]] : [[-0.43, -0.39], [0.43, -0.39], [0, 0.47]]) {
+        beam("tripod leg", new pc.Vec3(x, 0.08, z), top, 0.068);
+        this.cube("tripod foot", x, 0.038, z, 0.16, 0.075, 0.18, plate, false, root);
+      }
+      this.cube("tripod head", 0, top.y, 0, 0.16, 0.07, 0.16, plate, false, root);
     }
 
     const yaw = this.joint("traverse", root, 0, emplacementRules.pivotHeight, 0);
     const barrel = this.joint("elevation", yaw);
-    this.riflePart("receiver", 0, -0.014, 0.07, 0.15, 0.15, 0.4, "steel", barrel, "buttplate");
-    this.riflePart("receiver cover", 0, 0.058, 0.046, 0.16, 0.034, 0.34, "steel", barrel, "buttplate");
-    this.riflePart("hinge", 0, 0.071, -0.093, 0.148, 0.043, 0.038, "edge", barrel, "buttplate");
-    const tube = (label: string, z: number, diameter: number, length: number, color: string) => {
-      const part = this.joint(label, barrel, 0, 0, z);
+    // Everything that recoils on the mount.
+    const slide = this.joint("recoiling gun", barrel);
+    const tube = (label: string, z: number, diameter: number, length: number, color: string, x = 0, y = 0) => {
+      const part = this.joint(label, slide, x, y, z);
       part.addComponent("render", { type: "cylinder", material: this.material(color), castShadows: true, receiveShadows: true });
       part.setLocalEulerAngles(90, 0, 0);
       part.setLocalScale(diameter, length, diameter);
+      return part;
     };
-    const coolingJacket = name !== "Hotchkiss M1914";
-    tube(coolingJacket ? "barrel jacket" : "barrel housing", -0.41, coolingJacket ? 0.145 : 0.098, 0.65, steel);
-    tube("muzzle collar", -0.784, 0.084, 0.13, plate);
-    tube("muzzle opening", -0.866, 0.047, 0.022, "#181e1d");
-    for (const side of [-1, 1]) {
-      this.riflePart("spade grip", side * 0.096, -0.046, 0.29, 0.038, 0.14, 0.043, "walnut", barrel, "knob");
-      this.riflePart("rear notch", side * 0.021, 0.103, 0.17, 0.02, 0.034, 0.02, "steel", barrel, "buttplate");
-      this.riflePart("fastener", side * 0.075, 0.005, 0.09, 0.012, 0.031, 0.031, "edge", barrel, "pin").setLocalEulerAngles(0, 0, 90);
+    let glow: pc.Entity;
+    if (hotchkiss) {
+      this.riflePart("receiver", 0, -0.01, 0.1, 0.11, 0.13, 0.46, "steel", slide, "buttplate");
+      this.riflePart("receiver top", 0, 0.06, 0.06, 0.1, 0.03, 0.3, "edge", slide, "buttplate");
+      tube("air-cooled barrel", -0.47, 0.05, 0.8, "#2b302e");
+      tube("gas cylinder", -0.3, 0.028, 0.46, steel, 0, -0.05);
+      // Five broad brass cooling fins just ahead of the breech.
+      for (let i = 0; i < 5; i++) tube("brass cooling fin", -0.11 - i * 0.045, 0.13, 0.012, brass);
+      tube("muzzle", -0.86, 0.06, 0.04, plate);
+      tube("muzzle opening", -0.882, 0.034, 0.012, "#181e1d");
+      // A 30-round strip entering from the left, its rounds showing.
+      this.cube("feed strip", -0.2, 0.025, 0.03, 0.3, 0.008, 0.05, "#6e705f", false, slide);
+      for (let i = 0; i < 8; i++) this.cube("strip cartridge", -0.08 - i * 0.034, 0.04, 0.03, 0.012, 0.018, 0.075, brass, false, slide);
+      this.riflePart("pistol grip", 0, -0.11, 0.25, 0.05, 0.13, 0.06, "walnut", slide, "knob");
+      this.riflePart("butt", 0, -0.02, 0.4, 0.07, 0.1, 0.14, "walnut", slide, "buttplate");
+      this.cube("sight post", 0, 0.06, -0.8, 0.012, 0.045, 0.02, steel, false, slide);
+      glow = this.heatGlow(slide, -0.55, 0.062, 0.62);
+    } else {
+      this.riflePart("receiver", 0, -0.014, 0.07, mg08 ? 0.17 : 0.15, mg08 ? 0.17 : 0.15, mg08 ? 0.44 : 0.4, "steel", slide, "buttplate");
+      this.riflePart("receiver cover", 0, mg08 ? 0.066 : 0.058, 0.046, mg08 ? 0.18 : 0.16, 0.034, 0.34, "steel", slide, "buttplate");
+      this.riflePart("hinge", 0, 0.071, -0.093, 0.148, 0.043, 0.038, "edge", slide, "buttplate");
+      tube("water jacket", -0.41, mg08 ? 0.16 : 0.145, 0.65, steel);
+      tube("jacket rear cap", -0.09, mg08 ? 0.172 : 0.158, 0.03, plate);
+      tube("jacket front cap", -0.735, mg08 ? 0.15 : 0.135, 0.03, plate);
+      if (mg08) {
+        this.cube("water filler cap", 0.02, 0.09, -0.2, 0.04, 0.03, 0.04, "#858d85", false, slide);
+        tube("muzzle booster", -0.8, 0.095, 0.11, plate);
+        tube("booster cone", -0.87, 0.07, 0.04, steel);
+        this.cube("steam vent", 0, -0.085, -0.66, 0.03, 0.03, 0.05, plate, false, slide);
+      } else {
+        // The corrugated jacket: raised flutes all round it.
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2;
+          this.cube("jacket flute", Math.cos(a) * 0.073, Math.sin(a) * 0.073, -0.41, 0.014, 0.014, 0.6, "#3c4542", false, slide).setLocalEulerAngles(0, 0, (a * 180) / Math.PI);
+        }
+        tube("muzzle cup", -0.784, 0.084, 0.13, plate);
+        tube("steam tube port", -0.7, 0.03, 0.05, plate, -0.06, -0.06);
+      }
+      tube("muzzle opening", -0.866, 0.047, 0.022, "#181e1d");
+      for (const side of [-1, 1]) {
+        this.riflePart("spade grip", side * 0.096, -0.046, 0.29, 0.038, 0.14, 0.043, "walnut", slide, "knob");
+        this.riflePart("rear notch", side * 0.021, 0.103, 0.17, 0.02, 0.034, 0.02, "steel", slide, "buttplate");
+        this.riflePart("fastener", side * 0.075, 0.005, 0.09, 0.012, 0.031, 0.031, "edge", slide, "pin").setLocalEulerAngles(0, 0, 90);
+      }
+      this.cube("sight post", 0, 0.085, -0.73, 0.015, 0.050, 0.027, steel, false, slide);
+      // The cloth belt feeds in from the right and hangs to the box.
+      this.cube("ammunition belt", 0.14, -0.02, 0.02, 0.12, 0.012, 0.06, canvas, false, slide).setLocalEulerAngles(0, 0, -35);
+      for (let i = 0; i < 4; i++) this.cube("belt cartridge", 0.1 + i * 0.027, -0.004 - i * 0.019, 0.02, 0.014, 0.014, 0.07, brass, false, slide);
+      glow = this.heatGlow(slide, -0.81, mg08 ? 0.1 : 0.09, mg08 ? 0.15 : 0.17);
     }
-    this.cube("sight post", 0, 0.085, -0.73, 0.015, 0.050, 0.027, steel, false, barrel);
-    this.cube("ammunition can", 0.27, 0.145, 0.16, 0.3, 0.28, 0.42, "#505743", false, root);
-    this.cube("ammunition can lid", 0.27, 0.29, 0.16, 0.32, 0.035, 0.43, "#62694f", false, root);
-    this.cube("can handle", 0.27, 0.32, 0.16, 0.125, 0.035, 0.04, steel, false, root);
-    return { root, yaw, barrel, name };
+    this.cube("ammunition box", 0.27, 0.145, 0.16, 0.3, 0.28, 0.42, "#505743", false, root);
+    this.cube("ammunition box lid", 0.27, 0.29, 0.16, 0.32, 0.035, 0.43, "#62694f", false, root);
+    this.cube("box handle", 0.27, 0.32, 0.16, 0.125, 0.035, 0.04, steel, false, root);
+    if (!mg08 && !hotchkiss) {
+      // The condenser can the steam hose runs down to.
+      const can = this.joint("condenser can", root, -0.36, 0.17, -0.25);
+      can.addComponent("render", { type: "cylinder", material: this.material("#59614c"), castShadows: true, receiveShadows: true });
+      can.setLocalScale(0.18, 0.32, 0.18);
+      beam("condenser hose", new pc.Vec3(-0.34, 0.33, -0.27), new pc.Vec3(-0.08, 0.86, -0.55), 0.03, root, "#2a2a24");
+    }
+    return { root, yaw, barrel, slide, glow, name };
   }
 
-  private drawEmplacements(g: Game) {
+  private drawEmplacements(g: Game, alpha = 1) {
     for (const [id, mesh] of this.emplacementMeshes) {
       const gun = g.emplacements.get(id);
       if (!gun || gun.weaponId !== mesh.name) {
         mesh.root.destroy();
         this.emplacementMeshes.delete(id);
+        this.weaponFx?.forget(`gun-${id}`);
       }
     }
+    const tick = g.tick - 1 + alpha;
     for (const gun of g.emplacements.values()) {
       let mesh = this.emplacementMeshes.get(gun.owner);
       if (!mesh) {
         mesh = this.buildEmplacement(gun.weaponId);
         this.emplacementMeshes.set(gun.owner, mesh);
       }
+      // The gun slams back on each round and the whole mount shudders.
+      const age = (tick - gun.lastShotAt) / 30, kick = age >= 0 ? Math.exp(-22 * age) : 0;
+      const shake = kick * recoilBuzz(gun.lastShotAt, gun.owner);
       mesh.root.setPosition(gun.at.x, gun.at.y, gun.at.z);
-      mesh.root.setEulerAngles(0, -gun.baseYaw * pc.math.RAD_TO_DEG, 0);
+      mesh.root.setEulerAngles(shake * 0.35, -gun.baseYaw * pc.math.RAD_TO_DEG, shake * 0.3);
       const setup = Math.max(0, (gun.readyAt - g.tick) / emplacementRules.setupTicks);
       mesh.root.setLocalScale(1, 1 - 0.25 * setup, 1);
       mesh.yaw.setLocalEulerAngles(0, (gun.baseYaw - gun.yaw) * pc.math.RAD_TO_DEG, 0);
       mesh.barrel.setLocalEulerAngles(gun.pitch * pc.math.RAD_TO_DEG, 0, 0);
+      mesh.slide.setLocalPosition(0, kick * 0.004, kick * recoilFeel.emplaced.push);
+      mesh.slide.setLocalEulerAngles(shake * 0.9, 0, 0);
+      this.showHeat(mesh.glow, gun.barrel.heat, tick);
+      if (gun.barrel.heat > 0.18) {
+        const view = emplacementView(gun);
+        this.fx().heat({
+          key: `gun-${gun.owner}`, at: view.muzzle, dir: viewDirection(gun.yaw, gun.pitch), length: 0.75,
+          heat: gun.barrel.heat, overheated: gun.barrel.overheated, water: this.waterCooled(gun.weaponId, true), near: gun.operator === 0,
+        }, this.frameDt);
+      }
     }
 
     const preview = this.machineGunPreview;
@@ -5001,7 +5104,8 @@ export class Renderer implements CollisionWorld {
     battlePerformance.end("visualWork", visualStart);
     this.visualTurn = rebuilt > 0;
     this.flushWorldBatches();
-    this.drawEmplacements(g);
+    this.frameDt = dt;
+    this.drawEmplacements(g, alpha);
     for (const kit of g.flames?.kits ?? []) {
       let marker=this.flamePickups.get(kit.id);
       if(!marker) {
@@ -5177,6 +5281,18 @@ export class Renderer implements CollisionWorld {
     // Recoil is authoritative in weaponAim. Cosmetic blast angles cannot move
     // the first-person sight away from the direction used by the simulation.
     if (!overview && !firstPerson && !deathView) this.camera.rotateLocal(0, 0, this.cameraReaction.roll);
+    // A shot jolts the eye back and rolls the view about its own axis; the
+    // centre of the sight stays on the line the round takes.
+    if (firstPerson && p.hp > 0) {
+      const feel = gun ? recoilFeel.emplaced : recoilFeel[p.weapon] ?? recoilFeel.rifle;
+      const last = gun ? gun.lastShotAt : p.lastShotAt, age = (g.tick - 1 + alpha - last) / 30;
+      const kick = age >= 0 ? Math.exp(-20 * age) : 0;
+      if (kick > 0.002) {
+        const buzz = feel.buzz ? recoilBuzz(gun ? gun.lastShotAt : p.recoilShots, p.id) : 1;
+        this.camera.translateLocal(0, kick * feel.jolt * 0.15 * buzz, kick * feel.jolt);
+        this.camera.rotateLocal(0, 0, kick * feel.roll * buzz);
+      }
+    }
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
     this.camera.camera!.fov += ((p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
@@ -5203,6 +5319,7 @@ export class Renderer implements CollisionWorld {
     this.drawAtmosphere(g, alpha);
     if (g.gas.clouds.length || this.gasView) (this.gasView ??= this.createGasView()).draw(g, alpha, this.camera.getPosition(), this.quality);
     if (this.map.night) this.drawNight(g, alpha);
+    this.drawWeaponHeat(g, dt);
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {
       fx.life -= dt;
@@ -5227,6 +5344,21 @@ export class Renderer implements CollisionWorld {
       fx.e.destroy();
       return false;
     });
+    const effectStart = battlePerformance.begin();
+    this.weaponFx?.draw(dt, this.camera.getPosition(), this.camera.right, this.camera.up);
+    battlePerformance.end("weaponEffects", effectStart);
+  }
+  // Hot light machine guns in other soldiers' hands shimmer and smoke too.
+  private drawWeaponHeat(g: Game, dt: number) {
+    if (!this.weaponFx) return;
+    const eye = this.camera.getPosition();
+    for (const q of g.players) {
+      if (q.hp <= 0 || q.mountedGun !== undefined || q.weapon === "pistol" || q.barrel.heat < 0.3 || (q.id === 0 && firstPersonView(q))) continue;
+      const rig = this.soldiers[q.id];
+      if (!rig || Math.hypot(q.x - eye.x, q.z - eye.z) > 60) continue;
+      const m = rig.rifle.getWorldTransform().transformPoint(new pc.Vec3(0, 0.025, barrelEnd(q.weapon, q.weaponId))), f = rig.rifle.forward;
+      this.weaponFx.heat({ key: `soldier-${q.id}`, at: { x: m.x, y: m.y, z: m.z }, dir: { x: f.x, y: f.y, z: f.z }, length: 0.45, heat: q.barrel.heat, overheated: q.barrel.overheated, water: this.waterCooled(q.weaponId, false), near: false }, dt);
+    }
   }
   private drawGrenades(g: Game, alpha: number) {
     const active = new Set(g.grenades.map((p) => p.id));
@@ -5423,7 +5555,7 @@ export class Renderer implements CollisionWorld {
           false,
           root,
         );
-        trail.render!.material = this.tracerMaterial("red");
+        trail.render!.material = this.tracerMaterial("tracer");
         this.shells.set(shell.id, root);
       }
       const previous = this.previousShells.get(shell.id) ?? shell;
@@ -5543,13 +5675,15 @@ export class Renderer implements CollisionWorld {
     }
     return this.materials.get(key)!;
   }
-  private tracerMaterial(team: Team) {
-    const key = `projectile-${team}`;
+  // Period phosphorus tracers burn a warm red-orange for both sides; ball
+  // rounds show only as a faint grey streak.
+  private tracerMaterial(kind: "tracer" | "ball") {
+    const key = `projectile-${kind}`;
     if (!this.materials.has(key)) {
       const material = new pc.StandardMaterial();
-      material.diffuse = color(team === "blue" ? "#8defff" : "#ffb96d");
+      material.diffuse = color(kind === "tracer" ? "#ff9a52" : "#b9b1a3");
       material.emissive = material.diffuse.clone();
-      material.emissiveIntensity = 2;
+      material.emissiveIntensity = kind === "tracer" ? 1.5 : this.map.night ? 0.18 : 0.55;
       material.useLighting = false;
       material.useFog = false;
       material.update();
@@ -5580,9 +5714,11 @@ export class Renderer implements CollisionWorld {
           false,
           entity,
         );
-        tracer.render!.material = this.tracerMaterial(p.team);
+        const lit = tracerRound(p);
+        tracer.render!.material = this.tracerMaterial(lit ? "tracer" : "ball");
         tracer.render!.castShadows = false;
         tracer.render!.receiveShadows = false;
+        entity.tags.add(lit ? "tracer" : "ball");
         this.projectiles.set(p.id, entity);
       }
       const previous = this.previousProjectiles.get(p.id) ?? p;
@@ -5600,9 +5736,10 @@ export class Renderer implements CollisionWorld {
             (Math.hypot(p.vx, p.vy, p.vz) / 30) * (1 - alpha),
         ),
       );
-      const tracer = entity.children[0];
-      tracer.setLocalScale(0.11, 0.11, trailLength);
-      tracer.setLocalPosition(0, 0, trailLength / 2);
+      const tracer = entity.children[0], lit = entity.tags.has("tracer");
+      const length = lit ? trailLength : Math.min(0.45, trailLength), width = lit ? 0.085 : 0.028;
+      tracer.setLocalScale(width, width, length);
+      tracer.setLocalPosition(0, 0, length / 2);
     }
   }
   effect(e: Event) {
@@ -5723,8 +5860,19 @@ export class Renderer implements CollisionWorld {
       this.blastEffect(e.at, e.radius);
       return;
     }
-    if (e.type !== "fire" && e.type !== "impact") return;
-    const p = e.type === "fire" ? e.from : e.at;
+    if (e.type === "fire") {
+      this.muzzleEffect(e);
+      return;
+    }
+    if (e.type === "overheat") {
+      const g = this.activeGame, gun = e.emplacement === undefined ? undefined : g?.emplacements.get(e.emplacement);
+      const shooter = g?.players[e.actor];
+      const dir = gun ? viewDirection(gun.yaw, gun.pitch) : shooter ? viewDirection(weaponAim(shooter).yaw, weaponAim(shooter).pitch) : { x: 0, y: 0, z: -1 };
+      this.fx().overheat({ at: e.at, dir, length: gun ? 0.75 : 0.5, water: this.waterCooled(gun?.weaponId ?? shooter?.weaponId, !!gun), near: e.actor === 0 });
+      return;
+    }
+    if (e.type !== "impact") return;
+    const p = e.at;
     const v = this.cube(
       "spark",
       p.x,
@@ -5733,9 +5881,65 @@ export class Renderer implements CollisionWorld {
       0.15,
       0.15,
       0.15,
-      e.type === "impact" && e.hit ? "#ef8060" : "#ffe4a0",
+      e.hit ? "#ef8060" : "#ffe4a0",
     );
     this.effects.push({ e: v, life: 0.15 });
+  }
+  private fx() {
+    const key = `${this.map.id}|${!!this.map.night}|${this.quality}`;
+    if (!this.weaponFx || key !== this.weaponFxKey) {
+      this.weaponFx?.destroy();
+      this.weaponFx = new WeaponFx(this.app, (x, z) => groundHeight(x, z, this.map), { night: !!this.map.night, quality: this.quality });
+      this.weaponFxKey = key;
+    }
+    return this.weaponFx;
+  }
+  get weaponEffects() { return this.weaponFx?.stats; }
+  // Water-jacketed guns steam; the Hotchkiss, Chauchat and rifles are air-cooled.
+  private waterCooled(weaponId: string | undefined, mounted: boolean) {
+    return mounted ? weaponId !== "Hotchkiss M1914" : weaponId === "MG 08/15";
+  }
+  private muzzleEffect(e: Extract<Event, { type: "fire" }>) {
+    const g = this.activeGame, shooter = g?.players[e.actor];
+    const mounted = e.emplacement !== undefined;
+    let at = e.from, dir = { x: e.to.x - e.from.x, y: e.to.y - e.from.y, z: e.to.z - e.from.z };
+    const near = e.actor === 0 && !!shooter && (mounted || firstPersonView(shooter));
+    // In first person the flash belongs on the weapon the player can see.
+    if (near && !mounted && this.fpMuzzle) ({ at, dir } = this.fpMuzzle);
+    const n = Math.hypot(dir.x, dir.y, dir.z) || 1;
+    dir = { x: dir.x / n, y: dir.y / n, z: dir.z / n };
+    const flat = Math.hypot(dir.x, dir.z) || 1;
+    this.fx().shot({
+      at, dir, right: { x: -dir.z / flat, y: 0, z: dir.x / flat },
+      weapon: e.weapon, weaponId: e.weaponId, mounted, heat: e.heat ?? 0, seed: e.projectile * 7.13 + e.actor * 0.37, near,
+    });
+  }
+  private heatGlow(parent: pc.Entity, z: number, diameter: number, length: number) {
+    if (!this.heatGlowMaterial) {
+      const m = (this.heatGlowMaterial = new pc.StandardMaterial());
+      m.diffuse = color("#000000");
+      m.emissive = color("#d23a10");
+      m.emissiveIntensity = 1.3;
+      m.useLighting = false;
+      m.blendType = pc.BLEND_ADDITIVEALPHA;
+      m.depthWrite = false;
+      m.opacity = 0;
+      m.update();
+    }
+    const glow = this.joint("barrel heat glow", parent, 0, 0, z);
+    glow.addComponent("render", { type: "cylinder", material: this.heatGlowMaterial, castShadows: false, receiveShadows: false });
+    glow.setLocalEulerAngles(90, 0, 0);
+    glow.setLocalScale(diameter, length, diameter);
+    glow.enabled = false;
+    return glow;
+  }
+  private showHeat(glow: pc.Entity | undefined, heat: number, tick: number) {
+    if (!glow) return;
+    const level = Math.max(0, (heat - heatRules.glowFrom) / (1 - heatRules.glowFrom));
+    glow.enabled = level > 0.01;
+    if (glow.enabled)
+      // Dull red first, so the metal still shows through; bright only when seized.
+      glow.render!.meshInstances[0].setParameter("material_opacity", Math.min(0.7, level ** 1.6 * 0.7 * (0.9 + 0.1 * Math.sin(tick * 0.9))));
   }
   project(p: V3) {
     return this.camera.camera!.worldToScreen(new pc.Vec3(p.x, p.y, p.z));

@@ -178,12 +178,28 @@ describe("battlefield presentation", () => {
     );
     expect(cues.map((c) => c.kind)).toEqual([
       "serviceRifle",
+      "brass",
       "bolt",
       "clip",
       "bolt",
     ]);
     expect(cues.every((c) => c.local)).toBe(true);
+    expect(cues[1].delay).toBeGreaterThan(0.2);
     expect(feedback.stats.callouts).toBe(0);
+  });
+  it("gives a mounted gun its own heavy report and hisses when a barrel seizes", () => {
+    const { g, p, feedback, cues } = scene();
+    const from = { x: p.x, y: p.y + 1.1, z: p.z };
+    for (let i = 0; i < 6; i++)
+      feedback.event(g, event({ type: "fire", actor: 0, weapon: "machineGun", weaponId: "Vickers", emplacement: 0, projectile: i, from }));
+    feedback.event(g, event({ type: "overheat", actor: 0, at: from, emplacement: 0 }));
+    const kinds = cues.map((c) => c.kind);
+    expect(kinds.filter((k) => k === "heavyGun")).toHaveLength(6);
+    expect(kinds).not.toContain("machineGun");
+    // Brass falls from every third round of a belt.
+    expect(kinds.filter((k) => k === "brass")).toHaveLength(2);
+    expect(kinds.at(-1)).toBe("steam");
+    expect(cues.find((c) => c.kind === "heavyGun")!.weaponId).toBe("Vickers");
   });
   it("keeps battlefield effects audible without spoken smoke, grenade or incoming callouts", () => {
     const { g, p, feedback, cues } = scene(false);

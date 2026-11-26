@@ -50,3 +50,21 @@ export function recoilPulse(p: Soldier, tick: number) {
   const age = (tick - p.lastShotAt) / 30;
   return p.hp > 0 && age >= 0 ? Math.exp(-20 * age) : 0;
 }
+
+// How hard each weapon's kick reads on screen. Cosmetic only: the angles the
+// rounds follow are weaponAim's alone. `push` (metres) and `rise` (degrees)
+// move the first-person weapon, `roll` (degrees) turns the view about its own
+// axis and `jolt` (metres) pushes the camera back, so neither moves the sight
+// off the line the shot takes. `shoulder` scales the third-person body kick.
+export interface RecoilFeel { push: number; rise: number; roll: number; jolt: number; shoulder: number; buzz: number }
+export const recoilFeel: Record<string, RecoilFeel> = {
+  serviceRifle: { push: 0.085, rise: 7.5, roll: 2.2, jolt: 0.022, shoulder: 1.7, buzz: 0 },
+  rifle: { push: 0.06, rise: 4.5, roll: 1.2, jolt: 0.014, shoulder: 1.2, buzz: 0 },
+  pistol: { push: 0.05, rise: 9, roll: 1.5, jolt: 0.008, shoulder: 0.9, buzz: 0 },
+  machineGun: { push: 0.04, rise: 2.2, roll: 0.9, jolt: 0.01, shoulder: 0.85, buzz: 1 },
+  // A mounted gun's sight picture: the whole gun shudders on its mount.
+  emplaced: { push: 0.045, rise: 0, roll: 0.45, jolt: 0.012, shoulder: 0, buzz: 1 },
+  flamethrower: { push: 0, rise: 0, roll: 0, jolt: 0, shoulder: 0, buzz: 0 },
+};
+// A signed shake that changes every round, for buzzing automatic weapons.
+export const recoilBuzz = (shots: number, salt = 0) => Math.sin(shots * 12.9898 + salt * 78.233) >= 0 ? 1 : -1;
