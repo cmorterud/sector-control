@@ -2,12 +2,13 @@ import {characterGeometry} from './character-geometry';
 import {modelUV} from './model-surfaces';
 // How far each finger (index to little) and the thumb open from the full grip:
 // 0 wraps the rifle's wrist, 1 lies straight. The first-person right hand
-// swaps between these as it fires, works the bolt, feeds a clip or holds a grenade.
+// swaps between these as it fires, works the bolt, thumbs a clip home or holds a grenade.
+// "press" is the clip press: fingers loosely curled, thumb straight down on the rounds.
 export const handPoses = {
   grip: { fingers: [0, 0, 0, 0], thumb: 0 },
   trigger: { fingers: [.55, 0, 0, 0], thumb: .1 },
   pinch: { fingers: [.4, .12, .05, 0], thumb: .55 },
-  open: { fingers: [.8, .72, .66, .6], thumb: .6 },
+  press: { fingers: [.15, .1, .08, .05], thumb: 1 },
   grenade: { fingers: [.28, .25, .22, .2], thumb: .3 },
 } as const;
 export type HandPose = keyof typeof handPoses;

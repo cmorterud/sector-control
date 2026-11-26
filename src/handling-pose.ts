@@ -24,5 +24,6 @@ export function handlingWrist(p:Soldier,tick:number){
  const fetch=loading?ease((t-.18)/.12)*(1-ease((t-.43)/.15)):0;
  const push=loading?Math.sin(Math.PI*clamp((t-.48)/.17)):0;
  const bolt=cycling?.reach??(loading&&p.weapon==='serviceRifle'?Math.max(ease(t/.08)*(1-ease((t-.16)/.1)),ease((t-.72)/.1)*(1-ease((t-.88)/.1))):0);
- return {pitch:-25*fetch+8*push,roll:-30*fetch,bolt};
+ // While pressing a clip the wrist tips back, so the thumb comes down on the rounds.
+ return {pitch:-25*fetch-30*push,roll:-30*fetch,bolt};
 }

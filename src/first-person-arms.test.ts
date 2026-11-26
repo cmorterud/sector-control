@@ -16,9 +16,10 @@ test("each hand pose is a distinct, well-formed mesh with the same topology as t
     if (pose !== "grip") expect(mesh.positions).not.toEqual(grip.positions);
     for (let i = 0; i < mesh.normals.length; i += 3) expect(Math.hypot(...mesh.normals.slice(i, i + 3))).toBeCloseTo(1);
   }
-  // Opening a finger moves its tip away from the palm.
-  const reach = (pose: HandPose) => { const m = gripHandGeometry("right", "view", pose).positions; let far = 0; for (let i = 0; i < m.length; i += 3) far = Math.max(far, Math.hypot(m[i], m[i + 1])); return far; };
-  expect(reach("open")).toBeGreaterThan(reach("grip") + .02);
+  // A clip press straightens the thumb: its tip, the last vertex, swings clear of the grip.
+  const thumbTip = (pose: HandPose) => gripHandGeometry("right", "view", pose).positions.slice(-3);
+  const [a, b] = [thumbTip("grip"), thumbTip("press")];
+  expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeGreaterThan(.02);
 });
 
 test.each(["french", "german"] as const)("%s first-person arms get cuffs, a wrist and finer sleeves; the trigger hand follows the action", (faction) => {
@@ -40,7 +41,7 @@ test.each(["french", "german"] as const)("%s first-person arms get cuffs, a wris
     p.lastShotAt = 100 - Math.round(weaponProfiles.serviceRifle.shotTicks * 14 / 36);
     expect(poseAt(100)).toBe("pinch");
     Object.assign(p, { lastShotAt: -1000, reloadAt: 200 + Math.round(weaponProfiles.serviceRifle.reloadTicks / 2) });
-    expect(poseAt(200)).toBe("open");
+    expect(poseAt(200)).toBe("press");
     p.reloadAt = 0;
     Object.assign(p, { throwAction: { startTick: 300, releaseTick: 306, smoke: false, released: false }, throwUntil: 321 });
     expect(poseAt(303)).toBe("grenade");

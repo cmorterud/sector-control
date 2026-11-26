@@ -3987,11 +3987,11 @@ export class Renderer implements CollisionWorld {
     if (throwing?.held) rig.grenade.setLocalPosition(right.x, right.y + 0.035, right.z - 0.025);
     this.poseArm(rig, 1, right, armLengths.upper, armLengths.forearm);
     // The right hand's fingers follow the action: index on the trigger,
-    // thumb and finger on the bolt knob, open to press a clip, round a grenade.
+    // thumb and finger on the bolt knob, thumb down on a clip, round a grenade.
     if (rig.rightHand?.tags.has("hand-side:right")) {
       const cycling = boltMotion(p, tick), service = p.weapon === "serviceRifle";
       const wanted: HandPose = throwing?.held ? "grenade"
-        : loading ? (service && loading.progress > .3 && loading.progress < .7 ? "open" : service ? "pinch" : "grip")
+        : loading ? (service && loading.progress > .46 && loading.progress < .68 ? "press" : service ? "pinch" : "grip")
         : cycling ? "pinch" : sprint > .5 || change.active || p.melee ? "grip" : "trigger";
       if (wanted !== rig.handPose) {
         rig.handPose = wanted;
