@@ -14,7 +14,7 @@ import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
-import { factions, factionFor, kitFor, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
+import { equipLoadout, factions, factionFor, kitFor, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -72,7 +72,7 @@ import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
 import { soldierName } from "./soldier-names";
 import { rainChoice, rainIntensity, rainStorageKey, supportsRain } from "./weather";
-import { crewTank, supportsTanks, takeCommand } from "./tanks";
+import { crewTank, supportsTanks, takeCommand, tankRules, toWorld } from "./tanks";
 import { tankBrief, tankChoice, tankNotice, tankPanel, tankPrompt, tankStorageKey } from "./tank-hud";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
 root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="spread-ring" class="hidden"></div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
@@ -316,7 +316,7 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option></select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option>${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   if (supportsTanks(map)) {
@@ -325,6 +325,13 @@ function menu(
     el("controls-settings").before(armour);
     (el("tanks") as HTMLInputElement).onchange = (e) => {
       tanksOn = (e.target as HTMLInputElement).checked;
+      // The anti-tank kit is only issued where tanks fight.
+      const kit = select.querySelector<HTMLOptionElement>('option[value="antiTank"]');
+      if (kit) {
+        kit.disabled = !tanksOn;
+        kit.textContent = `Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}`;
+        if (!tanksOn && select.value === "antiTank") { select.value = "rifleman"; select.onchange?.(new Event("change")); }
+      }
       try { localStorage.setItem(tankStorageKey, tanksOn ? "1" : "0"); } catch { /* per-viewer convenience only */ }
     };
   }
@@ -1196,6 +1203,23 @@ try {
     flare:(x:number,z:number)=>{game.flares.flares.push({id:++game.flares.sequence,team:"blue",actor:0,x,z,heading:Math.PI/2,burstAt:game.tick,endsAt:game.tick+flareRules.burnTicks});},
     light:(x:number,z:number)=>lightAt(game,{x,z}),
     combat:combatReview,
+    // The anti-tank kit: stand off an enemy tank's flank with the kit raised,
+    // as a German (Tankgewehr) or British (armour-piercing SMLE) soldier.
+    antiTank:(stage:"aim"|"fire"|"status",side:"german"|"british"="german",range=22)=>{
+      const p=game.players[0];reviewManual=true;keys.clear();preferredFirstPerson=true;
+      if(stage==="aim"){p.team=side==="german"?"red":"blue";p.faction=side;equipLoadout(p,"antiTank");}
+      const t=game.tanks.list.find(t=>t.team!==p.team&&(stage==="status"||t.state!=="wreck"));if(!t)throw Error("No enemy tank in the field");
+      if(stage==="status")return {weapon:p.weaponId,tank:t.name,hull:t.hp,state:t.state};
+      if(stage==="aim"){
+        const spot=toWorld(t,1.2,-(tankRules.width/2+range));
+        Object.assign(p,{...spot,y:groundHeight(spot.x,spot.z,game.map),vx:0,vz:0,protectedUntil:Infinity});
+      }
+      p.yaw=Math.atan2(t.x-p.x,-(t.z-p.z));p.pitch=Math.atan2(t.y+1.3-(p.y+1.65),Math.hypot(t.x-p.x,t.z-p.z));
+      yaw=p.yaw;pitch=p.pitch;aim=true;p.command={...idle(),firstPerson:true,aim:true};
+      if(stage==="fire"){p.nextShot=0;p.ammo=Math.max(1,p.ammo);fire=true;}
+      if(stage==="aim")renderer.remember(game);advanceReview(stage==="aim"?24:3);
+      return {weapon:p.weaponId,tank:t.name,hull:t.hp,state:t.state};
+    },
     // Capture the flag: stand a few metres from Red's north stand, or carry Red's centre flag.
     ctf:(stage:"pickup"|"carry")=>{
       const ctf=game.ctf;if(!ctf)throw Error("Not a capture-the-flag operation");

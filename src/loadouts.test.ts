@@ -15,13 +15,30 @@ test("loadout selection waits for respawn and initializes faction equipment", ()
  expect(p.weapon).toBe("serviceRifle"); g.respawn(p); expect(p.weapon).toBe("machineGun"); expect(p.weaponId).toBe("Lewis Mk I");
  equipLoadout(p,"marksman"); expect(scoped(p)).toBe(true); switchWeapon(p,"sidearm",g.tick); expect(scoped(p)).toBe(false);
 });
-test("100-soldier roster has four supports, two marksmen and 44 riflemen per team", () => {
- const g = new Game(new TestCollision(trenchMap),true,100,5,undefined,{map:trenchMap,ambientArtillery:false});
- for(const team of ["blue","red"]) {
-  const list=g.players.filter(p=>p.team===team);
-  expect(list.filter(p=>p.loadout==="support")).toHaveLength(4);
-  expect(list.filter(p=>p.loadout==="marksman")).toHaveLength(2);
-  expect(list.filter(p=>p.loadout==="rifleman")).toHaveLength(44);
+test("100-soldier roster: riflemen are the clear majority beside every other role", () => {
+ for (const tanks of [false, true]) {
+  const g = new Game(new TestCollision(trenchMap),true,100,5,undefined,{map:trenchMap,ambientArtillery:false,tanks});
+  for(const team of ["blue","red"]) {
+   const list=g.players.filter(p=>p.team===team);
+   const count=(l:string)=>list.filter(p=>p.loadout===l).length;
+   expect(count("support")).toBe(4);
+   expect(count("marksman")).toBe(3);
+   expect(count("emplacement")).toBe(3);
+   expect(count("antiTank")).toBe(tanks ? 3 : 0);
+   // The player's slot on blue takes a rifle.
+   expect(count("rifleman")).toBe(tanks ? 37 : 40);
+   expect(count("rifleman")/list.length).toBeGreaterThan(.7);
+  }
+ }
+});
+test("small sides still mix roles, and the anti-tank kit fires through tank plate", async () => {
+ const { rosterRoles } = await import("./loadouts");
+ for (const size of [8, 10, 12, 16, 24, 32]) {
+  const roles = rosterRoles(size, true);
+  expect(roles).toHaveLength(size);
+  expect(roles.filter(r => r === "rifleman").length / size).toBeGreaterThanOrEqual(.5);
+  expect(roles).toContain("antiTank");
+  expect(roles[0]).toBe("rifleman");
  }
 });
 test("human machine gun repeats held fire; pistol requires a new press",()=>{

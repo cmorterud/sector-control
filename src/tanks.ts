@@ -4,10 +4,11 @@
 // takes command and the bot climbs out. Tanks are slow, cross ordinary
 // trenches, flatten wire and push over shattered trees.
 //
-// Bullets never wear a tank down. They "splash" it: rounds striking the
-// plates blur the crew's view, spoil their aim and slow a bot driver. Hull
-// damage comes only from explosions: grenades on or against the plates (the
-// period's bundled charges), artillery and other tanks' guns. A badly hurt
+// Ordinary bullets never wear a tank down. They "splash" it: rounds striking
+// the plates blur the crew's view, spoil their aim and slow a bot driver. Hull
+// damage comes from explosions (grenades on or against the plates, the
+// period's bundled charges; artillery; other tanks' guns) and from Support's
+// anti-tank kit, whose rounds go through the plate (src/anti-tank.ts). A badly hurt
 // tank throws a track and becomes a pillbox; a destroyed one leaves a wreck
 // that stops bullets, and its crew bail out. Tanks also ditch in gaps too
 // wide to bridge, such as shell-widened trenches, and now and then stall.
@@ -19,8 +20,8 @@ import { factionFor, type FactionId } from "./loadouts";
 import { beyondPlayArea, bodyBlocked, dist, groundHeight, outOfBounds, supportHeight, type MapDefinition, type Vec } from "./map";
 import { idle, raySphere, type Command, type Game, type Projectile, type Soldier, type Team, type V3 } from "./simulation";
 import { hitHeights, hitRadius } from "./crouch";
-import { weaponStats } from "./weapon-stats";
-import { weaponProfile } from "./weapons";
+import { tankHullPoints, tankImmobilizedBelow, weaponStats } from "./weapon-stats";
+import { equippedStats, weaponProfile } from "./weapons";
 
 export const tankRules = {
   length: 8,
@@ -32,9 +33,9 @@ export const tankRules = {
   reverseSpeed: 0.55,
   acceleration: 0.35,
   turnRate: 0.2,
-  hp: 600,
+  hp: tankHullPoints,
   // Below this share of its hull points a tank has thrown a track.
-  immobilizedBelow: 0.35,
+  immobilizedBelow: tankImmobilizedBelow,
   // Obstacles up to this high are climbed or crushed.
   climb: 1.25,
   maxSlope: 0.6,
@@ -120,7 +121,7 @@ export type TankEvent = {
   type: "tank";
   tank: number;
   team: Team;
-  phase: "spawn" | "board" | "exit" | "cannon" | "ditched" | "unditched" | "stalled" | "restarted" | "immobilized" | "knockedOut" | "crush";
+  phase: "spawn" | "board" | "exit" | "cannon" | "ditched" | "unditched" | "stalled" | "restarted" | "immobilized" | "knockedOut" | "crush" | "pierced";
   actor?: number;
   at: V3;
   to?: V3;
@@ -535,12 +536,21 @@ export function explosionOnTanks(g: Game, at: V3, actor: number, team: Team | nu
   }
 }
 
-// A rifle or machine-gun round striking the plates.
-export function bulletOnTank(t: Tank, at: V3) {
-  const l = toLocal(t, at);
+// A rifle or machine-gun round striking the plates. Ordinary rounds only
+// splash the crew's view; an anti-tank round (src/weapon-stats.ts armour)
+// also goes through, taking hull points and sometimes wounding the crewman.
+export function bulletOnTank(g: Game, t: Tank, shot: Projectile) {
+  const l = toLocal(t, shot);
   // Vision slits and the driver's cab sit high at the front.
-  const slit = l.f > halfL - 1.6 && at.y > t.y + 1.4;
-  t.splash = Math.min(1, t.splash + (slit ? tankRules.slitSplash : tankRules.splashPerHit));
+  const slit = l.f > halfL - 1.6 && shot.y > t.y + 1.4;
+  const armour = shot.weapon ? equippedStats({ weapon: shot.weapon, weaponId: shot.weaponId })?.armour : undefined;
+  t.splash = Math.min(1, t.splash + (slit ? tankRules.slitSplash : tankRules.splashPerHit) * (armour ? 2 : 1));
+  if (!armour || !alive(t) || shot.team === t.team) return;
+  const crew = t.driver === undefined ? undefined : g.players[t.driver];
+  const wounds = !!crew && crew.hp > 0 && g.random() < armour.crew * (slit ? 2 : 1);
+  g.emit({ type: "tank", tank: t.id, team: t.team, phase: "pierced", actor: shot.actor, at: { x: shot.x, y: shot.y, z: shot.z } });
+  if (wounds) g.tanks.hurt(crew, armour.crewDamage, shot.actor, shot.team, { kind: "bullet", weapon: shot.weaponId ?? "Armour-piercing round", from: shot.origin ? { ...shot.origin } : { x: shot.x, y: shot.y, z: shot.z } });
+  damageTank(g, t, armour.hull * (slit ? armour.slit : 1), shot.actor, shot.team);
 }
 
 // ---- Movement ------------------------------------------------------------

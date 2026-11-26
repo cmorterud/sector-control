@@ -18,6 +18,8 @@ export const hipFireRules = {
     scoped: 0.075,
     pistol: 0.03,
     machineGun: 0.05,
+    // A long, heavy rifle (or a service rifle loaded for tanks) from the hip.
+    antiTank: 0.07,
   } satisfies Partial<Record<WeaponRole, number>>,
   // The generic weapons outside the faction armory.
   generic: { rifle: 0.045, serviceRifle: 0.06, pistol: 0.03, machineGun: 0.05 },

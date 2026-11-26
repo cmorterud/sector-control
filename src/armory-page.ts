@@ -4,7 +4,7 @@ import "./armory.css";
 import { showBuildVersion } from "./build-version";
 import { factions, type FactionId } from "./loadouts";
 import {
-  armoryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, timeToKill,
+  armoryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, tankHits, timeToKill,
   weaponStats, type HitZone, type WeaponStats,
 } from "./weapon-stats";
 
@@ -57,9 +57,22 @@ function card(w: WeaponStats) {
       <div><dt>Rate of fire</dt><dd>${Number(gameRateOfFire(w).toFixed(2))}<small> rounds/min in game${low === undefined ? "" : ` · ${low === high ? low : `${low}–${high}`} historical`}</small></dd></div>
       <div><dt>Muzzle velocity</dt><dd>${gameMuzzleVelocity(w)} m/s<small> in game · ${w.historical.muzzleVelocity} m/s ${reference}</small></dd></div>
     </dl>
+    ${armourStats(w)}
     <p class="summary">${escape(w.summary)}</p>
     <p class="note">${escape(w.historical.note)}${w.falloff ? ` Damage falls to ${Math.round(w.falloff.minimum * 100)}% between ${w.falloff.start} and ${w.falloff.end} m.` : ""}</p>
   </article>`;
+}
+
+// What an anti-tank weapon's rounds do to a tank's plates.
+function armourStats(w: WeaponStats) {
+  const side = tankHits(w), slit = tankHits(w, true);
+  if (!w.armour || !side || !slit) return "";
+  return `<dl class="stats armour">
+      <div><dt>Hull damage per hit</dt><dd>${w.armour.hull}<small> of 600 · ×${w.armour.slit} through the vision slits</small></dd></div>
+      <div><dt>Hits to stop a tank</dt><dd>${side.immobilize}<small> to throw a track · ${slit.immobilize} at the slits</small></dd></div>
+      <div><dt>Hits to knock it out</dt><dd>${side.knockOut}<small> · ${slit.knockOut} at the slits</small></dd></div>
+      <div><dt>Crew wounded</dt><dd>${Math.round(w.armour.crew * 100)}%<small> of hits · ${w.armour.crewDamage} damage · twice as often at the slits</small></dd></div>
+    </dl>`;
 }
 
 type Column = { label: string; value: (w: WeaponStats) => number | string; show?: (w: WeaponStats) => string };
@@ -73,6 +86,7 @@ const columns: Column[] = [
   { label: "Rounds per reload", value: w => w.magazine },
   { label: "Reload", value: w => reloadDuration(w) / weaponTicksPerSecond, show: w => seconds(reloadDuration(w) / weaponTicksPerSecond) },
   { label: "Velocity in game (m/s)", value: w => gameMuzzleVelocity(w) },
+  { label: "Hits to knock out a tank", value: w => tankHits(w)?.knockOut ?? Infinity, show: w => String(tankHits(w)?.knockOut ?? "—") },
   { label: "Reference velocity (m/s)", value: w => w.historical.muzzleVelocity },
 ];
 let sort = { column: 0, ascending: true };
@@ -100,11 +114,11 @@ function render(tab: Tab) {
   root.innerHTML = `<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
       <div class="eyebrow">SECTOR CONTROL</div><h1>Armory</h1>
-      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun or take an emplacement kit on any map. Each role has a pistol.</p>
+      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun or take an emplacement kit on any map, and where tanks fight, an anti-tank kit whose rounds go through tank plate. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${tabs.map(([id, label]) => `<button role="tab" aria-selected="${id === tab}" data-tab="${id}">${escape(label)}</button>`).join("")}</nav>
     <section>${content}</section>
-    <footer><p>Damage and time to kill assume full health, close range and a clear shot. Pistol damage drops over distance. Time starts with the first hit.</p></footer>`;
+    <footer><p>Damage and time to kill assume full health, close range and a clear shot. Pistol damage drops over distance. Time starts with the first hit. Ordinary rounds only blur a tank crew's view; tank hits assume the side plates unless the vision slits are named.</p></footer>`;
   root.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach(b => b.onclick = () => {
     const next = b.dataset.tab as Tab;
     history.replaceState(null, "", "#" + next);

@@ -61,6 +61,11 @@ export function tankNotice(g: Game, e: Event, p: Soldier): string | undefined {
     case "stalled": return mine ? "ENGINE STALLED · RESTARTING" : undefined;
     case "restarted": return mine ? "ENGINE RUNNING" : undefined;
     case "unditched": return mine ? "CLEAR OF THE DITCH" : undefined;
+    case "pierced": {
+      if (mine) return "ROUND THROUGH THE PLATE · ANTI-TANK RIFLE";
+      const t = g.tanks.list.find(o => o.id === e.tank);
+      return e.actor === p.id && t ? `THROUGH THE PLATE · ENEMY ${name} ${Math.ceil((t.hp / tankRules.hp) * 100)}% HULL` : undefined;
+    }
     default: return undefined;
   }
 }
@@ -72,4 +77,4 @@ export function tankChoice(map: Pick<MapDefinition, "id">, on: boolean) {
   return `<label class="tank-choice"><input id="tanks" type="checkbox" ${on ? "checked" : ""}> Tanks<small>One a side, crewed by bots until you climb in · ${names}</small></label>`;
 }
 
-export const tankBrief = (interact: string) => `With tanks on, each side fields one at a time, crewed by a bot. Tanks are slow, slower than walking, and cross ordinary trenches but ditch in wider gaps. Bullets only splash them, blurring the crew's view; knock them out with grenades on or against the plates, artillery, or another tank's gun. Walk up to your own and press ${interact} to take command: its bot climbs out. W and S drive, A and D steer, the mouse lays the guns, left button fires whichever machine gun can swing onto the crosshair, and holding the right button fires the main gun each time it is loaded and bears. The Mark IV's 6-pounders sit in side sponsons, so aim left or right of the hull; the A7V and Saint-Chamond carry theirs in the nose.`;
+export const tankBrief = (interact: string) => `With tanks on, each side fields one at a time, crewed by a bot. Tanks are slow, slower than walking, and cross ordinary trenches but ditch in wider gaps. Ordinary bullets only splash them, blurring the crew's view; knock them out with grenades on or against the plates, artillery, another tank's gun, or Support's anti-tank kit, whose rounds go through the plate and can wound the crew. Walk up to your own and press ${interact} to take command: its bot climbs out. W and S drive, A and D steer, the mouse lays the guns, left button fires whichever machine gun can swing onto the crosshair, and holding the right button fires the main gun each time it is loaded and bears. The Mark IV's 6-pounders sit in side sponsons, so aim left or right of the hull; the A7V and Saint-Chamond carry theirs in the nose.`;
