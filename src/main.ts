@@ -17,6 +17,7 @@ import { ControlsPanel } from "./controls-panel";
 import { forwardMenuWheel } from "./menu-wheel";
 import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
+import { spreadRingRadius } from "./spread-reticle";
 import { villageMap } from "./village-map";
 import { headlandMap } from "./headland-map";
 import { fortVauxMap } from "./fort-vaux-map";
@@ -65,7 +66,7 @@ import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
 import { soldierName } from "./soldier-names";
 const root = document.querySelector<HTMLDivElement>("#ui")!;
-root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
+root.innerHTML = `<div id="hud"><header><div class="brand">SC <span>SECTOR CONTROL</span></div><div class="match"><div><b class="blue" id="blue">0</b><span id="clock">08:00</span><b class="red" id="red">0</b></div><nav id="sectors"></nav></div><div class="hint">TAB · SCOREBOARD<br>ESC · PAUSE</div></header><div id="labels"></div><div id="reticle">＋</div><div id="spread-ring" class="hidden"></div><div id="hit">×</div><div id="capture"></div><div id="artillery-status"></div><footer><div id="health"></div><div class="controls">WASD MOVE　 SHIFT SPRINT　 RMB AIM　 LMB FIRE　 R RELOAD　 V MELEE</div><div id="ammo"></div></footer><div id="suppression"></div><div id="damage"></div></div><div id="menu" class="overlay"></div><div id="scoreboard" class="overlay hidden"></div>`;
 const el = (id: string) => document.getElementById(id)!;
 const combatFeedback=new CombatFeedback(),combatOverlay=document.createElement("div");
 combatOverlay.id="combat-feedback";el("hud").append(combatOverlay);
@@ -634,6 +635,10 @@ function hud(now: number) {
   const watching = watched && !paused ? `WATCHING ${soldierName(watched, game.map)} · LMB NEXT` : "";
   if (spectateLabel.textContent !== watching) spectateLabel.textContent = watching;
   el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
+  const ring = el("spread-ring"), ringRadius = paused || tacticalMap.open || renderer.deathView ? 0 :
+    Math.round(spreadRingRadius(p, game.tick, renderer.camera.camera!.fov, innerHeight));
+  ring.classList.toggle("hidden", !ringRadius);
+  if (ringRadius && ring.style.getPropertyValue("--r") !== `${ringRadius}px`) ring.style.setProperty("--r", `${ringRadius}px`);
   el("blue").textContent = String(game.scores.blue);
   el("red").textContent = String(game.scores.red);
   const t = Math.ceil((game.duration - game.tick) / 30);

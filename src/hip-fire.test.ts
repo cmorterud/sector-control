@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Game, TestCollision, idle } from "./simulation";
 import { trenchMap } from "./trench-map";
 import { aimBlend } from "./weapon-handling";
-import { botSightsReady, hipFireRules, hipSpread, maskBlocksAim } from "./hip-fire";
+import { botSightsReady, hipFireRules, hipSpread, maskBlocksAim, movementSpread } from "./hip-fire";
 import { gasRules } from "./gas";
 
 const sealed = (tick: number) => ({ worn: true, since: tick - gasRules.donTicks - 1, from: 1 });
@@ -60,12 +60,27 @@ describe("hip fire", () => {
     const p = g.players[0];
     p.weapon = "serviceRifle";
     p.weaponId = undefined;
-    expect(hipSpread(p, g.tick)).toBeCloseTo(hipFireRules.generic.serviceRifle);
+    expect(hipSpread(p, g.tick)).toBeCloseTo(hipFireRules.generic.serviceRifle * hipFireRules.still);
     for (let i = 0; i < 10; i++) g.step({ ...idle(), aim: true });
     expect(hipSpread(p, g.tick)).toBe(0);
     p.crouched = true;
     p.aimMotion = undefined; p.command = idle();
-    expect(hipSpread(p, g.tick)).toBeCloseTo(hipFireRules.generic.serviceRifle * hipFireRules.crouched);
+    expect(hipSpread(p, g.tick)).toBeCloseTo(hipFireRules.generic.serviceRifle * hipFireRules.still * hipFireRules.crouched);
+  });
+
+  it("tightens the hip cone standing still and opens it in proportion to speed", () => {
+    const g = new Game({ ray: () => 1, move: (p) => p }, false);
+    const p = g.players[0];
+    p.weapon = "serviceRifle";
+    p.weaponId = undefined;
+    const at = (vx: number) => { p.vx = vx; p.vz = 0; return hipSpread(p, g.tick); };
+    const base = hipFireRules.generic.serviceRifle;
+    expect(at(0)).toBeLessThan(base);
+    expect(at(4.5)).toBeCloseTo(base * 1.5);
+    expect(at(7)).toBeGreaterThan(at(4.5));
+    // Proportional: each extra metre per second adds the same width.
+    expect(at(3) - at(2)).toBeCloseTo(at(2) - at(1));
+    expect(movementSpread(100)).toBe(hipFireRules.maxMoving);
   });
 
   it("sends a player's hip shots off the crosshair but not their aimed ones", () => {

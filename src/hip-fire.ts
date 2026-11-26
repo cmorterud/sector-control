@@ -23,8 +23,13 @@ export const hipFireRules = {
   generic: { rifle: 0.045, serviceRifle: 0.06, pistol: 0.03, machineGun: 0.05 },
   // A light machine gun walks off target while its gunner moves, raised or not.
   movingMachineGun: 0.0225,
-  // Moving faster than a slow walk widens the hip cone; crouching steadies it.
-  moving: 1.5,
+  // Movement scales the hip cone in proportion to ground speed: standing still
+  // steadies it below its listed size, a walk (4.5 m/s) opens it half again,
+  // and a sprint (7 m/s) nearly doubles it. Crouching steadies it further.
+  still: 0.7,
+  perSpeed: 0.8 / 4.5,
+  maxMoving: 2,
+  // A light machine gun counts as moving above this speed (m/s).
   movingSpeed: 1,
   crouched: 0.8,
   // How far up the sights must be before a bot will squeeze the trigger.
@@ -48,11 +53,15 @@ function hipCone(p: Shooter) {
   return p.weapon === "flamethrower" ? 0 : hipFireRules.generic[p.weapon];
 }
 
+// How much ground speed (m/s) widens the hip cone.
+export const movementSpread = (speed: number) =>
+  Math.min(hipFireRules.maxMoving, hipFireRules.still + hipFireRules.perSpeed * speed);
+
 // Half-angle of the cone a shot fired now lands inside.
 export function hipSpread(p: Shooter, tick: number) {
   const hip = 1 - Math.max(0, Math.min(1, aimBlend(p, tick)));
-  const moving = Math.hypot(p.vx, p.vz) > hipFireRules.movingSpeed;
-  const cone = hipCone(p) * hip * (moving ? hipFireRules.moving : 1) * (p.crouched ? hipFireRules.crouched : 1);
+  const speed = Math.hypot(p.vx, p.vz), moving = speed > hipFireRules.movingSpeed;
+  const cone = hipCone(p) * hip * movementSpread(speed) * (p.crouched ? hipFireRules.crouched : 1);
   return p.weapon === "machineGun" && moving ? Math.max(cone, hipFireRules.movingMachineGun) : cone;
 }
 
