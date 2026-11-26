@@ -197,8 +197,13 @@ export function timberPassage(map: MapDefinition, at: V3, d: V3): V3 | null {
   if (!(exit >= 0) || exit > 0.6) return null;
   return { x: at.x + u.x * (exit + 0.02), y: at.y + u.y * (exit + 0.02), z: at.z + u.z * (exit + 0.02) };
 }
-export const grenadeSpeed = 20;
-export const grenadeGravity = 10;
+// Throws fly 1.5x faster than they once did along the same arcs: speed is
+// scaled by 1.5 and gravity by 1.5^2, so every throw still lands where it
+// used to, only sooner.
+export const grenadeSpeed = 30;
+export const grenadeGravity = 22.5;
+export const smokeSpeed = 19.5;
+export const minThrowSpeed = 6;
 export interface Grenade extends V3 {
   kind?: "smoke";
   id: number;
@@ -2070,7 +2075,7 @@ export class Game {
     return fraction;
   }
   private throwGrenade(p: Soldier, smoke = false, botSpeed?: number) {
-    const speed = smoke ? 13 : botSpeed && !this.humanPlayerIds.includes(p.id) ? clamp(botSpeed, 4, grenadeSpeed) : grenadeSpeed;
+    const speed = smoke ? smokeSpeed : botSpeed && !this.humanPlayerIds.includes(p.id) ? clamp(botSpeed, minThrowSpeed, grenadeSpeed) : grenadeSpeed;
     const human = this.humanPlayerIds.includes(p.id);
     // A planned bot frag may skim low through a doorway.
     const elevation = human
@@ -2187,12 +2192,12 @@ export class Game {
             g[axis] +=
               delta * (f < 1 ? Math.max(0, f - 0.003 / Math.abs(delta)) : 1);
             if (f < 1) {
-              if (Math.abs(g[velocity]) > 1.5) bounced = true;
+              if (Math.abs(g[velocity]) > 2.25) bounced = true;
               g[velocity] *= -0.38;
               if (axis === "y") {
                 g.vx *= 0.7;
                 g.vz *= 0.7;
-                if (Math.abs(g.vy) < 0.6) g.vy = 0;
+                if (Math.abs(g.vy) < 0.9) g.vy = 0;
               }
             }
           }

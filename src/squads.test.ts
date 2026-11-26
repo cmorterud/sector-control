@@ -5,6 +5,7 @@ import {
   TestCollision,
   botCommand,
   botSettingsFor,
+  grenadeSpeed,
   idle,
   pathfind,
   type BotSettings,
@@ -305,7 +306,7 @@ describe("buildings", () => {
   it("throws a frag through a door at an enemy inside, and it lands in the room", () => {
     const { g, school, thrower, c } = breach();
     expect(c.grenade).toBe(true);
-    expect(c.throwSpeed).toBeLessThanOrEqual(20);
+    expect(c.throwSpeed).toBeLessThanOrEqual(grenadeSpeed);
     g.commandOverride = (_, p) => (p === thrower && g.tick === throwTick ? c : idle());
     const throwTick = g.tick + 1;
     let landed: Vec | undefined;

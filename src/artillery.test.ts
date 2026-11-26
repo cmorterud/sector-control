@@ -154,8 +154,8 @@ describe("artillery missions", () => {
     expect(g.artillery.shells).toHaveLength(1);
     const launchedAt = g.tick;
     const shell = { ...g.artillery.shells[0] };
-    expect(shell.vy).toBeCloseTo(-39.75);
-    expect(Math.abs(shell.vx)).toBe(15);
+    expect(shell.vy).toBeCloseTo(-62.958);
+    expect(Math.abs(shell.vx)).toBeCloseTo(22.5);
     g.step(idle());
     expect(g.artillery.shells[0].y).toBeLessThan(shell.y);
     expect(Math.abs(g.artillery.shells[0].x - shell.x)).toBeGreaterThan(0.3);
@@ -171,7 +171,7 @@ describe("artillery missions", () => {
     expect(radii.every((r) => r <= 14)).toBe(true);
     expect(artilleryRules.dangerRadius).toBe(23);
     expect(impacts[0].tick).toBe(mission.firstImpactAt);
-    expect(impacts[0].tick - launchedAt).toBe(24);
+    expect(impacts[0].tick - launchedAt).toBe(16);
     impacts.forEach((e, i) =>
       expect(e.tick).toBe(mission.firstImpactAt + mission.impactOffsets[i]),
     );
