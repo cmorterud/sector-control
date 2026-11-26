@@ -228,6 +228,24 @@ describe("tanks", () => {
     expect(tankPanel(g, g.players[0], keys)).toContain("FIRES WHEN LOADED");
   });
 
+  it("fire a fast shell that can be seen in flight and bursts where it lands", () => {
+    const g = scene();
+    const t = command(g);
+    place(g, t, -70, -45, east);
+    const fired = run(g, 1, { yaw: t.yaw + Math.PI / 2, aim: true });
+    expect(tankEvents(fired, "cannon")).toHaveLength(1);
+    expect(g.tick - t.cannon.firedAt).toBeLessThanOrEqual(1);
+    // In the air for a few ticks, not a hitscan: no burst yet.
+    expect(g.tanks.shells).toHaveLength(1);
+    expect(fired.some(e => e.type === "grenadeExplosion")).toBe(false);
+    const shell = g.tanks.shells[0];
+    expect(Math.hypot(shell.vx, shell.vy, shell.vz)).toBeGreaterThan(300);
+    const flight = run(g, 12, { yaw: t.yaw + Math.PI / 2 });
+    expect(g.tanks.shells).toHaveLength(0);
+    const burst = flight.find(e => e.type === "grenadeExplosion");
+    expect(burst).toBeDefined();
+  });
+
   it("fire the machine gun that can swing onto the crosshair", () => {
     const g = scene();
     const t = command(g);

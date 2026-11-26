@@ -57,6 +57,8 @@ export const tankRules = {
   cannonReloadTicks: Math.round(3.5 * 30),
   cannonAmmo: 40,
   cannonRange: 90,
+  // Metres a second: fast, but slow enough to see the shell cross the field.
+  shellSpeed: 330,
   splashPerHit: 0.05,
   slitSplash: 0.15,
   splashDecayPerTick: 0.3 / 30,
@@ -107,7 +109,8 @@ export interface Tank extends V3 {
   aim: V3;
   mg: { ammo: number; reserve: number; nextShot: number; reloadAt: number; weaponId: string; mount: number };
   // refused: the last tick the trigger was held while the gun could not fire.
-  cannon: { ammo: number; nextShot: number; held: boolean; refused: number };
+  // firedAt and muzzle: the last shot, for the smoke drawn at the barrel.
+  cannon: { ammo: number; nextShot: number; held: boolean; refused: number; firedAt: number; muzzle: V3 };
   knockedOutAt?: number;
   bot: { objective?: Vec; nextPlan: number; target: number; nextScan: number; check: Vec & { tick: number }; reverseUntil: number; turn: number; heading?: number; nextSteer: number };
 }
@@ -121,9 +124,23 @@ export type TankEvent = {
   to?: V3;
 };
 type Hurt = (p: Soldier, amount: number, source: number, team: Team | null, details: DamageDetails) => void;
+// A main-gun shell in flight: flat and fast, it bursts on whatever it meets
+// or where its range runs out.
+export interface TankShell extends V3 {
+  id: number;
+  tank: number;
+  actor: number;
+  team: Team;
+  vx: number;
+  vy: number;
+  vz: number;
+  remaining: number;
+  previous: V3;
+}
 export interface TankState {
   enabled: boolean;
   list: Tank[];
+  shells: TankShell[];
   sequence: number;
   nextSpawn: Record<Team, number>;
   fillAt: Record<Team, number>;
@@ -180,6 +197,7 @@ export function createTanks(g: Game, enabled: boolean, hurt: Hurt, destroy: Tank
   const state: TankState = {
     enabled: enabled && supportsTanks(g.map),
     list: [],
+    shells: [],
     sequence: 0,
     nextSpawn: { blue: 0, red: 0 },
     fillAt: { blue: 0, red: 0 },
@@ -343,7 +361,7 @@ function spawnTank(g: Game, team: Team) {
       speed: 0, travel: 0, hp: tankRules.hp, state: "mobile", until: 0, gap: 0, splash: 0,
       aimYaw: yaw, aimPitch: 0, aim: { ...toWorld({ x: c.x, z: c.z, yaw }, 30, 0), y: pose.y + 1.3 },
       mg: { ammo: tankRules.mgBelt, reserve: tankRules.mgReserve, nextShot: 0, reloadAt: 0, weaponId, mount: -1 },
-      cannon: { ammo: tankRules.cannonAmmo, nextShot: 0, held: false, refused: -1 },
+      cannon: { ammo: tankRules.cannonAmmo, nextShot: 0, held: false, refused: -1, firedAt: -1, muzzle: { x: c.x, y: pose.y, z: c.z } },
       bot: { nextPlan: 0, target: -1, nextScan: 0, check: { x: c.x, z: c.z, tick: g.tick }, reverseUntil: 0, turn: 1, nextSteer: 0 },
     };
     g.tanks.list.push(tank);
@@ -788,17 +806,40 @@ function fireCannon(g: Game, t: Tank, p: Soldier, yaw: number, pitch: number) {
     z: (target.z - from.z) / len + (g.random() - 0.5) * spread,
   };
   const n = Math.hypot(d.x, d.y, d.z);
-  const to = { x: from.x + (d.x / n) * range, y: from.y + (d.y / n) * range, z: from.z + (d.z / n) * range };
-  const hit = firstHit(g, from, to, t);
+  const speed = tankRules.shellSpeed;
   gun.ammo--;
   gun.nextShot = g.tick + tankRules.cannonReloadTicks;
+  gun.firedAt = g.tick;
+  gun.muzzle = from;
   p.protectedUntil = 0;
-  g.emit({ type: "tank", tank: t.id, team: t.team, phase: "cannon", actor: p.id, at: from, to: hit.at });
-  // A shell that flies its full range bursts where it comes down.
-  const at = hit.t < 1 ? hit.at : { ...to, y: Math.max(to.y, groundHeight(to.x, to.z, g.map)) };
-  const hits = g.explode(at, p.id, p.team, tankShellProfile);
-  g.emit({ type: "grenadeExplosion", actor: p.id, grenade: -t.id, at, radius: tankShellProfile.radius, hits });
+  g.tanks.shells.push({
+    id: ++g.tanks.sequence, tank: t.id, actor: p.id, team: p.team, ...from, previous: { ...from },
+    vx: (d.x / n) * speed, vy: (d.y / n) * speed, vz: (d.z / n) * speed, remaining: range,
+  });
+  g.emit({ type: "tank", tank: t.id, team: t.team, phase: "cannon", actor: p.id, at: from, to: { x: from.x + (d.x / n) * range, y: from.y + (d.y / n) * range, z: from.z + (d.z / n) * range } });
   return true;
+}
+
+// Shells move one tick's flight and burst on the first thing in their way.
+function advanceShells(g: Game) {
+  const shells = g.tanks.shells;
+  for (let i = shells.length - 1; i >= 0; i--) {
+    const s = shells[i];
+    s.previous = { x: s.x, y: s.y, z: s.z };
+    const speed = Math.hypot(s.vx, s.vy, s.vz), step = Math.min(s.remaining, speed / 30);
+    const to = { x: s.x + (s.vx / speed) * step, y: s.y + (s.vy / speed) * step, z: s.z + (s.vz / speed) * step };
+    const hit = firstHit(g, s, to, g.tanks.list.find(t => t.id === s.tank));
+    s.remaining -= step;
+    if (hit.t >= 1 && s.remaining > 1e-6) {
+      Object.assign(s, to);
+      continue;
+    }
+    shells.splice(i, 1);
+    // A shell that flies its full range bursts where it comes down.
+    const at = hit.t < 1 ? hit.at : { ...to, y: Math.max(to.y, groundHeight(to.x, to.z, g.map)) };
+    const hits = g.explode(at, s.actor, s.team, tankShellProfile);
+    g.emit({ type: "grenadeExplosion", actor: s.actor, grenade: -s.tank, at, radius: tankShellProfile.radius, hits });
+  }
 }
 
 // ---- Crew ----------------------------------------------------------------
@@ -934,6 +975,7 @@ export function advanceTanks(g: Game) {
       state.nextSpawn[team] = g.tick + 150;
       spawnTank(g, team);
     }
+  advanceShells(g);
   for (const t of state.list) {
     t.previous = { x: t.x, y: t.y, z: t.z, yaw: t.yaw, pitch: t.pitch, roll: t.roll };
     t.splash = Math.max(0, t.splash - tankRules.splashDecayPerTick);
