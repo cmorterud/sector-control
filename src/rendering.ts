@@ -59,6 +59,9 @@ import {
   soldierStyle,
   reloadMotion,
   chargePresentation,
+  throwBody,
+  deathFall,
+  deathFallRules,
   throwPresentation,
   casualtyRules,
 } from "./soldier-presentation";
@@ -183,6 +186,15 @@ type SoldierRig = {
   magazineScale: pc.Vec3;
   reloadMagazineScale: pc.Vec3;
   style: ReturnType<typeof soldierStyle>;
+  // A grenade in the right hand while winding up a throw; scaled away otherwise.
+  heldGrenade?: pc.Entity;
+  // Degrees the torso leans with the aim, eased (the rifle takes the rest).
+  aimLean?: number;
+  // Death: false while the fall plays, true once the ragdoll may take over.
+  fallReady?: boolean;
+  // Died beyond ragdoll range: the rig itself falls and lies there.
+  downAtRange?: boolean;
+  settled?: boolean;
   // Which of the army's faces (soldier-kit.ts) is merged into this rig's torso.
   look?: number;
   forward: number;
@@ -3269,6 +3281,9 @@ export class Renderer implements CollisionWorld {
       if(refined)part("sleeve cuff",0,-armLengths.forearm+.024,0,.15,.07,.17,shirt,elbow,"pouch");
       return { shoulder, elbow };
     });
+    const heldGrenade = this.joint("held grenade", arms[1].elbow, 0, -armLengths.forearm - .055, -.025);
+    part("held grenade body", 0, 0, 0, .07, .11, .07, "#3e4236", heldGrenade, "limb");
+    heldGrenade.setLocalScale(0, 0, 0);
     const rifle = this.joint(
       "weapon",
       upper,
@@ -3589,6 +3604,7 @@ export class Renderer implements CollisionWorld {
       reloadMagazineScale: reloadMagazine.getLocalScale().clone(),
       style: soldierStyle(p.id),
       look: refined ? look : undefined,
+      heldGrenade,
       forward: 0,
       sideways: 0,
       deathAt: null,
@@ -3605,7 +3621,7 @@ export class Renderer implements CollisionWorld {
     // the first-person rifle is cloned from.
     if (p.id !== 0) {
       const legJoints = legs.flatMap((leg) => [leg.hip, leg.knee, leg.ankle]), armJoints = arms.flatMap((arm) => [arm.shoulder, arm.elbow]);
-      this.mergeRigidParts(root, new Set<pc.GraphNode>([body, hips, upper, rifle, supportHand, bolt, magazine, reloadMagazine, ...legJoints, ...armJoints]));
+      this.mergeRigidParts(root, new Set<pc.GraphNode>([body, hips, upper, rifle, supportHand, bolt, magazine, reloadMagazine, heldGrenade, ...legJoints, ...armJoints]));
     }
   }
   // A warm-up soldier put back as it would be built: at the player's spawn,
@@ -3615,6 +3631,7 @@ export class Renderer implements CollisionWorld {
     root.setEulerAngles(0, (-p.yaw * 180) / Math.PI, 0);
     root.setLocalScale(1, 1, 1);
     rig.gasMask?.setLocalScale(0, 0, 0);
+    rig.heldGrenade?.setLocalScale(0, 0, 0);
     rig.magazine.setLocalScale(rig.magazineScale);
     rig.rifle.enabled = true;
     this.people.push(root);
@@ -3623,7 +3640,7 @@ export class Renderer implements CollisionWorld {
       gasMask: rig.gasMask, maskShown: 0, body: rig.body, design: rig.design, hips: rig.hips, upper: rig.upper,
       legs: rig.legs, arms: rig.arms, rifle: rig.rifle, supportHand: rig.supportHand, bolt: rig.bolt,
       magazine: rig.magazine, reloadMagazine: rig.reloadMagazine, magazineScale: rig.magazineScale,
-      reloadMagazineScale: rig.reloadMagazineScale, style: soldierStyle(p.id), look: rig.look,
+      reloadMagazineScale: rig.reloadMagazineScale, style: soldierStyle(p.id), look: rig.look, heldGrenade: rig.heldGrenade,
       forward: 0, sideways: 0, deathAt: null, remnantCreated: false, x: p.x, z: p.z,
       phase: p.id * 1.7, motion: 0, sprint: 0, crouch: 0, alive: p.hp > 0,
     });
@@ -4048,6 +4065,14 @@ export class Renderer implements CollisionWorld {
       -Math.atan2(sideways, Math.abs(forward) + 0.001) * 40 * rig.motion + weight.turn.value*1.5,
       0,
     );
+    // The torso takes part of the aim pitch, so a soldier firing uphill leans
+    // back and one firing down into a trench bends over it. The rifle keeps the
+    // exact aim; the lean eases out for reloads, throws, melee and climbing.
+    const reloading = reloadMotion(p, tick);
+    const leanTarget = p.mantle || p.hop || p.melee || p.throwUntil > tick ? 0
+      : Math.max(-16, Math.min(18, weaponAim(p).pitch * 180 / Math.PI * .4)) * (ready ? 1 : .5) * (1 - (reloading?.lower ?? 0));
+    rig.aimLean = rig.alive ? (rig.aimLean ?? leanTarget) + (leanTarget - (rig.aimLean ?? leanTarget)) * (1 - Math.exp(-10 * dt)) : 0;
+    const lean = rig.aimLean;
     const breath = Math.sin((tick / 30) * 1.7 + rig.style.phase);
     const idleTurn =
       Math.sin((tick / 30) * 0.65 + rig.style.phase) *
@@ -4056,7 +4081,7 @@ export class Renderer implements CollisionWorld {
       (1 - rig.motion);
     rig.upper.setLocalPosition(0, 0.08 + breath * 0.003 * (1 - rig.motion), 0);
     rig.upper.setLocalEulerAngles(
-      -kick * 2 + breath * 0.35 * (1 - rig.motion),
+      lean - kick * 2 + breath * 0.35 * (1 - rig.motion),
       stride * (ready ? 1.5 : 4) * rig.style.sway + idleTurn + weight.turn.value*.3,
       -stride * 1.5 * rig.style.sway,
     );
@@ -4099,7 +4124,7 @@ export class Renderer implements CollisionWorld {
     rig.rifle.setLocalEulerAngles(
       -rig.sprint * 20 +
         stride * 2 +
-        (weaponAim(p).pitch * 180) / Math.PI +
+        (weaponAim(p).pitch * 180) / Math.PI - lean +
         kick * 5,
       (p.recoilYaw * 180) / Math.PI,
       p.reloadAt ? 12 : 0,
@@ -4196,7 +4221,7 @@ export class Renderer implements CollisionWorld {
         0.36 - 0.14 * lower + rifleHeight(this.map) - 1.45,
         weaponMount.z + 0.15 * lower,
       );
-      rig.rifle.setLocalEulerAngles(-24 * lower, 10 * lower, -28 * lower);
+      rig.rifle.setLocalEulerAngles(-24 * lower - lean, 10 * lower, -28 * lower);
       const trigger = rig.rifle
         .getLocalTransform()
         .transformPoint(new pc.Vec3(...(weaponDesign(p)?.trigger ?? [0,-.03,.14]) as [number,number,number]));
@@ -4287,12 +4312,16 @@ export class Renderer implements CollisionWorld {
         cycling.reach,
       );
     }
-    if (p.throwUntil > tick && !p.mantle) {
-      const t = clamp01(1 - (p.throwUntil - tick) / 15);
+    const throwing = !p.mantle ? throwBody(p, tick) : null;
+    if (throwing) {
+      // Rifle down in the left hand; the body winds up and comes through.
+      rig.body.rotateLocal(throwing.lean * throwing.weight, 0, 0);
+      rig.upper.rotateLocal(0, throwing.twist * throwing.weight, 0);
       rig.rifle.setLocalEulerAngles(-30, 0, 15);
-      rig.arms[1].shoulder.setLocalEulerAngles(150 - 110 * smooth(t), 0, -15);
-      rig.arms[1].elbow.setLocalEulerAngles(55 * (1 - t), 0, 0);
+      rig.arms[1].shoulder.setLocalEulerAngles(throwing.shoulder, 0, -15);
+      rig.arms[1].elbow.setLocalEulerAngles(throwing.elbow, 0, 0);
     }
+    rig.heldGrenade?.setLocalScale(throwing?.held ? pc.Vec3.ONE : pc.Vec3.ZERO);
     if (p.melee && p.hp > 0 && !p.mantle) {
       const pose = meleePose(p.melee, tick);
       const charge = chargePresentation(p, tick, rig.phase, rig.motion);
@@ -4402,20 +4431,47 @@ export class Renderer implements CollisionWorld {
   private releaseCasualty(c: (typeof this.casualties)[number]) {
     c.ragdoll.destroy(); c.entity.destroy();
   }
+  // Knees give and the body drops and twists away from the hit. The ragdoll
+  // starts from this pose once the fall has played (`fallReady`).
+  private poseDeathFall(p: Soldier, rig: SoldierRig, age: number, lieDown: boolean) {
+    if (rig.settled) return;
+    const hit = this.deathHits.get(p.id);
+    const local = hit ? this.people[p.id].getRotation().clone().invert().transformVector(hit) : pc.Vec3.ZERO;
+    const fall = deathFall(lieDown ? age : Math.min(age, deathFallRules.fallTicks), local);
+    rig.body.setLocalPosition(0, 0.94 - fall.drop, 0);
+    rig.body.setLocalEulerAngles(fall.pitch, 0, fall.roll);
+    rig.hips.setLocalEulerAngles(0, 0, 0);
+    rig.upper.setLocalEulerAngles(fall.slump, fall.twist, 0);
+    for (const leg of rig.legs) {
+      leg.hip.setLocalEulerAngles(fall.hip, 0, 0);
+      leg.knee.setLocalEulerAngles(fall.knee, 0, 0);
+      leg.ankle.setLocalEulerAngles(fall.ankle, 0, 0);
+    }
+    // The rifle sags out of the aim, still in the left hand.
+    rig.rifle.setLocalEulerAngles(-35 * fall.arm, 0, 20 * fall.arm);
+    rig.arms[1].shoulder.setLocalEulerAngles(65 - 45 * fall.arm, 0, -8);
+    rig.arms[1].elbow.setLocalEulerAngles(25 - 15 * fall.arm, 0, 0);
+    this.attachSupportArm(rig);
+    if (fall.fallen) rig.fallReady = true;
+    if (lieDown ? fall.lying : fall.fallen) rig.settled = true;
+  }
   private queueCasualty(p: Soldier) {
     this.visualWork ??= new VisualWorkQueue();
     this.pendingCasualties ??= new Map();
     const rig = this.soldiers[p.id], actor = this.people[p.id];
     if (rig.remnantCreated) return;
     rig.remnantCreated = true;
+    rig.fallReady = false;
+    rig.settled = false;
     if (Math.hypot(p.x - this.camera.getPosition().x, p.z - this.camera.getPosition().z) > casualtyRules.range) {
-      actor.setLocalScale(pc.Vec3.ZERO); return;
+      // Too far for a ragdoll: the rig falls and stays down instead of vanishing.
+      rig.downAtRange = true; return;
     }
     const pending = { rig, blasts: [] as { at: pc.Vec3; radius: number; power: number }[] };
     this.pendingCasualties.set(p.id, pending);
     const impulse = this.deathHits.get(p.id)?.clone();
     const game = this.activeGame;
-    this.visualWork.set(`casualty:${p.id}`, { kind: "casualty", run: () => {
+    this.visualWork.set(`casualty:${p.id}`, { kind: "casualty", ready: () => rig.fallReady !== false, run: () => {
       this.pendingCasualties.delete(p.id);
       // A respawn, kit replacement or map reset invalidates the old death.
       if (this.activeGame !== game || this.soldiers[p.id] !== rig || p.hp > 0) return;
@@ -5009,6 +5065,7 @@ export class Renderer implements CollisionWorld {
         if (e.getLocalScale().x !== 1) e.setLocalScale(1, 1, 1);
         rig.deathAt = null;
         rig.remnantCreated = false;
+        rig.fallReady = undefined; rig.downAtRange = false; rig.settled = false;
         this.visualWork.delete(`casualty:${p.id}`);
         this.pendingCasualties.delete(p.id);
         this.animateSoldier(visible, x, z, owed, tick);
@@ -5026,13 +5083,10 @@ export class Renderer implements CollisionWorld {
           this.queueCasualty(p);
         }
         const pending = this.pendingCasualties.has(p.id);
-        e.setLocalScale(pending ? pc.Vec3.ONE : pc.Vec3.ZERO);
-        if (pending) {
-          // Immediate, allocation-free collapse while physical setup waits.
-          const fall = Math.min(1, Math.max(0, (tick - rig.deathAt) / 9));
-          rig.body.setLocalPosition(0, 0.94 - fall * 0.35, 0);
-          rig.body.setLocalEulerAngles(fall * 30, 0, fall * 12);
-        }
+        // A distant body lies where it fell for as long as a ragdoll would last.
+        const down = !!rig.downAtRange && tick - rig.deathAt < casualtyRules.lifetime * 30;
+        e.setLocalScale(pending || down ? pc.Vec3.ONE : pc.Vec3.ZERO);
+        if (pending || down) this.poseDeathFall(p, rig, tick - rig.deathAt, down);
       }
     }
     this.drawCasualties(dt);

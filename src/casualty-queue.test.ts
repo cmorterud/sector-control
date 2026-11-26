@@ -17,6 +17,10 @@ test("queued casualties retain blast impulse, deduplicate and cannot hide respaw
   r.queueCasualty(players[0]);r.queueCasualty(players[0]);r.queueCasualty(players[1]);
   expect(r.visualWork.size).toBe(2);
   r.blastCasualties({type:"artilleryImpact",at:{x:0,y:0,z:0},radius:5});
+  // Nothing is built while the death falls play.
+  r.visualWork.flush(4,2);
+  expect(retain).not.toHaveBeenCalled();
+  for(const rig of rigs)Object.assign(rig,{fallReady:true});
   r.visualWork.flush(4,2);
   expect(retain).toHaveBeenCalledTimes(1);
   expect(retain.mock.calls[0][1]!.equals(new pc.Vec3(7,0,0))).toBe(true);
