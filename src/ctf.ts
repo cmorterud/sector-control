@@ -171,6 +171,7 @@ export function touching(g: Game, p: Soldier, at: V3, radius: number) {
     p.hp > 0 &&
     !p.mantle &&
     p.mountedGun === undefined &&
+    p.tank === undefined &&
     dist(p, at) <= radius &&
     Math.abs(p.y - at.y) <= ctfRules.heightTolerance &&
     g.collision.ray({ x: p.x, y: p.y + 0.9, z: p.z }, { x: at.x, y: at.y + 0.9, z: at.z }) > 0.99
