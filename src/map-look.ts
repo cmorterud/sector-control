@@ -75,6 +75,15 @@ export const mapLooks: Record<MapDefinition["id"], MapLook> = {
     vignette: 0.34, exposure: 1.1, ambient: 1.8, farClip: 440,
     atmosphere: { fieldMist: 0.26, trenchMist: 0.2, fieldWidth: 140 },
   },
+  // A hot August evening at Anzac: a low sun over the sea behind the
+  // attackers, dry dust haze over the scrub and long shadows up the gullies.
+  gallipoli: {
+    sun: { color: "#ffd9a8", intensity: 1.7, elevation: 24, azimuth: -80, shadowStrength: 0.85 },
+    sky: { zenith: "#5f86b4", horizon: "#d9cfb6", ground: "#6a624e", clouds: 0.2, cloud: "#f3e6cf", glow: "#ffd49a" },
+    fog: { start: 70, end: 340 },
+    grade: { brightness: 0, contrast: 1.05, saturation: 0.95, tint: "#fff4e4" },
+    vignette: 0.28, exposure: 1.02, ambient: 1.4, farClip: 440,
+  },
   // Overcast late morning; green-grey haze between the trees.
   verdun: {
     sun: { color: "#ece9dc", intensity: 0.95, elevation: 30, azimuth: -20, shadowStrength: 0.6 },

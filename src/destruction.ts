@@ -3,7 +3,7 @@ import { settleBuildings } from "./building-destruction";
 import { collapsedStructureParts, isStructure } from "./landmarks";
 import { fallenTreeParts, timberSupport } from "./vegetation";
 import { craterShape, craterSampler, type CraterShape } from "./crater-shape";
-import {
+import { hillHeight,
   updateTerrainCutGrid,
   baseGroundHeight,
   groundHeight,
@@ -349,7 +349,8 @@ export function deformExplosion(
       )
     )
       return;
-    const limit = Math.max(0, base + 0.9);
+    // Never below 0.9 m under the hillside's own level.
+    const limit = Math.max(0, base - hillHeight(wx, wz, map) + 0.9);
     const next = Math.min(limit, depth);
     if (next <= read(x, z) + 0.0001) return;
     edits.set(cellKey(x, z), next);

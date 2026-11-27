@@ -168,7 +168,7 @@ export interface KitRuntime {
   fallen: Record<string, number[]>;
 }
 export interface MapDefinition {
-  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux" | "zeppelin" | "spring-offensive";
+  id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux" | "zeppelin" | "spring-offensive" | "gallipoli";
   // A night map (src/night.ts): an unlit soldier is seen only within `sight`
   // metres. Light from lamps, flares and bursts restores the usual range.
   night?: { sight: number };
@@ -190,6 +190,10 @@ export interface MapDefinition {
     drops: Record<"blue" | "red", Vec & { name: string }>;
   };
   artillery?: false;
+  // No gas shells (and no mask) on a front where gas was never used.
+  gas?: false;
+  // No flame kits at the trench ends.
+  flamethrower?: false;
   fort?: FortLayout;
   // A battlefield in the air. There is no ground: every height query off the
   // decks returns `floor`, far below, and a soldier who falls past `fallLimit`
@@ -255,6 +259,12 @@ export interface MapDefinition {
     depressions?: Depression[];
     shellScars?: Depression[];
     elevation?: TerrainElevation;
+    // A large-scale height field under everything else: a hillside the
+    // trenches, ramps and banks are dug into (Gallipoli's 45 m climb from the
+    // beach). Everything authored above stays relative to the local ground, so
+    // a trench floor follows the slope. Same 2 m triangles as `elevation`;
+    // sampled at the nearest edge outside its grid.
+    hill?: TerrainElevation;
     banks?: TrenchBanks;
     relief?: TerrainRelief;
   };
@@ -345,13 +355,29 @@ function authoredMapHeight(
       : 0)
   );
 }
+// The authored ground before blasts, measured from the hillside under it
+// (`terrain.hill`): what a flat map's ground height has always been.
+function localBaseHeight(x: number, z: number, map: MapDefinition): number {
+  return authoredMapHeight(x, z, map) - authoredTerrainCut(x, z, map);
+}
 export function baseGroundHeight(
   x: number,
   z: number,
   map: MapDefinition = industrialMap,
 ): number {
   if (map.sky) return map.sky.floor;
-  return authoredMapHeight(x, z, map) - authoredTerrainCut(x, z, map);
+  return localBaseHeight(x, z, map) + hillHeight(x, z, map);
+}
+// The hillside under the authored ground, 0 on a map without one. Trench and
+// bank tests compare a height with `bankHeight` after taking this away.
+export function hillHeight(x: number, z: number, map: Pick<MapDefinition, "terrain">): number {
+  const field = map.terrain?.hill;
+  if (!field) return 0;
+  const gx = Math.max(0, Math.min(field.columns - 1, (x - field.originX) / field.spacing)),
+    gz = Math.max(0, Math.min(field.rows - 1, (z - field.originZ) / field.spacing));
+  const ix = Math.min(field.columns - 2, Math.floor(gx)),
+    iz = Math.min(field.rows - 2, Math.floor(gz));
+  return elevationCell(field, ix, iz, gx - ix, gz - iz);
 }
 // The same diagonal as terrainGeometry's two-meter surface quads. Interpolating
 // this cached field keeps movement, ray queries and the coarse mesh in agreement.
@@ -404,7 +430,7 @@ export function groundHeight(
   map: MapDefinition = industrialMap,
 ): number {
   if (map.sky) return map.sky.floor;
-  return Math.max(-0.9, baseGroundHeight(x, z, map) - terrainCut(x, z, map));
+  return Math.max(-0.9, localBaseHeight(x, z, map) - terrainCut(x, z, map)) + hillHeight(x, z, map);
 }
 // Numeric lookup keeps repeated movement/ray queries cheap after large barrages.
 // Sparse, serializable cuts remain authoritative; the cache expires per revision.
@@ -530,7 +556,7 @@ function sampleTerrainCuts(
       [ix, iz + 1],
       [ix + 1, iz + 1],
     ].map(([gx, gz]) =>
-      baseGroundHeight(
+      localBaseHeight(
         gx * terrainResolution,
         gz * terrainResolution,
         runtimeMap,
@@ -545,7 +571,7 @@ function sampleTerrainCuts(
         // Cap each shared sample to this cell's side of the authored cliff;
         // otherwise interpolation tries to raise the floor, then a query-time
         // clamp creates a curved lip that disagrees with the mesh triangles.
-        const sideBase = baseGroundHeight(
+        const sideBase = localBaseHeight(
           (ix + dx) * terrainResolution + (dx ? -0.00001 : 0.00001),
           (iz + dz) * terrainResolution + (dz ? -0.00001 : 0.00001),
           runtimeMap,
@@ -555,7 +581,7 @@ function sampleTerrainCuts(
       if (bases.some((base, i) => base > low + 0.3 && heights[i] < base - 0.15))
         return Math.max(
           0,
-          baseGroundHeight(x, z, runtimeMap) -
+          localBaseHeight(x, z, runtimeMap) -
             interpolate(heights[0], heights[1], heights[2], heights[3]),
         );
     }

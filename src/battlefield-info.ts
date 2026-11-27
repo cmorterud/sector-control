@@ -11,6 +11,7 @@ export const battlefieldInfo = {
   "night-raid": { setting: "Ypres salient · 1917", factions: "Britain · Imperial Germany", description: "Ypres after dark. You see fifteen meters; lamps, flares and shell bursts show the rest. Four flags." },
   headland: { setting: "Atlantic coast · 1917", factions: "France · Imperial Germany", description: "Graybox preview. A lighthouse headland with a town square between cliff-top parks. Three flags." },
   "spring-offensive": { setting: "St. Quentin · March 1918", factions: "Britain · Imperial Germany", description: "Three trench lines a side in morning fog: a ruined village, a hill redoubt, a chalk quarry and a tank lane. Seven flags; deploy forward from home flags you hold." },
+  gallipoli: { setting: "Anzac · August 1915", factions: "ANZAC · Ottoman Empire", description: "Graybox preview. Climb from the beach through scrub gullies to the Nek, Lone Pine and the summit of Chunuk Bair, 45 m above the sea. Six flags; no gas, no tanks." },
   village: { setting: "Western Front · 1917", factions: "Britain · Imperial Germany", description: "Nine village buildings, sheltered gardens and a destructible two-story manor. Five flags, including the manor." },
 };
 export function battlefieldCard(map: MapDefinition, href?: string) {

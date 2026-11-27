@@ -19,6 +19,10 @@ export const gasAgent = (map: Pick<MapDefinition, "id">) => map.id === "verdun"
   ? { shells: "PHOSGENE SHELLS", weapon: "Phosgene shell", masked: "MASK LEAKING", cloud: "#c9ccb4", burst: "#d8dac6" }
   : { shells: "GAS SHELLS", weapon: "Gas shell", masked: "STILL BURNING", cloud: "#c3bd52", burst: "#cfc95a" };
 
+// Fronts with gas shells: every map with artillery, unless it says otherwise
+// (no one used gas at Gallipoli).
+export const gasMap = (map: Pick<MapDefinition, "artillery" | "gas">) => map.artillery !== false && map.gas !== false;
+
 export const gasRules = {
   damageInterval: 15,
   // Pulling the mask on takes both hands for a second; off is quicker.
@@ -135,7 +139,7 @@ export function maskProgress(p: Pick<Soldier, "gasMask">, tick: number) {
 }
 export const masked = (p: Pick<Soldier, "gasMask">, tick: number) => !!p.gasMask?.worn && maskProgress(p, tick) >= 1;
 export function toggleMask(g: Game, p: Soldier) {
-  if (p.hp <= 0 || p.mantle || p.melee || p.mountedGun !== undefined) return false;
+  if (p.hp <= 0 || p.mantle || p.melee || p.mountedGun !== undefined || !gasMap(g.map)) return false;
   const from = maskProgress(p, g.tick), worn = !p.gasMask?.worn;
   const busy = Math.ceil((worn ? 1 - from : from) * (worn ? gasRules.donTicks : gasRules.doffTicks));
   p.gasMask = { worn, since: g.tick, from };
@@ -157,6 +161,7 @@ export function resetGas(p: Soldier) {
 // The same rules as a high-explosive fire mission (range, view, the shared
 // cooldown, one mission at a time), plus no gas onto a deployment.
 export function gasStrikeReason(g: Game, p: Soldier, target: Vec & { area?: boolean }): string | null {
+  if (!gasMap(g.map)) return "NO GAS ON THIS FRONT";
   const reason = artilleryTargetReason(g, p, target);
   if (reason) return reason;
   const at = target.area ? artillerySector(g.map, target) : target;
@@ -198,7 +203,7 @@ export function gasShellTarget(cloud: Pick<GasCloud, "id" | "x" | "z">, index: n
 // enemies 30 to 70 m away, clear of its own soldiers; otherwise it leaves the
 // battery to the ordinary fire mission.
 export function botGasTarget(g: Game, p: Soldier): Vec | null {
-  if (!g.artillery.enabled || g.tick < g.artillery.readyAt[p.team] || g.tick % 30 !== p.id % 30 || teamHasHuman(g, p)) return null;
+  if (!g.artillery.enabled || !gasMap(g.map) || g.tick < g.artillery.readyAt[p.team] || g.tick % 30 !== p.id % 30 || teamHasHuman(g, p)) return null;
   let best: Vec | null = null, most = gasStrikeRules.botCluster - 1;
   for (const q of g.players) {
     if (q.hp <= 0 || q.team === p.team || g.tick < q.protectedUntil || dist(p, q) < 30 || dist(p, q) > 70) continue;

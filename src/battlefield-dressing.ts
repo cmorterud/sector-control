@@ -1,5 +1,5 @@
 import { lookNoise } from "./battlefield-look";
-import { blocked, groundHeight, type MapDefinition, type Vec } from "./map";
+import { hillHeight, blocked, groundHeight, type MapDefinition, type Vec } from "./map";
 
 export type BattlefieldProp = Vec & {
   y: number;
@@ -56,7 +56,7 @@ export function trenchRoots(map: MapDefinition): TrenchRoot[] {
       for (const side of [-1, 1]) {
         let found: number | undefined;
         for (let offset = 0.3; offset < 3.5; offset += 0.1) {
-          const x = section.x + side * offset, h = groundHeight(x, z, map);
+          const x = section.x + side * offset, h = groundHeight(x, z, map) - hillHeight(x, z, map);
           if (h > 0.5 && h < map.terrain.bankHeight - 0.3) { found = x; break; }
         }
         if (found === undefined) continue;

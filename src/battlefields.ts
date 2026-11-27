@@ -1,5 +1,6 @@
 import { ctfMap, supportsCtf } from "./ctf";
 import { fortVauxMap } from "./fort-vaux-map";
+import { gallipoliMap } from "./gallipoli-map";
 import { headlandMap } from "./headland-map";
 import type { MapDefinition } from "./map";
 import { nightRaidMap } from "./night-map";
@@ -14,7 +15,7 @@ import { zeppelinMap } from "./zeppelin-map";
 // offered, but ?map=industrial still opens it for the CI combat and Armory
 // browser checks. A new map added here is picked up by the bot progress
 // tests (src/bot-progress-suite.ts) on every mode battleModes lists for it.
-export const battlefields: readonly MapDefinition[] = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, headlandMap];
+export const battlefields: readonly MapDefinition[] = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, gallipoliMap, headlandMap];
 
 export interface BattleMode {
   // The ?mode= value, or "default" for the map's own scoring.

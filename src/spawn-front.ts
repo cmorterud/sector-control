@@ -22,7 +22,7 @@ export const spawnFrontRules = {
 // The open, outdoor battlefields, where a side holds a front.
 export const spreadsAlongFront = (map: Pick<MapDefinition, "id" | "sky">) =>
   !map.sky && (map.id === "trenches" || map.id === "night-raid" || map.id === "village" ||
-    map.id === "verdun" || map.id === "spring-offensive" || map.id === "headland");
+    map.id === "verdun" || map.id === "spring-offensive" || map.id === "gallipoli" || map.id === "headland");
 
 export interface SpawnFront { x: number; z0: number; z1: number }
 

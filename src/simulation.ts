@@ -79,7 +79,7 @@ import {
   evadeArtillery,
   type ArtilleryEvade,
 } from "./artillery";
-import {
+import { hillHeight,
   blocked,
   invalidateCoverLookup,
   dist,
@@ -246,7 +246,7 @@ export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   if (p.forwardPost) return p.forwardPost;
   if (!original || !g.map.destruction?.revision) return original;
   const intact = (v: Vec) =>
-    groundHeight(v.x, v.z, g.map) + rifleHeight(g.map) >=
+    groundHeight(v.x, v.z, g.map) - hillHeight(v.x, v.z, g.map) + rifleHeight(g.map) >=
     g.map.terrain!.bankHeight + 0.04;
   if (intact(original)) return original;
   return (

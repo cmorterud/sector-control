@@ -1,4 +1,4 @@
-import {
+import { hillHeight,
   groundHeight,
   baseGroundHeight,
   groundElevation,
@@ -44,7 +44,7 @@ export function vegetationFor(map: MapDefinition): Box[] {
       // Keep plants off trench faces/craters, but allow their original sites
       // on gentle rolling ground. Their roots use the actual surface height.
       return (
-        Math.abs(height - groundElevation(x + dx, z + dz, map) - 2.4) < 0.03 &&
+        Math.abs(height - hillHeight(x + dx, z + dz, map) - groundElevation(x + dx, z + dz, map) - 2.4) < 0.03 &&
         Math.abs(height - center) < 0.4
       );
     });

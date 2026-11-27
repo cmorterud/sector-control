@@ -1,6 +1,6 @@
 import { weaponProfile } from "./weapons";
 import { availableCraterCover, craterDepth } from "./crater-cover";
-import {
+import { hillHeight,
   groundHeight,
   dist,
   mantleLanding,
@@ -326,7 +326,7 @@ export function assaultCommand(g: Game, p: Soldier, c: Command): Command {
     !p.mantle &&
     !p.hop &&
     !p.fall &&
-    (stage < 2 || p.y < g.map.terrain!.bankHeight - 0.5)
+    (stage < 2 || p.y - hillHeight(p.x, p.z, g.map) < g.map.terrain!.bankHeight - 0.5)
   ) {
     stage = ++m.progress[p.id];
     m.waitUntil[p.id] = g.tick + (stage === 1 ? 90 : 45);

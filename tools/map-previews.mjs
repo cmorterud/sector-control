@@ -25,6 +25,7 @@ export const previewShots={
  'spring-offensive':{view:'third',ticks:3300},
  trenches:{view:'third',ticks:540},
  'night-raid':{view:'third',ticks:540,survey:'trench-dugout'},
+ gallipoli:{view:'third',ticks:600,survey:'summit'},
  headland:{view:'third',ticks:540},
  village:{view:'third',ticks:540,survey:'street'},
  // Not in the picker, but its card shows when ?map=industrial is open.

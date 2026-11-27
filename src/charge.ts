@@ -5,7 +5,7 @@
 // numbers alone at range. A charge that reaches defenders already shaken by
 // fire, smoke or shells breaks them for a moment, and that is its reward.
 import { angleDelta, awarenessSample, turnToward } from "./awareness";
-import { beyondPlayArea, dist, mantleLanding, walkSegment, type Vec } from "./map";
+import { hillHeight, beyondPlayArea, dist, mantleLanding, walkSegment, type Vec } from "./map";
 import { chargeStance, meleeReady } from "./melee";
 import { reactToThreat } from "./combat-reaction";
 import { smokeBlocks } from "./smoke";
@@ -214,7 +214,7 @@ function release(g: Game, p: Soldier, reached = false) {
   if (charge && reached) charge.reached++;
   // Survivors who reach the enemy trench hold it, as trench assaults do.
   const terrain = g.map.terrain;
-  if (reached && own.kind === "squad" && terrain?.firingPositions && p.y < terrain.bankHeight - 0.5) p.forwardPost = { x: p.x, z: p.z };
+  if (reached && own.kind === "squad" && terrain?.firingPositions && p.y - hillHeight(p.x, p.z, g.map) < terrain.bankHeight - 0.5) p.forwardPost = { x: p.x, z: p.z };
 }
 
 // Reads the previous tick's events before they are cleared.

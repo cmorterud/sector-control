@@ -1,12 +1,21 @@
 import type { BackdropBox } from "./backdrop";
 import { duckboards } from "./battlefield";
 import { factionFor, type FactionId } from "./loadouts";
-import { groundHeight, type MapDefinition, type Vec } from "./map";
+import { groundHeight as worldGround, hillHeight, type MapDefinition, type Vec } from "./map";
 
 // Presentation-only construction detail for trench lines: sandbags along the
 // parados, faction revetments, dugout entrances, signboards and the clutter of
 // a lived-in line. Nothing here collides. Everything stays off the firing steps
 // and the enemy-facing parapet, so it can never pose as cover or block a shot.
+
+// Heights here are measured from the hillside under the trenches
+// (terrain.hill, Gallipoli's climb), as on a flat map; `lift` adds it back to
+// what is drawn. On a flat map the hillside is zero and nothing changes.
+const groundHeight = (x: number, z: number, map: MapDefinition) => worldGround(x, z, map) - hillHeight(x, z, map);
+const lift = <T extends { x: number; y: number; z: number }>(map: MapDefinition, items: T[]) =>
+  map.terrain?.hill ? items.map((b) => ({ ...b, y: b.y + hillHeight(b.x, b.z, map) })) : items;
+const liftLines = (map: MapDefinition, points: number[]) =>
+  map.terrain?.hill ? points.map((v, i) => (i % 3 === 1 ? v + hillHeight(points[i - 1], points[i + 1], map) : v)) : points;
 
 const hash = (n: number) => {
   const s = Math.sin(n * 12.9898 + 3.71) * 43758.5453;
@@ -57,7 +66,7 @@ export function paradosBags(map: MapDefinition): BackdropBox[] {
         bags.push({ x: x + s.rear * 0.04 - jitter, y: top + tall - 0.05, z: z + 0.26, w: 0.28, h: 0.19, d: 0.48, yaw: -yaw * 1.4, color: tint(k + 1) });
     }
   });
-  return bags;
+  return lift(map, bags);
 }
 
 export type RevetmentStyle = "timber" | "corrugated" | "sandbag" | "wicker";
@@ -107,7 +116,7 @@ export function dugouts(map: MapDefinition): Dugout[] {
     if (s.front || s.z1 - s.z0 < 16 || n % 2) return;
     for (const z of [(s.z0 + s.z1) / 2, (s.z0 + s.z1) / 2 + 3, (s.z0 + s.z1) / 2 - 3]) {
       if (!rearWallIntact(map, s, z, 0.9)) continue;
-      out.push({ x: s.floorX + s.rear * s.half, z, rear: s.rear, floor: groundHeight(s.floorX, z, map) });
+      out.push({ x: s.floorX + s.rear * s.half, z, rear: s.rear, floor: worldGround(s.floorX, z, map) });
       return;
     }
   });
@@ -151,7 +160,7 @@ export function signboards(map: MapDefinition): Signboard[] {
     const faction = factionFor(map, s.team);
     const list = (map.id === "verdun" && faction === "german" ? verdunGerman : names[faction]) ?? names[s.team === "blue" ? "british" : "german"]!;
     const label = list[used[s.team]++ % list.length];
-    out.push({ x: s.floorX + s.rear * (s.half - 0.06), y: groundHeight(s.floorX, z, map) + 1.65, z, facing: -s.rear as 1 | -1, text: `${label}\n${arrow} ${flag.id}` });
+    out.push({ x: s.floorX + s.rear * (s.half - 0.06), y: worldGround(s.floorX, z, map) + 1.65, z, facing: -s.rear as 1 | -1, text: `${label}\n${arrow} ${flag.id}` });
   });
   return out;
 }
@@ -201,5 +210,5 @@ export function trenchProps(map: MapDefinition, braziers: Vec[] = []): TrenchPro
     embers.push({ x: b.x, z: b.z, y: floor + 0.5 });
   }
   duckboards(map).forEach((p, i) => { if (i % 4 === 1) water.push({ x: p.x, z: p.z }); });
-  return { boxes, embers, lanterns, water, cable };
+  return { boxes: lift(map, boxes), embers: embers.map((e) => ({ ...e, y: (e.y ?? 0) + hillHeight(e.x, e.z, map) })), lanterns: lift(map, lanterns), water, cable: liftLines(map, cable) };
 }

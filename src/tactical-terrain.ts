@@ -1,4 +1,4 @@
-import { groundHeight, playArea, type MapDefinition } from "./map";
+import { coastDistance, groundHeight, hillHeight, playArea, type MapDefinition } from "./map";
 import type { FortRect } from "./fort-vaux-map";
 import { hullRadius } from "./zeppelin-map";
 
@@ -8,10 +8,13 @@ export function tacticalRelief(map: MapDefinition, size = 256) {
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (let z = 0; z < height; z++) for (let x = 0; x < width; x++) {
     const wx = (x / width - 0.5) * playArea(map).width, wz = (z / height - 0.5) * playArea(map).depth;
-    const h = groundHeight(wx, wz, map);
-    const slope = groundHeight(wx + 0.5, wz - 0.5, map) - h;
-    const shade = Math.max(-40, Math.min(35, h * 8 + slope * 22));
+    const ground = groundHeight(wx, wz, map), hill = hillHeight(wx, wz, map);
     const i = (z * width + x) * 4;
+    if (map.coast && coastDistance(wx, wz, map) < 0) { pixels.set([62, 86, 98, 255], i); continue; }
+    // Trenches read against the local ground; a hillside (Gallipoli) adds a
+    // gentle wash that lightens with height, so the climb shows too.
+    const h = ground - hill, slope = groundHeight(wx + 0.5, wz - 0.5, map) - ground;
+    const shade = Math.max(-40, Math.min(35, h * 8 + slope * 22)) + (hill ? Math.max(-24, Math.min(24, hill * 0.9 - 18)) : 0);
     pixels.set([108 + shade, 105 + shade, 78 + shade, 255], i);
   }
   return { width, height, pixels };
