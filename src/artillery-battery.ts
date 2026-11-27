@@ -20,9 +20,9 @@ export const batteryRules = {
   // land out there: past the level band at the seam, 55 to 65 m behind the
   // soldiers deploying at the spawn.
   rear: 28,
-  // Maps closed in by hills or the sea have no land to show a battery on: it
-  // fires from out of sight this far beyond the edge, and only its flash and
-  // its shells climbing over the horizon are seen.
+  // A map bounded by the sea has no land to show a battery on: it fires from
+  // out of sight this far beyond the edge, and only its flash over the water
+  // and its shells climbing over the horizon are seen.
   hiddenRear: 90,
   hiddenHeight: 6,
   // Keep this far from the far scenery's ruins, parapets and trees.
@@ -69,7 +69,7 @@ export function batteryGuns(map: MapDefinition): BatteryGun[] {
   let list = guns.get(map);
   if (list) return list;
   list = [];
-  const hidden = !map.backdrop, blocks = obstacles(map);
+  const hidden = !!map.coast, blocks = obstacles(map);
   const clear = (x: number, z: number) => blocks.every((b) => Math.hypot(b.x - x, b.z - z) > b.r + batteryRules.clearance);
   for (const team of ["blue", "red"] as const) {
     const side = team === "blue" ? -1 : 1, x = side * (map.width / 2 + (hidden ? batteryRules.hiddenRear : batteryRules.rear));

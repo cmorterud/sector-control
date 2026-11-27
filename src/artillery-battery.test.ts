@@ -42,8 +42,9 @@ it("parks each side's battery behind its spawn, on the far ground, clear of its 
   }
 });
 
-it("fires from out of sight where hills or the sea close in the map", () => {
-  for (const map of [villageMap, headlandMap])
+it("fires from out of sight where the sea closes in the map", () => {
+  for (const gun of batteryGuns(villageMap)) expect(gun.hidden).toBe(false);
+  for (const map of [headlandMap])
     for (const gun of batteryGuns(map)) {
       expect(gun.hidden).toBe(true);
       expect(Math.abs(gun.x)).toBeGreaterThan(map.width / 2 + 60);
