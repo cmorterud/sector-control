@@ -141,7 +141,7 @@ export function createArtilleryState(
   };
 }
 // A snapshot-owned stream keeps stray timing/placement independent of combat RNG.
-function ambientRandom(state: ArtilleryState["ambient"]): number {
+function ambientRandom(state: { seed: number }): number {
   state.seed = (Math.imul(state.seed, 1664525) + 1013904223) >>> 0;
   return state.seed / 4294967296;
 }
@@ -156,6 +156,24 @@ function ambientGap(state: ArtilleryState["ambient"]): number {
     )
   );
 }
+// Where a shell starts its final 16-tick drop onto `target`, and how fast:
+// 35 m above the surface it falls on, 12 m out on the firing side.
+export function shellStart(g: Game, target: Vec, team: Team) {
+  const side = team === "blue" ? -1 : 1;
+  const floor = groundHeight(target.x, target.z, g.map);
+  const above = { ...target, y: floor + 50 },
+    below = { ...target, y: floor + 0.025 };
+  const surface = above.y + (below.y - above.y) * g.collision.ray(above, below);
+  const flightSeconds = artilleryRules.flightTicks / 30;
+  return {
+    x: target.x + side * shellApproach,
+    y: surface + shellHeight,
+    z: target.z,
+    vx: (-side * shellApproach) / flightSeconds,
+    vy: -shellHeight / flightSeconds + (shellGravity * flightSeconds) / 2,
+    vz: 0,
+  };
+}
 export function launchShell(
   g: Game,
   target: Vec,
@@ -166,12 +184,6 @@ export function launchShell(
   boundary = false,
   gas?: number,
 ) {
-  const side = team === "blue" ? -1 : 1;
-  const floor = groundHeight(target.x, target.z, g.map);
-  const above = { ...target, y: floor + 50 },
-    below = { ...target, y: floor + 0.025 };
-  const surface = above.y + (below.y - above.y) * g.collision.ray(above, below);
-  const flightSeconds = artilleryRules.flightTicks / 30;
   const shell: ArtilleryShell = {
     id: ++g.artillery.shellSequence,
     mission,
@@ -180,12 +192,7 @@ export function launchShell(
     ...(ambient ? { ambient: true } : {}),
     ...(boundary ? { boundary: true } : {}),
     ...(gas !== undefined ? { gas } : {}),
-    x: target.x + side * shellApproach,
-    y: surface + shellHeight,
-    z: target.z,
-    vx: (-side * shellApproach) / flightSeconds,
-    vy: -shellHeight / flightSeconds + (shellGravity * flightSeconds) / 2,
-    vz: 0,
+    ...shellStart(g, target, team),
     bornAt: g.tick,
   };
   g.artillery.shells.push(shell);
@@ -198,17 +205,10 @@ export function launchShell(
     from: { x: shell.x, y: shell.y, z: shell.z },
   });
 }
-function advanceAmbient(g: Game) {
-  const state = g.artillery.ambient;
-  if (
-    g.phase !== "playing" ||
-    !g.artillery.enabled ||
-    !state.enabled ||
-    g.tick < state.nextAt
-  )
-    return;
-  state.nextAt = g.tick + ambientGap(state);
-  // Bounded rejection sampling, using authored spawn positions, never live targets.
+// Where the next stray shell will fall and whose it is, drawn from the
+// stream after the gap to it. Bounded rejection sampling over authored spawn
+// positions only, never live targets, so it can be read ahead of time.
+function ambientPick(g: Game, state: { seed: number }): { target: Vec; team: Team } | null {
   for (let i = 0; i < 64; i++) {
     const target = {
       x:
@@ -227,16 +227,33 @@ function advanceAmbient(g: Game) {
       )
     )
       continue;
-    launchShell(
-      g,
-      target,
-      ++g.artillery.missionSequence,
-      -1,
-      ambientRandom(state) < 0.5 ? "blue" : "red",
-      true,
-    );
-    return;
+    return { target, team: ambientRandom(state) < 0.5 ? "blue" : "red" };
   }
+  return null;
+}
+// Presentation: the stray shell due next, read from a copy of the stream so
+// the match itself is untouched. Its final drop starts at `tick`.
+export function nextAmbientShell(g: Game): { tick: number; target: Vec; team: Team } | null {
+  const state = g.artillery.ambient;
+  if (!g.artillery.enabled || !state.enabled) return null;
+  const copy = { seed: state.seed };
+  ambientRandom(copy);
+  const pick = ambientPick(g, copy);
+  return pick && { tick: state.nextAt, ...pick };
+}
+function advanceAmbient(g: Game) {
+  const state = g.artillery.ambient;
+  if (
+    g.phase !== "playing" ||
+    !g.artillery.enabled ||
+    !state.enabled ||
+    g.tick < state.nextAt
+  )
+    return;
+  state.nextAt = g.tick + ambientGap(state);
+  const pick = ambientPick(g, state);
+  if (pick)
+    launchShell(g, pick.target, ++g.artillery.missionSequence, -1, pick.team, true);
 }
 export function teamHasHuman(g: Game, p: Soldier): boolean {
   return g.players.some(
