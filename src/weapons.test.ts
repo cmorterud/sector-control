@@ -228,11 +228,11 @@ it("requires awareness and stops gunner bursts immediately when sight is lost", 
   }
 });
 
-it("scales all bullet velocities by 1.5, and keeps in-flight speed after a weapon change", () => {
+it("fires infantry rounds at one speed, and keeps in-flight speed after a weapon change", () => {
   for (const [weapon, speed] of [
     ["rifle", 288],
     ["serviceRifle", 288],
-    ["machineGun", 72],
+    ["machineGun", 288],
     ["pistol", 288],
   ] as const) {
     const g = new Game(

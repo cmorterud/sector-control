@@ -2,10 +2,11 @@ import { expect, it } from "vitest";
 import { equipLoadout, factions, kitFor, riflemanWeapon, switchWeapon } from "./loadouts";
 import { fortVauxMap } from "./fort-vaux-map";
 import { trenchMap } from "./trench-map";
-import { armoryFactions, issuedTo, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
+import { armoryFactions, issuedTo, damageAt, gameMuzzleVelocity, infantryMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
 
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
+import { weaponProfiles } from "./weapons";
 
 it("gives every Armory faction a rifle, scoped rifle, pistol, both machine-gun variants and an anti-tank kit", () => {
   for (const f of armoryFactions) {
@@ -87,6 +88,14 @@ it("derives hits and time to kill, and game velocity, from the stats", () => {
   expect(gameMuzzleVelocity(weaponStats.find(w => w.id === "smle")!)).toBe(288);
   const fastest = [...weaponStats].sort((a, b) => gameMuzzleVelocity(b) - gameMuzzleVelocity(a))[0];
   expect(fastest.faction).toBe("german");
+});
+
+it("gives every infantry-carried weapon one muzzle velocity, with slower pistols", () => {
+  const carried = weaponStats.filter(w => w.role !== "pistol" && w.role !== "emplaced");
+  expect(new Set(carried.map(w => w.role))).toEqual(new Set(["rifle", "carbine", "scoped", "periscope", "machineGun", "antiTank"]));
+  for (const w of carried) expect(gameMuzzleVelocity(w)).toBe(infantryMuzzleVelocity);
+  for (const w of weaponStats.filter(w => w.role === "pistol")) expect(gameMuzzleVelocity(w)).toBeLessThan(infantryMuzzleVelocity);
+  for (const kind of ["rifle", "serviceRifle", "machineGun"] as const) expect(weaponProfiles[kind].projectileSpeed).toBe(infantryMuzzleVelocity);
 });
 
 function weaponRange() {
@@ -198,8 +207,8 @@ it("makes each carbine its rifle worked faster, with the same hit up close and l
     expect(shotInterval(carbine)).toBeLessThan(shotInterval(rifle));
     expect(timeToKill(carbine, "chest", 5)).toBeLessThan(timeToKill(rifle, "chest", 5) - .15);
     expect(timeToKill(carbine, "chest", 5)).toBeLessThan(.9);
-    // The short barrel gives up velocity and, past a room's length, damage.
-    expect(gameMuzzleVelocity(carbine)).toBeLessThan(gameMuzzleVelocity(rifle));
+    // The short barrel keeps the infantry velocity but, past a room's length, gives up damage.
+    expect(gameMuzzleVelocity(carbine)).toBe(gameMuzzleVelocity(rifle));
     for (const zone of hitZones) {
       expect(damageAt(carbine, zone.id, 20)).toBe(rifle.damage[zone.id]);
       expect(damageAt(carbine, zone.id, 70)).toBeLessThan(damageAt(rifle, zone.id, 70));

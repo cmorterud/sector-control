@@ -15,9 +15,13 @@ export const tankHullPoints = 600;
 export const tankImmobilizedBelow = 0.35;
 
 // Bullets fly well below real speed (about two fifths) so moving targets need
-// leading. One scale for every weapon keeps their real differences: it puts
-// the SMLE at the game's 288 m/s.
-export const bulletSpeedScale = 288 / 744;
+// leading. Every weapon an infantryman carries (rifles, carbines, scoped and
+// periscope rifles, light machine guns, anti-tank rifles) fires at one speed,
+// so leading a target is the same skill whatever kit you picked. Pistols and
+// emplaced guns keep their real differences through one scale, which puts the
+// SMLE's 744 m/s at the infantry speed.
+export const infantryMuzzleVelocity = 288;
+export const bulletSpeedScale = infantryMuzzleVelocity / 744;
 
 export type WeaponRole = "rifle" | "carbine" | "scoped" | "periscope" | "pistol" | "machineGun" | "emplaced" | "antiTank";
 export const roleLabels: Record<WeaponRole, string> = {
@@ -140,7 +144,7 @@ export const weaponStats: WeaponStats[] = [
     id: "mg08-15", name: "MG 08/15", faction: "german", role: "machineGun", round: "7.92×57 mm",
     historical: { muzzleVelocity: 878, note: "The game uses the 7.92 mm service rifle velocity as its reference." },
     roundsPerMinute: 450, magazine: 250, reserve: 500, reloadSeconds: 5, damage: machineGunDamage,
-    summary: "High ammunition capacity and the fastest machine-gun projectile.",
+    summary: "High ammunition capacity and a steady rate of fire.",
   },
   {
     id: "berthier", name: "Berthier Mle 1916", faction: "french", role: "rifle", round: "8 mm Lebel",
@@ -205,7 +209,7 @@ export const weaponStats: WeaponStats[] = [
     id: "mauser1903", name: "Mauser 1903", faction: "ottoman", role: "rifle", round: "7.65×53 mm",
     historical: { muzzleVelocity: 820, rate: [12, 15], note: "The Ottoman Model 1903, a Mauser built at Oberndorf with a five-round stripper clip; most Ottoman infantry at Gallipoli carried it." },
     roundsPerMinute: 55, magazine: 5, reserve: 60, reloadSeconds: 1.6, damage: rifleDamage,
-    summary: "A quick five-round clip and a fast bullet.",
+    summary: "A quick five-round clip and a quick reload.",
   },
   {
     id: "mauser1903-scoped", name: "Scoped Mauser 1903", faction: "ottoman", role: "scoped", round: "7.65×53 mm",
@@ -256,6 +260,7 @@ export const issuedTo = (w: Pick<WeaponStats, "faction" | "alsoIssuedTo">, facti
   w.faction === faction || (!!faction && !!w.alsoIssuedTo?.includes(faction));
 
 export function gameMuzzleVelocity(w: WeaponStats) {
+  if (w.role !== "pistol" && w.role !== "emplaced") return infantryMuzzleVelocity;
   return Math.round(w.historical.muzzleVelocity * bulletSpeedScale);
 }
 export const weaponTicksPerSecond = 30;

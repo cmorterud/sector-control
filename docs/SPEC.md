@@ -162,3 +162,5 @@ Reload durations are halved across all three profiles: rifle30ticks(1s), service
 Rifle/serviceRifle projectile velocity doubles64→128m/s. Machine-gun rounds remain32m/s. Per-shot speed, bot interception, swept impact, tracer interpolation and60m expiry use the existing velocity/profile system. A nearby target's time to dodge is consequently shorter; tests that move targets during flight act before the faster round arrives.
 
 Latest bullet-speed pass: rifle/serviceRifle/pistol192m/s, machineGun48m/s (all1.5×). Swept collision, per-shot velocity, bot lead, range, damage and cadence retain their existing rules; flame jets, grenades and artillery are unchanged.
+
+Infantry velocity pass: every weapon an infantryman carries (rifles, carbines, scoped and periscope rifles, light machine guns, anti-tank rifles) fires at one speed, 288 m/s (`infantryMuzzleVelocity` in `src/weapon-stats.ts`), so the lead on a moving target is the same whatever kit a player picks. Pistols keep slower, scaled-historical speeds; emplaced and tank guns are unchanged.
