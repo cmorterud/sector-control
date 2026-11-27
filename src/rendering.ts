@@ -46,7 +46,8 @@ import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { bayonetMount, weaponDesign } from "./weapon-design";
 import { flagCloth, flagColor, flagRingColor, lockedRingColor, type FlagState } from "./flag";
 import { CtfMarkers } from "./ctf-render";
-import { factionFor, factions, scoped } from "./loadouts";
+import { factionFor, factions, scoped, type FactionId } from "./loadouts";
+import { factionGrenade, grenadeLook } from "./grenade-look";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
@@ -3889,7 +3890,7 @@ export class Renderer implements CollisionWorld {
       .transformPoint(rig.supportHand.getLocalPosition());
     this.poseArm(rig, 0, hand, supportUpperLength, supportForearmLength);
   }
-  private createFirstPersonRig() {
+  private createFirstPersonRig(faction?: FactionId) {
     this.firstPersonRig?.root.destroy();
     const source = this.soldiers[0];
     const root = this.joint("first-person weapon and arms", this.camera);
@@ -3902,9 +3903,24 @@ export class Renderer implements CollisionWorld {
     });
     const grenade = this.joint("held throwable", root);
     const explosive = this.joint("held explosive", grenade), smoke = this.joint("held smoke", grenade);
-    this.riflePart("held grenade shell", 0, 0.015, 0, 0.11, 0.14, 0.11, "dark", explosive, "knob");
-    this.cube("held grenade lever", 0.025, 0.08, 0, 0.018, 0.08, 0.025, "#868c75", false, explosive, 15);
-    this.riflePart("held grenade pin", -0.01, 0.09, 0, 0.035, 0.035, 0.012, "edge", explosive, "hood");
+    const bomb = factionGrenade(faction);
+    if (bomb.shape === "tin") {
+      // A jam tin bound with wire, its fuse standing out of the lid.
+      this.cube("held jam tin", 0, 0.015, 0, 0.09, 0.12, 0.09, bomb.body, false, explosive);
+      for (const y of [-0.02, 0.05]) this.cube("held jam tin wire", 0, y, 0, 0.096, 0.012, 0.096, "#6d5f47", false, explosive);
+      this.cube("held jam tin fuse", 0.015, 0.11, 0, 0.012, 0.07, 0.012, bomb.fuse, false, explosive, 12);
+    } else if (bomb.shape === "ball") {
+      const ball = new pc.Entity("held cricket-ball bomb");
+      ball.addComponent("render", { type: "sphere", material: this.material(bomb.body) });
+      ball.setLocalPosition(0, 0.015, 0);
+      ball.setLocalScale(0.11, 0.11, 0.11);
+      explosive.addChild(ball);
+      this.cube("held bomb fuse", 0, 0.075, 0, 0.025, 0.03, 0.025, bomb.fuse, false, explosive);
+    } else {
+      this.riflePart("held grenade shell", 0, 0.015, 0, 0.11, 0.14, 0.11, "dark", explosive, "knob");
+      this.cube("held grenade lever", 0.025, 0.08, 0, 0.018, 0.08, 0.025, "#868c75", false, explosive, 15);
+      this.riflePart("held grenade pin", -0.01, 0.09, 0, 0.035, 0.035, 0.012, "edge", explosive, "hood");
+    }
     this.riflePart("held smoke canister", 0, 0.025, 0, 0.085, 0.16, 0.085, "edge", smoke, "shroud");
     this.cube("held smoke cap", 0, 0.115, 0, 0.05, 0.025, 0.05, "#414d29", false, smoke);
     grenade.enabled = false;
@@ -4919,7 +4935,7 @@ export class Renderer implements CollisionWorld {
     // Stand-ins left over or rebuilt change the batch; otherwise it is current.
     if (built || kept.size < standInCount || !standIns) this.app.batcher!.generate([this.actorBatch]);
     this.boundSoldiers();
-    this.createFirstPersonRig();
+    this.createFirstPersonRig(g.players[0]?.faction);
     for (const rig of this.soldiers) rig.reloadMagazine.setLocalScale(0, 0, 0);
     this.soldiers.forEach((rig, i) => {
       if (!rig.standIn) return;
@@ -5070,13 +5086,19 @@ export class Renderer implements CollisionWorld {
     const steel = "#363c38", plate = "#4c5248", dark = "#1b201f";
     // The Ottoman thrower is drawn as the Granatenwerfer it stands in for.
     const german = name === "Granatenwerfer 16" || name === "Light bomb thrower", french = name.startsWith("Mortier");
-    // The baseplate the tube's foot sits in.
-    this.cube("baseplate", 0, 0.03, 0.02, german ? 0.42 : 0.56, 0.05, german ? 0.36 : 0.46, plate, false, root);
-    this.cube("baseplate rib", 0, 0.065, 0.02, 0.06, 0.025, german ? 0.34 : 0.44, steel, false, root);
+    const garland = name === "Garland trench mortar", wood = "#6b5136", tin = "#9a978b";
+    // The baseplate the tube's foot sits in; Garland's is a wooden block.
+    if (garland) {
+      this.cube("wooden base", 0, 0.05, 0.02, 0.46, 0.1, 0.5, wood, false, root);
+      for (const x of [-0.17, 0.17]) this.cube("base batten", x, 0.105, 0.02, 0.06, 0.02, 0.52, "#54402b", false, root);
+    } else {
+      this.cube("baseplate", 0, 0.03, 0.02, german ? 0.42 : 0.56, 0.05, german ? 0.36 : 0.46, plate, false, root);
+      this.cube("baseplate rib", 0, 0.065, 0.02, 0.06, 0.025, german ? 0.34 : 0.44, steel, false, root);
+    }
     const yaw = this.joint("traverse", root, 0, 0.07, 0);
     const barrel = this.joint("elevation", yaw);
     const slide = this.joint("recoiling tube", barrel);
-    const length = german ? 0.62 : french ? 0.78 : 1.05, bore = german ? 0.07 : french ? 0.1 : 0.095;
+    const length = german ? 0.62 : french ? 0.78 : garland ? 0.5 : 1.05, bore = german ? 0.07 : french ? 0.1 : garland ? 0.085 : 0.095;
     const cylinder = (label: string, y: number, diameter: number, height: number, color: string) => {
       const part = this.joint(label, slide, 0, y, 0);
       part.addComponent("render", { type: "cylinder", material: this.material(color), castShadows: true, receiveShadows: true });
@@ -5093,6 +5115,21 @@ export class Renderer implements CollisionWorld {
       cylinder("breech cap", 0.04, bore + 0.03, 0.08, plate);
       cylinder("muzzle band", length - 0.03, bore + 0.018, 0.05, plate);
       cylinder("bore", length + 0.002, bore * 0.72, 0.004, dark);
+    }
+    if (garland) {
+      // No bipod: the short barrel sits in a wooden cradle bolted to the
+      // base, the shaft of a jam-tin bomb standing out of its muzzle. Range
+      // was set by propping the base up, aim by turning the whole mortar.
+      for (const side of [-1, 1]) this.cube("cradle cheek", side * 0.075, 0.12, -0.02, 0.025, 0.2, 0.26, wood, false, yaw);
+      this.cube("cradle bolt", 0, 0.12, -0.02, 0.2, 0.03, 0.03, steel, false, yaw);
+      this.cube("range prop", 0, -0.02, -0.2, 0.3, 0.06, 0.08, "#54402b", false, yaw);
+      cylinder("bomb shaft", length + 0.06, 0.022, 0.14, "#7b6446");
+      for (let i = 0; i < 3; i++) {
+        const spare = this.joint("spare jam-tin bomb", root, 0.36, 0.08, -0.12 + i * 0.13);
+        this.cube("tin", 0, 0, 0, 0.09, 0.1, 0.09, tin, false, spare);
+        this.cube("shaft", 0, 0, 0.12, 0.022, 0.022, 0.2, "#7b6446", false, spare);
+      }
+      return { root, yaw, barrel, slide, name };
     }
     // The bipod stands ahead of the baseplate and holds the tube at its collar.
     const collar = new pc.Vec3(0, 0.07 + length * 0.55 * Math.sin(1.13), -length * 0.55 * Math.cos(1.13));
@@ -5450,7 +5487,7 @@ export class Renderer implements CollisionWorld {
         old.destroy(); this.batchGroup = -1;
         this.app.batcher!.generate([this.actorBatch]);
         this.boundSoldiers();
-        if (p.id === 0) this.createFirstPersonRig();
+        if (p.id === 0) this.createFirstPersonRig(p.faction);
       }
       // Dead actors keep the kit actually rendered at death while setup waits.
       if (p.hp > 0) this.actorKits.set(p.id, kit);
@@ -5739,27 +5776,24 @@ export class Renderer implements CollisionWorld {
       let entity = this.grenades.get(grenade.id);
       if (!entity) {
         entity = this.joint("grenade", this.app.root);
+        // Smoke is the usual canister; a bomb takes its side's look.
+        const look = grenade.kind === "smoke" ? { shape: "egg", body: "#b8b49e", fuse: "#ebc77a" } : grenadeLook(g.map, grenade.team);
         const shell = new pc.Entity("grenade shell");
-        shell.addComponent("render", {
-          type: "sphere",
-          material: this.material(
-            grenade.kind === "smoke" ? "#b8b49e" : "#414d29",
-          ),
-        });
-        shell.setLocalScale(0.24, 0.28, 0.24);
+        shell.addComponent("render", { type: look.shape === "tin" ? "cylinder" : "sphere", material: this.material(look.body) });
+        if (look.shape === "tin") {
+          // A jam tin, its lid bound down with wire, the fuse out of the top.
+          shell.setLocalScale(0.17, 0.2, 0.17);
+          this.cube("jam tin binding", 0, 0.02, 0, 0.18, 0.025, 0.18, "#6d5f47", false, entity);
+          this.cube("jam tin fuse", 0.03, 0.14, 0, 0.025, 0.09, 0.025, look.fuse, false, entity);
+        } else if (look.shape === "ball") {
+          // A round iron bomb with a short brass fuse.
+          shell.setLocalScale(0.25, 0.25, 0.25);
+          this.cube("bomb fuse", 0, 0.14, 0, 0.05, 0.05, 0.05, look.fuse, false, entity);
+        } else {
+          shell.setLocalScale(0.24, 0.28, 0.24);
+          this.cube("grenade fuse", 0, 0.15, 0, 0.07, 0.06, 0.07, look.fuse, false, entity);
+        }
         entity.addChild(shell);
-        this.cube(
-          "grenade fuse",
-          0,
-          0.15,
-          0,
-          0.07,
-          0.06,
-          0.07,
-          "#ebc77a",
-          false,
-          entity,
-        );
         this.grenades.set(grenade.id, entity);
       }
       const previous = this.previousGrenades.get(grenade.id) ?? grenade;
@@ -6134,7 +6168,7 @@ export class Renderer implements CollisionWorld {
       const burst = this.burstLights.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b));
       {
         burst.bornAt = e.tick;
-        burst.radius = burstRadius(e.type === "artilleryImpact" ? artilleryExplosionProfile.radius : grenadeExplosionProfile.radius);
+        burst.radius = burstRadius(e.type === "artilleryImpact" ? e.radius : grenadeExplosionProfile.radius);
         burst.light.setPosition(e.at.x, e.at.y + 2.5, e.at.z);
         burst.light.light!.range = burst.radius * 1.25;
       }

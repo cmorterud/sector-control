@@ -69,10 +69,21 @@ export function batteryGuns(map: MapDefinition): BatteryGun[] {
   let list = guns.get(map);
   if (list) return list;
   list = [];
-  const hidden = !!map.coast, blocks = obstacles(map);
+  // Where the sea closes the map the guns fire from out of sight; on a map
+  // whose sea side is a fleet (navalGunfire), the land side's guns show.
+  const hidden = !!map.coast && !map.navalGunfire, blocks = obstacles(map);
   const clear = (x: number, z: number) => blocks.every((b) => Math.hypot(b.x - x, b.z - z) > b.r + batteryRules.clearance);
   for (const team of ["blue", "red"] as const) {
     const side = team === "blue" ? -1 : 1, x = side * (map.width / 2 + (hidden ? batteryRules.hiddenRear : batteryRules.rear));
+    // A fleet's guns are its warships' turrets offshore, drawn with the backdrop.
+    if (map.navalGunfire?.team === team) {
+      const turrets = map.navalGunfire.guns;
+      for (let i = 0; i < batteryRules.guns; i++) {
+        const gun = turrets[i % turrets.length];
+        list.push({ team, index: i, x: gun.x, y: gun.y, z: gun.z, yaw: side < 0 ? Math.PI / 2 : -Math.PI / 2, hidden: true });
+      }
+      continue;
+    }
     for (let i = 0; i < batteryRules.guns; i++) {
       const z0 = map.spawn[team].z + (i - (batteryRules.guns - 1) / 2) * batteryRules.spacing;
       let at = { x, z: z0 };

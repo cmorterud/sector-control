@@ -205,6 +205,9 @@ export interface MapDefinition {
     drops: Record<"blue" | "red", Vec & { name: string }>;
   };
   artillery?: false;
+  // One side's artillery is its warships offshore (src/naval-gunfire.ts):
+  // their guns fire from these points and cannot reach dead ground.
+  navalGunfire?: { team: "blue" | "red"; guns: (Vec & { y: number })[] };
   // No gas shells (and no mask) on a front where gas was never used.
   gas?: false;
   // No flame kits at the trench ends.
