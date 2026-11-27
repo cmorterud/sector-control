@@ -159,11 +159,42 @@ export function backdropTrenches(map: MapDefinition) {
 export function backdropScenery(map: MapDefinition): { boxes: BackdropBox[]; lines: number[] } {
   const boxes: BackdropBox[] = [], lines: number[] = [];
   // Gallipoli's trenches stop short of its edges, and the Western Front's
-  // woods, villages and towns have no place on the peninsula.
-  if (map.id === "gallipoli") return { boxes, lines };
+  // woods, villages and towns have no place on the peninsula. Offshore lie
+  // the warships and transports supporting the landing.
+  if (map.id === "gallipoli") {
+    warships(boxes, lines);
+    return { boxes, lines };
+  }
   continuingFront(map, backdropTrenches(map), boxes, lines, true);
   trenchFrontScenery(map, boxes, lines);
   return { boxes, lines };
+}
+
+// Grey silhouettes riding at anchor west of Anzac, bows to the north: two
+// warships with turrets and tall funnels, and a transport. Hulls sit low in
+// the water, which stands at the coast's sea level.
+export const gallipoliShips = [
+  { x: -250, z: -110, length: 72, beam: 11, funnels: 3, turrets: true },
+  { x: -300, z: 30, length: 64, beam: 10, funnels: 2, turrets: true },
+  { x: -225, z: 135, length: 52, beam: 9, funnels: 1, turrets: false },
+];
+function warships(boxes: BackdropBox[], lines: number[]) {
+  const sea = coastalRules.seaLevel, grey = "#5d666b", dark = "#454c50";
+  for (const ship of gallipoliShips) {
+    const { x, z, length: l, beam: b } = ship;
+    boxes.push({ x, y: sea - 1.2, z, w: b, h: 4.6, d: l, color: grey });
+    boxes.push({ x, y: sea - 1.2, z: z - l / 2 - 2.5, w: b * 0.55, h: 4.9, d: 5, color: grey });
+    boxes.push({ x, y: sea + 3.4, z: z - l * 0.12, w: b * 0.6, h: 3.2, d: l * 0.28, color: grey });
+    boxes.push({ x, y: sea + 6.6, z: z - l * 0.2, w: b * 0.4, h: 2.4, d: 5, color: dark });
+    for (let i = 0; i < ship.funnels; i++)
+      boxes.push({ x, y: sea + 3.4, z: z - l * 0.02 + i * 6.5, w: 2.4, h: 9, d: 3, color: dark });
+    if (ship.turrets) for (const t of [-0.36, 0.34])
+      boxes.push({ x, y: sea + 3.4, z: z + t * l, w: 4.4, h: 2, d: 5, color: dark });
+    // Masts and the stay between them.
+    const fore = z - l * 0.3, aft = z + l * 0.3;
+    for (const mz of [fore, aft]) lines.push(x, sea + 3.4, mz, x, sea + 24, mz);
+    lines.push(x, sea + 24, fore, x, sea + 24, aft);
+  }
 }
 
 // Sandbag parapets either side of each continuing trench, and a wire belt on the

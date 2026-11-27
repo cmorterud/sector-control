@@ -1404,7 +1404,7 @@ try {
         "no-mans-land":[-46,-12,-58,-21]};
       if(map.id==="verdun"){if(trenchDetails["trench-dugout"])verdunDetails["trench-dugout"]=trenchDetails["trench-dugout"];if(trenchDetails["trench-sign"])verdunDetails["trench-sign"]=trenchDetails["trench-sign"];}
       // Gallipoli: up from the beach, across the Nek and Lone Pine, along Monash Valley and down from the summit.
-      const gallipoliDetails:Record<string,[number,number,number,number]>={beach:[-84,-24,-20,-30],"north-lane":[-70,-50,10,-40],"south-lane":[-70,40,10,42],monash:[-21,30,-21,-20],nek:[-12,-42,30,-42],"lone-pine":[-14,42,30,42],summit:[70,-38,-60,10]};
+      const gallipoliDetails:Record<string,[number,number,number,number]>={beach:[-84,-24,-20,-30],"north-lane":[-70,-50,10,-40],"south-lane":[-70,40,10,42],monash:[-21,30,-21,-20],nek:[-12,-42,30,-42],"lone-pine":[-14,42,30,42],summit:[70,-38,-60,10],"pine-roofs":[13,53,15,22],pier:[-82,16,-120,-4]};
       const view = detail ? (map.fort ? fortDetails[detail] : map.sky ? zeppelinDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : map.id === "gallipoli" ? gallipoliDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : map.sky ? zeppelinDetails.keel : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0],deck=map.sky?view[4]:undefined;

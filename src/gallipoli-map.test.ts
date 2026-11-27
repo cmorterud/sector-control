@@ -10,7 +10,8 @@ import { supportsTanks } from "./tanks";
 import { gasMap } from "./gas";
 import { mortarMap } from "./mortar";
 import { createFlames } from "./flamethrower";
-import { backdropHeight } from "./backdrop";
+import { backdropHeight, backdropScenery } from "./backdrop";
+import { grenadeExplosionProfile } from "./destruction";
 
 // Building the navigation graph for a field this size takes a few seconds on a busy machine.
 vi.setConfig({ testTimeout: 90000 });
@@ -120,4 +121,39 @@ it("plays a 100-soldier attack in which both sides climb, fight and capture", ()
   expect(captures).toBeGreaterThan(1);
   // Played as attack and defend, ANZAC takes the first spurs inside two minutes.
   expect(g.offensive!.phase).toBeGreaterThanOrEqual(1);
+});
+
+it("roofs the Lone Pine trench in lengths over the rear of its floor, clear of the step and D's pole, on posts that bring it down", () => {
+  const roofs = map.boxes.filter((b) => b.id?.startsWith("gp-pine-roof-") && b.supports);
+  expect(roofs.length).toBeGreaterThan(5);
+  const d = map.sectors.find((s) => s.id === "D")!;
+  for (const roof of roofs) {
+    expect(Math.abs(roof.z - d.z)).toBeGreaterThan(3);
+    const floor = groundHeight(roof.x, roof.z, map);
+    // Flush with the ground at the trench lip, with headroom underneath.
+    expect(roof.baseY! + roof.h - (hillHeight(roof.x, roof.z, map) + map.terrain!.bankHeight)).toBeCloseTo(0, 1);
+    expect(roof.baseY! - floor).toBeGreaterThan(1.9);
+    expect(blocked(roof.x, roof.z, 0.4, map), roof.id).toBe(false);
+    expect(roof.supports).toHaveLength(2);
+    for (const id of roof.supports!) expect(map.boxes.find((b) => b.id === id)?.kind).toBe("log");
+  }
+  // The firing step in front of every roof stays walkable.
+  for (const roof of roofs) expect(blocked(roof.x - roof.w / 2 - 1.2, roof.z, 0.4, map), roof.id).toBe(false);
+});
+
+it("dresses the beach and puts warships offshore", () => {
+  expect(map.boxes.some((b) => b.id === "gp-pier-deck")).toBe(true);
+  const ships = backdropScenery(map).boxes;
+  expect(ships.length).toBeGreaterThan(10);
+  for (const s of ships) expect(coastDistance(s.x, s.z, map)).toBeLessThan(-100);
+});
+
+it("brings a Lone Pine roof down when a shell takes out its posts", () => {
+  const g = new Game(new TestCollision(map), false, 1000, 1915, undefined, { map, humanPlayerIds: [0], ambientArtillery: false });
+  const roof = g.map.boxes.find((b) => b.id?.startsWith("gp-pine-roof-") && b.supports)!;
+  const post = g.map.boxes.find((b) => b.id === roof.supports![0])!;
+  g.explode({ x: post.x - 0.5, y: post.baseY! + 1, z: post.z }, -1, null, { ...grenadeExplosionProfile, radius: 0, craterRadius: 0, craterDepth: 0, terrainReach: 0, structuralDamage: 1000, structuralRadius: 0.8 });
+  expect(g.map.destruction!.objects[post.id!].stage).toBe(2);
+  expect(g.map.destruction!.objects[roof.id!].stage).toBe(2);
+  expect(g.map.boxes.some((b) => b.id === roof.id)).toBe(false);
 });
