@@ -16,7 +16,7 @@ import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
 import { verdunMap } from "./verdun-map";
-import { equipLoadout, factions, factionFor, kitFor, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
+import { equipLoadout, factionOverride, factions, factionFor, kitFor, parseFactionOverride, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -212,6 +212,8 @@ const params = new URLSearchParams(location.search),
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
+// ?factions=anzac,ottoman (or =gallipoli) dresses both sides of any map in other armies.
+Object.assign(factionOverride, parseFactionOverride(params.get("factions")));
 const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
 // Graphics quality: ?quality= wins, then the stored choice, then Auto. Auto
 // stores the level it settles on as "auto:<level>" so later visits start there.
@@ -1261,6 +1263,23 @@ try {
       goals: training ? [...training.progress[training.lesson]] : [],
     }),
     manual:()=>{reviewManual=true;},
+    // Stand a row of one side's soldiers in front of the player, facing it, to
+    // look at their uniforms (?factions= picks the armies). Slot `loadouts`
+    // cycles through the kits; nobody moves or fires.
+    lineup:(team:"blue"|"red"="red",count=5,distance=4,loadouts:Loadout[]=["rifleman","marksman","emplacement"])=>{
+      reviewManual=true;keys.clear();triggerDown=fire=aim=false;preferredFirstPerson=true;
+      game.commandOverride=(_,q)=>({...idle(),yaw:q.yaw});
+      const p=game.players[0],heading=p.yaw;
+      const row=game.players.filter(q=>q.team===team&&q.id!==0).slice(0,Math.max(1,Math.min(12,count)));
+      row.forEach((q,i)=>{
+        equipLoadout(q,loadouts[i%loadouts.length],kitFor(map));
+        const side=(i-(row.length-1)/2)*1.1,x=p.x+Math.sin(heading)*distance+Math.cos(heading)*side,z=p.z-Math.cos(heading)*distance+Math.sin(heading)*side;
+        Object.assign(q,{x,z,y:groundHeight(x,z,game.map),vx:0,vz:0,hp:100,yaw:heading+Math.PI-(i-(row.length-1)/2)*0.25,pitch:0,protectedUntil:Infinity,crouched:false,command:idle()});
+      });
+      Object.assign(p,{protectedUntil:Infinity});yaw=p.yaw;pitch=p.pitch=-0.06;
+      renderer.remember(game);advanceReview(12);
+      return row.map(q=>({id:q.id,faction:q.faction,loadout:q.loadout,weapon:q.weaponId}));
+    },
     training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
     advance:advanceReview,
     // Rain: show the water as it stands this many seconds into the downpour.

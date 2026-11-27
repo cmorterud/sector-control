@@ -166,6 +166,10 @@ const models: Record<FactionId, { model: TankModel; name: string }> = {
   british: { model: "mark-iv", name: "Mark IV" },
   german: { model: "a7v", name: "A7V" },
   french: { model: "saint-chamond", name: "Saint-Chamond" },
+  // No tanks fought at Gallipoli; these only answer if a debug override puts
+  // the Gallipoli armies on a tank map.
+  anzac: { model: "mark-iv", name: "Mark IV" },
+  ottoman: { model: "a7v", name: "A7V" },
   trainingBlue: { model: "mark-iv", name: "Mark IV" },
   trainingRed: { model: "a7v", name: "A7V" },
 };

@@ -55,3 +55,21 @@ test("marksman sights take half a second to settle and sidearm clears the scoped
  g.step({...idle(),aim:true,firstPerson:true});expect(sighted(p,g.tick)).toBe(true);
  switchWeapon(p,"sidearm",g.tick);expect(scoped(p)).toBe(false);
 });
+test("Gallipoli dresses ANZAC and the Ottoman army, and ?factions= can dress any map in them", async () => {
+ const { factionFor, factionOverride, parseFactionOverride } = await import("./loadouts");
+ expect([factionFor({ id: "gallipoli" }, "blue"), factionFor({ id: "gallipoli" }, "red")]).toEqual(["anzac", "ottoman"]);
+ expect(parseFactionOverride("gallipoli")).toEqual({ blue: "anzac", red: "ottoman" });
+ expect(parseFactionOverride("ottoman,british")).toEqual({ blue: "ottoman", red: "british" });
+ // Unknown names are ignored rather than crashing a soldier's kit.
+ expect(parseFactionOverride("zulu,german")).toEqual({ red: "german" });
+ expect(parseFactionOverride(null)).toEqual({});
+ Object.assign(factionOverride, parseFactionOverride("gallipoli"));
+ try {
+  const g = new Game(new TestCollision(trenchMap), true, 3000, 5, undefined, { map: trenchMap, ambientArtillery: false, teamSize: 4 });
+  g.respawn(g.players[1]); g.respawn(g.players[g.teamSize]);
+  expect(g.players[1].faction).toBe("anzac");
+  expect(g.players[g.teamSize].faction).toBe("ottoman");
+  expect(g.players[g.teamSize].weaponId).toMatch(/Mauser/);
+ } finally { delete factionOverride.blue; delete factionOverride.red; }
+ expect(factionFor(trenchMap, "blue")).toBe("british");
+});

@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { equipLoadout, factions, kitFor, riflemanWeapon, switchWeapon } from "./loadouts";
 import { fortVauxMap } from "./fort-vaux-map";
 import { trenchMap } from "./trench-map";
-import { armoryFactions, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
+import { armoryFactions, issuedTo, damageAt, gameMuzzleVelocity, hitZones, reloadDuration, shotInterval, shotsToKill, soldierHealth, timeToKill, weaponStats, weaponTicksPerSecond } from "./weapon-stats";
 
 import { Game, TestCollision, idle } from "./simulation";
 import { industrialMap } from "./map";
@@ -10,11 +10,37 @@ import { industrialMap } from "./map";
 it("gives every Armory faction a rifle, scoped rifle, pistol, both machine-gun variants and an anti-tank kit", () => {
   for (const f of armoryFactions) {
     expect(factions[f].name).toBeTruthy();
-    // The two armies that fight inside Fort Vaux also have a carbine.
+    // The two armies that fight inside Fort Vaux also have a carbine. The
+    // Gallipoli armies (1915) had no light machine gun and met no tanks.
     const carbine = f === "french" || f === "german" ? ["carbine"] : [];
-    expect(weaponStats.filter(w => w.faction === f).map(w => w.role).sort()).toEqual(["antiTank", ...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
+    const gallipoli = f === "anzac" || f === "ottoman";
+    expect(weaponStats.filter(w => issuedTo(w, f)).map(w => w.role).sort())
+      .toEqual(gallipoli ? ["emplaced", "pistol", "rifle", "scoped"] : ["antiTank", ...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
   }
   expect(new Set(weaponStats.map(w => w.id)).size).toBe(weaponStats.length);
+  // One row per weapon name: an army that shares a weapon lists it, rather than copying it.
+  expect(new Set(weaponStats.map(w => w.name)).size).toBe(weaponStats.length);
+});
+
+it("issues ANZAC the British rifles and pistol, and the Ottomans their own Mausers", () => {
+  expect(factions.anzac).toMatchObject({ rifle: "SMLE Mk III", scoped: "Scoped SMLE", pistol: "Webley Mk VI", support: undefined, antiTank: undefined });
+  expect(factions.ottoman).toMatchObject({ rifle: "Mauser 1903", scoped: "Scoped Mauser 1903", pistol: "Mauser C96", support: undefined, antiTank: undefined });
+  // Same role, same numbers: the Mauser is worked like the other five-round rifles.
+  const mauser = weaponStats.find(w => w.id === "mauser1903")!, gewehr = weaponStats.find(w => w.id === "gewehr98")!;
+  expect([mauser.magazine, mauser.reloadSeconds, mauser.roundsPerMinute]).toEqual([gewehr.magazine, gewehr.reloadSeconds, gewehr.roundsPerMinute]);
+  expect(weaponStats.find(w => w.id === "c96")!.approximate).toBeTruthy();
+});
+
+it("sends Support out with a rifle in an army without a light machine gun", () => {
+  const g = new Game(new TestCollision(industrialMap), true, 1000, 3, undefined, { map: industrialMap, ambientArtillery: false, teamSize: 2 });
+  const p = g.players[1];
+  p.faction = "ottoman";
+  equipLoadout(p, "support");
+  expect(p.weapon).toBe("serviceRifle");
+  expect(p.weaponId).toBe("Mauser 1903");
+  p.faction = "anzac";
+  equipLoadout(p, "emplacement");
+  expect(p.inventory!.sidearm.id).toBe("Webley Mk VI");
 });
 
 it("follows the damage design rules", () => {

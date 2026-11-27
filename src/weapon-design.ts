@@ -42,6 +42,7 @@ const furniture: Record<string, { rear: [number, BandPiece[]]; front: [number, B
   gewehr: { rear: [-.42, [[.075, -.074, .007], [.05, .003, .0455]]], front: [-.55, [[.04, .005, .045]]], swivel: -.0728 },
   berthier: { rear: [-.42, [[.06, -.069, .005], [.05, .003, .0455]]], front: [-.55, [[.08, -.0675, .0475]]], swivel: -.0672 },
   lebel: { rear: [-.42, [[.072, -.0792, .0144], [.05, .003, .0455]]], front: [-.55, [[.065, -.0675, .004], [.04, .002, .045]]], swivel: -.0778 },
+  mauser: { rear: [-.4, [[.075, -.074, .007], [.05, .003, .0455]]], front: [-.56, [[.07, -.07, .045]]], swivel: -.0728 },
 };
 // The bayonet is fixed at the muzzle: the blade runs forward tucked beneath the
 // barrel, and its guard covers the blade's root and reaches up to ring the barrel.
@@ -60,7 +61,7 @@ const rifleAction = (straight: boolean, knob: V): RiflePart[] => [
 ];
 // A carbine is its rifle with 18 cm off the barrel and no cleaning rod under it.
 function rifle(family: string, carbine = false): WeaponDesign {
-  const smle = family === "smle", berthier = family === "berthier", lebel = family === "lebel";
+  const smle = family === "smle", berthier = family === "berthier", lebel = family === "lebel", mauser = family === "mauser";
   const muzzle = (smle ? -.7 : berthier ? -.79 : lebel ? -.8 : -.78) + (carbine ? .18 : 0);
   const grip: V = smle ? [.105, -.055, 0] : [.115, 0, 0];
   const receiver = round("receiver", [0, .025, .055], [smle ? .075 : .068, .29, .075]);
@@ -89,11 +90,18 @@ function rifle(family: string, carbine = false): WeaponDesign {
     parts.push(box("Berthier charger guide", [0, .066, .07], [.065, .028, .04]));
     // The nose ferrule closes over the tip of the stock and the barrel above it.
     parts.push(round("Berthier long nose ferrule", [0, -.01, -.5175], [.075, .105, .11]));
+  } else if (mauser) {
+    // The Ottoman Model 1903: the Mauser 98 action with a plain tangent rear
+    // sight instead of the Lange ramp, and a handguard reaching back to the
+    // receiver ring.
+    parts.push(box("Mauser 1903 tangent sight", [0, .062, -.115], [.042, .02, .085]));
+    parts.push(part("Mauser 1903 long handguard", "handguard", [0, .036, -.105], [.06, .13, .04], "walnut", [90, 0, 0]));
+    parts.push(round("Mauser 1903 nose cap", [0, .005, -.66], [.07, .07, .1]));
   } else {
     parts.push(part("Gewehr Lange sight ramp", "handguard", [0, .067, -.16], [.055, .16, .047], "steel", [90, 0, 0]));
     parts.push(box("Gewehr straight bolt stop", [-.047, .038, .12], [.018, .045, .055]));
   }
-  const upgraded = berthier || family === "gewehr";
+  const upgraded = berthier || family === "gewehr" || mauser;
   const sightLeaf = box("rear sight leaf seat", [0, .054, -.172], [.048, .034, .14]);
   if (upgraded) {
     const furniture = parts[0];
@@ -129,7 +137,7 @@ function rifle(family: string, carbine = false): WeaponDesign {
     reload: lebel ? "tube" : "clip", muzzle, front: muzzle + .055, rear: smle ? -.17 : -.13,
     feed: lebel ? [-.045, .09, -.015] : [.015, .15, .035], grip: [-.035, -.06, -.17],
     actionOrigin: [.05, .045, .13], boltGrip: grip, lift: smle ? 55 : 75, travel: smle ? .1 : .14,
-    soundPitch: (smle ? 1.12 : berthier ? 1.03 : lebel ? .9 : .97) + (carbine ? .05 : 0),
+    soundPitch: (smle ? 1.12 : berthier ? 1.03 : lebel ? .9 : mauser ? 1.01 : .97) + (carbine ? .05 : 0),
   };
 }
 // The Tankgewehr M1918: a scaled-up single-shot Mauser, 1.69 m long. A long
@@ -204,9 +212,10 @@ function support(family: string): WeaponDesign {
   };
 }
 function pistol(family: string): WeaponDesign {
-  const webley = family === "webley", luger = family === "luger";
+  const webley = family === "webley", luger = family === "luger", c96 = family === "c96";
   const origin: V = webley ? [0, -.035, -.065] : [0, .045, .025];
-  const parts = [part("pistol grip", "handguard", [0, -.085, .09], [.078, .19, .1], "walnut", [luger ? -28 : -12, 0, 0]),
+  // The C96's round "broomhandle" grip is upright; the Luger's rakes back.
+  const parts = [part("pistol grip", "handguard", [0, -.085, .09], [c96 ? .07 : .078, .19, c96 ? .085 : .1], "walnut", [luger ? -28 : c96 ? -6 : -12, 0, 0]),
     part("open trigger guard", "guard", [0, -.065, -.015], [.01, .075, .12]),
     box("pistol frame", [0, -.005, .025], [.075, .07, .18]),
   ];
@@ -221,32 +230,44 @@ function pistol(family: string): WeaponDesign {
     absoluteAction.push(box("Luger toggle rear link", [0, .035, .035], [.052, .027, .085]));
     absoluteAction.push(box("Luger toggle front link", [0, .035, -.045], [.052, .027, .085]));
     for (const side of [-1, 1]) absoluteAction.push(part("knurled toggle knob", "knob", [side * .04, .035, .04], [.028, .036, .036], "edge"));
+  } else if (c96) {
+    // The "broomhandle" Mauser: a long thin barrel, a deep frame and the fixed
+    // ten-round magazine ahead of the trigger guard; the bolt runs in the frame top.
+    parts.push(round("C96 long barrel", [0, .035, -.25], [.03, .38, .03]));
+    parts.push(box("C96 deep frame", [0, .02, -.03], [.07, .1, .2]));
+    parts.push(box("C96 tangent sight", [0, .075, -.06], [.04, .018, .06]));
+    parts.push(box("C96 front sight", [0, .06, -.43], [.008, .025, .015]));
+    parts.push(box("C96 hammer", [0, .085, .1], [.03, .055, .03]));
+    absoluteAction.push(box("C96 bolt", [0, .065, .045], [.05, .035, .1]));
+    for (const side of [-1, 1]) absoluteAction.push(box("C96 bolt grip", [side * .03, .065, .085], [.012, .03, .03], "edge"));
   } else {
     absoluteAction.push(box("Ruby slide", [0, .034, -.07], [.077, .078, .31]));
     parts.push(round("Ruby muzzle", [0, .025, -.19], [.027, .12, .027]));
     for (const side of [-1, 1]) for (let i = 0; i < 6; i++) absoluteAction.push(box("Ruby slide serration", [side * .039, .04, .045 - i * .012], [.003, .04, .004], "edge"));
   }
   const magazine = webley ? round("weapon magazine", [0, .023, .025], [.103, .12, .103])
+    : c96 ? box("weapon magazine", [0, -.065, -.075], [.05, .1, .1])
     : box("weapon magazine", [0, -.1, .09], [.057, .15, .075]);
   return {
     family, kind: "pistol", parts, actionParts: absoluteAction.map(p => ({...p, at: p.at.map((v,i)=>v-origin[i]) as V})), magazine,
-    reload: webley ? "revolver" : "box", muzzle: webley || luger ? -.38 : -.25, front: webley || luger ? -.345 : -.225, rear: .085,
-    feed: webley ? [.035, .04, .025] : [0, -.18, .09], grip: [-.035, -.075, .08],
-    actionOrigin: origin, boltGrip: [0, 0, 0], lift: 0, travel: .035, soundPitch: webley ? .83 : luger ? 1.18 : 1.3, trigger: [0,-.045,.07],
+    reload: webley ? "revolver" : "box", muzzle: c96 ? -.44 : webley || luger ? -.38 : -.25, front: c96 ? -.43 : webley || luger ? -.345 : -.225, rear: .085,
+    feed: webley ? [.035, .04, .025] : c96 ? [0, -.14, -.075] : [0, -.18, .09], grip: [-.035, -.075, .08],
+    actionOrigin: origin, boltGrip: [0, 0, 0], lift: 0, travel: .035, soundPitch: webley ? .83 : luger ? 1.18 : c96 ? 1.08 : 1.3, trigger: [0,-.045,.07],
   };
 }
 const designs = {
   smle: rifle("smle"), gewehr: rifle("gewehr"), berthier: rifle("berthier"), lebel: rifle("lebel"),
   gewehrCarbine: rifle("gewehr", true), berthierCarbine: rifle("berthier", true),
   lewis: support("lewis"), mg08: support("mg08"), chauchat: support("chauchat"),
-  webley: pistol("webley"), luger: pistol("luger"), ruby: pistol("ruby"),
+  webley: pistol("webley"), luger: pistol("luger"), ruby: pistol("ruby"), c96: pistol("c96"),
+  mauser: rifle("mauser"),
   tankgewehr: tankgewehr(),
 };
 const ids: Record<string, keyof typeof designs> = {
   "SMLE Mk III":"smle", "Scoped SMLE":"smle", "Gewehr 98":"gewehr", "Scoped Gewehr 98":"gewehr",
   "Karabiner 98AZ":"gewehrCarbine", "Berthier Mle 1892 M16":"berthierCarbine",
   "Berthier Mle 1916":"berthier", "Scoped Lebel":"lebel", "Lewis Mk I":"lewis", "MG 08/15":"mg08", "Chauchat":"chauchat",
-  "Webley Mk VI":"webley",
+  "Webley Mk VI":"webley", "Mauser 1903":"mauser", "Scoped Mauser 1903":"mauser", "Mauser C96":"c96",
   "SMLE Mk III · AP":"smle", "Berthier Mle 1916 · AP":"berthier", "Tankgewehr M1918":"tankgewehr", "P08":"luger", "P08 Luger":"luger", "Ruby":"ruby",
 };
 export function weaponDesign(p: {weapon: WeaponKind; weaponId?: string}): WeaponDesign | undefined {

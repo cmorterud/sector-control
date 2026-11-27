@@ -34,6 +34,11 @@ export interface WeaponStats {
   id: string;
   name: string;
   faction: FactionId;
+  // Other armies that carry the same weapon, with the same stats: the
+  // Australians and New Zealanders at Gallipoli fought with British rifles.
+  alsoIssuedTo?: FactionId[];
+  // Shown in the Armory when the game's pick for an army is a best guess.
+  approximate?: string;
   role: WeaponRole;
   round: string;
   historical: {
@@ -73,19 +78,19 @@ const carbineRoundsPerMinute = 70;
 
 export const weaponStats: WeaponStats[] = [
   {
-    id: "smle", name: "SMLE Mk III", faction: "british", role: "rifle", round: ".303 British",
+    id: "smle", name: "SMLE Mk III", faction: "british", alsoIssuedTo: ["anzac"], role: "rifle", round: ".303 British",
     historical: { muzzleVelocity: 744, rate: [15, 30], note: "Two 5-round chargers; trained riflemen fired 15+ aimed rounds a minute." },
     roundsPerMinute: 55, magazine: 10, reserve: 60, reloadSeconds: 2.2, damage: rifleDamage,
     summary: "Twice the magazine of its rivals, at the cost of a longer reload.",
   },
   {
-    id: "smle-scoped", name: "Scoped SMLE", faction: "british", role: "scoped", round: ".303 British",
+    id: "smle-scoped", name: "Scoped SMLE", faction: "british", alsoIssuedTo: ["anzac"], role: "scoped", round: ".303 British",
     historical: { muzzleVelocity: 744, rate: [10, 15], note: "Sniper conversions with a side-mounted telescopic sight." },
     roundsPerMinute: 40, magazine: 10, reserve: 40, reloadSeconds: 2.4, damage: scopedDamage,
     summary: "Slow to cycle; any hit to the chest or head kills.",
   },
   {
-    id: "webley", name: "Webley Mk VI", faction: "british", role: "pistol", round: ".455 Webley",
+    id: "webley", name: "Webley Mk VI", faction: "british", alsoIssuedTo: ["anzac"], role: "pistol", round: ".455 Webley",
     historical: { muzzleVelocity: 190, rate: [20, 30], note: "Six-round top-break revolver." },
     roundsPerMinute: 120, magazine: 6, reserve: 24, reloadSeconds: 2.5, damage: { head: 80, chest: 45, stomach: 40, arms: 25, legs: 25 }, falloff: pistolFalloff,
     summary: "Heaviest-hitting sidearm, but slow bullets and a slow reload.",
@@ -174,6 +179,42 @@ export const weaponStats: WeaponStats[] = [
     roundsPerMinute: 600, magazine: 30, reserve: 300, reloadSeconds: 3.5, damage: machineGunDamage,
     summary: "Shorter bursts and a quicker reload than the other emplacements.",
   },
+  // Gallipoli, 1915. ANZAC carries the British rifle, scoped rifle and pistol
+  // (above); its machine gun was the older Maxim. The Ottoman army fought with
+  // German-pattern Mausers in its own 7.65 mm calibre. Stats follow the roles,
+  // so neither side is favoured: the Mauser is worked like the other
+  // five-round rifles.
+  {
+    id: "maxim-303", name: "Maxim .303", faction: "anzac", role: "emplaced", round: ".303 British",
+    historical: { muzzleVelocity: 744, note: "The AIF and NZEF landed with Maxim guns converted to .303, two to a battalion; Vickers guns replaced them from 1916. Drawn on the Vickers tripod." },
+    roundsPerMinute: 600, magazine: 250, reserve: 500, reloadSeconds: 6, damage: machineGunDamage,
+    summary: "Long bursts from a fixed mount. The gun keeps its ammunition when you dismount.",
+  },
+  {
+    id: "mauser1903", name: "Mauser 1903", faction: "ottoman", role: "rifle", round: "7.65×53 mm",
+    historical: { muzzleVelocity: 820, rate: [12, 15], note: "The Ottoman Model 1903, a Mauser built at Oberndorf with a five-round stripper clip; most Ottoman infantry at Gallipoli carried it." },
+    roundsPerMinute: 55, magazine: 5, reserve: 60, reloadSeconds: 1.6, damage: rifleDamage,
+    summary: "A quick five-round clip and a fast bullet.",
+  },
+  {
+    id: "mauser1903-scoped", name: "Scoped Mauser 1903", faction: "ottoman", role: "scoped", round: "7.65×53 mm",
+    historical: { muzzleVelocity: 820, rate: [10, 12], note: "Ottoman snipers worked from the scrub above the gullies; some had telescopic sights." },
+    roundsPerMinute: 40, magazine: 5, reserve: 40, reloadSeconds: 1.8, damage: scopedDamage,
+    summary: "Five rounds a clip and a flat shot down the gullies.",
+  },
+  {
+    id: "c96", name: "Mauser C96", faction: "ottoman", role: "pistol", round: "7.63×25 mm Mauser",
+    approximate: "Ottoman officers carried a mix of pistols; the C96 stands in for them.",
+    historical: { muzzleVelocity: 430, rate: [30, 40], note: "The \"broomhandle\" Mauser, loaded from a ten-round charger into a fixed magazine ahead of the trigger." },
+    roundsPerMinute: 150, magazine: 10, reserve: 30, reloadSeconds: 1.8, damage: { head: 65, chest: 34, stomach: 30, arms: 18, legs: 20 }, falloff: pistolFalloff,
+    summary: "Ten rounds and a fast bullet, but a slow charger reload.",
+  },
+  {
+    id: "maxim-m1909", name: "Maxim M1909", faction: "ottoman", role: "emplaced", round: "7.65×53 mm",
+    historical: { muzzleVelocity: 820, note: "The Ottoman export Maxim, the German MG 08 in Ottoman calibre on the same sled mount." },
+    roundsPerMinute: 600, magazine: 250, reserve: 500, reloadSeconds: 6, damage: machineGunDamage,
+    summary: "Long bursts from a sled mount. The gun keeps its ammunition when you dismount.",
+  },
   // Support's anti-tank kit (src/anti-tank.ts), offered where tanks fight.
   {
     id: "smle-ap", name: "SMLE Mk III · AP", faction: "british", role: "antiTank", round: ".303 Mk VII.W armour-piercing",
@@ -198,7 +239,10 @@ export const weaponStats: WeaponStats[] = [
   },
 ];
 
-export const armoryFactions: FactionId[] = ["british", "german", "french"];
+export const armoryFactions: FactionId[] = ["british", "german", "french", "anzac", "ottoman"];
+// Whether an army carries this weapon.
+export const issuedTo = (w: Pick<WeaponStats, "faction" | "alsoIssuedTo">, faction: FactionId | undefined) =>
+  w.faction === faction || (!!faction && !!w.alsoIssuedTo?.includes(faction));
 
 export function gameMuzzleVelocity(w: WeaponStats) {
   return Math.round(w.historical.muzzleVelocity * bulletSpeedScale);

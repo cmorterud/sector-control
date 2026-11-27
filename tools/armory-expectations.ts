@@ -7,6 +7,8 @@ console.log(JSON.stringify({
   weapons: weaponStats.map(weapon => ({
     name: weapon.name,
     faction: weapon.faction,
+    // Every army that carries it, and so shows its card.
+    factions: [weapon.faction, ...(weapon.alsoIssuedTo ?? [])],
     magazine: weapon.magazine,
     reserve: weapon.reserve,
     reload: reloadDuration(weapon) / weaponTicksPerSecond,

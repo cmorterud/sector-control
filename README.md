@@ -96,7 +96,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `mode=ctf` plays capture the flag on Ypres, Ypres at night or Verdun sector (domination is the default), `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds.
+The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `headland` or `training` to open another map directly. `mode=ctf` plays capture the flag on Ypres, Ypres at night or Verdun sector (domination is the default), `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds. `factions=anzac,ottoman` (or `factions=gallipoli`) puts other armies on any map, blue first then red, to try their kit on familiar ground.
 
 ## Continuous integration and publishing
 

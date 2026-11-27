@@ -4,7 +4,7 @@ import type { CharacterShape } from "./character-geometry";
 // upper-body or hip space (metres; -z is the soldier's front). Each list is
 // merged into the soldier's one torso mesh or its hip batch, so a pouch costs
 // triangles but never a draw call.
-export type KitFaction = "british" | "german" | "french";
+export type KitFaction = "british" | "german" | "french" | "anzac" | "ottoman";
 export type KitPart = {
   name: string;
   at: [number, number, number];
@@ -17,9 +17,18 @@ export type KitPart = {
   small?: boolean;
 };
 
-export const kitFactions: readonly KitFaction[] = ["british", "german", "french"];
+export const kitFactions: readonly KitFaction[] = ["british", "german", "french", "anzac", "ottoman"];
 export const isKitFaction = (faction?: string): faction is KitFaction =>
-  faction === "british" || faction === "german" || faction === "french";
+  !!faction && (kitFactions as readonly string[]).includes(faction);
+// Gallipoli, 1915: no steel helmets. ANZAC soldiers wear the felt slouch hat
+// (Australians) or the peaked "lemon squeezer" (New Zealanders), Ottoman
+// soldiers the wrapped cloth kabalak. These armies draw their headgear as kit
+// rather than as the shaped steel helmet.
+export const wearsHat = (faction?: string) => faction === "anzac" || faction === "ottoman";
+// Which ANZAC soldiers are New Zealanders in the lemon squeezer, and which have
+// cut their trousers down to shorts in the August heat. Both follow the face,
+// so a soldier's merged kit and its distant stand-in agree.
+export const anzacDress = (look: number) => ({ hat: look % soldierLooks.length === 1 ? "lemonSqueezer" as const : "slouch" as const, shorts: look === 1 || look === 2 });
 
 // Four faces per army: skin tone, hair colour and moustache. Picked from the
 // soldier's id, so a squad is not one face repeated.
@@ -29,12 +38,29 @@ export const soldierLooks = [
   { skin: "#ad9073", hair: "#2e261e", moustache: "full" },
   { skin: "#b89b7c", hair: "#6f5a42", moustache: "none" },
 ] as const;
+// Faces for the Gallipoli armies: sunburnt Australians and New Zealanders,
+// and Ottoman soldiers, nearly all of whom wore a moustache.
+const factionLooks: Partial<Record<KitFaction, readonly { skin: string; hair: string; moustache: "none" | "clipped" | "full" }[]>> = {
+  anzac: [
+    { skin: "#a87d58", hair: "#6a5236", moustache: "none" },
+    { skin: "#b48a66", hair: "#4a3a2a", moustache: "clipped" },
+    { skin: "#9b7250", hair: "#7c6142", moustache: "none" },
+    { skin: "#ae845f", hair: "#3a2e22", moustache: "full" },
+  ],
+  ottoman: [
+    { skin: "#a8865f", hair: "#231d17", moustache: "full" },
+    { skin: "#b59470", hair: "#2e261e", moustache: "clipped" },
+    { skin: "#9b7a57", hair: "#1c1814", moustache: "full" },
+    { skin: "#ae8c68", hair: "#3a2f24", moustache: "none" },
+  ],
+};
+export const looksFor = (faction?: string) => factionLooks[faction as KitFaction] ?? soldierLooks;
 export const soldierLookFor = (id: number) => {
   const n = Math.sin((id + 1) * 91.7 + 17.3) * 43758.5453;
   return Math.floor((n - Math.floor(n)) * soldierLooks.length);
 };
 
-const webbing = { british: "#8d8466", german: "#4b4136", french: "#5a4a37" };
+const webbing = { british: "#8d8466", german: "#4b4136", french: "#5a4a37", anzac: "#958a69", ottoman: "#5a4732" };
 const brass = "#7d7556";
 // A point on the front of the torso at height-independent width x, standing
 // `lift` off the cloth, with the yaw that turns a part's face along the curve.
@@ -51,8 +77,9 @@ function sideStrap(name: string, from: [number, number, number], to: [number, nu
   return { name, at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2], size: [width, length, .016], tint, shape: "limb", rotation: [pitch, 0, roll] };
 }
 
-export function faceParts(look: number): KitPart[] {
-  const { skin, hair, moustache } = soldierLooks[look % soldierLooks.length];
+export function faceParts(look: number, faction?: string): KitPart[] {
+  const looks = looksFor(faction);
+  const { skin, hair, moustache } = looks[look % looks.length];
   const parts: KitPart[] = [
     { name: "nose", at: [0, .662, -.138], size: [.04 + (look % 2) * .008, .07, .052], tint: skin, shape: "soft", rotation: [-8, 0, 0], small: true },
   ];
@@ -69,7 +96,7 @@ export function faceParts(look: number): KitPart[] {
 }
 
 // The national kit, on top of the shared tunic, belt, braces and pack.
-export function factionKit(faction: KitFaction, shirt: string, helmet: string): KitPart[] {
+export function factionKit(faction: KitFaction, shirt: string, helmet: string, look = 0): KitPart[] {
   const parts: KitPart[] = [], strap = webbing[faction];
   const pouch = (name: string, x: number, y: number, w: number, h: number, d: number, tint: string, lift = .03) => {
     const { z, yaw } = front(x, lift + d / 2);
@@ -124,7 +151,56 @@ export function factionKit(faction: KitFaction, shirt: string, helmet: string): 
     for (const side of [-1, 1])
       parts.push({ name: "turned coat tail", at: [side * .2, -.02, -.07], size: [.12, .16, .03], tint: "#7d97a3", shape: "pouch", rotation: [4, side * -55, side * -8], parent: "hips" });
   }
+  if (faction === "anzac") {
+    // 1908 web equipment over the khaki shirt, as the British wore it.
+    for (const side of [-1, 1]) {
+      for (const x of [.065, .13, .195]) pouch("ammunition pouch", side * x, .12, .062, .11, .07, strap);
+      for (const x of [.095, .165]) pouch("ammunition pouch", side * x, .235, .066, .1, .062, strap);
+      parts.push({ name: "shirt pocket", at: [side * .12, .4, front(.12, .008).z], size: [.1, .045, .016], tint: shirt, shape: "pouch", rotation: [0, front(side * .12, 0).yaw, 0], small: true });
+    }
+    parts.push({ name: "water bottle", at: [.255, -.02, .07], size: [.085, .17, .075], tint: "#6c6650", shape: "limb" });
+    parts.push({ name: "haversack", at: [-.24, -.06, .08], size: [.09, .19, .21], tint: "#8f8664", shape: "pouch" });
+    parts.push({ name: "bayonet scabbard", at: [-.235, -.13, .02], size: [.034, .42, .022], tint: "#3b3428", shape: "limb", rotation: [-18, 0, 4] });
+    parts.push({ name: "spade helve", at: [.235, -.08, .13], size: [.032, .3, .032], tint: "#6e5338", shape: "limb", rotation: [-14, 0, 0] });
+    parts.push(...anzacHat(look, helmet));
+  }
+  if (faction === "ottoman") {
+    // Leather cartridge pouches on the belt, three a side, German pattern.
+    for (const side of [-1, 1])
+      for (const x of [.085, .15, .215]) pouch("ammunition pouch", side * x, .075, .062, .1, .075, "#5e4a33");
+    parts.push({ name: "bread bag", at: [.235, -.05, .09], size: [.1, .19, .2], tint: "#7b6f52", shape: "pouch" });
+    parts.push({ name: "canteen", at: [-.27, -.05, .12], size: [.16, .07, .16], tint: "#5d4e3b", shape: "disc", rotation: [0, 0, 90] });
+    parts.push(sideStrap("canteen sling", [.16, .47, -.145], [-.25, .06, -.1], .022, "#4c4232"));
+    parts.push({ name: "bayonet scabbard", at: [-.23, -.13, .0], size: [.034, .4, .022], tint: "#2f2b25", shape: "limb", rotation: [-16, 0, 4] });
+    // The kabalak: cloth wound in overlapping bands round a light frame, with
+    // no brim, so a man could press his forehead to the ground in prayer.
+    parts.push({ name: "kabalak", at: [0, .83, -.006], size: [.29, .21, .31], tint: helmet, shape: "kabalak" });
+    // The wound bands cross the crown on a slant, alternately left and right.
+    for (const [i, y] of [.77, .81, .85, .885].entries())
+      parts.push({ name: "kabalak wrap", at: [0, y, -.006], size: [.305 - i * .03, .032, .325 - i * .032], tint: i % 2 ? "#6f6243" : "#a19066", shape: "disc", rotation: [i % 2 ? 9 : -8, 0, i % 2 ? -6 : 5], small: i > 1 });
+  }
   return parts;
+}
+
+// The ANZAC hat on soldier look `look`, in upper-body space. The Australian
+// slouch hat has its left brim turned up and pinned with the Rising Sun; the New
+// Zealand hat is pinched to a peak and wears a coloured band in its puggaree.
+export function anzacHat(look: number, felt: string): KitPart[] {
+  const puggaree = "#9a8d68";
+  if (anzacDress(look).hat === "lemonSqueezer") return [
+    { name: "hat crown", at: [0, .85, -.006], size: [.28, .2, .29], tint: felt, shape: "lemonSqueezer" },
+    { name: "hat brim", at: [0, .758, -.006], size: [.56, .02, .58], tint: felt, shape: "disc" },
+    { name: "hat puggaree", at: [0, .783, -.006], size: [.3, .04, .31], tint: puggaree, shape: "disc" },
+    { name: "hat flash", at: [0, .785, -.006], size: [.302, .014, .312], tint: "#8c3b2e", shape: "disc", small: true },
+  ];
+  return [
+    { name: "hat crown", at: [0, .835, -.006], size: [.3, .17, .32], tint: felt, shape: "slouchCrown" },
+    { name: "hat brim", at: [.04, .756, -.006], size: [.5, .02, .6], tint: felt, shape: "disc" },
+    // The turned-up side stands against the crown.
+    { name: "turned-up hat brim", at: [-.19, .825, -.006], size: [.16, .02, .44], tint: felt, shape: "disc", rotation: [0, 0, -78] },
+    { name: "hat puggaree", at: [0, .775, -.006], size: [.31, .035, .33], tint: puggaree, shape: "disc" },
+    { name: "hat badge", at: [-.205, .85, -.006], size: [.012, .05, .06], tint: "#8f8a72", shape: "disc", rotation: [0, 0, 90], small: true },
+  ];
 }
 
 // First person only: the cuffs and wrists of your own arms, which fill the
@@ -137,7 +213,12 @@ export function viewCuffParts(faction: KitFaction, shirt: string, skin: string):
     french: { at: .04, size: [.162, .06, .182], tint: "#7d96a3", rotation: [0, 0, 9] },
     // Plain khaki band.
     british: { at: .044, size: [.16, .05, .18], tint: "#6c6749", rotation: [0, 0, 0] },
+    // Ottoman khaki, plain.
+    ottoman: { at: .044, size: [.16, .05, .18], tint: "#6c6245", rotation: [0, 0, 0] },
+    // ANZAC sleeves are rolled above the elbow: the wrist is bare.
+    anzac: undefined,
   }[faction];
+  if (!cuff) return [{ name: "wrist", at: [0, .004, 0], size: [.074, .07, .068], tint: skin, shape: "limb" }];
   return [
     { name: "wrist", at: [0, .004, 0], size: [.074, .07, .068], tint: skin, shape: "limb" },
     { name: "turned cuff", at: [0, cuff.at, 0], size: cuff.size as [number, number, number], tint: cuff.tint, shape: "pouch", rotation: cuff.rotation as [number, number, number] },

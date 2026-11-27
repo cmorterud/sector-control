@@ -183,3 +183,13 @@ test.each([["Karabiner 98AZ", "Gewehr 98"], ["Berthier Mle 1892 M16", "Berthier 
   // The front sight stands behind the crown.
   expect(carbine.front).toBeGreaterThan(carbine.muzzle);
 });
+
+test("the Ottoman Mausers and the C96 have their own models", () => {
+  for (const weaponId of ["Mauser 1903", "Scoped Mauser 1903"]) expect(weaponDesign({ weapon: "serviceRifle", weaponId })?.family).toBe("mauser");
+  const c96 = weaponDesign({ weapon: "pistol", weaponId: "Mauser C96" })!;
+  expect(c96.family).toBe("c96");
+  // The magazine sits ahead of the trigger guard.
+  expect(c96.magazine.at[2]).toBeLessThan(c96.trigger![2]);
+  // ANZAC shares the British models.
+  expect(weaponDesign({ weapon: "serviceRifle", weaponId: "SMLE Mk III" })?.family).toBe("smle");
+});

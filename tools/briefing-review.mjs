@@ -56,7 +56,7 @@ export function checkArmory({ factions, weapons }) {
   for (const faction of factions) {
     tab(faction);
     const cards = [...document.querySelectorAll('#armory .card:not(.mortar)')];
-    const roster = weapons.filter(weapon => weapon.faction === faction);
+    const roster = weapons.filter(weapon => (weapon.factions ?? [weapon.faction]).includes(faction));
     check(cards.length === roster.length, `Unexpected weapon count for ${faction}`);
     check(document.querySelectorAll('#armory .card.mortar').length === 1, `Missing trench mortar card for ${faction}`);
     for (const weapon of roster) {
