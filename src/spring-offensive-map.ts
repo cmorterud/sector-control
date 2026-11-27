@@ -331,7 +331,7 @@ export const springOffensiveMap: MapDefinition = {
   id: "spring-offensive", name: "Spring Offensive", width, depth, navSpacing: 4, scoring: "domination",
   playArea: { width: playWidth, depth: playDepth }, boundary: { warningTicks: 5 * 30, wireDepth: 3 }, backdrop: true,
   // 64 a side is the target once frame time allows it; today's matches start at 50.
-  defaultTeamSize: 50, maxTeamSize: 64,
+  defaultTeamSize: 64, maxTeamSize: 64,
   navigationPoints: [],
   spawn: { blue: { x: -132, z: 0 }, red: { x: 132, z: 0 } },
   // The Mark IV and the A7V come up the open plain to the south, on the tank lane.
