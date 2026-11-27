@@ -1090,6 +1090,15 @@ a.armory-link:hover { background: #3f5856; }
 .map-choice a.loading::after { content: "LOADING BATTLEFIELD…"; position: absolute; top: 8px; right: 8px; padding: 4px 9px; background: #142323eb; border-right: 3px solid #f3d49a; color: #f3d49a; font-size: 11px; font-weight: 700; letter-spacing: .12em; animation: map-loading 1s ease-in-out infinite alternate; }
 @keyframes map-loading { from { opacity: 1; } to { opacity: .55; } }
 #primary:disabled { opacity: .6; cursor: progress; }
+/* Front line HUD preset (hud-preset.ts): the battlefield, not the dashboard. */
+.hud-frontline #hud > header,
+.hud-frontline .battle-sidebar,
+.hud-frontline .controls,
+.hud-frontline #health,
+.hud-frontline.ammo-hidden #ammo { display: none; }
+/* The weapon card keeps its corner while the left side is empty. */
+.hud-frontline #hud > footer { justify-content: flex-end; }
+.controls-panel > label.hud-preset small { display: block; margin: 4px 0 0 24px; color: #b8c4c0; font-size: 12px; line-height: 1.4; }
 /* The player's soldier on paper (src/soldier-record.ts): a deploy slip, the
    casualty note heading the death card, the operation order heading the
    briefing and the casualty return after the match. Typed-form colours. */

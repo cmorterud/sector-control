@@ -77,6 +77,13 @@ export class ControlsPanel {
     const first = document.createElement("input"); first.type = "checkbox"; first.checked = this.settings.firstPerson;
     first.onchange = () => { this.settings.firstPerson = first.checked; this.changed(); };
     camera.append(first, " Start in first person"); this.panel.append(camera);
+    const preset = document.createElement("label"); preset.className = "hud-preset";
+    const frontLine = document.createElement("input"); frontLine.type = "checkbox"; frontLine.checked = this.settings.hud === "frontLine";
+    frontLine.onchange = () => { this.settings.hud = frontLine.checked ? "frontLine" : "standard"; this.changed(); };
+    const note = document.createElement("small");
+    note.textContent = "No minimap, kill feed, scores, health or controls bar. Ammo shows while reloading or when you press " +
+      `${keyLabel(this.settings.bindings.reload)}; flag state shows near a flag. Tab still opens the scoreboard.`;
+    preset.append(frontLine, " Front line HUD", note); this.panel.append(preset);
     this.status = document.createElement("p"); this.status.setAttribute("role", "status"); this.panel.append(this.status);
     const reset = document.createElement("button"); reset.textContent = "Reset controls"; reset.className = "secondary";
     reset.onclick = () => { Object.assign(this.settings, freshControls()); this.changed(); this.waiting = null; this.draw(); };

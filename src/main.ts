@@ -30,6 +30,7 @@ import { weaponProfiles } from "./weapons";
 import "./style.css";
 import { ArtilleryMap, mapCallKey } from "./artillery-map";
 import { Minimap } from "./minimap";
+import { frontLineAmmoShown, frontLineFlagShown, frontLineRules } from "./hud-preset";
 import { flagContains } from "./domination";
 import { Renderer } from "./rendering";
 import {
@@ -176,6 +177,8 @@ function updateControlHints(situation = hintSituation) {
 }
 
 let triggerDown = false;
+// Front line HUD: pressing reload shows the ammo card briefly, even on a full magazine.
+let ammoPeekUntil = 0;
 let fire = false,
   aim = false,
   reload = false,
@@ -737,11 +740,14 @@ function hud(now: number) {
   const mirrorText = !paused && now < periscopeNoticeUntil ? "MIRROR SHOT AWAY · AIM FROM THE SHOULDER UNTIL YOU REDEPLOY" : "";
   if (periscopeNotice.textContent !== mirrorText) periscopeNotice.textContent = mirrorText;
   const clearHUD = playing && !tacticalMap.open;
+  // Training teaches the standard HUD, so the Front line preset waits for a battle.
+  const frontLine = settings.hud === "frontLine" && !training;
+  root.classList.toggle("hud-frontline", frontLine);
   root.classList.toggle("dead",p.hp<=0);
   staged.combat=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw,p.hp<=0?deploymentChoice(p):"",p.hp<=0&&lives.length?casualtyNote(lives.at(-1)!,game.map):""):"";
   const identityText = playing && !tacticalMap.open && p.hp > 0 && lives.length > 0 && game.tick < identityNoticeUntil ? deployNotice(lives.at(-1)!) : "";
   if (identityText !== displayedIdentity) identityNotice.innerHTML = displayedIdentity = identityText;
-  battleSidebar.hidden = !clearHUD || aimingScope || periscopeView;
+  battleSidebar.hidden = !clearHUD || aimingScope || periscopeView || frontLine;
   if (!battleSidebar.hidden) {
     minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
     minimapGas.update(game, el("minimap"));
@@ -907,6 +913,10 @@ function hud(now: number) {
     const prompt = tankPrompt(game, p, useKey);
     if (prompt) staged.capture = prompt;
   }
+  root.classList.toggle("ammo-hidden", frontLine && !frontLineAmmoShown({
+    crewing: !!crewed || !!gun, reloading: !!p.reloadAt, overheated: p.weapon === "machineGun" && p.barrel.overheated,
+    now, peekUntil: ammoPeekUntil,
+  }));
   updateControlHints(crewed ? { kind: "tank" } : gun ? { kind: gun.mortar ? "mortar" : "gun" } : {
     kind: "foot", scoped: scoped(p), flame: p.weapon === "flamethrower", gas: gasLine.danger,
     antiTank: p.loadout === "antiTank" && p.equippedSlot !== "sidearm",
@@ -947,7 +957,7 @@ function hud(now: number) {
               y: (s.y ?? groundHeight(s.x, s.z, game.map)) + 4,
               z: s.z,
             });
-            return v.z > 0
+            return v.z > 0 && (!frontLine || frontLineFlagShown(dist(p, s)))
               ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")} ${flagStatus(game, s)}" aria-label="${s.id}${s.name ? " · " + s.name : ""}${s.contested ? " · Contested" : ""}${flagStatus(game, s) === "open" ? "" : " · Locked"}" style="left:${v.x}px;top:${v.y}px">${s.id}${flagStatus(game, s) === "open" ? "" : padlock}${s.contested ? " · !" : ""}<small>${Math.round(dist(p, s))}m</small></div>`
               : "";
           })
@@ -1066,7 +1076,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (isKey("primary", e.code) && !e.repeat) pendingEquip = "primary";
   if (isKey("sidearm", e.code) && !e.repeat) pendingEquip = "sidearm";
-  if (isKey("reload", e.code)) reload = true;
+  if (isKey("reload", e.code)) { reload = true; ammoPeekUntil = performance.now() + frontLineRules.ammoPeekMs; }
   if (isKey("mantle", e.code) && !e.repeat) mantle = true;
   if (isKey("grenade", e.code) && !e.repeat) grenade = true;
   if (isKey("smoke", e.code) && !e.repeat) smoke = true;

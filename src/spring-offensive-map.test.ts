@@ -20,9 +20,9 @@ it("is a larger trench front than Verdun with British and German rosters and sev
   expect(g.map.playArea).toEqual({ width: 288, depth: 176 });
   expect([g.map.width, g.map.depth]).toEqual([320, 208]);
   expect(288 * 176).toBeGreaterThan(1.8 * verdunMap.playArea!.width * verdunMap.playArea!.depth);
-  expect(g.players).toHaveLength(100);
+  expect(g.players).toHaveLength(128);
   expect(g.players[0].faction).toBe("british");
-  expect(g.players[50].faction).toBe("german");
+  expect(g.players[64].faction).toBe("german");
   expect(g.sectors.map((s) => s.id)).toEqual(["A", "B", "C", "D", "E", "F", "G"]);
   expect(g.sectors.filter((s) => s.home === "blue").map((s) => s.id)).toEqual(["A", "B"]);
   expect(g.sectors.filter((s) => s.home === "red").map((s) => s.id)).toEqual(["F", "G"]);
@@ -71,7 +71,7 @@ it("keeps every communication trench and ramp walkable", () => {
 });
 
 it("deploys whole rosters on clear ground, including 64 a side", () => {
-  expect(resolveTeamSize(map)).toBe(50);
+  expect(resolveTeamSize(map)).toBe(64);
   expect(resolveTeamSize(map, 64)).toBe(64);
   expect(resolveTeamSize(map, 80)).toBe(64);
   expect(resolveTeamSize(trenchMap, 64)).toBe(50);

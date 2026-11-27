@@ -17,7 +17,7 @@ Free, no install, no sign-in.</p>
 
 ## Why play it
 
-- **Big battles, no waiting.** Up to 50 soldiers a side, all bots, so a full match starts the moment you click. No accounts, no servers, no lobby.
+- **Big battles, no waiting.** Up to 64 soldiers a side, all bots, so a full match starts the moment you click. No accounts, no servers, no lobby.
 - **Real First World War fronts.** Ypres in the August 1917 rain, Verdun's shell-stripped woods in June 1916, a village, a coastal headland, the galleries of Fort Vaux and a Zeppelin above the clouds.
 - **Bots that fight as squads.** They move in bounds under covering fire, clear houses room by room, throw grenades, mask up against gas and go over the top when the whistle blows.
 - **Everything breaks.** Shells crater the ground, cut the wire, fell trees and bring buildings down, and the bots reroute around the damage.
@@ -45,7 +45,7 @@ Free, no install, no sign-in.</p>
 <summary>The full feature list: squad AI, capture the flag, gas, rain, tanks, mortars and more</summary>
 
 
-- **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
+- **Large bot battles.** Up to 64 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
 - **Capture the flag.** Ypres, Ypres at night, Verdun sector and Spring Offensive can also be played as capture the flag: choose it in the briefing or add `?mode=ctf`. Each side keeps three flags at pickup points spread along its own line, so no one spot can be camped; raid any of the enemy's, carry it back across no-man's land to your single drop point and score. Carriers walk and fight with the pistol but can still mantle; a flag falls where its carrier dies, and first to five captures wins. Bot squads raid, escort, intercept carriers and return dropped flags.
 - **Ten maps.** Ypres, Ypres at night, Verdun sector, Spring Offensive, Gallipoli, Village front, Lighthouse point, indoor Fort Vaux, the Zeppelin above the clouds, and a guided training camp.
@@ -81,6 +81,7 @@ Free, no install, no sign-in.</p>
 | Ypres | 50v50 | Frezenberg, August 1917. Four flags in opposing trench lines across no man's land, or capture the flag with three flags a side |
 | Ypres at night | 50v50 | Ypres after dark. You see about 15 m. Call flares from the tactical map (**F** switches it) to light the field; lamps mark the trenches and white tape the lanes through the wire. Also plays as capture the flag |
 | Verdun sector | 50v50 | Fleury and Thiaumont, June 1916: five flags through shell-stripped woods, craters and communication trenches, or capture the flag with three flags a side |
+| Spring Offensive | 64v64 | 21 March 1918. Seven flags through the British defence in depth, from the outpost line to the rear switch line; deploy behind a home flag your side holds. Tanks on by default. Also plays as capture the flag |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 25v25 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Fort Vaux | 6v6 | France and Imperial Germany fight through vaulted galleries and the open-air Sunken Yard for three flags. Riflemen carry carbines: shorter, and quicker between shots. **Q** opens the floor plan. No artillery |
