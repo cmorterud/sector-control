@@ -228,9 +228,9 @@ const flag = (id: string) => sectors.find((s) => s.id === id)!;
   ramp(x + 9, z - 3, 4, 3, 1.2, bankHeight, 1);
   ramp(x - 9, z + 3, 4, 3, 1.2, bankHeight, -1);
   const l2 = fit(lineOf("blue", 1), z + 4), l3 = fit(lineOf("blue", 2), z - 3);
-  route([l2, { x: x + 7, z: l2.z }], "blue", 0, true);
+  route([l2, { x: x + 9, z: l2.z }], "blue", 0, true);
   ramp(x + 8.5, l2.z, 3, 2, 0, 1.2, -1);
-  route([{ x: x - 7, z: l3.z }, l3], "blue", 0, true);
+  route([{ x: x - 9, z: l3.z }, l3], "blue", 0, true);
   ramp(x - 8.5, l3.z, 3, 2, 0, 1.2, 1);
 }
 // B: Railway cutting. The line from the British railhead runs east in a
@@ -239,7 +239,9 @@ const flag = (id: string) => sectors.find((s) => s.id === id)!;
   const { z } = flag("B");
   dig(-111, z, 58, 6, 1.3);
   ramp(-80, z, 4, 6, 1.3, bankHeight, 1);
-  ramp(-142, z, 4, 6, 1.3, bankHeight, -1);
+  // Inside the cutting's west end (it is dug from x -140), so the British
+  // spawn ground beside it has a way down and back up.
+  ramp(-138, z, 4, 6, 1.3, bankHeight, -1);
 }
 // C: Hill Redoubt. A square ring trench around a ruined blockhouse, open in
 // the middle of each face so soldiers can walk in over the top.
@@ -262,9 +264,9 @@ const flag = (id: string) => sectors.find((s) => s.id === id)!;
   ramp(x - 7.5, z, 3, 4, 0.5, 1.4, -1);
   ramp(x + 7.5, z, 3, 4, 0.5, 1.4, 1);
   const l2 = fit(lineOf("red", 1), z - 6), l3 = fit(lineOf("red", 2), z + 6);
-  route([l2, { x: x - 11, z: l2.z }], "red", 0, true);
+  route([l2, { x: x - 13, z: l2.z }], "red", 0, true);
   ramp(x - 12.5, l2.z, 3, 2, 0, 1.4, 1);
-  route([{ x: x + 11, z: l3.z }, l3], "red", 0, true);
+  route([{ x: x + 13, z: l3.z }, l3], "red", 0, true);
   ramp(x + 12.5, l3.z, 3, 2, 0, 1.4, -1);
 }
 // G: Sunken road. An old lane cut 1.2 m into the chalk, slanting south-east
@@ -406,7 +408,9 @@ function ruinedHouse(id: string, cx: number, cz: number, flip: 1 | -1, landmark:
 {
   const { x, z } = flag("B");
   add("rail-wagon", x - 8, z - 1.2, 5.2, 2.2, 1.9, "wood", { landmark: "B", farmProp: "cart" });
-  add("rail-wagon-2", x - 20, z + 1.6, 5.2, 2.2, 1.9, "wood", { landmark: "B", farmProp: "cart" });
+  // West of the British rear line: at x - 20 it stood across that line's
+  // crossing and shut the short run of trench north of the cutting.
+  add("rail-wagon-2", x - 32, z + 1.6, 5.2, 2.2, 1.9, "wood", { landmark: "B", farmProp: "cart" });
   add("rail-sleepers", x + 6, z + 2, 2.4, 1.2, 0.7, "wood", { landmark: "B", farmProp: "timber" });
   add("rail-crates", x + 5, z - 2.2, 1.2, 0.9, 0.8, "wood", { landmark: "B", farmProp: "crate" });
   add("rail-barrels", x - 3, z + 2.3, 1.2, 0.9, 0.9, "wood", { landmark: "B", farmProp: "barrels" });
@@ -595,6 +599,10 @@ for (const f of sectors) for (let x = -10; x <= 10; x += 2) for (let z = -10; z 
 for (const r of [...terrain.communicationRoutes!, ...terrain.branchRoutes!]) for (const point of r.points) map.navigationPoints!.push({ ...point });
 for (const r of terrain.ramps.filter((q) => q.w > 2)) for (const x of [r.x - r.w / 2, r.x, r.x + r.w / 2]) map.navigationPoints!.push({ x, z: r.z });
 for (const d of map.deployments!) map.navigationPoints!.push({ x: d.x, z: d.z });
+// The railway cutting is 6 m wide but the 4 m lattice puts one row in it, and
+// the wagons stand across that row: two lanes let soldiers walk round them and
+// out by the east ramp instead of being stranded at the west end.
+for (let x = -138; x <= -82; x += 2) for (const z of [flag("B").z - 1.6, flag("B").z + 1.6]) map.navigationPoints!.push({ x, z });
 
 
 // Capture the flag: each side's three pickups stand on its first line's floor
