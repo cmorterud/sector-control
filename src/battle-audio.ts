@@ -589,20 +589,18 @@ export class BattleAudio {
     this.stats.byKind[cue.kind] = (this.stats.byKind[cue.kind] ?? 0) + 1;
     this.stats.spatial++;
     const c = this.context, start = c.currentTime + (cue.delay ?? 0);
-    const length = Math.max(0.12, path.at(-1)!.t), end = start + length + 0.03;
+    const length = Math.max(0.12, path.at(-1)!.t), end = start + length + 0.035;
     const sources: AudioScheduledSourceNode[] = [], nodes: AudioNode[] = [];
-    // The swell, sampled into a curve: built to the burst, or up and away.
-    const curve = new Float32Array(48);
-    for (let i = 0; i < curve.length; i++) {
-      const f = i / (curve.length - 1);
+    // The swell, as a run of ramps: built to the burst, or up and away.
+    // (Ramps rather than a value curve: a curve whose start Chrome has
+    // clamped to a later current time refuses any event inside it.)
+    const envelope = c.createGain(), steps = 16;
+    envelope.gain.setValueAtTime(0.0001, start);
+    for (let i = 1; i <= steps; i++) {
+      const f = i / steps;
       const shape = voice.pass ? Math.pow(Math.sin(f * Math.PI), 1.5) : Math.pow(f, voice.swell);
-      curve[i] = Math.max(0.0001, cue.volume * (0.015 + 0.985 * shape));
+      envelope.gain.linearRampToValueAtTime(Math.max(0.0001, cue.volume * (0.015 + 0.985 * shape)), start + length * f);
     }
-    if (!voice.pass) curve[curve.length - 1] = cue.volume;
-    const envelope = c.createGain();
-    envelope.gain.value = 0.0001;
-    envelope.gain.setValueCurveAtTime(curve, start, length);
-    envelope.gain.setValueAtTime(voice.pass ? 0.0001 : cue.volume, start + length);
     envelope.gain.exponentialRampToValueAtTime(0.0001, end);
     nodes.push(envelope);
     let into: AudioNode = envelope;
