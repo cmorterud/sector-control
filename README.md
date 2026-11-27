@@ -1,12 +1,49 @@
-# Sector Control
+<h1 align="center">Sector Control</h1>
 
-A single-player First World War shooter that runs in the browser. You fight alongside and against bots for control of flags across trench lines, a shelled forest and a destructible village, in first or third person.
+<p align="center"><b>A First World War trench shooter that runs in your browser.</b><br>
+Fight 50 v 50 battles with bots across Ypres, Verdun and seven other maps, with artillery, gas, tanks and trenches you can blow apart.<br>
+Free, no install, no sign-in.</p>
 
-![Verdun sector](public/previews/verdun.jpg)
+<p align="center">
+  <a href="https://codymorterud.com/sector-control/"><img alt="Play in your browser" src="https://img.shields.io/badge/%E2%96%B6%20Play%20now-in%20your%20browser-c8a24a?style=for-the-badge"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/cmorterud/sector-control/actions/workflows/ci.yml"><img alt="Build, test, render and publish" src="https://github.com/cmorterud/sector-control/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue"></a>
+  <img alt="Built with TypeScript and PlayCanvas" src="https://img.shields.io/badge/built%20with-TypeScript%20%C2%B7%20PlayCanvas-3178c6">
+</p>
 
-**[Play it in your browser](https://codymorterud.com/sector-control/)** — no sign-in. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Phones and tablets without a mouse see a short notice instead, with a link to share to a computer and a **Try anyway** option; add `?desktop` to the URL to skip it. Passing builds and rendered checks on `main` publish automatically through GitHub Actions.
+<p align="center"><a href="https://codymorterud.com/sector-control/"><img src="docs/media/gameplay.gif" width="720" alt="A British barrage landing on the German line across no man's land at Ypres"></a></p>
+
+## Why play it
+
+- **Big battles, no waiting.** Up to 50 soldiers a side, all bots, so a full match starts the moment you click. No accounts, no servers, no lobby.
+- **Real First World War fronts.** Ypres in the August 1917 rain, Verdun's shell-stripped woods in June 1916, a village, a coastal headland, the galleries of Fort Vaux and a Zeppelin above the clouds.
+- **Bots that fight as squads.** They move in bounds under covering fire, clear houses room by room, throw grenades, mask up against gas and go over the top when the whistle blows.
+- **Everything breaks.** Shells crater the ground, cut the wire, fell trees and bring buildings down, and the bots reroute around the damage.
+- **The whole arsenal of 1916 and 1917.** Bolt-action rifles, scoped rifles, machine guns you emplace yourself, trench mortars, flamethrowers, artillery and gas shells you call from the map, and tanks you can command.
+- **Plays well on a desktop browser.** Keyboard and mouse, first or third person, with Auto, Low, Medium or High graphics.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/media/screenshot-verdun.jpg" alt="A French soldier in the shell-stripped woods at Verdun"></td>
+    <td><img src="docs/media/screenshot-tank.jpg" alt="Commanding a British Mark IV tank at Ypres"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/screenshot-village.jpg" alt="Shellfire in the streets of Village front"></td>
+    <td><img src="docs/media/screenshot-spring.jpg" alt="A British squad forming up in the morning fog on Spring Offensive"></td>
+  </tr>
+</table>
+
+**[Play it in your browser](https://codymorterud.com/sector-control/)**. Use a desktop browser with a keyboard and mouse, and click **Begin operation** to start. Phones and tablets without a mouse see a short notice instead, with a link to share to a computer and a **Try anyway** option; add `?desktop` to the URL to skip it.
 
 ## Features
+
+<details>
+<summary>The full feature list: squad AI, capture the flag, gas, rain, tanks, mortars and more</summary>
+
 
 - **Large bot battles.** Up to 50 soldiers a side, with riflemen, machine gunners, smoke-screened assaults, suppression, cover-seeking and imperfect aim.
 - **Squad AI.** Bots fight in squads of four or five under a team commander that spreads them across the flags. Squads share sightings, move in bounds while half of them cover, man windows on every floor, stack at doors, throw grenades into rooms and leave failing floors. They hear sprinting and reloading, target whoever threatens them most and route round places where teammates died. Choose Recruit, Regular or Veteran in the briefing.
@@ -33,6 +70,8 @@ A single-player First World War shooter that runs in the browser. You fight alon
 - **Readable combat feedback.** Kill confirmations, a team-colored kill feed, directional hit indicators, a brief view toward the last attack, death reports and damage-based assists. The HUD minimap shows your position, heading and flag ownership.
 - **Period factions.** Britain, France and Imperial Germany, with stylized procedural soldier and weapon models.
 - **No accounts or backend.** Soldiers, weapons, terrain and most audio are generated in code; a few landmark buildings are contributed models. There is no networking.
+
+</details>
 
 ## Maps
 

@@ -17,7 +17,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 const args=process.argv.slice(2),github=args.includes('--github'),[distArg,outArg]=args.filter(a=>!a.startsWith('--'));
 const dist=resolve(distArg??'dist'),out=resolve(outArg??(github?'.github':'public'));
 const size=github?{width:1280,height:640}:{width:1200,height:630};
-const shot={map:process.env.SHOT_MAP??'verdun',view:process.env.SHOT_VIEW??'third',ticks:Number(process.env.SHOT_TICKS??540),quality:'high'};
+const shot={map:process.env.SHOT_MAP??'verdun',view:process.env.SHOT_VIEW??'third',ticks:Number(process.env.SHOT_TICKS??240),quality:'high'};
 const sitePath='/sector-control/';
 const chromePath=process.env.CHROME_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/google-chrome');
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.svg':'image/svg+xml','.jpg':'image/jpeg','.png':'image/png','.glb':'model/gltf-binary','.wav':'audio/wav','.json':'application/json','.webmanifest':'application/manifest+json'};
@@ -101,8 +101,8 @@ await (async()=>{try{
   .url b{color:#edf0e7;font-weight:700}
  </style>
  <img class="shot" src="${sitePath}__brand/shot.png"><div class="band"></div>
- <div class="copy"><div class="eyebrow">LOCAL OPERATIONS</div><h1>SECTOR<br>CONTROL</h1>
-  <p>Squad infantry battles for capture sectors.</p>
+ <div class="copy"><div class="eyebrow">FIRST WORLD WAR · 50 V 50</div><h1>SECTOR<br>CONTROL</h1>
+  <p>A trench shooter that runs in your browser.</p>
   <div class="sectors"><div class="sector blue">A<i></i></div><div class="sector contested">B<i></i></div><div class="sector red">C<i></i></div></div></div>
  <div class="url"><b>Free in your browser</b> · codymorterud.com/sector-control</div>`);
  await writeFile(join(out,'social-preview.png'),await capture());
