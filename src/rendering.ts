@@ -94,6 +94,7 @@ import { duckboards, intactBoard } from "./battlefield";
 import { crouchRules } from "./crouch";
 import { weaponAim, recoilPulse, recoilFeel, feelFor, recoilBuzz } from "./recoil";
 import { WeaponFx } from "./weapon-fx";
+import { BatteryView } from "./battery-render";
 import { tankGunMuzzle, tracerRound } from "./muzzle-blast";
 import { heatRules } from "./weapon-heat";
 import { firstPersonView, sighted, sightHeight, scopeFov, viewWeaponPosition, weaponPullback, barrelEnd, viewDirection } from "./player-view";
@@ -4813,6 +4814,7 @@ export class Renderer implements CollisionWorld {
     for (const mesh of this.emplacementMeshes.values()) mesh.root.destroy();
     this.emplacementMeshes.clear();
     this.tankView?.reset();
+    this.batteryView?.reset();
     this.gunGhost?.root.destroy();
     this.gunGhost = undefined;
     for (const bomb of this.mortarBombs.values()) bomb.destroy();
@@ -5039,6 +5041,7 @@ export class Renderer implements CollisionWorld {
   private emplacementMeshes = new Map<number, EmplacementMesh>();
   private gunGhost?: EmplacementMesh;
   private tankView?: TankView;
+  private batteryView?: BatteryView;
   private gunGhostValid?: boolean;
   private previewMaterials = new Map<boolean, pc.StandardMaterial>();
 
@@ -5398,6 +5401,9 @@ export class Renderer implements CollisionWorld {
     this.flushWorldBatches();
     this.frameDt = dt;
     this.drawEmplacements(g, alpha);
+    const batteryStart = battlePerformance.begin();
+    (this.batteryView ??= new BatteryView(this.app, (root) => this.shellModel(root), () => this.fx())).draw(g, alpha, dt);
+    battlePerformance.end("batteries", batteryStart);
     if (g.tanks?.list.length || this.tankView)
       (this.tankView ??= new TankView(this.app, (...a) => this.cube(...a), (c) => this.material(c))).draw(g, alpha);
     for (const kit of g.flames?.kits ?? []) {
@@ -5797,6 +5803,13 @@ export class Renderer implements CollisionWorld {
       }
     }
   }
+  // An artillery shell in flight: its body and a hot streak behind it.
+  private shellModel(root: pc.Entity) {
+    this.cube("shell body", 0, 0, 0, 0.28, 0.28, 0.8, "#443d2a", false, root);
+    const trail = this.cube("shell hot trail", 0, 0, 1.5, 0.16, 0.16, 2.4, "#ffc874", false, root);
+    trail.render!.material = this.tracerMaterial("tracer");
+    return root;
+  }
   private drawArtillery(g: Game, alpha: number) {
     const markers: {
       id: number;
@@ -5875,32 +5888,7 @@ export class Renderer implements CollisionWorld {
     for (const shell of g.artillery.shells) {
       let root = this.shells.get(shell.id);
       if (!root) {
-        root = this.joint("incoming artillery shell", this.app.root);
-        this.cube(
-          "shell body",
-          0,
-          0,
-          0,
-          0.28,
-          0.28,
-          0.8,
-          "#443d2a",
-          false,
-          root,
-        );
-        const trail = this.cube(
-          "shell hot trail",
-          0,
-          0,
-          1.5,
-          0.16,
-          0.16,
-          2.4,
-          "#ffc874",
-          false,
-          root,
-        );
-        trail.render!.material = this.tracerMaterial("tracer");
+        root = this.shellModel(this.joint("incoming artillery shell", this.app.root));
         this.shells.set(shell.id, root);
       }
       const previous = this.previousShells.get(shell.id) ?? shell;
@@ -6249,6 +6237,7 @@ export class Renderer implements CollisionWorld {
     return this.weaponFx;
   }
   get weaponEffects() { return this.weaponFx?.stats; }
+  get batteries() { return this.batteryView?.stats; }
   // Water-jacketed guns steam; the Hotchkiss, Chauchat and rifles are air-cooled.
   private waterCooled(weaponId: string | undefined, mounted: boolean) {
     return mounted ? weaponId !== "Hotchkiss M1914" : weaponId === "MG 08/15";
