@@ -4,7 +4,7 @@ import "./armory.css";
 import { showBuildVersion } from "./build-version";
 import { factions, type FactionId } from "./loadouts";
 import {
-  armoryFactions, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, tankHits, timeToKill,
+  armoryFactions, issuedTo, gameRateOfFire, gameMuzzleVelocity, reloadDuration, weaponTicksPerSecond, hitZones, roleLabels, shotsToKill, tankHits, timeToKill,
   weaponStats, type HitZone, type WeaponStats,
 } from "./weapon-stats";
 import { mortarExplosionProfile, mortarRules, mortarStats, type MortarStats } from "./mortar-stats";
@@ -60,6 +60,7 @@ function card(w: WeaponStats) {
     </dl>
     ${armourStats(w)}
     <p class="summary">${escape(w.summary)}</p>
+    ${w.approximate ? `<p class="approximate"><strong>Approximate.</strong> ${escape(w.approximate)}</p>` : ""}
     <p class="note">${escape(w.historical.note)}${w.falloff ? ` Damage falls to ${Math.round(w.falloff.minimum * 100)}% between ${w.falloff.start} and ${w.falloff.end} m.` : ""}</p>
   </article>`;
 }
@@ -78,6 +79,7 @@ function mortarCard(m: MortarStats) {
       <div><dt>Landing spread</dt><dd>±${mortarRules.spread} m<small> settled · up to ±${mortarRules.spread + mortarRules.bloomMax} m just after moving or firing</small></dd></div>
     </dl>
     <p class="summary">${escape(m.summary)}</p>
+    ${m.approximate ? `<p class="approximate"><strong>Approximate.</strong> ${escape(m.approximate)}</p>` : ""}
     <p class="note">${escape(m.historical.calibre)}. ${escape(m.historical.note)}</p>
   </article>`;
 }
@@ -97,7 +99,7 @@ function armourStats(w: WeaponStats) {
 type Column = { label: string; value: (w: WeaponStats) => number | string; show?: (w: WeaponStats) => string };
 const columns: Column[] = [
   { label: "Weapon", value: w => w.name },
-  { label: "Faction", value: w => factions[w.faction].name },
+  { label: "Faction", value: w => [w.faction, ...(w.alsoIssuedTo ?? [])].map(f => factions[f].name).join(", ") },
   { label: "Role", value: w => roleLabels[w.role] },
   ...hitZones.map(z => ({ label: z.label, value: (w: WeaponStats) => w.damage[z.id] })),
   { label: "Chest time to kill", value: w => timeToKill(w, "chest"), show: w => seconds(timeToKill(w, "chest")) },
@@ -129,11 +131,11 @@ function compare() {
 function render(tab: Tab) {
   const tabs: [Tab, string][] = [...armoryFactions.map(f => [f, factions[f].name] as [Tab, string]), ["compare", "Compare"]];
   const content = tab === "compare" ? compare()
-    : `<div class="cards">${weaponStats.filter(w => w.faction === tab).map(card).join("")}${mortarStats.filter(m => m.faction === tab).map(mortarCard).join("")}</div>`;
+    : `<div class="cards">${weaponStats.filter(w => issuedTo(w, tab)).map(w => ({ ...w, faction: tab })).map(card).join("")}${mortarStats.filter(m => m.faction === tab).map(mortarCard).join("")}</div>`;
   root.innerHTML = `<header class="masthead">
       <a class="back" href="../">← Back to the game</a>
       <div class="eyebrow">SECTOR CONTROL</div><h1>Armory</h1>
-      <p>Live weapon stats for Britain, Imperial Germany and France. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun or take an emplacement kit on any map, and where tanks fight, an anti-tank kit whose rounds go through tank plate. On maps with artillery, Support can also set up a trench mortar that lobs bombs one trench line ahead. Each role has a pistol.</p>
+      <p>Live weapon stats for Britain, Imperial Germany, France, and at Gallipoli the ANZAC and Ottoman armies. Riflemen and marksmen carry bolt-action rifles; inside Fort Vaux, French and German riflemen carry a carbine instead. Support can carry a light machine gun (none reached Gallipoli in 1915) or take an emplacement kit on any map, and where tanks fight, an anti-tank kit whose rounds go through tank plate. On maps with artillery, Support can also set up a trench mortar that lobs bombs one trench line ahead. Each role has a pistol.</p>
     </header>
     <nav class="tabs" role="tablist">${tabs.map(([id, label]) => `<button role="tab" aria-selected="${id === tab}" data-tab="${id}">${escape(label)}</button>`).join("")}</nav>
     <section>${content}</section>

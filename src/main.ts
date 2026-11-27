@@ -14,7 +14,7 @@ import {trainingHUD,trainingMenu} from "./training-ui";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
-import { equipLoadout, factions, factionFor, kitFor, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
+import { equipLoadout, factionOverride, factions, factionFor, kitFor, parseFactionOverride, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
 import { ControlsPanel } from "./controls-panel";
@@ -63,6 +63,7 @@ import { flareRules } from "./flares";
 import { carriedFlag, ctfMap, ctfRules, supportsCtf } from "./ctf";
 import { CtfAnnouncer, ctfBrief, ctfLabels, ctfPrompt, ctfStrip, modeChoice } from "./ctf-hud";
 import { gasAgent, masked } from "./gas";
+import { artilleryTargetReason, requestArtillery } from "./artillery";
 import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
 import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
@@ -205,6 +206,8 @@ const params = new URLSearchParams(location.search),
   autoplay = params.has("autoplay"),
   demo = params.has("demo") || autoplay;
 battlePerformance.enabled = params.has("perf") || params.has("playtest");
+// ?factions=anzac,ottoman (or =gallipoli) dresses both sides of any map in other armies.
+Object.assign(factionOverride, parseFactionOverride(params.get("factions")));
 const renderReview = autoplay && params.has("playtest") && params.has("renderReview");
 // Graphics quality: ?quality= wins, then the stored choice, then Auto. Auto
 // stores the level it settles on as "auto:<level>" so later visits start there.
@@ -1251,6 +1254,23 @@ try {
       goals: training ? [...training.progress[training.lesson]] : [],
     }),
     manual:()=>{reviewManual=true;},
+    // Stand a row of one side's soldiers in front of the player, facing it, to
+    // look at their uniforms (?factions= picks the armies). Slot `loadouts`
+    // cycles through the kits; nobody moves or fires.
+    lineup:(team:"blue"|"red"="red",count=5,distance=4,loadouts:Loadout[]=["rifleman","marksman","emplacement"])=>{
+      reviewManual=true;keys.clear();triggerDown=fire=aim=false;preferredFirstPerson=true;
+      game.commandOverride=(_,q)=>({...idle(),yaw:q.yaw});
+      const p=game.players[0],heading=p.yaw;
+      const row=game.players.filter(q=>q.team===team&&q.id!==0).slice(0,Math.max(1,Math.min(12,count)));
+      row.forEach((q,i)=>{
+        equipLoadout(q,loadouts[i%loadouts.length],kitFor(map));
+        const side=(i-(row.length-1)/2)*1.1,x=p.x+Math.sin(heading)*distance+Math.cos(heading)*side,z=p.z-Math.cos(heading)*distance+Math.sin(heading)*side;
+        Object.assign(q,{x,z,y:groundHeight(x,z,game.map),vx:0,vz:0,hp:100,yaw:heading+Math.PI-(i-(row.length-1)/2)*0.25,pitch:0,protectedUntil:Infinity,crouched:false,command:idle()});
+      });
+      Object.assign(p,{protectedUntil:Infinity});yaw=p.yaw;pitch=p.pitch=-0.06;
+      renderer.remember(game);advanceReview(12);
+      return row.map(q=>({id:q.id,faction:q.faction,loadout:q.loadout,weapon:q.weaponId}));
+    },
     training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
     advance:advanceReview,
     // Rain: show the water as it stands this many seconds into the downpour.
@@ -1386,6 +1406,31 @@ try {
       yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
       renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
       return {tick:game.tick,hp:p.hp,masked:masked(p,game.tick)};
+    },
+    // Field batteries: with `target`, Blue's tactical-map fire mission on that
+    // point; then stand the player at (x, z) looking at (tx, ty, tz) and run on.
+    // Field batteries: with `target`, a tactical-map fire mission on that point
+    // (Blue's, or Red's with target.red); then stand the player at (x, z)
+    // looking at (tx, ty, tz) and run on.
+    battery:(x:number,z:number,tx:number,ty:number,tz:number,ticks:number,target?:{x:number;z:number;red?:boolean},firstPerson=true)=>{
+      reviewManual=true;const p=game.players[0];
+      if(target){
+        const team=target.red?"red":"blue",caller=target.red?game.players.find(q=>q.team==="red")!:p,side=target.red?1:-1;
+        game.respawn(caller);game.artillery.readyAt[team]=0;game.artillery.missions=game.artillery.missions.filter(m=>m.team!==team);
+        Object.assign(caller,{x:target.x+side*40,z:target.z,y:groundHeight(target.x+side*40,target.z,game.map),hp:100});
+        // Autoplay has no human soldier; stand one in for the call only.
+        const humans=game.humanPlayerIds as number[],stand=!humans.includes(caller.id);if(stand)humans.push(caller.id);
+        const spot={x:target.x,z:target.z,area:true},why=artilleryTargetReason(game,caller,spot),called=!why&&requestArtillery(game,caller,spot);
+        if(stand)humans.splice(humans.indexOf(caller.id),1);
+        if(!called)throw Error("Fire mission refused: "+why);
+      }
+      const y=groundHeight(x,z,game.map),eye=y+1.6;
+      Object.assign(p,{x,z,y,yaw:Math.atan2(tx-x,-(tz-z)),pitch:Math.atan2(ty-eye,Math.hypot(tx-x,tz-z)),protectedUntil:Infinity,vx:0,vz:0,hp:100});
+      yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson,yaw,pitch};
+      const weapon=renderer.app.root.findByName("first-person weapon and arms") as Entity|null;
+      for(const component of weapon?.findComponents("render")??[])component.enabled=false;
+      renderer.remember(game);advanceReview(Math.round(ticks));
+      return {tick:game.tick,...renderer.batteries};
     },
     finish:()=>recording?.stop(),
   }});

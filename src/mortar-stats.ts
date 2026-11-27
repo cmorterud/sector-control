@@ -12,6 +12,8 @@ export interface MortarStats {
   bomb: string;
   // Real service details, for the Armory.
   historical: { calibre: string; range: string; note: string };
+  // Shown in the Armory when the game's pick for an army is a best guess.
+  approximate?: string;
   summary: string;
 }
 
@@ -30,6 +32,19 @@ export const mortarStats: MortarStats[] = [
     id: "crapouillot", name: "Mortier de 58 mm T No. 2", faction: "french", bomb: "Finned 58 mm bomb",
     historical: { calibre: "58 mm, over-calibre bomb", range: "about 450 m", note: "The \"crapouillot\" fired a large finned bomb from a short tube. The real one was a crew weapon; here one soldier carries a lightened tube." },
     summary: "France's trench tube, lightened for one soldier. The same reach and blast as the other tubes.",
+  },
+  // Gallipoli, 1915. The Stokes did not reach Anzac in time; Herbert Garland's
+  // tube, made in the Cairo Citadel, was the most numerous mortar there.
+  {
+    id: "garland", name: "Garland trench mortar", faction: "anzac", bomb: "Shafted jam-tin bomb",
+    historical: { calibre: "65 mm, barrel fixed at 45°", range: "about 50–230 m", note: "A short steel barrel on a wooden base. The bomb's shaft went down the barrel onto a small powder charge; range was set by propping the base up, aim by turning the whole mortar. Seven served with the 1st Australian Division by October 1915." },
+    summary: "A crude Cairo-made tube. The same reach and blast as the other tubes.",
+  },
+  {
+    id: "ottoman-spigot", name: "Light bomb thrower", faction: "ottoman", bomb: "Finned spigot bomb",
+    approximate: "The Ottoman army had few trench mortars at Anzac, some of them German; the game gives it a light spigot thrower drawn like the Granatenwerfer.",
+    historical: { calibre: "Spigot, light bomb", range: "about 300 m", note: "German advisers brought trench mortars to the peninsula during 1915; their numbers and types are poorly recorded." },
+    summary: "A one-man spigot thrower. The same reach and blast as the other tubes.",
   },
 ];
 

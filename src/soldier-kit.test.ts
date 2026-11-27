@@ -50,3 +50,42 @@ test.each(["french", "german"] as const)("%s far torso leaves out buttons, brows
     expect([...r.casualtyTemplates.keys()].some((key: string) => key.endsWith(`look${rig.look}`))).toBe(true);
   } finally { destroy(); }
 });
+
+test("Gallipoli armies wear hats, not steel helmets: slouch hats with some lemon squeezers, and the kabalak", async () => {
+  const { anzacDress, anzacHat, looksFor, wearsHat, viewCuffParts } = await import("./soldier-kit");
+  expect(wearsHat("anzac") && wearsHat("ottoman")).toBe(true);
+  expect(wearsHat("british") || wearsHat("german") || wearsHat("french")).toBe(false);
+  const hats = soldierLooks.map((_, look) => anzacDress(look).hat);
+  expect(hats.filter(h => h === "slouch").length).toBeGreaterThan(hats.filter(h => h === "lemonSqueezer").length);
+  expect(hats).toContain("lemonSqueezer");
+  expect(soldierLooks.some((_, look) => anzacDress(look).shorts)).toBe(true);
+  expect(soldierLooks.some((_, look) => !anzacDress(look).shorts)).toBe(true);
+  for (let look = 0; look < soldierLooks.length; look++) {
+    const names = new Set(factionKit("anzac", "#777777", "#555555", look).map(part => part.name));
+    expect(names).toContain("hat brim");
+    expect(names.has("turned-up hat brim")).toBe(anzacDress(look).hat === "slouch");
+    expect(anzacHat(look, "#555555").every(part => modelSurfaceFor(part.name) === "cloth" || part.small)).toBe(true);
+  }
+  const ottoman = factionKit("ottoman", "#777777", "#555555").map(part => part.name);
+  expect(ottoman).toContain("kabalak");
+  expect(ottoman.some(name => /helmet|brim/.test(name))).toBe(false);
+  // Every army keeps four faces, so a soldier's face index works for all of them.
+  for (const faction of kitFactions) expect(looksFor(faction).length).toBe(soldierLooks.length);
+  expect(looksFor("ottoman").filter(l => l.moustache !== "none").length).toBeGreaterThanOrEqual(3);
+  // Rolled sleeves: the first-person ANZAC wrist has no cuff.
+  expect(viewCuffParts("anzac", "#777777", "#bbbbbb").map(part => part.name)).toEqual(["wrist"]);
+});
+
+test.each([["anzac", 1], ["anzac", 0], ["ottoman", 0]] as const)("%s soldier (face %i) builds with a hat and no steel helmet", async (faction, id) => {
+  const { standInKit } = await import("./rendering");
+  const { r, p, destroy } = modelScene(faction, id);
+  try {
+    const rig = r.soldiers[0];
+    expect(rig.look).toBe(soldierLookFor(id));
+    const names: string[] = [];
+    r.people[0].forEach((node: pc.GraphNode) => { names.push(node.name); });
+    expect(names).not.toContain("helmet");
+    // ANZAC stand-ins are baked per face, so a distant New Zealander keeps his hat.
+    expect(standInKit(p)).toContain(faction === "anzac" ? `|${soldierLookFor(id)}` : "ottoman");
+  } finally { destroy(); }
+});
