@@ -65,7 +65,10 @@ export function spawnLineDistance(map: MapDefinition, team: Team, at: Vec, spawn
 
 // Bots must be able to plan a route out: a spot is kept only if the planner
 // joins it to the side's main spawn. Slots repeat, so the answer is remembered
-// per map and destruction revision.
+// per map and destruction revision. It asks the last finished route graph
+// (pathfind's deferred mode) rather than rebuilding the graph on the spot
+// when a blast has just changed the ground: that rebuild cost 40-70 ms on a
+// respawn tick, and a spawn line far from the fighting rarely changes.
 const routes = new WeakMap<MapDefinition, { revision: number; known: Map<string, boolean> }>();
 function routed(map: MapDefinition, team: Team, x: number, z: number) {
   const revision = map.destruction?.revision ?? 0;
@@ -74,7 +77,7 @@ function routed(map: MapDefinition, team: Team, x: number, z: number) {
   const key = team + x.toFixed(2) + "," + z.toFixed(2);
   let ok = memo.known.get(key);
   if (ok === undefined) {
-    const path = dist({ x, z }, map.spawn[team]) < 1 ? [map.spawn[team]] : pathfind({ x, z }, map.spawn[team], map);
+    const path = dist({ x, z }, map.spawn[team]) < 1 ? [map.spawn[team]] : pathfind({ x, z }, map.spawn[team], map, true);
     // The first leg must leave from the spot itself, not a step beside it.
     memo.known.set(key, (ok = path.length > 0 && walkSegment({ x, z }, path[0], map)));
   }
