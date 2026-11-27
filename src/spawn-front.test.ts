@@ -10,6 +10,7 @@ import { headlandMap } from "./headland-map";
 import { fortVauxMap } from "./fort-vaux-map";
 import { zeppelinMap } from "./zeppelin-map";
 import { deploymentRules } from "./deployment";
+import { dominationMap, teamSpawn } from "./offensive";
 import { frontSlot, spawnFront, spawnFrontRules, spawnLineDistance, spreadsAlongFront } from "./spawn-front";
 import { ambientArtilleryRules } from "./artillery";
 
@@ -23,7 +24,7 @@ it("starts every side on the outdoor maps in a line along its whole front, not o
     expect(spreadsAlongFront(map), map.id).toBe(true);
     const g = game(map);
     for (const team of ["blue", "red"] as const) {
-      const front = spawnFront(map, team), side = g.players.filter((p) => p.team === team);
+      const front = spawnFront(map, team, teamSpawn(g, team)), side = g.players.filter((p) => p.team === team);
       const zs = side.map((p) => p.z).sort((a, b) => a - b);
       // From one end of the line to the other, with no long gap.
       expect(zs[0] - front.z0, `${map.id} ${team}`).toBeLessThan(6);
@@ -66,7 +67,7 @@ it("keeps indoor, airborne and small arenas on their own spawns", () => {
 });
 
 it("spreads forward deployment across the flag's sector and never onto a flag", () => {
-  const g = game(springOffensiveMap);
+  const g = game(dominationMap(springOffensiveMap));
   for (const s of g.sectors) if (s.home) s.owner = s.home;
   const centre = g.sectors.findIndex((s) => s.id === "D");
   const bots = g.players.filter((p) => p.team === "blue");

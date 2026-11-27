@@ -50,7 +50,9 @@ function battle(map: (typeof botProgressCases)[number]["map"]) {
   while (g.phase === "playing" && g.tick < botProgressRules.seconds * 30) {
     g.step(g.players[0].hp > 0 ? botCommand(g, g.players[0]) : idle());
     for (const e of g.events) {
-      if (e.type === "capture") captures++;
+      // Neutralizing counts: in attack and defend the first flags must be
+      // knocked out of the defender's hands before anyone can take them.
+      if (e.type === "capture" || e.type === "neutralized") captures++;
       if (e.type === "flag" && e.action === "take") takes++;
     }
     for (const p of g.players) {
@@ -79,7 +81,7 @@ export function botProgressShard(shard: number, count: number) {
         const { stranded, captures, takes } = battle(c.map);
         expect(stranded, `${c.name}: soldiers still within ${botProgressRules.leave} m of their spawn after ${botProgressRules.within} s`).toEqual([]);
         if (c.mode === "ctf") expect(takes, `${c.name}: no enemy flag taken in ${botProgressRules.seconds} s`).toBeGreaterThan(0);
-        else expect(captures, `${c.name}: no flag captured in ${botProgressRules.seconds} s`).toBeGreaterThan(0);
+        else expect(captures, `${c.name}: no flag captured or neutralized in ${botProgressRules.seconds} s`).toBeGreaterThan(0);
       });
     });
   });

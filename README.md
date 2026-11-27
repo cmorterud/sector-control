@@ -81,7 +81,7 @@ Free, no install, no sign-in.</p>
 | Ypres | 50v50 | Frezenberg, August 1917. Four flags in opposing trench lines across no man's land, or capture the flag with three flags a side |
 | Ypres at night | 50v50 | Ypres after dark. You see about 15 m. Call flares from the tactical map (**F** switches it) to light the field; lamps mark the trenches and white tape the lanes through the wire. Also plays as capture the flag |
 | Verdun sector | 50v50 | Fleury and Thiaumont, June 1916: five flags through shell-stripped woods, craters and communication trenches, or capture the flag with three flags a side |
-| Spring Offensive | 64v64 | 21 March 1918. Seven flags through the British defence in depth, from the outpost line to the rear switch line; deploy behind a home flag your side holds. Tanks on by default. Also plays as capture the flag |
+| Spring Offensive | 64v64 | 21 March 1918. Germany attacks out of the fog: take the British forward zone, then the battle zone, against the clock. Tanks on by default. Also plays as seven-flag domination (deploy behind a home flag your side holds) and capture the flag |
 | Village front | 50v50 | Five flags in a nine-building village around a two-story manor |
 | Lighthouse point | 25v25 | Three flags along a coastal headland, from the mainland road to the lighthouse |
 | Fort Vaux | 6v6 | France and Imperial Germany fight through vaulted galleries and the open-air Sunken Yard for three flags. Riflemen carry carbines: shorter, and quicker between shots. **Q** opens the floor plan. No artillery |
@@ -137,7 +137,7 @@ npm run build    # type-check and build to dist/
 npm run preview  # serve the production build
 ```
 
-The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `spring-offensive`, `gallipoli`, `headland` or `training` to open another map directly. `mode=ctf` plays capture the flag on Ypres, Ypres at night or Verdun sector (domination is the default), `mode=domination` plays Gallipoli as domination instead of attack and defend, `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds. `factions=anzac,ottoman` (or `factions=gallipoli`) puts other armies on any map, blue first then red, to try their kit on familiar ground.
+The briefing opens on Fort Vaux. Use `?map=zeppelin`, `trenches`, `night-raid`, `verdun`, `village`, `spring-offensive`, `gallipoli`, `headland` or `training` to open another map directly. `mode=ctf` plays capture the flag on Ypres, Ypres at night or Verdun sector (domination is the default), `mode=domination` plays Gallipoli or Spring Offensive as domination instead of attack and defend, `view=first` or `third` sets the camera, `bots=0` disables bots, `difficulty=recruit` (or `regular`, `veteran`) sets bot difficulty, `quality=low` (or `medium`, `high`, `auto`) sets graphics quality and `duration=30` shortens the match to thirty seconds. `factions=anzac,ottoman` (or `factions=gallipoli`) puts other armies on any map, blue first then red, to try their kit on familiar ground.
 
 ## Continuous integration and publishing
 

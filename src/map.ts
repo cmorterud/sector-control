@@ -180,6 +180,9 @@ export interface OffensivePlan {
   clock: { start: number; perPhase: number };
   // Seconds the defender waits to redeploy; 5 (everyone's usual) when unset.
   defenderRespawn?: number;
+  // Flags behind the attacker's own start line: the attacker holds them from
+  // the start and they stay locked, so the whole attack is fought for the rest.
+  held?: string[];
 }
 
 export interface MapDefinition {
