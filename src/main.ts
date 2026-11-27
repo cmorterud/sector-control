@@ -306,7 +306,7 @@ function menu(
 ) {
   el("menu").classList.remove("hidden");
   el("menu").innerHTML =
-    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p><a class="secondary armory-link" href="armory/" target="_blank" rel="noopener">Armory</a>${extra}${training?trainingMenu(training,started):""}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label><label>Graphics <select id="quality"><option value="auto">Auto · ${qualityLabel(autoQuality.quality)}${autoQuality.done ? "" : ", testing"}</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label></div><button id="primary">${button} <span>→</span></button><div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
+    `<section class="panel"><div class="eyebrow">LOCAL OPERATIONS / ${map.name.toUpperCase()}</div><h1>${title}</h1><p>${subtitle}</p><a class="secondary armory-link" href="armory/" target="_blank" rel="noopener">Armory</a>${extra}${training?trainingMenu(training,started):""}<button class="secondary" id="controls-settings">Controls</button><div class="audio-settings"><label>Battlefield volume <input id="volume" type="range" min="0" max="100" value="${Math.round(audioVolume * 100)}"></label><label><input id="camera-reactions" type="checkbox" ${cameraReactions ? "checked" : ""}> Blast camera motion</label><label>Graphics <select id="quality"><option value="auto">Auto · ${qualityLabel(autoQuality.quality)}${autoQuality.done ? "" : ", testing"}</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label></div>${renderer || action !== start ? `<button id="primary">${button} <span>→</span></button>` : `<button id="primary" disabled aria-busy="true" data-label="${button}">Preparing battlefield…</button>`}<div class="fine">DESKTOP · HEADPHONES RECOMMENDED · WEBGL 2</div></section>`;
   if(training){
     (el("training-station") as HTMLSelectElement).onchange=e=>{training.select(Number((e.target as HTMLSelectElement).value));trainingReset=true;};
     (el("training-loadout") as HTMLSelectElement).onchange=e=>{training.loadout=(e.target as HTMLSelectElement).value as Loadout;trainingReset=true;};
@@ -502,6 +502,35 @@ function pause() {
     selectMap.setAttribute("aria-expanded", String(expanded));
   };
 }
+// Enable the briefing's Begin button once the renderer is built.
+function armPrimary() {
+  const primary = document.getElementById("primary") as HTMLButtonElement | null;
+  if (!primary?.dataset.label) return;
+  primary.innerHTML = `${primary.dataset.label} <span>→</span>`;
+  primary.disabled = false;
+  primary.removeAttribute("aria-busy");
+  delete primary.dataset.label;
+}
+// Picking another map loads a new page. Mark the card at once, so the choice
+// shows while the next battlefield loads.
+let leavingForMap = false;
+document.addEventListener("click", (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const card = (e.target as Element).closest?.<HTMLAnchorElement>(".map-choice a[data-battlefield]");
+  if (!card) return;
+  leavingForMap = true;
+  const choices = card.closest(".map-choice")!;
+  choices.classList.add("switching");
+  card.classList.add("loading");
+  card.setAttribute("aria-busy", "true");
+});
+// Coming back to this page from history shows it as it was left.
+window.addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  leavingForMap = false;
+  for (const card of Array.from(document.querySelectorAll(".map-choice a.loading"))) { card.classList.remove("loading"); card.removeAttribute("aria-busy"); }
+  for (const choices of Array.from(document.querySelectorAll(".map-choice.switching"))) choices.classList.remove("switching");
+});
 function handle(e: Event) {
   combatFeedback.event(game,e);
   reinforcementNotices.event(game, e, performance.now(), teamName);
@@ -1219,21 +1248,6 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 try {
-  renderer = new Renderer(document.querySelector("#game")!, map, activeQuality());
-  // ?standIns=0 draws every soldier in full; ?standIns=<metres> moves the switch.
-  if (params.has("standIns")) renderer.standInDistance = Number(params.get("standIns")) > 0 ? Number(params.get("standIns")) : Infinity;
-  let renderStart: number | undefined;
-  renderer.app.on("prerender", () => { renderStart = started && !paused ? battlePerformance.begin() : undefined; });
-  // Copy the WebGL surface while its drawing buffer is still available.
-  renderer.app.on("postrender", () => {
-    battlePerformance.end("renderSubmit",renderStart);
-    if (renderStart !== undefined && reviewFrames % 30 === 0) {
-      const drawables = renderer.drawables();
-      battlePerformance.gauge("drawables", drawables.total);
-      for (const [root, n] of Object.entries(drawables.roots)) battlePerformance.gauge(`drawables: ${root}`, n);
-    }
-    if (started) { reviewFrames++; recording?.frame(game, rawFrameMs, paused); }
-  });
   // Explicit diagnostic mode: advance the real simulation and presentation
   // without waiting for a software GPU to display every intermediate frame.
   // Normal play never installs this bridge or changes its frame loop.
@@ -1412,14 +1426,44 @@ try {
     start,
     training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}${modeChoice(chosenMap, ctfMode, params)}<div class="brief"><b>01 / ${ctfMode ? "CAPTURE THE FLAG" : map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${ctfMode ? ctfBrief({ map }) : map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p>${supportsTanks(map) ? `<b>04 / TANKS</b><p>${tankBrief(keyLabel(settings.bindings.interact))}</p>` : ""}</div>`,
   );
+  // The briefing is painted before the battlefield is built: building the
+  // renderer takes seconds on big maps, and picking another map reloads the
+  // page, so the new briefing would otherwise wait behind the whole scene.
+  // Begin stays disabled until the renderer exists.
+  // (A hidden tab gets no animation frames, so it goes ahead after a second.)
+  await new Promise<void>((done) => { requestAnimationFrame(() => setTimeout(done)); setTimeout(done, 1000); });
+  renderer = new Renderer(document.querySelector("#game")!, map, activeQuality());
+  // ?standIns=0 draws every soldier in full; ?standIns=<metres> moves the switch.
+  if (params.has("standIns")) renderer.standInDistance = Number(params.get("standIns")) > 0 ? Number(params.get("standIns")) : Infinity;
+  let renderStart: number | undefined;
+  renderer.app.on("prerender", () => { renderStart = started && !paused ? battlePerformance.begin() : undefined; });
+  // Copy the WebGL surface while its drawing buffer is still available.
+  renderer.app.on("postrender", () => {
+    battlePerformance.end("renderSubmit",renderStart);
+    if (renderStart !== undefined && reviewFrames % 30 === 0) {
+      const drawables = renderer.drawables();
+      battlePerformance.gauge("drawables", drawables.total);
+      for (const [root, n] of Object.entries(drawables.roots)) battlePerformance.gauge(`drawables: ${root}`, n);
+    }
+    if (started) { reviewFrames++; recording?.frame(game, rawFrameMs, paused); }
+  });
+  armPrimary();
   requestAnimationFrame(frame);
   // Build the bot navigation graph while the briefing is read rather than in
   // the Begin click; every match on this map then copies it.
   // Then compile the match's shaders on a stand-in deployment, so the first
   // frames after Begin don't stall on them.
+  // Two idle slices rather than one, so a click on another map card can land
+  // between them; neither runs once that card's page is loading.
+  const whenIdle = (work: () => void, wait: number) =>
+    "requestIdleCallback" in window ? requestIdleCallback(work, { timeout: wait }) : setTimeout(work, wait / 4);
   const prepare = () => {
+    if (leavingForMap) return;
     if (bots || training) prepareNavigation(map);
-    if (started || renderReview) return;
+    whenIdle(warmUp, 1000);
+  };
+  const warmUp = () => {
+    if (started || renderReview || leavingForMap) return;
     try {
       const standIn = new Game(new TestCollision(map), true, 30, 12345, undefined,
         { map, teamSize: training ? 4 : teamSize, humanPlayerIds: [0], ambientArtillery: false });
@@ -1430,8 +1474,7 @@ try {
       console.warn("Shader warm-up skipped", error);
     }
   };
-  if ("requestIdleCallback" in window) requestIdleCallback(prepare, { timeout: 2000 });
-  else setTimeout(prepare, 500);
+  whenIdle(prepare, 2000);
 } catch (error) {
   menu(
     "Unable to initialize",
