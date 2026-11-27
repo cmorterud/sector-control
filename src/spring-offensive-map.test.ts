@@ -178,3 +178,17 @@ it("brings the Mark IV and the A7V up the tank lane, and they drive through the 
   for (const t of g.tanks.list) if (t.hp > 0) expect(start.get(t.id)! - Math.abs(t.x), t.name).toBeGreaterThan(15);
   expect(g.tanks.list.every((t) => Number.isFinite(t.x + t.z))).toBe(true);
 }, 240000);
+
+it("never routes soldiers up the railway cutting's walls, and the cutting has ways out", () => {
+  const g = scene(false);
+  const b = g.sectors.find((s) => s.id === "B")!;
+  // A long slant from the cutting floor to the bank top passes a 0.25 m
+  // height check sample by sample, but the bank stops a soldier moving that
+  // way: two British bots ran along the wall at the spawn all battle.
+  expect(groundHeight(-124, b.z, g.map)).toBeLessThan(groundHeight(-136, b.z - 4, g.map) - 1);
+  expect(walkSegment({ x: -124, z: b.z }, { x: -136, z: b.z - 4 }, g.map)).toBe(false);
+  // From the west end (where the spawn line crosses) and the east end, a
+  // soldier can still reach the field and every flag.
+  for (const from of [{ x: -132, z: b.z - 2.8 }, { x: -132, z: b.z + 0.4 }, { x: -100, z: b.z }])
+    for (const s of g.sectors) expect(pathfind(from, s, g.map).length, `${from.x},${from.z} to ${s.id}`).toBeGreaterThan(0);
+});

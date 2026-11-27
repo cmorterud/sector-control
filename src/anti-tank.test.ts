@@ -6,7 +6,7 @@ import { springOffensiveMap } from "./spring-offensive-map";
 import { equipLoadout, factions, rosterRoles } from "./loadouts";
 import { activeTank, tankRules, toWorld, type Tank } from "./tanks";
 import { tankNotice } from "./tank-hud";
-import { antiTankBotAim, antiTankHunt, antiTankRules, antiTankTarget } from "./anti-tank";
+import { antiTankBotAim, antiTankHunt, antiTankRules, antiTankTarget, blockAntiTankHunt } from "./anti-tank";
 import { TankHitFeedback } from "./tank-hit-feedback";
 import { tankHits, weaponStats } from "./weapon-stats";
 
@@ -122,6 +122,21 @@ describe("anti-tank kit", () => {
     const enemy = g.players.find((p) => p.team === "blue" && p.tank === undefined)!;
     Object.assign(enemy, { x: bot.x + 8, z: bot.z, y: bot.y });
     expect(antiTankBotAim(g, bot, { ...idle() }, enemy)).toBe(true);
+  });
+
+  it("lets a hunter with no route to its standoff point keep to its other orders for a while", () => {
+    const g = scene();
+    run(g, 2);
+    const t = activeTank(g, "blue")!;
+    const bot = g.players.find((p) => p.team === "red" && p.tank === undefined)!;
+    equipLoadout(bot, "antiTank");
+    const far = toWorld(t, 0, 110);
+    Object.assign(bot, { ...far, y: groundHeight(far.x, far.z, g.map) });
+    expect(antiTankHunt(g, bot)).toBeDefined();
+    blockAntiTankHunt(g, bot);
+    expect(antiTankHunt(g, bot)).toBeUndefined();
+    g.tick += antiTankRules.huntRetryTicks;
+    expect(antiTankHunt(g, bot)).toBeDefined();
   });
 
   it("lets armour-piercing service rounds wear a tank down slowly, while ball only splashes", () => {

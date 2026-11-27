@@ -850,14 +850,44 @@ export function walkSegment(
   // difference can never pass (for example, between floors of a building).
   if (map.buildings && a.y !== undefined && b.y !== undefined && Math.abs(b.y - a.y) >= 0.23 * (n + 2)) return false;
   let height = map.buildings ? a.y ?? groundHeight(a.x, a.z, map) : groundHeight(a.x, a.z, map);
+  const sx = Math.sign(b.x - a.x) * 0.15, sz = Math.sign(b.z - a.z) * 0.15;
+  let px = a.x, pz = a.z, steep = false;
   for (let i = 0; i <= n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
       z = a.z + ((b.z - a.z) * i) / n;
     const next = supportHeight(x, z, map, height + 0.23, map.buildings ? .45 : 0);
     if ((map.buildings ? bodyBlocked(x,z,next,0.6,map) : blocked(x,z,0.6,map)) || Math.abs(next - height) > 0.23) return false;
+    // moveOnMap moves along x and z separately and refuses either step where
+    // a rounded bank rises more than 0.23 m within 15 cm on that axis. A long
+    // slanting segment can pass the check above while climbing such a face a
+    // little at a time; note it and walk it the way a soldier would.
+    steep ||= !!map.terrain?.banks && next > height + 0.00001 &&
+      ((!!sx && groundHeight(px + sx, pz, map) - height > 0.23) ||
+        (!!sz && groundHeight(px, pz + sz, map) - height > 0.23));
     height = next;
+    px = x; pz = z;
   }
+  if (steep && !walksUpBank(a, b, map)) return false;
   return !map.buildings || Math.abs(height - (b.y ?? groundHeight(b.x,b.z,map))) < 0.23;
+}
+// Steer a soldier from a to b with moveOnMap, the movement the simulation
+// uses, re-aiming at every step. A slanting route up a steep bank fails here:
+// the bank stops the climbing axis and the soldier only slides along its foot,
+// as bots did in Spring Offensive's railway cutting. A small sideways
+// component that the bank stops (a route brushing a trench wall) still
+// arrives.
+function walksUpBank(a: Vec, b: Vec, map: MapDefinition) {
+  const length = dist(a, b), stride = 0.2;
+  let at = { x: a.x, z: a.z, y: groundHeight(a.x, a.z, map) };
+  for (let i = 0, limit = Math.ceil(length / stride) * 2 + 8; i < limit; i++) {
+    const left = dist(at, b);
+    if (left < 0.5) return Math.abs(at.y - groundHeight(b.x, b.z, map)) < 0.5;
+    const step = Math.min(stride, left);
+    const next = moveOnMap(at, { x: (b.x - at.x) / left * step, z: (b.z - at.z) / left * step }, map);
+    if (dist(next, at) < 0.01) return false;
+    at = { ...next, y: supportHeight(next.x, next.z, map, at.y + 0.23) };
+  }
+  return false;
 }
 export const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.z - b.z);
 
