@@ -1,5 +1,5 @@
 export type CharacterShape =
-  "soft" | "limb" | "tunic" | "head" | "helmet" | "disc" | "stock" | "coat" | "coatHem" | "sleeve" | "trouser" | "boot" | "palm" | "face" | "adrian" | "stahlhelm" | "brodie" | "pouch";
+  "soft" | "limb" | "tunic" | "head" | "helmet" | "disc" | "stock" | "coat" | "coatHem" | "sleeve" | "trouser" | "boot" | "palm" | "face" | "adrian" | "stahlhelm" | "brodie" | "pouch" | "slouchCrown" | "lemonSqueezer" | "kabalak";
 type Ring = [number, number, number];
 const profiles: Record<CharacterShape, Ring[]> = {
   coat: [[-.5,.43,.43],[-.42,.46,.44],[-.18,.37,.37],[.08,.45,.44],[.3,.5,.44],[.43,.39,.34],[.5,.24,.25]],
@@ -13,6 +13,10 @@ const profiles: Record<CharacterShape, Ring[]> = {
   stahlhelm: [[-.5,.48,.47],[-.27,.5,.5],[-.08,.44,.46],[.13,.4,.42],[.36,.29,.32],[.5,0,0]],
   // The Brodie bowl: shallow and wide, sitting on its separate flat brim.
   brodie: [[-.5,.5,.5],[-.3,.49,.49],[-.02,.44,.45],[.28,.33,.34],[.46,.14,.15],[.5,0,0]],
+  // Felt hats and the cloth kabalak (Gallipoli, 1915).
+  slouchCrown: [[-.5,.5,.5],[-.25,.5,.5],[.1,.47,.48],[.34,.42,.42],[.48,.3,.33],[.5,.18,.24]],
+  lemonSqueezer: [[-.5,.5,.5],[-.25,.45,.45],[0,.37,.37],[.25,.25,.25],[.42,.11,.11],[.5,0,0]],
+  kabalak: [[-.5,.5,.49],[-.3,.52,.51],[-.02,.5,.49],[.24,.46,.45],[.4,.36,.36],[.5,.12,.12]],
   pouch: [[-.5,.39,.4],[-.4,.48,.46],[-.1,.5,.5],[.3,.48,.48],[.45,.43,.45],[.5,.38,.4]],
   soft: [
     [-0.5, 0, 0],

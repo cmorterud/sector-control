@@ -59,6 +59,7 @@ table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .stats small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
 .summary { margin: 0 0 4px; }
 .note { margin: 0; font-size: 13px; color: var(--faint); }
+.approximate { margin: 0 0 6px; font-size: 13px; color: var(--gold); }
 
 .lede { color: var(--muted); margin: 0 0 12px; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }

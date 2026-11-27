@@ -52,7 +52,7 @@ import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./envi
 import { meleePose } from "./melee";
 import { characterGeometry, type CharacterShape } from "./character-geometry";
 import { RagdollPhysics, type Ragdoll, type RagdollPart } from "./ragdoll";
-import { factionKit, faceParts, isKitFaction, soldierLookFor, soldierLooks, type KitFaction } from "./soldier-kit";
+import { anzacDress, factionKit, faceParts, isKitFaction, looksFor, soldierLookFor, wearsHat, type KitFaction } from "./soldier-kit";
 import { detailedRifleParts, detailedBoltParts, boltGrip, rifleGeometry, rifleSurfaceMaps, rifleTextureSize, type RifleShape } from "./rifle-geometry";
 import { armLengths, weaponMount, boltMotion } from "./weapons";
 import {
@@ -168,7 +168,8 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const supportUpperLength = armLengths.upper;
 const supportForearmLength = armLengths.forearm;
 // What a soldier's built model depends on, to match warm-up soldiers to a match's.
-export const standInKit = (p: Soldier) => `${p.team}|${p.faction}|${p.weapon}|${p.weaponId}`;
+// ANZAC soldiers differ by hat and by shorts, which follow their face.
+export const standInKit = (p: Soldier) => `${p.team}|${p.faction}|${p.weapon}|${p.weaponId}${p.faction === "anzac" ? `|${soldierLookFor(p.id)}` : ""}`;
 type SoldierRig = {
   // One world-space box for all of this soldier's batched parts (boundSoldiers).
   bounds?: pc.BoundingBox;
@@ -3110,7 +3111,7 @@ export class Renderer implements CollisionWorld {
     const refined=isKitFaction(p.faction), look=soldierLookFor(p.id);
     const shirt = faction.shirt, trousers = faction.trousers;
     const equipment = "#68634d",
-      skin = refined ? soldierLooks[look].skin : "#bba185",
+      skin = refined ? looksFor(p.faction)[look].skin : "#bba185",
       leather = "#403b30";
     const part = (
       name: string,
@@ -3163,7 +3164,10 @@ export class Renderer implements CollisionWorld {
     }
     const helmetTint = faction.helmet;
     const brodie = p.faction === "british" && refined;
-    if (brodie) part("helmet", 0, .815, -.008, .34, .155, .36, helmetTint, upper, "helmet");
+    // Hats and the kabalak are kit parts (src/soldier-kit.ts), not a shaped helmet.
+    const hat = wearsHat(p.faction);
+    if (hat) { /* drawn with the faction kit below */ }
+    else if (brodie) part("helmet", 0, .815, -.008, .34, .155, .36, helmetTint, upper, "helmet");
     else part("helmet", 0, refined?.86:.83, 0, refined?.4:.375, refined?.265:.2, refined?.46:.395, helmetTint, upper, "helmet");
     if(!refined)part(
       "helmet brim",
@@ -3192,7 +3196,7 @@ export class Renderer implements CollisionWorld {
     if (p.faction === "french") part("Adrian helmet crest", 0, .91, 0, .04, .08, .33, helmetTint, upper);
     if(refined){
       for(const side of [-1,1]){
-        part("chin strap",side*.12,.635,-.018,.016,.21,.017,leather,upper,"limb").setLocalEulerAngles(0,0,side*13);
+        if (p.faction !== "ottoman") part("chin strap",side*.12,.635,-.018,.016,.21,.017,leather,upper,"limb").setLocalEulerAngles(0,0,side*13);
         part("turned coat collar",side*.075,.47,-.12,.095,.13,.045,shirt,upper,"pouch").setLocalEulerAngles(0,0,side*24);
       }
       // A single short hem overlaps the waist. Separate thigh-shaped panels
@@ -3200,7 +3204,7 @@ export class Renderer implements CollisionWorld {
       part("coat hem",0,.015,0,.51,p.faction==="french"?.18:p.faction==="british"?.12:.14,.34,shirt,hips,"coatHem");
       for(let i=0;i<5;i++)part("coat button",p.faction==="french"?.045:0,.09+i*.073,-.185,.017,.017,.009,"#515345",upper,"disc");
       part("belt buckle",0,.025,-.201,.085,.057,.022,"#767867",upper,"pouch");
-      for (const kit of [...factionKit(p.faction as KitFaction, shirt, helmetTint), ...faceParts(look)]) {
+      for (const kit of [...factionKit(p.faction as KitFaction, shirt, helmetTint, look), ...faceParts(look, p.faction)]) {
         const e = part(kit.name, ...kit.at, ...kit.size, kit.tint, kit.parent === "hips" ? hips : upper, kit.shape, Math.max(...kit.size) < .13);
         if (kit.rotation) e.setLocalEulerAngles(...kit.rotation);
         if (kit.small) e.tags.add("far-omit");
@@ -3248,12 +3252,15 @@ export class Renderer implements CollisionWorld {
       "limb",
     );
     blanket.setLocalEulerAngles(0, 0, 90);
+    // ANZAC shirt sleeves are rolled above the elbow, and some men wear shorts.
+    const anzac = p.faction === "anzac" && refined, shorts = anzac && anzacDress(look).shorts;
     const legs = [-1, 1].map((side) => {
       const hip = this.joint("hip", hips, side * 0.145);
-      part("thigh", 0, -0.21, 0, 0.225, 0.46, 0.25, trousers, hip, "limb");
+      part("thigh", 0, shorts ? -0.15 : -0.21, 0, 0.225, shorts ? 0.32 : 0.46, 0.25, trousers, hip, "limb");
+      if (shorts) part("bare knee", 0, -0.35, 0, 0.17, 0.16, 0.19, skin, hip, "limb");
       const knee = this.joint("knee", hip, 0, -0.42);
-      part("knee joint", 0, 0, 0, 0.185, 0.18, 0.2, trousers, knee);
-      part("shin", 0, -0.185, 0, 0.17, 0.4, 0.2, trousers, knee, "limb");
+      part("knee joint", 0, 0, 0, 0.185, 0.18, 0.2, shorts ? skin : trousers, knee);
+      part("shin", 0, -0.185, 0, 0.17, 0.4, 0.2, shorts ? skin : trousers, knee, "limb");
       part("puttee", 0, -0.23, 0, 0.19, 0.29, 0.215, "#77715a", knee, "limb");
       const ankle = this.joint("ankle", knee, 0, -0.4);
       part("boot", 0, -0.04, -0.065, 0.205, 0.145, 0.32, leather, ankle);
@@ -3294,16 +3301,17 @@ export class Renderer implements CollisionWorld {
         "disc",
       );
       const elbow = this.joint("elbow", shoulder, 0, -armLengths.upper);
-      part("elbow joint", 0, 0, 0, 0.15, 0.145, 0.17, shirt, elbow);
+      if (anzac) part("rolled sleeve", 0, -armLengths.upper + 0.035, 0, 0.2, 0.075, 0.22, shirt, shoulder, "pouch");
+      part("elbow joint", 0, 0, 0, 0.15, 0.145, 0.17, anzac ? skin : shirt, elbow);
       part(
         "forearm",
         0,
         -armLengths.forearm / 2,
         0,
-        0.145,
+        anzac ? 0.13 : 0.145,
         armLengths.forearm + 0.04,
-        0.17,
-        shirt,
+        anzac ? 0.15 : 0.17,
+        anzac ? skin : shirt,
         elbow,
         "limb",
       );
@@ -3320,7 +3328,7 @@ export class Renderer implements CollisionWorld {
           elbow,
         );
       if(!support && refined)this.gripHand("hand",elbow,"right").setLocalPosition(0,-armLengths.forearm,0);
-      if(refined)part("sleeve cuff",0,-armLengths.forearm+.024,0,.15,.07,.17,shirt,elbow,"pouch");
+      if(refined && !anzac)part("sleeve cuff",0,-armLengths.forearm+.024,0,.15,.07,.17,shirt,elbow,"pouch");
       return { shoulder, elbow };
     });
     const heldGrenade = this.joint("held grenade", arms[1].elbow, 0, -armLengths.forearm - .055, -.025);
@@ -3887,7 +3895,7 @@ export class Renderer implements CollisionWorld {
     // wrist, which the world model is too small to need.
     const player = this.activeGame?.players[0];
     if (isKitFaction(player?.faction))
-      for (const arm of arms) for (const cuff of viewCuffParts(player.faction, factions[player.faction].shirt, soldierLooks[source.look ?? 0].skin)) {
+      for (const arm of arms) for (const cuff of viewCuffParts(player.faction, factions[player.faction].shirt, looksFor(player.faction)[source.look ?? 0].skin)) {
         const e = this.organic(cuff.name, cuff.at[0], -armLengths.forearm + cuff.at[1], cuff.at[2], ...cuff.size, cuff.tint, arm.elbow, cuff.shape, modelSurfaceFor(cuff.name));
         if (cuff.rotation) e.setLocalEulerAngles(...cuff.rotation);
       }
@@ -5041,7 +5049,8 @@ export class Renderer implements CollisionWorld {
   private buildMortar(name: string): EmplacementMesh {
     const root = this.joint(name, this.app.root);
     const steel = "#363c38", plate = "#4c5248", dark = "#1b201f";
-    const german = name === "Granatenwerfer 16", french = name.startsWith("Mortier");
+    // The Ottoman thrower is drawn as the Granatenwerfer it stands in for.
+    const german = name === "Granatenwerfer 16" || name === "Light bomb thrower", french = name.startsWith("Mortier");
     // The baseplate the tube's foot sits in.
     this.cube("baseplate", 0, 0.03, 0.02, german ? 0.42 : 0.56, 0.05, german ? 0.36 : 0.46, plate, false, root);
     this.cube("baseplate rib", 0, 0.065, 0.02, 0.06, 0.025, german ? 0.34 : 0.44, steel, false, root);
@@ -5085,7 +5094,8 @@ export class Renderer implements CollisionWorld {
     if (isMortarWeapon(name) || name === "Mortar preview") return this.buildMortar(name);
     const root = this.joint(name, this.app.root);
     const steel = "#343d3a", plate = "#51584e", brass = "#a8843c", canvas = "#6d6448";
-    const mg08 = name === "MG 08", hotchkiss = name === "Hotchkiss M1914";
+    // The Ottoman Maxim is the MG 08 on its sled; ANZAC's Maxim stands on the Vickers tripod.
+    const mg08 = name === "MG 08" || name === "Maxim M1909", hotchkiss = name === "Hotchkiss M1914";
     const beam = (label: string, from: pc.Vec3, to: pc.Vec3, width: number, parent = root, tint = steel) => {
       const center = new pc.Vec3().add2(from, to).mulScalar(0.5);
       const leg = this.cube(label, center.x, center.y, center.z, width, width, from.distance(to), tint, false, parent);
