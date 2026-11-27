@@ -532,7 +532,7 @@ export function damageTank(g: Game, t: Tank, amount: number, actor: number, team
 // than shells landing nearby.
 export function explosionOnTanks(g: Game, at: V3, actor: number, team: Team | null, profile: ExplosionProfile) {
   if (!g.tanks?.list.length) return;
-  const weight = profile.kind.startsWith("artillery") ? 1.15 : profile.kind === "tank-shell" ? 0.9 : profile.kind === "grenade" ? 1 : 0;
+  const weight = profile.kind.startsWith("artillery") ? 1.15 : profile.kind === "tank-shell" ? 0.9 : profile.kind === "grenade" ? 1 : profile.kind === "mortar" ? 0.8 : 0;
   if (!weight) return;
   for (const t of g.tanks.list) {
     if (!alive(t) || (team !== null && t.team === team)) continue;

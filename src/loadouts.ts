@@ -3,8 +3,8 @@ import type { Soldier } from "./simulation";
 import { weaponProfile, type WeaponKind } from "./weapons";
 import { weaponStats, type WeaponRole } from "./weapon-stats";
 export type FactionId = "british" | "german" | "french" | "trainingBlue" | "trainingRed";
-export type Loadout = "rifleman" | "marksman" | "support" | "emplacement" | "antiTank";
-export const loadoutIds: Loadout[] = ["rifleman", "marksman", "support", "emplacement", "antiTank"];
+export type Loadout = "rifleman" | "marksman" | "support" | "emplacement" | "antiTank" | "mortar";
+export const loadoutIds: Loadout[] = ["rifleman", "marksman", "support", "emplacement", "antiTank", "mortar"];
 export type WeaponSlot = "primary" | "sidearm";
 export interface WeaponState { kind: WeaponKind; id: string; ammo: number; reserve: number; nextShot: number; lastShotAt: number }
 function factionWeapons(faction: FactionId) {
@@ -79,14 +79,15 @@ export function equipLoadout(p: Soldier, loadout: Loadout, kit: Kit = "service")
     primary: make(loadout === "support" ? "machineGun" : industrial && loadout === "rifleman" ? "rifle" : "serviceRifle", loadout === "support" ? f.support : loadout === "marksman" ? f.scoped : antiTank ?? riflemanWeapon(p.faction ?? "british", kit)),
     sidearm: make("pistol", f.pistol),
   };
-  if (loadout === "emplacement") p.equippedSlot = "sidearm";
+  // The set-up kits leave only the pistol in hand.
+  if (loadout === "emplacement" || loadout === "mortar") p.equippedSlot = "sidearm";
   const primary = p.inventory[p.equippedSlot];
   p.ammo = primary.ammo; p.reserve = primary.reserve; p.nextShot = primary.nextShot; p.lastShotAt = primary.lastShotAt;
   p.weapon = primary.kind; p.weaponId = primary.id;
   p.reloadAt = 0; p.aimSince = -1; p.weaponChange=undefined; p.aimMotion=undefined;
 }
 export function switchWeapon(p:Soldier, slot:WeaponSlot, tick:number) {
-  if (p.loadout === "emplacement" && slot === "primary" && p.inventory?.primary.kind !== "flamethrower") return false;
+  if ((p.loadout === "emplacement" || p.loadout === "mortar") && slot === "primary" && p.inventory?.primary.kind !== "flamethrower") return false;
   if (!p.inventory || p.equippedSlot === slot || p.hp <= 0 || p.mantle || p.melee || tick < p.throwUntil) return false;
   beginWeaponChange(p,tick);
   const old = p.inventory[p.equippedSlot ?? "primary"];

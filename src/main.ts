@@ -1,4 +1,6 @@
-import { emplacementRules, emplacementWeapon, mountedGun, nearbyGun, placementFor } from "./emplacements";
+import { emplacementRules, emplacementWeapon, kitOwns, mountedGun, nearbyGun, placementFor, setsUpKit } from "./emplacements";
+import { flightTicks, mortarAim, mortarMap, mortarSpread, mortarTargetBlocked, splashReport } from "./mortar";
+import { mortarFor, mortarRules } from "./mortar-stats";
 import { heatRules, ventSeconds, type BarrelHeat } from "./weapon-heat";
 // Barrel heat for machine guns: fills as the barrel warms, red once it seizes.
 const heatGauge = (b: BarrelHeat) =>
@@ -317,7 +319,7 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option>${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option>${mortarMap(map) ? `<option value="mortar">Support · Trench mortar · ${mortarFor(factionFor(map,"blue")).name}</option>` : ""}${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   if (supportsTanks(map)) {
@@ -536,6 +538,21 @@ function handle(e: Event) {
       hitUntil = performance.now() + 200;
   }
   if (e.type === "grenadeThrow" && e.actor === 0) sound(320, 0.12, 0.035);
+  // The mortarman reads each splash against the aim point and brackets onto it.
+  if (e.type === "mortar" && e.owner === 0 && e.phase === "impact" && e.aim && e.from) {
+    artilleryNotice = `${splashReport(e.from, e.aim, e.at)}${e.hits?.some(h => h.target !== 0) ? " · HIT" : ""}`;
+    artilleryNoticeUntil = performance.now() + 2200;
+  }
+  if (e.type === "mortar" && e.actor === 0 && e.phase === "refused") {
+    artilleryNotice = "TOO CLOSE TO A DEPLOYMENT LINE · LAY THE TUBE ELSEWHERE";
+    artilleryNoticeUntil = performance.now() + 2000;
+  }
+  // The hollow cough of a bomb leaving a tube.
+  if (e.type === "mortar" && e.phase === "launch" && dist(game.players[0], e.at) < 70) {
+    const near = Math.max(0.2, 1 - dist(game.players[0], e.at) / 70);
+    sound(95, 0.18, 0.07 * near);
+    sound(210, 0.06, 0.03 * near);
+  }
   const listener = game.players[0];
   const armour = tankNotice(game, e, listener);
   if (armour) {
@@ -772,7 +789,18 @@ function hud(now: number) {
   const nearby = p.hp > 0 && !gun && game.emplacements.size ? nearbyGun(game, p) : undefined;
   const deployKey = keyLabel(settings.bindings.emplace), useKey = keyLabel(settings.bindings.interact);
   const placement = renderer.machineGunPreview;
-  if (gun) {
+  if (gun?.mortar) {
+    const aim = mortarAim(game, gun), refused = mortarTargetBlocked(game, aim);
+    const loading = refused ? "TOO CLOSE TO A DEPLOYMENT LINE" : gun.ammo === 0 ? "NO BOMBS · RESUPPLY ON RESPAWN"
+      : game.tick < gun.readyAt ? `SETTING UP · ${((gun.readyAt - game.tick) / 30).toFixed(1)}s`
+      : game.tick < gun.nextShot ? `LOADING · ${((gun.nextShot - game.tick) / 30).toFixed(1)}s` : "READY · LMB DROP BOMB";
+    const traverse = 50 + (gun.yaw - gun.baseYaw) / emplacementRules.traverse * 50;
+    const key = (action: ControlAction) => keyLabel(settings.bindings[action]);
+    staged.ammo = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${mortarRules.bombs} BOMBS</em></strong>` +
+      `<small class="mortar-card">RANGE ${Math.round(gun.mortar.range)} m · FLIGHT ${(flightTicks(gun.mortar.range) / 30).toFixed(1)} s · SPREAD ±${mortarSpread(gun).toFixed(1)} m</small>` +
+      `<small${refused ? ' class="mortar-refused"' : ""}>${loading}</small><div class="gun-traverse" aria-label="Mortar traverse"><i style="left:${traverse}%"></i></div>` +
+      `<small>${key("forward")}/${key("backward")} · RANGE ${mortarRules.minRange}–${mortarRules.maxRange} m　 ${useKey} · STAND UP</small>`;
+  } else if (gun) {
     const loading = gun.reloadAt ? `RELOADING · ${((gun.reloadAt - game.tick) / 30).toFixed(1)}s` : gun.barrel.overheated ? `BARREL OVERHEATED · COOLING ${ventSeconds(gun.barrel).toFixed(1)}s` : "90° TRAVERSE · HOLD FIRE";
     const traverse = 50 + (gun.yaw - gun.baseYaw) / emplacementRules.traverse * 50;
     staged.ammo = `<small>${gun.weaponId} · ${Math.ceil(gun.hp)} HP</small><strong>${gun.ammo}<em> / ${gun.reserve}</em></strong><small>${loading}</small>${heatGauge(gun.barrel)}<div class="gun-traverse" aria-label="Gun traverse"><i style="left:${traverse}%"></i></div><small>${useKey} · DISMOUNT</small>`;
@@ -782,13 +810,14 @@ function hud(now: number) {
       : `<small>${placement.reason}　 ${deployKey} · CANCEL</small>`;
   } else if (nearby) {
     const setup = nearby.readyAt - game.tick;
-    const pack = nearby.owner === p.id && p.loadout === "emplacement" ? `　 ${deployKey} · PACK UP` : "";
+    const pack = nearby.owner === p.id && kitOwns(p, nearby) ? `　 ${deployKey} · PACK UP` : "";
     const action = setup > 0 ? `SETTING UP · ${(setup/30).toFixed(1)}s`
       : nearby.operator !== undefined ? "IN USE" : `${useKey} · MOUNT${pack}`;
     staged.capture = `<small>${nearby.weaponId} · ${action}</small>`;
-  } else if (p.hp > 0 && p.loadout === "emplacement") {
-    staged.ammo += `<small>${p.emplacementLost ? "EMPLACEMENT LOST · RESUPPLY ON RESPAWN" :
-      game.emplacements.has(p.id) ? deployKey + " · PACK UP WHEN NEAR YOUR GUN" : deployKey + " · PREVIEW EMPLACEMENT"}</small>`;
+  } else if (p.hp > 0 && setsUpKit(p)) {
+    const mortar = p.loadout === "mortar", packed = p.packedEmplacement;
+    staged.ammo += `<small>${p.emplacementLost ? `${mortar ? "MORTAR" : "EMPLACEMENT"} LOST · RESUPPLY ON RESPAWN` :
+      game.emplacements.has(p.id) ? `${deployKey} · PACK UP WHEN NEAR YOUR ${mortar ? "MORTAR" : "GUN"}` : `${deployKey} · ${mortar ? `SET UP MORTAR · ${packed?.ammo ?? mortarRules.bombs} BOMBS` : "PREVIEW EMPLACEMENT"}`}</small>`;
   }
   const pickup = !gun && !nearby && !placement && p.hp > 0 && p.flameKit === undefined && nearestFlame(game,p);
   if (pickup) staged.capture = `<small>${keyLabel(settings.bindings.interact)} · EXCHANGE PRIMARY FOR FLAME KIT · ${(pickup.fuel/30).toFixed(1)}s FUEL</small>`;
@@ -806,10 +835,11 @@ function hud(now: number) {
     const prompt = tankPrompt(game, p, useKey);
     if (prompt) staged.capture = prompt;
   }
-  updateControlHints(crewed ? { kind: "tank" } : gun ? { kind: "gun" } : {
+  updateControlHints(crewed ? { kind: "tank" } : gun ? { kind: gun.mortar ? "mortar" : "gun" } : {
     kind: "foot", scoped: scoped(p), flame: p.weapon === "flamethrower", gas: gasLine.danger,
     antiTank: p.loadout === "antiTank" && p.equippedSlot !== "sidearm",
-    emplacement: placement ? "preview" : p.loadout !== "emplacement" || p.emplacementLost ? undefined : game.emplacements.has(p.id) ? "placed" : "carry",
+    emplacement: placement ? "preview" : !setsUpKit(p) || p.emplacementLost ? undefined : game.emplacements.has(p.id) ? "placed" : "carry",
+    mortar: p.loadout === "mortar",
   });
   if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
@@ -952,7 +982,7 @@ window.addEventListener("keydown", (e) => {
   if (tacticalMap.open && !isKey("reload", e.code)) return;
   const player = game.players[0];
   if (isKey("interact", e.code) && !e.repeat) pendingInteract = true;
-  if (isKey("emplace", e.code) && !e.repeat && player.hp > 0 && player.loadout === "emplacement" &&
+  if (isKey("emplace", e.code) && !e.repeat && player.hp > 0 && setsUpKit(player) &&
       player.mountedGun === undefined && !player.emplacementLost) {
     if (game.emplacements.has(player.id)) kitCommand = "pack";
     else placingGun = !placingGun;
@@ -1241,6 +1271,44 @@ try {
       if(stage==="fire"){p.nextShot=0;p.ammo=Math.max(1,p.ammo);fire=true;}
       if(stage==="aim")renderer.remember(game);advanceReview(stage==="aim"?24:3);
       return {weapon:p.weaponId,tank:t.name,hull:t.hp,state:t.state};
+    },
+    // The trench mortar: set up behind Blue's line, laid on a few Red soldiers
+    // in the next line ahead, then fire and watch the bomb in flight and land.
+    mortar:(stage:"aim"|"fire"|"status"|"look"|"turn",range=60)=>{
+      const p=game.players[0];reviewManual=true;keys.clear();preferredFirstPerson=true;
+      if(stage==="aim"){
+        game.commandOverride=()=>idle();
+        p.faction=factionFor(map,"blue");equipLoadout(p,"mortar");
+        const spot=map.terrain?.firingPositions?.find(f=>f.team==="blue")??{x:-30,z:0};
+        const heading=Math.atan2(map.spawn.red.x-spot.x,-(map.spawn.red.z-spot.z));
+        for(let back=2;back<14;back+=0.5){
+          const x=spot.x-Math.sin(heading)*back,z=spot.z+Math.cos(heading)*back;
+          Object.assign(p,{x,z,y:groundHeight(x,z,game.map),vx:0,vz:0,yaw:heading,pitch:0.08,protectedUntil:Infinity});
+          if(placementFor(game,p,heading).valid)break;
+        }
+        yaw=p.yaw;pitch=p.pitch;p.command={...idle(),firstPerson:true,yaw,pitch};
+        kitCommand="deploy";advanceReview(1);advanceReview(emplacementRules.setupTicks+1);
+        pendingInteract=true;advanceReview(2);
+        const gun=mountedGun(game,p);if(!gun?.mortar)throw Error("Mortar did not set up");
+        gun.mortar.range=range;
+        const aim=mortarAim(game,gun);
+        game.players.filter(q=>q.team==="red").slice(0,3).forEach((q,i)=>Object.assign(q,{x:aim.x+(i-1)*1.6,z:aim.z+(i%2)*1.2,y:groundHeight(aim.x,aim.z,game.map),vx:0,vz:0,hp:100,protectedUntil:0}));
+        renderer.remember(game);advanceReview(75);
+      }
+      if(stage==="turn"){yaw=p.yaw+0.3;advanceReview(3);}
+      if(stage==="look"){
+        // Stand up and step round to look back at the laid tube.
+        const own=game.emplacements.get(0);if(!own)throw Error("No mortar laid");
+        pendingInteract=true;advanceReview(2);
+        const x=own.at.x+Math.cos(own.baseYaw)*1.9+Math.sin(own.baseYaw)*0.9,z=own.at.z+Math.sin(own.baseYaw)*1.9-Math.cos(own.baseYaw)*0.9;
+        Object.assign(p,{x,z,y:own.at.y,vx:0,vz:0,yaw:Math.atan2(own.at.x-x,-(own.at.z-z)),pitch:-0.42});
+        yaw=p.yaw;pitch=p.pitch;p.command={...idle(),firstPerson:true,yaw,pitch};
+        renderer.remember(game);advanceReview(3);
+        return {weapon:own.weaponId};
+      }
+      const gun=mountedGun(game,p);
+      if(stage==="fire"){fire=true;advanceReview(1);fire=false;advanceReview(Math.round(flightTicks(gun?.mortar?.range??range)*0.55));}
+      return {weapon:gun?.weaponId,range:gun?.mortar?.range,bombs:gun?.ammo,spread:gun?mortarSpread(gun):undefined,flying:game.mortars.bombs.length,x:p.x,z:p.z};
     },
     // Capture the flag: stand a few metres from Red's north stand, or carry Red's centre flag.
     ctf:(stage:"pickup"|"carry")=>{

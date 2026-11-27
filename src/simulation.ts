@@ -14,6 +14,7 @@ import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-ha
 import { freshArtilleryAudit } from "./artillery-audit";
 import { antiTankBotAim, antiTankHunt } from "./anti-tank";
 import { emplacementBotCommand } from "./bot-emplacement";
+import { advanceMortars, createMortarState, mortarMap, operateMortar, type MortarState } from "./mortar";
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
@@ -169,7 +170,10 @@ export interface Command {
   // Blow the whistle for a squad bayonet charge (src/charge.ts).
   whistle?: boolean;
   // Raw drive keys for a tank commander: forward/back and steer (src/tanks.ts).
+  // On a mortar, forward/back wind the range card.
   drive?: { throttle: number; turn: number };
+  // Bots on a mortar: the range they want the tube laid at (src/mortar.ts).
+  mortarRange?: number;
 }
 export const idle = (): Command => ({
   x: 0,
@@ -390,7 +394,7 @@ export interface Soldier extends Vec {
   // The tank this soldier is crewing (src/tanks.ts).
   tank?: number;
   emplacementLost?: boolean;
-  packedEmplacement?: { ammo: number; reserve: number; hp: number };
+  packedEmplacement?: { ammo: number; reserve: number; hp: number; range?: number };
   loadout?: Loadout;
   pendingLoadout?: Loadout;
   equippedSlot?: WeaponSlot;
@@ -673,6 +677,8 @@ export type Event = { id: number; tick: number } & (
       at: V3;
       radius: number;
       hits: { target: number; damage: number }[];
+      // A trench mortar bomb's burst (src/mortar.ts).
+      mortar?: boolean;
     }
   | {
       type: "fire";
@@ -737,6 +743,9 @@ export type Event = { id: number; tick: number } & (
   | { type: "end"; winner: Team | "draw" }
   | import("./reinforcements").ReinforcementEvent
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
+  // Trench mortar bombs: leaving the tube, whistling down, bursting, or an
+  // aim point refused for being on a deployment line.
+  | { type: "mortar"; phase: "launch" | "whistle" | "impact" | "refused"; actor: number; owner: number; at: V3; bomb?: number; landsAt?: number; aim?: Vec; from?: V3; hits?: { target: number; damage: number }[] }
   | { type: "callout"; actor: number; line: CalloutLine; at: Vec }
   | TankEvent
   | CtfEvent
@@ -972,6 +981,7 @@ export class Game {
   artilleryAudit = freshArtilleryAudit();
   flames: FlameState = {kits:[]};
   emplacements = new Map<number, Emplacement>();
+  mortars: MortarState = createMortarState();
   // Tanks, when the briefing turns them on (src/tanks.ts).
   tanks: TankState;
   // Rain on the maps that have weather: rising water and heavy mud (src/weather.ts).
@@ -1181,6 +1191,7 @@ export class Game {
       bursts: this.bursts,
       flames: this.flames,
       emplacements: [...this.emplacements.values()],
+      mortars: this.mortars,
       artilleryAudit: this.artilleryAudit,
       assaults: this.assaults,
       charges: this.charges,
@@ -1200,12 +1211,19 @@ export class Game {
     this.events.push({ ...e, id: ++this.sequence, tick: this.tick } as Event);
   }
   selectLoadout(p: Soldier, loadout: Loadout) {
-    if (!loadoutIds.includes(loadout)) return;
+    if (!loadoutIds.includes(loadout) || (loadout === "mortar" && !mortarMap(this.map))) return;
     p.pendingLoadout = loadout;
     if (this.tick === 0) equipLoadout(p, loadout, kitFor(this.map));
   }
   respawn(p: Soldier) {
     dismount(this, p, false);
+    // A mortar left behind is lost with its bombs; the new life carries a fresh one.
+    const left = this.emplacements.get(p.id);
+    if (left?.mortar) {
+      const operator = left.operator === undefined ? undefined : this.players[left.operator];
+      if (operator) dismount(this, operator, false);
+      this.emplacements.delete(p.id);
+    }
     p.emplacementLost = false;
     p.packedEmplacement = undefined;
     dropFlame(this,p); p.burnUntil=0; p.flameThreatUntil=0;
@@ -1214,7 +1232,7 @@ export class Game {
     p.faction = factionFor(this.map, p.team);
     equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon, this.tanks.enabled)), kitFor(this.map));
     const retainedKind = legacyWeapon ?? (retainedPrimary?.kind !== "flamethrower" ? retainedPrimary?.kind : undefined);
-    if (retainedKind && p.inventory && p.loadout !== "emplacement") {
+    if (retainedKind && p.inventory && p.loadout !== "emplacement" && p.loadout !== "mortar") {
       p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;
       p.weaponId = retainedPrimary?.id ?? p.weaponId; p.inventory.primary.id = p.weaponId!;
     }
@@ -1276,7 +1294,8 @@ export class Game {
     p.ammo = profile.magazine;
     p.reserve = profile.reserve;
     if (p.inventory) Object.assign(p.inventory[p.equippedSlot ?? "primary"], { ammo: p.ammo, reserve: p.reserve });
-    p.grenades = 3;
+    // The mortarman's tube and bombs leave room for one grenade.
+    p.grenades = p.loadout === "mortar" ? 1 : 3;
     p.smokes = smokeRules.perSpawn;
     p.botSmokeReadyAt = this.tick + smokeRules.botSpawnDelay;
     p.suppression = 0;
@@ -1339,6 +1358,7 @@ export class Game {
     const failure = advanceStructuralFailures(this.map, this.tick);
     if (failure) this.structuralFailure(failure);
     advanceEmplacements(this);
+    advanceMortars(this);
     for (const p of this.players) coolBarrel(p.barrel);
     advanceTanks(this);
     advanceNavigation(this.map, this.players.filter(p => p.hp > 0), navigationChecksPerTick, this.navigationDeadline);
@@ -1394,7 +1414,8 @@ export class Game {
       const gunAction = emplacementCommand(this, p, c, interactPressed && !tankAction);
       const gun = mountedGun(this, p);
       if (gun) {
-        operateGun(this, p, gun, c);
+        if (gun.mortar) operateMortar(this, p, gun, c);
+        else operateGun(this, p, gun, c);
         continue;
       }
       if (interactPressed && !gunAction && !tankAction) pickupFlame(this,p);
@@ -1563,7 +1584,7 @@ export class Game {
       )
         this.fire(p);
     for (const gun of this.emplacements.values()) {
-      if (gun.operator === undefined) continue;
+      if (gun.operator === undefined || gun.mortar) continue;
       const p = this.players[gun.operator];
       if (p.hp > 0 && p.command.fire && gun.ammo > 0 && !gun.reloadAt &&
           this.tick >= gun.nextShot && this.tick >= p.staggerUntil && barrelReady(gun.barrel)) this.fire(p, gun);
@@ -2344,7 +2365,7 @@ export class Game {
       if (
         p.hp <= 0 ||
         p.tank !== undefined ||
-        (p.team === team && p.id !== actor) ||
+        (p.team === team && p.id !== actor && !profile.friendlyFire) ||
         this.tick < p.protectedUntil
       )
         continue;
@@ -2373,7 +2394,7 @@ export class Game {
       );
       const capturing = this.scoring === "domination" && this.sectors.some(s=>s.owner!==p.team && flagOccupant(this,p,s));
       hits.push({ target: p.id, damage });
-      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":profile.kind==="artillery-boundary"?"Left the battlefield":"Artillery strike"):profile.kind==="tank-shell"?"Tank gun":"Fragmentation grenade",from:{...at}});
+      this.damage(p, damage, actor, team,{kind:artillery?"artillery":"grenade",weapon:profile.label??(artillery?(profile.kind==="artillery-ambient"?"Ambient artillery":profile.kind==="artillery-boundary"?"Left the battlefield":"Artillery strike"):profile.kind==="tank-shell"?"Tank gun":"Fragmentation grenade"),from:{...at}});
       if(artillery) {
         this.artilleryAudit.damagePrevented+=rawDamage-damage;
         if(p.hp<=0) { this.artilleryAudit.deaths++; if(capturing)this.artilleryAudit.captureInterruptions++; }

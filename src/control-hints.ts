@@ -5,8 +5,9 @@ import { keyLabel, type ControlAction, type ControlSettings } from "./controls";
 // cloud) come first and are marked `context`, so they can be drawn bold.
 export interface ControlHint { text: string; context?: boolean }
 export type HintSituation =
-  | { kind: "foot"; scoped?: boolean; antiTank?: boolean; flame?: boolean; emplacement?: "carry" | "placed" | "preview"; gas?: boolean }
+  | { kind: "foot"; scoped?: boolean; antiTank?: boolean; flame?: boolean; emplacement?: "carry" | "placed" | "preview"; mortar?: boolean; gas?: boolean }
   | { kind: "gun" }
+  | { kind: "mortar" }
   | { kind: "tank" };
 
 export function controlHints(settings: Pick<ControlSettings, "bindings">, s: HintSituation = { kind: "foot" }): ControlHint[] {
@@ -18,14 +19,18 @@ export function controlHints(settings: Pick<ControlSettings, "bindings">, s: Hin
     special(`${move} DRIVE`), special("LMB MACHINE GUNS"), special("RMB MAIN GUN"), special(`${key("interact")} CLIMB OUT`),
     plain(`${key("tactical")} TACTICAL MAP`),
   ];
+  if (s.kind === "mortar") return [
+    special("MOUSE TRAVERSE"), special(`${key("forward")}/${key("backward")} RANGE`), special("LMB DROP BOMB"), special(`${key("interact")} STAND UP`),
+  ];
   if (s.kind === "gun") return [
     special("LMB FIRE"), special(`${key("reload")} RELOAD`), special(`${key("interact")} DISMOUNT`),
   ];
   const context: ControlHint[] = [];
   if (s.gas) context.push(special(`${key("mask")} GAS MASK`));
-  if (s.emplacement === "preview") context.push(special("LMB SET UP GUN"), special(`${key("emplace")} CANCEL`));
-  else if (s.emplacement === "carry") context.push(special(`${key("emplace")} SET UP MACHINE GUN`));
-  else if (s.emplacement === "placed") context.push(special(`${key("emplace")} PACK UP GUN`));
+  const kit = s.mortar ? "MORTAR" : "GUN";
+  if (s.emplacement === "preview") context.push(special(`LMB SET UP ${kit}`), special(`${key("emplace")} CANCEL`));
+  else if (s.emplacement === "carry") context.push(special(`${key("emplace")} SET UP ${s.mortar ? "MORTAR" : "MACHINE GUN"}`));
+  else if (s.emplacement === "placed") context.push(special(`${key("emplace")} PACK UP ${kit}`));
   // Kit-specific versions of the two mouse buttons replace the general ones.
   const aim = s.scoped ? special("RMB SCOPE 4×") : plain("RMB AIM");
   const fire = s.flame ? special("LMB FLAME") : s.antiTank ? special("LMB FIRE AP ROUND") : plain("LMB FIRE");

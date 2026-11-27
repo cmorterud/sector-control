@@ -358,6 +358,11 @@ export class BattlefieldFeedback {
       this.cue(g, "whistle", e.from, 0.3, false, false, e.id);
       this.stats.whistles++;
     }
+    // A mortar bomb's short whistle, heard close to where it will land.
+    if (e.type === "mortar" && e.phase === "whistle" && Math.hypot(p.x - e.at.x, p.z - e.at.z) < 45) {
+      this.cue(g, "whistle", e.at, 0.18, false, false, e.id);
+      this.stats.whistles++;
+    }
     // A gas shell lands with a dull plop, not a blast.
     if (e.type === "gasShellImpact" && Math.hypot(p.x - e.at.x, p.z - e.at.z) < 90)
       this.cue(g, "grenade", e.at, 0.32, false, true, e.shell);

@@ -27,6 +27,10 @@ export interface ExplosionProfile {
   terrainReach: number;
   bankDepth?: number;
   craterVariation?: number;
+  // Hurts the firer's own side too (trench mortar bombs).
+  friendlyFire?: boolean;
+  // What the casualty report names the blast, when not the profile's default.
+  label?: string;
 }
 export const grenadeExplosionProfile: ExplosionProfile = {
   kind: "grenade",
