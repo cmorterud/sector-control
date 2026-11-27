@@ -12,7 +12,7 @@ import { reactToThreat, reactionCoverCommand, braceCommand, type CombatReaction,
 import { weaponDesign } from "./weapon-design";
 import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-handling";
 import { freshArtilleryAudit } from "./artillery-audit";
-import { antiTankBotAim, antiTankHunt } from "./anti-tank";
+import { antiTankBotAim, antiTankHunt, blockAntiTankHunt } from "./anti-tank";
 import { emplacementBotCommand } from "./bot-emplacement";
 import { mortarBotCommand } from "./bot-mortar";
 import { advanceMortars, createMortarState, mortarMap, operateMortar, type MortarState } from "./mortar";
@@ -119,7 +119,7 @@ import {
   type WeaponKind,
 } from "./weapons";
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
-import { advanceCtf, createCtf, ctfBotCommand, ctfCommand, ctfGoal, ctfRules, type CtfEvent, type CtfState } from "./ctf";
+import { advanceCtf, createCtf, ctfBotCommand, ctfCommand, ctfGoal, ctfGoalUnroutable, ctfRules, type CtfEvent, type CtfState } from "./ctf";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
 import { advanceOffensive, createOffensive, objectiveOpen, offensiveDuration, respawnTicks, teamSpawn, type OffensiveState } from "./offensive";
 import { advanceReinforcements, createReinforcements, reinforcementsLeft, takeReinforcement, type ReinforcementState } from "./reinforcements";
@@ -2887,12 +2887,18 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
   c.pitch = p.pitch;
   // A capture-the-flag order, or for the anti-tank kit an enemy tank to hunt
   // down (src/anti-tank.ts), outranks the firing step or the flag.
-  const raid = ctfGoal(g, p) ?? antiTankHunt(g, p);
+  const ctfRaid = ctfGoal(g, p), raid = ctfRaid ?? antiTankHunt(g, p);
   const station = raid ? undefined : firingPosition(g, p);
   if (g.tick >= p.nextThink && p.assaultId === null) {
     p.nextThink = g.tick + 30;
     const ordered = station || raid ? undefined : squadObjective(g, p);
-    if (raid) p.path = pathfind(p, raid, g.map, true, dangerCost(g, p.team));
+    if (raid) {
+      p.path = pathfind(p, raid, g.map, true, dangerCost(g, p.team));
+      if (!p.path.length && dist(p, raid) > 1) {
+        if (ctfRaid) ctfGoalUnroutable(g, p);
+        else blockAntiTankHunt(g, p);
+      }
+    }
     else if (station) p.path = pathfind(p, station, g.map, true);
     else if (ordered !== undefined) {
       p.objective = ordered;

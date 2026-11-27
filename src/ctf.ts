@@ -389,6 +389,14 @@ function orderTeam(g: Game, team: Team) {
   }
 }
 
+// Guards whose spot on the ring had no route, by the point they guard: they
+// stand at the point itself instead (the bot progress tests found Verdun
+// guards waiting at their spawn for a ring spot on a bank they could not reach).
+const guardAtPoint = new WeakMap<Soldier, string>();
+export function ctfGoalUnroutable(g: Game, p: Soldier) {
+  const role = g.ctf?.roles[p.id];
+  if (role?.kind === "guard" && role.flag) guardAtPoint.set(p, role.flag);
+}
 // Where a bot's CTF order sends it; undefined leaves it to its usual post.
 export function ctfGoal(g: Game, p: Soldier): Vec | undefined {
   const ctf = g.ctf;
@@ -410,6 +418,7 @@ export function ctfGoal(g: Game, p: Soldier): Vec | undefined {
   if (role.kind === "return" || role.kind === "recover") return f.state === "dropped" ? f.at! : undefined;
   if (role.kind === "raid") return f.state === "home" ? f.home : undefined;
   // Guards spread on a ring around their point.
+  if (guardAtPoint.get(p) === f.id) return { x: f.home.x, z: f.home.z };
   const a = (p.teamIndex * 2.39996) % (Math.PI * 2), r = 6 + (p.teamIndex % 3) * 4;
   return { x: f.home.x + Math.cos(a) * r, z: f.home.z + Math.sin(a) * r };
 }
