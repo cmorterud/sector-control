@@ -16,6 +16,8 @@ export const hipFireRules = {
     rifle: 0.06,
     carbine: 0.045,
     scoped: 0.075,
+    // The frame is long and the shooter holds it from below.
+    periscope: 0.08,
     pistol: 0.03,
     machineGun: 0.05,
     // A long, heavy rifle (or a service rifle loaded for tanks) from the hip.

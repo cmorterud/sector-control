@@ -20,6 +20,7 @@ import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
 import { grenadeLook } from "./grenade-look";
+import { advancePeriscope, breakMirror, mirrorOnPath, periscopeEye, periscopeLift, periscopeRaised, periscopeRules, type PeriscopeState } from "./periscope";
 import { equipLoadout, kitFor, loadoutIds, switchWeapon, factionFor, factions, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
@@ -236,8 +237,12 @@ export const projectileSpeed = weaponProfiles.rifle.projectileSpeed;
 export const projectileRange = 60;
 export const rifleHeight = (map: MapDefinition, p?: Soldier) =>
   (map.terrain ? 1.65 : 1.45) - stanceDrop(p);
+// Where a bot looks for and aims at an enemy. A raised periscope rifle shows
+// only its mirror over the parapet, so that is what draws the fire.
 export const exposedAimHeight = (map: MapDefinition, p?: Soldier) =>
-  (map.terrain ? 1.65 : 1.25) - stanceDrop(p);
+  p?.periscope && !p.periscope.broken && p.periscope.lift > 0.05
+    ? eyeHeightOf(p) + p.periscope.lift + periscopeRules.mirrorAbove
+    : (map.terrain ? 1.65 : 1.25) - stanceDrop(p);
 export function firingPosition(g: Game, p: Soldier): Vec | undefined {
   const positions = g.map.terrain?.firingPositions?.filter(
     (position) => position.team === p.team,
@@ -454,6 +459,8 @@ export interface Soldier extends Vec {
   triggerPressed: boolean;
   awareness: Awareness;
   aimBloom: number;
+  // The periscope rifle's frame: how high it is raised, and whether its mirror is smashed.
+  periscope?: PeriscopeState;
   recoilPitch: number;
   recoilYaw: number;
   recoilShots: number;
@@ -746,6 +753,7 @@ export type Event = { id: number; tick: number } & (
   | { type: "end"; winner: Team | "draw" }
   | import("./reinforcements").ReinforcementEvent
   | import("./offensive").OffensiveEvent
+  | { type: "periscope"; phase: "broken"; owner: number; actor: number; at: V3 }
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   // Trench mortar bombs: leaving the tube, whistling down, bursting, or an
   // aim point refused for being on a deployment line.
@@ -1223,7 +1231,7 @@ export class Game {
     this.events.push({ ...e, id: ++this.sequence, tick: this.tick } as Event);
   }
   selectLoadout(p: Soldier, loadout: Loadout) {
-    if (!loadoutIds.includes(loadout) || (loadout === "mortar" && !mortarMap(this.map))) return;
+    if (!loadoutIds.includes(loadout) || (loadout === "mortar" && !mortarMap(this.map)) || (loadout === "periscope" && !factions[p.faction ?? "british"].periscope)) return;
     p.pendingLoadout = loadout;
     if (this.tick === 0) equipLoadout(p, loadout, kitFor(this.map));
   }
@@ -1578,6 +1586,7 @@ export class Game {
       }
     }
     for(const p of this.players){const action=reloadCue(p,this.tick);if(action)this.emit({type:"weaponAction",actor:p.id,action,weaponId:p.weaponId});}
+    for (const p of this.players) advancePeriscope(this, p);
     advanceMelee(this, (target, amount, source, team, kind) =>
       this.damage(target, amount, source, team,{kind:"melee",weapon:kind==="charge"?"Bayonet charge":kind==="bayonet"?"Bayonet":"Rifle butt",from:this.attackOrigin(source)}),
     );
@@ -1840,6 +1849,11 @@ export class Game {
       // Fired from the hip, or before the sights are up, a shot wanders.
       const hip = hipFireOffset(p, this.tick, () => this.random());
       yaw += hip.yaw; pitch += hip.pitch;
+      // Laid from a mirror image, a periscope rifle's shot wanders a little.
+      if (periscopeRaised(p)) {
+        yaw += (this.random() - 0.5) * 2 * periscopeRules.spread;
+        pitch += (this.random() - 0.5) * 2 * periscopeRules.spread;
+      }
     }
     const shooter = gun ?? p;
     shooter.ammo--;
@@ -1854,7 +1868,7 @@ export class Game {
       y: Math.sin(pitch),
       z: -Math.cos(yaw) * Math.cos(pitch),
     };
-    const pivot = pose?.pivot ?? { x: p.x, y: p.y + eyeHeightOf(p), z: p.z },
+    const pivot = pose?.pivot ?? periscopeEye(p),
       distance = p.command.aim ? 2.5 : 4;
     const desired = {
       x: p.x - dir.x * distance + Math.cos(yaw) * 0.65,
@@ -1894,9 +1908,10 @@ export class Game {
       z: camera.z + (aim.z - camera.z) * first,
     };
     const muzzle = profile.muzzle;
-    const from = pose?.muzzle ?? (firstPersonView(p) ? viewMuzzle(p, this.tick) : {
+    // A raised periscope rifle's sights and muzzle are on the mirror's line.
+    const from = pose?.muzzle ?? (periscopeRaised(p) ? { x: pivot.x + dir.x * 0.6, y: pivot.y + dir.y * 0.6, z: pivot.z + dir.z * 0.6 } : firstPersonView(p) ? viewMuzzle(p, this.tick) : {
       x: p.x + Math.cos(yaw) * weaponMount.x + dir.x * muzzle,
-      y: p.y + rifleHeight(this.map, p),
+      y: p.y + rifleHeight(this.map, p) + periscopeLift(p),
       z: p.z + Math.sin(yaw) * weaponMount.x + dir.z * muzzle,
     });
     const length = Math.max(
@@ -1983,6 +1998,7 @@ export class Game {
         if (list) list.push(p);
         else cells.set(key, [p]);
       }
+    const mirrors = this.players.filter((p) => p.periscope && !p.periscope.broken && p.periscope.lift > 0.05);
     for (const shot of this.projectiles) {
       // A newly fired round starts at the muzzle at this tick's boundary.
       if (shot.bornAt === this.tick) {
@@ -2027,6 +2043,12 @@ export class Game {
                   victim = q;
                 }
               }
+      // A raised periscope's mirror, if the round reaches it first.
+      const mirror = mirrors.length ? mirrorOnPath(mirrors, from, to, shot.actor, nearest) : undefined;
+      if (mirror) {
+        nearest = mirror.t;
+        victim = undefined;
+      }
       shot.x = from.x + (to.x - from.x) * nearest;
       shot.y = from.y + (to.y - from.y) * nearest;
       shot.z = from.z + (to.z - from.z) * nearest;
@@ -2052,7 +2074,10 @@ export class Game {
       shot.remaining = Math.max(0, shot.remaining - travel);
       const through = nearest < 1 && !victim && !shot.penetrated && !(armour.tank && nearest === armour.t)
         ? timberPassage(this.map, shot, { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }) : null;
-      if (through) {
+      if (mirror) {
+        breakMirror(this, mirror.owner, shot.actor);
+        this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false });
+      } else if (through) {
         // Stone stops bullets, wood doesn't: one thin partition, at half damage.
         this.emit({ type: "impact", actor: shot.actor, projectile: shot.id, at: { x: shot.x, y: shot.y, z: shot.z }, target: null, hit: false });
         const crossed = travel * nearest + Math.hypot(through.x - shot.x, through.y - shot.y, through.z - shot.z);

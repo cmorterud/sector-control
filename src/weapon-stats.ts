@@ -19,11 +19,12 @@ export const tankImmobilizedBelow = 0.35;
 // the SMLE at the game's 288 m/s.
 export const bulletSpeedScale = 288 / 744;
 
-export type WeaponRole = "rifle" | "carbine" | "scoped" | "pistol" | "machineGun" | "emplaced" | "antiTank";
+export type WeaponRole = "rifle" | "carbine" | "scoped" | "periscope" | "pistol" | "machineGun" | "emplaced" | "antiTank";
 export const roleLabels: Record<WeaponRole, string> = {
   rifle: "Bolt-action rifle",
   carbine: "Bolt-action carbine",
   scoped: "Scoped rifle",
+  periscope: "Periscope rifle",
   pistol: "Pistol",
   machineGun: "Light machine gun",
   emplaced: "Emplaced machine gun",
@@ -88,6 +89,16 @@ export const weaponStats: WeaponStats[] = [
     historical: { muzzleVelocity: 744, rate: [10, 15], note: "Sniper conversions with a side-mounted telescopic sight." },
     roundsPerMinute: 40, magazine: 10, reserve: 40, reloadSeconds: 2.4, damage: scopedDamage,
     summary: "Slow to cycle; any hit to the chest or head kills.",
+  },
+  // Gallipoli, May 1915: Lance Corporal William Beech of the 2nd Battalion
+  // built the first at Anzac, an SMLE clamped in a wooden frame with a box
+  // periscope, fired by a wire from a lower grip, so the shooter stayed
+  // below the parapet. Hundreds were made on the beach.
+  {
+    id: "smle-periscope", name: "Periscope rifle", faction: "anzac", role: "periscope", round: ".303 British",
+    historical: { muzzleVelocity: 744, rate: [6, 10], note: "An SMLE in a wooden frame with two mirrors, fired by a wire from a lower grip. Accurate enough to snipe from below the parapet at the Nek and Quinn's Post, where the trenches were metres apart." },
+    roundsPerMinute: 30, magazine: 10, reserve: 40, reloadSeconds: 3.2, damage: rifleDamage,
+    summary: "Fires over the parapet with your head below it. A slow, loose aim, and the top mirror can be shot away.",
   },
   {
     id: "webley", name: "Webley Mk VI", faction: "british", alsoIssuedTo: ["anzac"], role: "pistol", round: ".455 Webley",
