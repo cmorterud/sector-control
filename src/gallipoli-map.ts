@@ -1,6 +1,7 @@
 import { groundHeight, hillHeight, type Box, type MapDefinition, type TrenchLine, type Vec } from "./map";
 import { buildTrenchBanks } from "./trench-banks";
 import { coastalRules } from "./coastal-scenery";
+import { gallipoliShips } from "./backdrop";
 import { gallipoliGround, gallipoliHeight, shoreX } from "./gallipoli-terrain";
 
 // Gallipoli: Anzac, 6 to 8 August 1915, authored for play rather than
@@ -224,6 +225,8 @@ export const gallipoliMap: MapDefinition = {
   gas: false, flamethrower: false,
   defaultTeamSize: 50, maxTeamSize: 64,
   coast,
+  // The fleet offshore is ANZAC's artillery, and cannot reach dead ground.
+  navalGunfire: { team: "blue", ships: gallipoliShips.map(({ x, z }) => ({ x, z })) },
   navigationPoints: [],
   // ANZAC on the beach; the Ottoman army behind the crest, out of sight of the sea.
   spawn: { blue: { x: -85, z: 0 }, red: { x: 96, z: 0 } },

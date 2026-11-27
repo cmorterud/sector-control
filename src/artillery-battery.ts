@@ -10,6 +10,7 @@ import { backdropHeight, backdropScenery } from "./backdrop";
 import { verdunBackdropScenery, verdunDeadZoneTrees } from "./verdun-backdrop";
 import { gasShellTarget, gasStrikeRules } from "./gas";
 import { groundHeight, type MapDefinition, type Vec } from "./map";
+import { navalGun } from "./naval-gunfire";
 import type { Game, Team, V3 } from "./simulation";
 
 export const batteryRules = {
@@ -73,6 +74,15 @@ export function batteryGuns(map: MapDefinition): BatteryGun[] {
   const clear = (x: number, z: number) => blocks.every((b) => Math.hypot(b.x - x, b.z - z) > b.r + batteryRules.clearance);
   for (const team of ["blue", "red"] as const) {
     const side = team === "blue" ? -1 : 1, x = side * (map.width / 2 + (hidden ? batteryRules.hiddenRear : batteryRules.rear));
+    // A fleet's guns are its ships offshore, drawn with the backdrop.
+    if (map.navalGunfire?.team === team) {
+      const ships = map.navalGunfire.ships;
+      for (let i = 0; i < batteryRules.guns; i++) {
+        const ship = ships[i % ships.length], gun = navalGun(map, ship);
+        list.push({ team, index: i, x: gun.x + Math.floor(i / ships.length) * 8 * side, y: gun.y, z: gun.z, yaw: side < 0 ? Math.PI / 2 : -Math.PI / 2, hidden: true });
+      }
+      continue;
+    }
     for (let i = 0; i < batteryRules.guns; i++) {
       const z0 = map.spawn[team].z + (i - (batteryRules.guns - 1) / 2) * batteryRules.spacing;
       let at = { x, z: z0 };

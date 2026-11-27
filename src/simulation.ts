@@ -19,6 +19,7 @@ import { advanceMortars, createMortarState, mortarMap, operateMortar, type Morta
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
+import { grenadeLook } from "./grenade-look";
 import { equipLoadout, kitFor, loadoutIds, switchWeapon, factionFor, factions, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
@@ -2352,7 +2353,7 @@ export class Game {
       return;
     }
     const at = { x: g.x, y: g.y, z: g.z };
-    const hits = this.explode(at, g.actor, g.team, grenadeExplosionProfile);
+    const hits = this.explode(at, g.actor, g.team, { ...grenadeExplosionProfile, label: grenadeLook(this.map, g.team).name });
     this.emit({
       type: "grenadeExplosion",
       actor: g.actor,
