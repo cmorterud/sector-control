@@ -1,6 +1,7 @@
 import { awarenessSample } from "./awareness";
 import { dist, groundHeight, walkSegment, type Vec } from "./map";
 import { idle, type Command, type Game, type Soldier, type V3 } from "./simulation";
+import { inLockedRing } from "./offensive";
 
 export type ReactionKind = "nearMiss" | "hit" | "blast";
 export interface CombatReaction {
@@ -75,7 +76,10 @@ export function reactionCoverCommand(g: Game, p: Soldier): Command | null {
   }
   if (cover) cover.revision = revision;
   const reaction = p.combatReaction;
-  if (!cover && reaction && reaction.strength >= .35 &&
+  // In a locked flag's ring a soldier keeps going rather than going to ground
+  // there: the flag can't change hands, and lingering in its pit reads as a
+  // try for it.
+  if (!cover && reaction && reaction.strength >= .35 && !inLockedRing(g, p) &&
     g.tick - reaction.tick < 30 && g.tick >= reaction.tick + 2 + p.id % 6 &&
     g.tick >= (p.nextCombatCover ?? 0)) {
     p.nextCombatCover = g.tick + 75 + p.id % 30;
@@ -91,7 +95,7 @@ export function reactionCoverCommand(g: Game, p: Soldier): Command | null {
           ? Math.max(0, 1.4 - dist(at, q.combatCover?.goal ?? q)) : 0), 0);
         const flag = g.sectors[p.objective];
         return {at, protection, score: protection * 5 - r * .3 - crowd * 2 - (flag ? dist(at, flag) * .04 : 0)};
-      }).filter(c => c.protection > current && c.protection >= .5)
+      }).filter(c => c.protection > current && c.protection >= .5 && !inLockedRing(g, c.at))
         .sort((a,b) => b.score - a.score);
       // Bounded local probes; no extra A* rebuild or battlefield-wide search.
       const chosen = candidates.slice(0,3).find(c => walkSegment(p, c.at, g.map));

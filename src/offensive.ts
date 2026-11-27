@@ -1,4 +1,5 @@
-import type { MapDefinition, OffensivePlan, Vec } from "./map";
+import { groundHeight, type MapDefinition, type OffensivePlan, type Vec } from "./map";
+import { flagContains } from "./domination";
 import type { Game, Sector, Team } from "./simulation";
 
 // Attack and defend: an optional mode for a map that sets MapDefinition.offensive.
@@ -73,6 +74,15 @@ const indexOf = (g: Pick<Game, "sectors">, s: Sector | number) => (typeof s === 
 export function objectiveOpen(g: Pick<Game, "offensive" | "sectors">, s: Sector | number): boolean {
   const o = g.offensive;
   return !o || !!o.phases[o.phase]?.includes(indexOf(g, s));
+}
+
+// Whether a point stands in a locked flag's ring (a later phase's, or one
+// already taken). Bots keep out of these: a soldier crouched in a locked
+// flag's pit looks as though he is trying to take it.
+export function inLockedRing(g: Pick<Game, "offensive" | "sectors" | "map" | "collision">, at: Vec): boolean {
+  if (!g.offensive) return false;
+  const p = { ...at, y: groundHeight(at.x, at.z, g.map) };
+  return g.sectors.some((s, i) => !objectiveOpen(g, i) && flagContains(g as Game, p, s));
 }
 
 // The phase a flag belongs to, or -1.
