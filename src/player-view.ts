@@ -47,7 +47,7 @@ export function viewToWorld(p: Soldier, local: V3): V3 {
   };
   return {
     x: p.x + Math.cos(yaw) * local.x + up.x * local.y - forward.x * local.z,
-    y: p.y + eyeHeightOf(p) + up.y * local.y - forward.y * local.z,
+    y: p.y + eyeHeightOf(p) + (p.periscope?.lift ?? 0) + up.y * local.y - forward.y * local.z,
     z: p.z + Math.sin(yaw) * local.x + up.z * local.y - forward.z * local.z,
   };
 }

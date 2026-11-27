@@ -15,7 +15,7 @@ it("gives every Armory faction a rifle, scoped rifle, pistol, both machine-gun v
     const carbine = f === "french" || f === "german" ? ["carbine"] : [];
     const gallipoli = f === "anzac" || f === "ottoman";
     expect(weaponStats.filter(w => issuedTo(w, f)).map(w => w.role).sort())
-      .toEqual(gallipoli ? ["emplaced", "pistol", "rifle", "scoped"] : ["antiTank", ...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
+      .toEqual(f === "anzac" ? ["emplaced", "periscope", "pistol", "rifle", "scoped"] : gallipoli ? ["emplaced", "pistol", "rifle", "scoped"] : ["antiTank", ...carbine, "emplaced", "machineGun", "pistol", "rifle", "scoped"]);
   }
   expect(new Set(weaponStats.map(w => w.id)).size).toBe(weaponStats.length);
   // One row per weapon name: an army that shares a weapon lists it, rather than copying it.
@@ -50,8 +50,8 @@ it("follows the damage design rules", () => {
     expect(w.damage.arms).toBeLessThan(w.damage.stomach);
     expect(w.damage.legs).toBeLessThan(w.damage.stomach);
     expect(w.damage.stomach).toBeLessThanOrEqual(w.damage.chest);
-    if (w.role === "rifle" || w.role === "carbine") {
-      // A rifle or carbine kills with one hit to the head and two to the chest or stomach.
+    if (w.role === "rifle" || w.role === "carbine" || w.role === "periscope") {
+      // A rifle, carbine or periscope rifle kills with one hit to the head and two to the chest or stomach.
       expect(shotsToKill(w, "head")).toBe(1);
       expect(shotsToKill(w, "chest")).toBe(2);
       expect(shotsToKill(w, "stomach")).toBe(2);
@@ -102,7 +102,7 @@ function weaponRange() {
 it.each(weaponStats.filter(w => w.role !== "emplaced"))("uses the $name Armory profile when equipping, firing and reloading", w => {
   const { g, shooter } = weaponRange();
   shooter.faction = w.faction;
-  equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "machineGun" ? "support" : w.role === "antiTank" ? "antiTank" : "rifleman", w.role === "carbine" ? "carbine" : "service");
+  equipLoadout(shooter, w.role === "scoped" ? "marksman" : w.role === "periscope" ? "periscope" : w.role === "machineGun" ? "support" : w.role === "antiTank" ? "antiTank" : "rifleman", w.role === "carbine" ? "carbine" : "service");
   if (w.role === "pistol") {
     expect(switchWeapon(shooter, "sidearm", g.tick)).toBe(true);
     for (let i = 0; i < 10; i++) g.step(idle());

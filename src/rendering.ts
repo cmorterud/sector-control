@@ -48,6 +48,7 @@ import { flagCloth, flagColor, flagRingColor, lockedRingColor, type FlagState } 
 import { CtfMarkers } from "./ctf-render";
 import { factionFor, factions, scoped, type FactionId } from "./loadouts";
 import { factionGrenade, grenadeLook } from "./grenade-look";
+import { periscopeLift, periscopeRaised, periscopeRules } from "./periscope";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
 import { earthPixels, earthDiffusePS, earthGlossPS, earthNormalPS } from "./environment-surface";
 import { meleePose } from "./melee";
@@ -4517,9 +4518,18 @@ export class Renderer implements CollisionWorld {
         this.poseArm(rig,1,rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(...(design?.trigger??[0,-.03,.14]) as [number,number,number])),armLengths.upper,armLengths.forearm);
       }
     }
+    // A raised periscope rifle rides above the head: the hands hold the frame
+    // below it, the right on the lower grip and the left on the upright.
+    const raisedBy = !p.mantle && !p.melee ? periscopeLift(p) : 0;
+    if (raisedBy > 0.01) {
+      const position = rig.rifle.getLocalPosition();
+      rig.rifle.setLocalPosition(position.x, position.y + raisedBy, position.z);
+      this.poseArm(rig, 1, rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(0, -1.0, 0.14)), armLengths.upper, armLengths.forearm);
+    }
     this.plantFeet(p,rig,dt,tick,distance>=2);
     this.attachSupportArm(rig);
-    this.alignGripHand(rig,p,tick);
+    if (raisedBy > 0.01) this.poseArm(rig, 0, rig.rifle.getLocalTransform().transformPoint(new pc.Vec3(0, -0.62, -0.02)), supportUpperLength, supportForearmLength);
+    else this.alignGripHand(rig,p,tick);
   }
   private ragdollPose(p: Soldier) {
     const rig = this.soldiers[p.id], root = this.people[p.id];
@@ -5653,7 +5663,9 @@ export class Renderer implements CollisionWorld {
       y: crewed.previous.y + (crewed.y - crewed.previous.y) * alpha,
       z: crewed.previous.z + (crewed.z - crewed.previous.z) * alpha,
     }, view.yaw, view.pitch) : undefined;
-    const pivot = tankEye?.pivot ?? (gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop, z: visual.z }),
+    // A raised periscope rifle lifts the eye to its top mirror.
+    const raised = firstPerson && !gun ? periscopeLift(p) : 0;
+    const pivot = tankEye?.pivot ?? (gun ? emplacementView(gun).eye : { x: visual.x, y: visual.y + 1.65 - cameraDrop + raised, z: visual.z }),
       desired = tankEye?.desired ?? {
         x: visual.x - dir.x * d + Math.cos(view.yaw) * 0.65,
         y: visual.y + 2.5 - cameraDrop - dir.y * d,
@@ -5687,7 +5699,7 @@ export class Renderer implements CollisionWorld {
       }
     }
     this.camera.camera!.projection = pc.PROJECTION_PERSPECTIVE;
-    this.camera.camera!.fov += ((crewed?65:p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
+    this.camera.camera!.fov += ((crewed?65:p.hp<=0?70-15*(deathView?.zoom??0):70+((!gun && scoped(p)?scopeFov:!gun && periscopeRaised(p)?periscopeRules.fov:50)-70)*(gun ? Number(p.command.aim) : aimBlend(p,g.tick-1+alpha))) - this.camera.camera!.fov) * (1 - Math.exp(-16 * dt));
     this.camera.camera!.nearClip = firstPerson ? 0.04 : 0.08;
     if (this.fortRoof) this.fortRoof.enabled = !overview;
     // A morning fog that thins over the opening minutes (MapLook.fogLift).
@@ -5706,7 +5718,7 @@ export class Renderer implements CollisionWorld {
       this.app.scene.fog.type = "none";
     }
     this.drawFirstPerson(visualWeapon(p,g.tick-1+alpha), g.tick - 1 + alpha, dt);
-    if (this.firstPersonRig && scoped(p) && sighted(p,g.tick)) this.firstPersonRig.root.enabled = false;
+    if (this.firstPersonRig && ((scoped(p) && sighted(p,g.tick)) || periscopeRaised(p))) this.firstPersonRig.root.enabled = false;
     if (this.firstPersonRig && (overview || gun || crewed)) this.firstPersonRig.root.enabled = false;
     if (firstPerson) this.people[0].setLocalScale(pc.Vec3.ZERO);
     this.drawProjectiles(g, alpha);

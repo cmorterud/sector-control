@@ -53,6 +53,7 @@ import { smokeRules } from "./smoke";
 import { BattlefieldFeedback } from "./battlefield";
 import { weaponAim } from "./recoil";
 import { CrouchToggle, eyeHeightOf } from "./crouch";
+import { periscopeRaised } from "./periscope";
 import { PlaytestRecorder } from "./playtest";
 import { AutoQuality, parseQuality, qualityStorageKey, type Quality, type QualityChoice } from "./graphics-quality";
 import { mantleLanding, dist, groundHeight, industrialMap, blocked, beyondPlayArea, trenchGround, bodyBlocked, supportHeight } from "./map";
@@ -106,7 +107,12 @@ let spectateNext = false;
 const gasWarning = document.createElement("div");
 gasWarning.className = "gas-warning";
 gasWarning.setAttribute("role", "status");
-el("hud").append(battleSidebar, killNotice, boundaryNotice, flagNotice, reinforcementNotice, spectateLabel, gasWarning);
+// The periscope rifle's mirror shot away.
+const periscopeNotice = document.createElement("div");
+periscopeNotice.className = "periscope-notice";
+periscopeNotice.setAttribute("role", "status");
+let periscopeNoticeUntil = 0;
+el("hud").append(battleSidebar, killNotice, boundaryNotice, flagNotice, reinforcementNotice, spectateLabel, gasWarning, periscopeNotice);
 const gasScreen = new GasScreen(el("hud")), minimapGas = new GasOverlay(), tacticalGas = new GasOverlay();
 const gasAudio = new GasAudio(() => audio);
 root.querySelector(".match")!.append(reinforcementTallyBox);
@@ -319,9 +325,11 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option>${faction.support ? `<option value="support">Support · ${faction.support}</option>` : ""}<option value="emplacement">Support · Emplacement kit</option>${mortarMap(map) ? `<option value="mortar">Support · Trench mortar · ${mortarFor(factionFor(map,"blue")).name}</option>` : ""}${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option>${faction.periscope ? `<option value="periscope">Marksman · ${faction.periscope} · fires over the parapet</option>` : ""}${faction.support ? `<option value="support">Support · ${faction.support}</option>` : ""}<option value="emplacement">Support · Emplacement kit</option>${mortarMap(map) ? `<option value="mortar">Support · Trench mortar · ${mortarFor(factionFor(map,"blue")).name}</option>` : ""}${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
+  // A kit this army doesn't issue (the periscope rifle off Gallipoli) falls back to the rifle.
+  if (select.value !== chosenLoadout) select.value = chosenLoadout = "rifleman";
   if (supportsTanks(map)) {
     const armour = document.createElement("div"); armour.className = "loadout-choice";
     armour.innerHTML = tankChoice(map, tanksOn) + (started ? "<small>Takes effect when you restart the match</small>" : "");
@@ -536,6 +544,7 @@ function handle(e: Event) {
   combatFeedback.event(game,e);
   reinforcementNotices.event(game, e, performance.now(), teamName);
   offensiveNotices.event(game, e, performance.now());
+  if (e.type === "periscope" && e.owner === 0) { periscopeNoticeUntil = performance.now() + 3500; sound(2400, 0.18, 0.05); sound(3400, 0.3, 0.02); }
   if (e.type === "offensive" && e.phase === "taken" && e.next !== null) sound(game.players[0].team === game.offensive?.attacker ? 660 : 300, 0.7, 0.05);
   if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
@@ -703,10 +712,13 @@ function hud(now: number) {
   const p = game.players[0];
   const playing = !paused && !held("scoreboard");
   const aimingScope = p.hp > 0 && !paused && !tacticalMap.open && scoped(p) && sighted(p,game.tick);
+  const periscopeView = p.hp > 0 && !paused && !tacticalMap.open && periscopeRaised(p);
+  const mirrorText = !paused && now < periscopeNoticeUntil ? "MIRROR SHOT AWAY · AIM FROM THE SHOULDER UNTIL YOU REDEPLOY" : "";
+  if (periscopeNotice.textContent !== mirrorText) periscopeNotice.textContent = mirrorText;
   const clearHUD = playing && !tacticalMap.open;
   root.classList.toggle("dead",p.hp<=0);
   staged.combat=playing?combatFeedback.html(game,renderer.deathView?.yaw??weaponAim(p).yaw,p.hp<=0?deploymentChoice(p):""):"";
-  battleSidebar.hidden = !clearHUD || aimingScope;
+  battleSidebar.hidden = !clearHUD || aimingScope || periscopeView;
   if (!battleSidebar.hidden) {
     minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
     minimapGas.update(game, el("minimap"));
@@ -740,7 +752,7 @@ function hud(now: number) {
   const watched = renderer.spectating === null ? undefined : game.players[renderer.spectating];
   const watching = watched && !paused ? `WATCHING ${soldierName(watched, game.map)} · LMB NEXT` : "";
   if (spectateLabel.textContent !== watching) spectateLabel.textContent = watching;
-  el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p));
+  el("reticle").classList.toggle("hidden", sighted(p, game.tick) && !scoped(p) && !periscopeView);
   const ring = el("spread-ring"), ringRadius = paused || tacticalMap.open || renderer.deathView ? 0 :
     Math.round(spreadRingRadius(p, game.tick, renderer.camera.camera!.fov, innerHeight));
   ring.classList.toggle("hidden", !ringRadius);
@@ -773,6 +785,7 @@ function hud(now: number) {
   staged.health =
     `<small>VITALS / ${factions[p.faction ?? factionFor(map,p.team)].name.toUpperCase()}</small><strong>${Math.ceil(p.hp)}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
   root.classList.toggle("scoped", aimingScope);
+  root.classList.toggle("periscope", periscopeView);
   staged.ammo =
     `<small>${p.weaponId ?? weaponProfiles[p.weapon].label}</small><strong>${p.ammo}<em> / ${p.reserve}</em></strong><small>${p.melee ? (p.melee.kind === "charge" ? "BAYONET CHARGE / RECOVERY" : "MELEE / RECOVERY") : p.reloadAt ? "RELOADING · " + ((p.reloadAt - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" && game.tick < p.nextShot ? "CYCLING BOLT · " + ((p.nextShot - game.tick) / 30).toFixed(1) + "s" : p.weapon === "serviceRifle" ? "BOLT ACTION · CLICK TO FIRE" : p.weapon === "machineGun" ? "AUTO · HOLD TO FIRE / BRACE FOR ACCURACY" : "SEMI · CLICK TO FIRE"}</small><small>${keyLabel(settings.bindings.grenade)} · GRENADES ${p.grenades}　 ${keyLabel(settings.bindings.smoke)} · SMOKE ${p.smokes}</small>`;
   const readyIn = Math.max(
@@ -1295,6 +1308,32 @@ try {
     combat:combatReview,
     // The anti-tank kit: stand off an enemy tank's flank with the kit raised,
     // as a German (Tankgewehr) or British (armour-piercing SMLE) soldier.
+    // The periscope rifle on Gallipoli. "first": the player in a captured
+    // Lone Pine bay with the frame raised, looking through the mirror.
+    // "third": three ANZAC soldiers a few metres off, frames raised, facing the player.
+    periscope:(view:"first"|"third"="first")=>{
+      reviewManual=true;keys.clear();const p=game.players[0];
+      if(view==="first"){
+        game.commandOverride=()=>idle();
+        p.faction=factionFor(map,"blue");equipLoadout(p,"periscope");
+        const x=14,z=42;Object.assign(p,{x,z,y:groundHeight(x,z,game.map),vx:0,vz:0,yaw:Math.PI/2,pitch:0.05,protectedUntil:Infinity});
+        yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=true;aim=true;p.command={...idle(),firstPerson:true,aim:true,yaw,pitch};
+        renderer.remember(game);advanceReview(24);
+        return {lift:p.periscope?.lift,weapon:p.weaponId};
+      }
+      preferredFirstPerson=true;aim=false;
+      const row=game.players.filter(q=>q.team==="blue"&&q.id!==0).slice(0,3);
+      const ids=new Set(row.map(q=>q.id));
+      game.commandOverride=(_,q)=>ids.has(q.id)?{...idle(),aim:true,yaw:q.yaw,pitch:0}:{...idle(),yaw:q.yaw};
+      row.forEach((q,i)=>{
+        equipLoadout(q,"periscope");
+        const x=p.x+Math.sin(p.yaw)*4+Math.cos(p.yaw)*(i-1)*1.4,z=p.z-Math.cos(p.yaw)*4+Math.sin(p.yaw)*(i-1)*1.4;
+        Object.assign(q,{x,z,y:groundHeight(x,z,game.map),vx:0,vz:0,hp:100,yaw:p.yaw+Math.PI*0.75,pitch:0,protectedUntil:Infinity,command:idle()});
+      });
+      Object.assign(p,{protectedUntil:Infinity});yaw=p.yaw;pitch=p.pitch=-0.05;
+      renderer.remember(game);advanceReview(24);
+      return row.map(q=>({id:q.id,lift:q.periscope?.lift,weapon:q.weaponId}));
+    },
     antiTank:(stage:"aim"|"fire"|"status",side:"german"|"british"="german",range=22)=>{
       const p=game.players[0];reviewManual=true;keys.clear();preferredFirstPerson=true;
       if(stage==="aim"){p.team=side==="german"?"red":"blue";p.faction=side;equipLoadout(p,"antiTank");}

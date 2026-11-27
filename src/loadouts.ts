@@ -3,8 +3,8 @@ import type { Soldier } from "./simulation";
 import { weaponProfile, type WeaponKind } from "./weapons";
 import { issuedTo, weaponStats, type WeaponRole } from "./weapon-stats";
 export type FactionId = "british" | "german" | "french" | "anzac" | "ottoman" | "trainingBlue" | "trainingRed";
-export type Loadout = "rifleman" | "marksman" | "support" | "emplacement" | "antiTank" | "mortar";
-export const loadoutIds: Loadout[] = ["rifleman", "marksman", "support", "emplacement", "antiTank", "mortar"];
+export type Loadout = "rifleman" | "marksman" | "periscope" | "support" | "emplacement" | "antiTank" | "mortar";
+export const loadoutIds: Loadout[] = ["rifleman", "marksman", "periscope", "support", "emplacement", "antiTank", "mortar"];
 export type WeaponSlot = "primary" | "sidearm";
 export interface WeaponState { kind: WeaponKind; id: string; ammo: number; reserve: number; nextShot: number; lastShotAt: number }
 function factionWeapons(faction: FactionId) {
@@ -12,7 +12,7 @@ function factionWeapons(faction: FactionId) {
   const name = (role: WeaponRole) => find(role)!;
   // Only the armies that fight indoors have a carbine; the Gallipoli armies
   // have no light machine gun and no anti-tank kit (no tanks before 1916).
-  return { rifle: name("rifle"), carbine: find("carbine"), scoped: name("scoped"), support: find("machineGun"), antiTank: find("antiTank"), pistol: name("pistol") };
+  return { rifle: name("rifle"), carbine: find("carbine"), scoped: name("scoped"), periscope: find("periscope"), support: find("machineGun"), antiTank: find("antiTank"), pistol: name("pistol") };
 }
 export const factions = {
   british: { name: "Britain", shirt: "#77745a", trousers: "#68644f", helmet: "#62644e", ...factionWeapons("british") },
@@ -23,8 +23,8 @@ export const factions = {
   // `helmet` is the hat's colour: neither army had steel helmets in 1915.
   anzac: { name: "ANZAC", shirt: "#8f8160", trousers: "#7d7154", helmet: "#76654a", ...factionWeapons("anzac") },
   ottoman: { name: "Ottoman Empire", shirt: "#776c4c", trousers: "#6a6045", helmet: "#94855d", ...factionWeapons("ottoman") },
-  trainingBlue: { name: "Blue training", shirt: "#597f91", trousers: "#4d5853", helmet: "#586c68", rifle: "AR-01", carbine: undefined, scoped: "Scoped training rifle", support: "Training LMG", antiTank: undefined, pistol: "Training pistol" },
-  trainingRed: { name: "Red training", shirt: "#9f685a", trousers: "#62594b", helmet: "#796d57", rifle: "AR-01", carbine: undefined, scoped: "Scoped training rifle", support: "Training LMG", antiTank: undefined, pistol: "Training pistol" },
+  trainingBlue: { name: "Blue training", shirt: "#597f91", trousers: "#4d5853", helmet: "#586c68", rifle: "AR-01", carbine: undefined, scoped: "Scoped training rifle", periscope: undefined, support: "Training LMG", antiTank: undefined, pistol: "Training pistol" },
+  trainingRed: { name: "Red training", shirt: "#9f685a", trousers: "#62594b", helmet: "#796d57", rifle: "AR-01", carbine: undefined, scoped: "Scoped training rifle", periscope: undefined, support: "Training LMG", antiTank: undefined, pistol: "Training pistol" },
 };
 // A debug override (?factions=anzac,ottoman) that dresses both sides of any
 // map in other armies, to try a faction's kit on familiar ground.
@@ -95,11 +95,13 @@ export function equipLoadout(p: Soldier, loadout: Loadout, kit: Kit = "service")
     return { kind, id, ammo: profile.magazine, reserve: profile.reserve, nextShot: 0, lastShotAt: -1000 };
   };
   const antiTank = loadout === "antiTank" ? f.antiTank : undefined;
+  // Only ANZAC has a periscope rifle; anyone else asking gets the scoped rifle.
+  const periscope = loadout === "periscope" ? f.periscope ?? f.scoped : undefined;
   // An army without a light machine gun (Gallipoli, 1915) sends Support out
   // with the service rifle.
   const gunner = loadout === "support" && !!f.support;
   p.inventory = {
-    primary: make(gunner ? "machineGun" : industrial && loadout === "rifleman" ? "rifle" : "serviceRifle", gunner ? f.support! : loadout === "marksman" ? f.scoped : antiTank ?? riflemanWeapon(p.faction ?? "british", kit)),
+    primary: make(gunner ? "machineGun" : industrial && loadout === "rifleman" ? "rifle" : "serviceRifle", gunner ? f.support! : loadout === "marksman" ? f.scoped : periscope ?? antiTank ?? riflemanWeapon(p.faction ?? "british", kit)),
     sidearm: make("pistol", f.pistol),
   };
   // The set-up kits leave only the pistol in hand.
@@ -108,6 +110,8 @@ export function equipLoadout(p: Soldier, loadout: Loadout, kit: Kit = "service")
   p.ammo = primary.ammo; p.reserve = primary.reserve; p.nextShot = primary.nextShot; p.lastShotAt = primary.lastShotAt;
   p.weapon = primary.kind; p.weaponId = primary.id;
   p.reloadAt = 0; p.aimSince = -1; p.weaponChange=undefined; p.aimMotion=undefined;
+  // A fresh life brings a whole mirror.
+  p.periscope = undefined;
 }
 export function switchWeapon(p:Soldier, slot:WeaponSlot, tick:number) {
   if ((p.loadout === "emplacement" || p.loadout === "mortar") && slot === "primary" && p.inventory?.primary.kind !== "flamethrower") return false;

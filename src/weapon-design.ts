@@ -255,8 +255,29 @@ function pistol(family: string): WeaponDesign {
     actionOrigin: origin, boltGrip: [0, 0, 0], lift: 0, travel: .035, soundPitch: webley ? .83 : luger ? 1.18 : c96 ? 1.08 : 1.3, trigger: [0,-.045,.07],
   };
 }
+// Beech's periscope rifle: the SMLE clamped on top of a wooden frame that
+// drops 0.9 m (periscopeRules.lift) to a lower butt and grip, a box periscope down its left side
+// and a wire from the lower grip to the trigger. Raised, the shooter's
+// shoulder is at the lower butt and the rifle rides above his head.
+function periscopeRifle(): WeaponDesign {
+  const base = rifle("smle"), drop = .9;
+  return {
+    ...base, family: "periscope",
+    parts: [
+      ...base.parts,
+      box("periscope frame upright", [0, -drop / 2 - .04, .44], [.05, drop, .06], "walnut"),
+      box("periscope frame foot", [0, -drop / 2 - .04, -.02], [.045, drop * .85, .045], "walnut"),
+      part("periscope lower butt", "stock", [0, -drop - .02, .3], [.1, .42, .15], "walnut", [90, 0, 0]),
+      box("periscope lower grip", [0, -drop - .1, .14], [.04, .12, .05], "walnut"),
+      box("periscope box", [-.075, -drop / 2 + .02, .14], [.055, drop + .12, .07], "dark"),
+      box("periscope top mirror", [-.075, .1, .14], [.07, .07, .075], "edge"),
+      box("periscope lower mirror", [-.075, -drop + .06, .14], [.07, .07, .075], "edge"),
+      box("periscope trigger wire", [0, -drop / 2 - .06, .17], [.006, drop - .06, .006], "steel"),
+    ],
+  };
+}
 const designs = {
-  smle: rifle("smle"), gewehr: rifle("gewehr"), berthier: rifle("berthier"), lebel: rifle("lebel"),
+  smle: rifle("smle"), periscope: periscopeRifle(), gewehr: rifle("gewehr"), berthier: rifle("berthier"), lebel: rifle("lebel"),
   gewehrCarbine: rifle("gewehr", true), berthierCarbine: rifle("berthier", true),
   lewis: support("lewis"), mg08: support("mg08"), chauchat: support("chauchat"),
   webley: pistol("webley"), luger: pistol("luger"), ruby: pistol("ruby"), c96: pistol("c96"),
@@ -264,7 +285,7 @@ const designs = {
   tankgewehr: tankgewehr(),
 };
 const ids: Record<string, keyof typeof designs> = {
-  "SMLE Mk III":"smle", "Scoped SMLE":"smle", "Gewehr 98":"gewehr", "Scoped Gewehr 98":"gewehr",
+  "SMLE Mk III":"smle", "Scoped SMLE":"smle", "Periscope rifle":"periscope", "Gewehr 98":"gewehr", "Scoped Gewehr 98":"gewehr",
   "Karabiner 98AZ":"gewehrCarbine", "Berthier Mle 1892 M16":"berthierCarbine",
   "Berthier Mle 1916":"berthier", "Scoped Lebel":"lebel", "Lewis Mk I":"lewis", "MG 08/15":"mg08", "Chauchat":"chauchat",
   "Webley Mk VI":"webley", "Mauser 1903":"mauser", "Scoped Mauser 1903":"mauser", "Mauser C96":"c96",
