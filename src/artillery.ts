@@ -2,6 +2,7 @@ import { auditArtilleryCall } from "./artillery-audit";
 import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
 import { spawnLineDistance } from "./spawn-front";
+import { teamSpawn } from "./offensive";
 import { hillHeight, beyondPlayArea, blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
 import {
   idle,
@@ -222,7 +223,7 @@ function ambientPick(g: Game, state: { seed: number }): { target: Vec; team: Tea
         (s) => dist(s, target) < ambientArtilleryRules.spawnClearance,
       ) ||
       (["blue", "red"] as const).some(
-        (team) => spawnLineDistance(g.map, team, target) < ambientArtilleryRules.spawnLineClearance,
+        (team) => spawnLineDistance(g.map, team, target, teamSpawn(g, team)) < ambientArtilleryRules.spawnLineClearance,
       )
     )
       continue;

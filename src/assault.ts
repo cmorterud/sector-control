@@ -1,3 +1,4 @@
+import { objectiveOpen } from "./offensive";
 import { weaponProfile } from "./weapons";
 import { availableCraterCover, craterDepth } from "./crater-cover";
 import { hillHeight,
@@ -100,7 +101,8 @@ export function advanceAssaults(g: Game) {
     const flags =
       g.scoring === "domination"
         ? g.sectors.filter(
-            (s) => s.home === enemy && (s.owner !== team || s.contested),
+            // Attack and defend: whichever open flag the side does not hold.
+            (s) => (g.offensive ? objectiveOpen(g, s) : s.home === enemy) && (s.owner !== team || s.contested),
           )
         : [];
     if (g.scoring === "domination" && !flags.length) continue;

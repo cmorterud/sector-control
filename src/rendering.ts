@@ -44,7 +44,7 @@ import { SceneryBatches } from "./scenery-batches";
 import { combatReactionPose } from "./combat-reaction";
 import { switchPose, visualWeapon, aimBlend } from "./weapon-handling";
 import { bayonetMount, weaponDesign } from "./weapon-design";
-import { flagCloth, flagColor, flagRingColor, type FlagState } from "./flag";
+import { flagCloth, flagColor, flagRingColor, lockedRingColor, type FlagState } from "./flag";
 import { CtfMarkers } from "./ctf-render";
 import { factionFor, factions, scoped } from "./loadouts";
 import { terrainNormals, invalidateTerrainNormals } from "./terrain-shading";
@@ -100,6 +100,7 @@ import { heatRules } from "./weapon-heat";
 import { firstPersonView, sighted, sightHeight, scopeFov, viewWeaponPosition, weaponPullback, barrelEnd, viewDirection } from "./player-view";
 import { smokeRules, smokeDensity } from "./smoke";
 import { artilleryRules } from "./artillery";
+import { flagStatus } from "./offensive";
 import { dominationRules, flagContains } from "./domination";
 import * as pc from "playcanvas";
 import { createPhysicsWorld, TerrainPhysics } from "./physics";
@@ -5550,7 +5551,8 @@ export class Renderer implements CollisionWorld {
         // Domination flags are dyed cloth over a worn painted ring; other modes keep a bright beacon.
         flags = g.scoring === "domination",
         c = flags ? flagColor(state, this.map) : beaconColors[state],
-        ringColor = flags ? flagRingColor(state, this.map) : c;
+        // Attack and defend: a ring that cannot change hands now fades to grey.
+        ringColor = flagStatus(g, i) !== "open" ? lockedRingColor : flags ? flagRingColor(state, this.map) : c;
       const root = this.rings[i];
       if (g.scoring === "domination" && positionObjectives) {
         const water = this.map.fort && inFortRect(s, this.map.fort.water) ? this.map.fort.waterHeight : 0;

@@ -1,4 +1,4 @@
-import { finalPhase, finalPhaseTicks, lowThreshold, reinforcementRules } from "./reinforcements";
+import { finalPhase, finalPhaseTicks, limited, lowThreshold, reinforcementRules } from "./reinforcements";
 import type { Event, Game, Soldier, Team } from "./simulation";
 
 // HUD text for the final phase's limited reinforcements. Strings only, so the
@@ -13,7 +13,8 @@ const noticeMs = 6000;
 // The pools under the score, or before the final phase what is coming.
 export function reinforcementTally(g: Game): string {
   const r = g.reinforcements;
-  if (!r.enabled) return "";
+  // Attack and defend shows the attacker's pool in its own strip (src/offensive-hud.ts).
+  if (!r.enabled || g.offensive) return "";
   if (!finalPhase(g))
     return `<small class="reinforcement-hint">LIMITED REINFORCEMENTS AT ${clock(finalPhaseTicks(g.duration))} OR ${Math.ceil(g.scoreLimit! * reinforcementRules.scoreShare)} ${g.scoring === "ctf" ? "CAPTURES" : "POINTS"}</small>`;
   const count = (team: Team) =>
@@ -23,11 +24,11 @@ export function reinforcementTally(g: Game): string {
 
 // Whether this soldier is down for the rest of the match.
 export const outOfReinforcements = (g: Game, p: Soldier) =>
-  p.hp <= 0 && finalPhase(g) && g.reinforcements.remaining[p.team] <= 0;
+  p.hp <= 0 && limited(g, p.team) && g.reinforcements.remaining[p.team] <= 0;
 
 // The death card's line in place of the respawn countdown, if it changes.
 export function reinforcementCountdown(g: Game, p: Soldier, seconds: number): string | undefined {
-  if (!finalPhase(g)) return undefined;
+  if (!limited(g, p.team)) return undefined;
   if (outOfReinforcements(g, p)) {
     const standing = g.players.filter((q) => q.team === p.team && q.hp > 0).length;
     return `No reinforcements · ${standing} of your side still ${standing === 1 ? "stands" : "stand"}`;

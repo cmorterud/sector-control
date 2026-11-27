@@ -520,6 +520,15 @@ a.armory-link:hover { background: #3f5856; }
 .minimap-flag[data-state="blue"] { background: #64bdd6; }
 .minimap-flag[data-state="red"] { background: #e38e77; }
 .minimap-flag[data-state="contested"] { background: #efd07b; }
+/* Attack and defend: flags outside the open phase are greyed and padlocked. */
+.minimap-flag:is([data-status="locked"], [data-status="taken"]) { filter: grayscale(0.75) brightness(0.8); opacity: 0.85; }
+.minimap-flag .padlock { position: absolute; right: -5px; top: -5px; width: 7px; height: 8px; color: #ede5c8; filter: drop-shadow(0 0 1px #000); }
+.padlock { width: 0.7em; height: 0.85em; margin-left: 3px; vertical-align: -1px; }
+.flag-sector:is(.locked, .taken) { opacity: 0.6; filter: grayscale(0.6); }
+.objective:is(.locked, .taken) { opacity: 0.55; }
+.offensive-tag small.blue { color: #8fd0e2; }
+.offensive-tag small.red { color: #eaa18e; }
+.offensive-tag small.low { color: #efd07b; }
 .minimap-player {
   position: absolute;
   width: 12px;

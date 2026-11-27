@@ -1,4 +1,5 @@
 import { ctfMap, supportsCtf } from "./ctf";
+import { dominationMap } from "./offensive";
 import { fortVauxMap } from "./fort-vaux-map";
 import { gallipoliMap } from "./gallipoli-map";
 import { headlandMap } from "./headland-map";
@@ -27,6 +28,8 @@ export interface BattleMode {
 export function battleModes(map: MapDefinition): BattleMode[] {
   return [
     { id: "default", map },
+    // A map that plans an attack (src/offensive.ts) is also played as domination.
+    ...(map.offensive ? [{ id: "domination", map: dominationMap(map) }] : []),
     ...(supportsCtf(map) ? [{ id: "ctf", map: ctfMap(map) }] : []),
   ];
 }

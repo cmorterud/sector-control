@@ -72,8 +72,9 @@ export function rosterWeapon(
   teamSize: number,
   human: boolean,
   trenches = false,
+  lightMachineGuns = true,
 ): WeaponKind {
-  if (human) return trenches ? "serviceRifle" : "rifle";
+  if (human || !lightMachineGuns) return trenches ? "serviceRifle" : "rifle";
   const count = Math.floor(teamSize / 12);
   for (let i = 0; i < count; i++)
     if (index === Math.floor(((i + 0.5) * teamSize) / count))

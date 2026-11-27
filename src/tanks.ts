@@ -12,6 +12,7 @@
 // tank throws a track and becomes a pillbox; a destroyed one leaves a wreck
 // that stops bullets, and its crew bail out. Tanks also ditch in gaps too
 // wide to bridge, such as shell-widened trenches, and now and then stall.
+import { objectiveOpen } from "./offensive";
 import { angleDelta } from "./awareness";
 import { carriedFlag } from "./ctf";
 import { crushWire, damageVegetation, type DestructionChange, type ExplosionProfile } from "./destruction";
@@ -927,7 +928,7 @@ export function tankBotCommand(g: Game, p: Soldier, t: Tank): Command {
   if (g.tick >= bot.nextPlan) {
     bot.nextPlan = g.tick + 150 + (t.id % 30);
     const ctf = g.scoring === "ctf";
-    const sectors = g.sectors.filter(s => ctf ? s.home !== t.team : s.owner !== t.team || s.contested);
+    const sectors = g.sectors.filter(s => ctf ? s.home !== t.team : (s.owner !== t.team || s.contested) && objectiveOpen(g, s));
     const pick = (sectors.length ? sectors : g.sectors.filter(s => s.home !== t.team)).sort((a, b) => dist(a, t) - dist(b, t))[0] ?? g.sectors[0];
     bot.objective = pick ? { x: pick.x, z: pick.z } : undefined;
   }

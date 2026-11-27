@@ -7,6 +7,7 @@
 import { dist, walkSegment, type Box, type Vec } from "./map";
 import { angleDelta, semiAutoIntent, turnToward } from "./awareness";
 import { flagContains } from "./domination";
+import { objectiveOpen } from "./offensive";
 import { gasCost } from "./gas";
 import { maskedBotAim } from "./hip-fire";
 import {
@@ -315,13 +316,15 @@ function commandTeam(g: Game, team: Team) {
   const contacts = t.squads
     .filter((s) => s.team === team && s.contact && fresh(g, s.contact, g.botSettings.squadMemoryTicks))
     .map((s) => s.contact!);
+  // Attack and defend: only the open phase's flags are worth sending anyone to.
   const flags = g.sectors.map((s, i) => {
     const owned = s.owner === team;
     const threatened =
       owned && (s.contested || Math.abs(s.control) < 0.97 || contacts.some((c) => dist(c, s) < 25));
     return { s, i, owned, threatened };
-  });
-  const assigned = flags.map(() => 0);
+  }).filter((f) => objectiveOpen(g, f.i));
+  if (!flags.length) return;
+  const assigned = g.sectors.map(() => 0);
   const centre = (s: Squad) => {
     const alive = living(g, s);
     if (!alive.length) return g.map.spawn[team];
@@ -331,6 +334,7 @@ function commandTeam(g: Game, team: Team) {
     };
   };
   for (const s of squads) s.reserve = false;
+  const attacking = g.offensive?.attacker === team;
   const owned = flags.filter((f) => f.owned);
   const enemyHeld = flags.filter((f) => f.s.owner && !f.owned).length;
   const behind = Math.max(0, enemyHeld - owned.length);
@@ -353,9 +357,11 @@ function commandTeam(g: Game, team: Team) {
       (f.threatened ? 25 : 0) -
       (f.s.contested ? 15 : 0) -
       (f.s.owner && !f.owned ? 10 + 15 * behind : 0) +
-      assigned[f.i] * 45;
+      assigned[f.i] * 45 +
+      // An attacker in an offensive goes for the flag it has seen fewer defenders on.
+      (attacking ? contacts.filter((c) => dist(c, f.s) < 25).length * 12 : 0);
     const best = flags.reduce((a, b) => (cost(b) < cost(a) ? b : a));
-    const current = flags[s.objective];
+    const current = flags.find((f) => f.i === s.objective);
     if (!current || cost(best) + 12 < cost(current)) s.objective = best.i;
     assigned[s.objective]++;
   }
@@ -405,7 +411,7 @@ export function formUp(g: Game, p: Soldier, c: Command) {
 // The squad's flag, when the commander chose it.
 export function squadObjective(g: Game, p: Soldier) {
   const s = squadOf(g, p);
-  return squadFeatures.commander && s?.commanded && s.objective >= 0 ? s.objective : undefined;
+  return squadFeatures.commander && s?.commanded && s.objective >= 0 && objectiveOpen(g, s.objective) ? s.objective : undefined;
 }
 
 // Members take posts near their leader's post rather than anywhere round the flag.

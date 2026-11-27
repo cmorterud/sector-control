@@ -4,6 +4,7 @@
 // (no cover, no firing, a straight predictable run) and gain nothing from
 // numbers alone at range. A charge that reaches defenders already shaken by
 // fire, smoke or shells breaks them for a moment, and that is its reward.
+import { objectiveOpen } from "./offensive";
 import { angleDelta, awarenessSample, turnToward } from "./awareness";
 import { hillHeight, beyondPlayArea, dist, mantleLanding, walkSegment, type Vec } from "./map";
 import { chargeStance, meleeReady } from "./melee";
@@ -110,7 +111,7 @@ export function whistleTarget(g: Game, p: Soldier, yaw: number, pitch: number): 
     dist(p, v) > 6 && dist(p, v) < range && Math.abs(angleDelta(yaw, bearing(p, v))) < cone;
   const nearest = (vs: Vec[]) => vs.sort((a, b) => dist(p, a) - dist(p, b))[0];
   // In capture the flag the sectors are pickup points; skip your own side's.
-  const flag = nearest(g.sectors.filter((s) => s.owner !== p.team && (g.scoring !== "ctf" || s.home !== p.team) && ahead(s, 70)));
+  const flag = nearest(g.sectors.filter((s) => s.owner !== p.team && (g.scoring !== "ctf" || s.home !== p.team) && objectiveOpen(g, s) && ahead(s, 70)));
   if (flag) return { x: flag.x, z: flag.z };
   const enemy = p.team === "blue" ? "red" : "blue";
   const front = g.map.terrain?.trenchLines?.find((l) => l.team === enemy && l.role === "front");

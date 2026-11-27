@@ -378,11 +378,11 @@ describe("capture the flag presentation", () => {
 
   it("offers the mode only on maps that lay it out, keeping the rest of the query", () => {
     const query = new URLSearchParams("map=trenches&view=third");
-    const domination = modeChoice(trenchMap, false, query);
+    const domination = modeChoice(trenchMap, "domination", query);
     expect(domination).toContain('href="?map=trenches&view=third&mode=ctf"');
     expect(domination).toMatch(/<span aria-current="page"><strong>Domination/);
-    expect(modeChoice(trenchMap, true, new URLSearchParams("map=trenches&mode=ctf"))).toContain('href="?map=trenches"');
-    expect(modeChoice(villageMap, false, query)).toBe("");
+    expect(modeChoice(trenchMap, "ctf", new URLSearchParams("map=trenches&mode=ctf"))).toContain('href="?map=trenches"');
+    expect(modeChoice(villageMap, "domination", query)).toBe("");
   });
 });
 

@@ -19,7 +19,7 @@ import { advanceMortars, createMortarState, mortarMap, operateMortar, type Morta
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
 import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
-import { equipLoadout, kitFor, loadoutIds, switchWeapon, factionFor, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
+import { equipLoadout, kitFor, loadoutIds, switchWeapon, factionFor, factions, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
 import {
   planVillageMove,
   villageSpawn,
@@ -121,6 +121,7 @@ import {
 import { dominationRules, dominationPost, flagOccupant } from "./domination";
 import { advanceCtf, createCtf, ctfBotCommand, ctfCommand, ctfGoal, ctfGoalUnroutable, ctfRules, type CtfEvent, type CtfState } from "./ctf";
 import { terrainRayCeiling } from "./terrain-ray-bounds";
+import { advanceOffensive, createOffensive, objectiveOpen, offensiveDuration, respawnTicks, teamSpawn, type OffensiveState } from "./offensive";
 import { advanceReinforcements, createReinforcements, reinforcementsLeft, takeReinforcement, type ReinforcementState } from "./reinforcements";
 import {
   advanceTactics, audible, checkCorners, collapseEscape, createTactics, dangerCost, formUp, grenadeCommand, heard, listen,
@@ -743,6 +744,7 @@ export type Event = { id: number; tick: number } & (
     }
   | { type: "end"; winner: Team | "draw" }
   | import("./reinforcements").ReinforcementEvent
+  | import("./offensive").OffensiveEvent
   | { type: "emplacement"; actor: number; phase: "deploy" | "mount" | "dismount" | "reload" | "pack" | "destroy"; owner: number }
   // Trench mortar bombs: leaving the tube, whistling down, bursting, or an
   // aim point refused for being on a deployment line.
@@ -1030,6 +1032,8 @@ export class Game {
   ctf?: CtfState;
   // The final phase's team respawn pools; see reinforcements.ts.
   reinforcements: ReinforcementState;
+  // Attack and defend's phases and clock (src/offensive.ts).
+  offensive?: OffensiveState;
   constructor(
     public collision: CollisionWorld,
     public bots = true,
@@ -1066,7 +1070,7 @@ export class Game {
     this.scoring = this.map.scoring ?? "sectors";
     this.scoreLimit =
       this.scoring === "ctf" ? ctfRules.captureLimit :
-      this.scoring === "domination" && this.map.id !== "training" ? dominationRules.scoreLimit : null;
+      this.scoring === "domination" && this.map.id !== "training" && !this.map.offensive ? dominationRules.scoreLimit : null;
     this.ctf = createCtf(this.map);
     this.botSettings = {
       ...botSettingsFor(this.map, botSettings?.difficulty),
@@ -1079,7 +1083,10 @@ export class Game {
       owner: null,
       contested: false,
     }));
-    this.duration = this.map.id === "training" ? Number.MAX_SAFE_INTEGER : duration;
+    this.offensive = createOffensive(this.map, this.sectors);
+    // The attack keeps its own clock; the match lasts as long as it could.
+    this.duration = this.map.id === "training" ? Number.MAX_SAFE_INTEGER :
+      this.map.offensive ? offensiveDuration(this.map.offensive) + 1 : duration;
     this.seed = seed;
     for (let i = 0; i < (bots ? this.teamSize * 2 : 1); i++) {
       const team: Team = i < this.teamSize ? "blue" : "red";
@@ -1090,6 +1097,8 @@ export class Game {
           this.teamSize,
           this.humanPlayerIds.includes(i),
           this.map.id !== "industrial",
+          // An army without a light machine gun gives those slots to riflemen.
+          !!factions[factionFor(this.map, team)].support,
         ),
         team,
         teamIndex: i % this.teamSize,
@@ -1205,6 +1214,7 @@ export class Game {
       tactics: this.tactics,
       ctf: this.ctf,
       reinforcements: this.reinforcements,
+      offensive: this.offensive,
       world: this.map.destruction,
     });
   }
@@ -1237,7 +1247,7 @@ export class Game {
       p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;
       p.weaponId = retainedPrimary?.id ?? p.weaponId; p.inventory.primary.id = p.weaponId!;
     }
-    const s = this.map.spawn[p.team];
+    const s = teamSpawn(this, p.team);
     if (this.teamSize <= 5 && !this.map.terrain) {
       p.x = s.x + (p.teamIndex - 2) * 1.8;
       p.z = s.z;
@@ -1599,6 +1609,11 @@ export class Game {
     advanceFlares(this);
     advanceCtf(this);
     for (const s of this.scoring !== "eliminations" && this.scoring !== "ctf" ? this.sectors : []) {
+      // Attack and defend: a flag outside the open phase is locked.
+      if (!objectiveOpen(this, s)) {
+        s.contested = false;
+        continue;
+      }
       const occupants = this.players.filter((p) =>
           this.scoring === "domination"
             ? flagOccupant(this, p, s)
@@ -1630,7 +1645,7 @@ export class Game {
       this.emit({ type: "score" });
     }
     if (
-      this.scoring === "domination" &&
+      this.scoring === "domination" && !this.offensive &&
       this.tick % dominationRules.scoreInterval === 0
     ) {
       const held = { blue: 0, red: 0 };
@@ -1644,7 +1659,7 @@ export class Game {
         }
       this.emit({ type: "score", points: { ...this.scores }, held });
     }
-    const decided = advanceReinforcements(this);
+    const decided = advanceOffensive(this) ?? advanceReinforcements(this);
     if (
       decided ||
       this.tick >= this.duration ||
@@ -2091,7 +2106,7 @@ export class Game {
         this.players.find(p=>p.id===credit.actor)!.assists++;
         this.emit({type:"assist",actor:credit.actor,target:victim.id,damage:credit.damage});
       }
-      victim.respawnAt = this.tick + 150;
+      victim.respawnAt = this.tick + respawnTicks(this, victim.team);
       victim.mode = "Respawn";
       victim.reloadAt = 0;
       victim.throwUntil = 0;
@@ -2893,6 +2908,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
     } else {
       const ranks = g.sectors.map((s, i) => ({
         i,
+        open: objectiveOpen(g, i),
         weight:
           dist(p, s) +
           (s.owner === p.team ? 32 : 0) +
@@ -2902,9 +2918,9 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
           ).length *
             14,
       }));
-      ranks.sort((a, b) => a.weight - b.weight);
+      ranks.sort((a, b) => Number(b.open) - Number(a.open) || a.weight - b.weight);
       const current = ranks.find((rank) => rank.i === p.objective)!;
-      if (ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
+      if (!current.open || ranks[0].weight + 12 < current.weight) p.objective = ranks[0].i;
       if (usesVillageTactics(g.map))
         planVillageMove(g, p, (a, b) => pathfind(a, b, g.map, true, dangerCost(g, p.team)));
       else p.path = pathfind(p, g.sectors[p.objective], g.map, true, dangerCost(g, p.team));

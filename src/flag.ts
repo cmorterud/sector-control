@@ -13,6 +13,8 @@ const scaled = (hex: string, k: number) => "#" + [1, 3, 5]
 export const flagColor = (state: FlagState, map: Pick<MapDefinition, "fort">) => scaled(dyes[state], tone(map));
 // The ring painted on the ground around a flag: the same dye, worn darker.
 export const flagRingColor = (state: FlagState, map: Pick<MapDefinition, "fort">) => scaled(dyes[state], tone(map) * 0.72);
+// A ring that cannot change hands now (attack and defend's locked phases): grey chalk.
+export const lockedRingColor = "#6f6d62";
 
 // A flag in still or light air. `length` runs out from the pole and `height`
 // down it; the origin is the top of the hoist. The fly end sinks through `droop`

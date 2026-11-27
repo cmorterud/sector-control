@@ -1,5 +1,6 @@
 import { beyondPlayArea, blocked, coastDistance, dist, inWire, outOfBounds, playArea, walkSegment, type MapDefinition, type Vec } from "./map";
 import { dominationRules } from "./domination";
+import { teamSpawn } from "./offensive";
 import { pathfind, type Game, type Soldier, type Team } from "./simulation";
 
 // Spawning along the front. On the open battlefields a side does not appear in
@@ -26,16 +27,18 @@ export const spreadsAlongFront = (map: Pick<MapDefinition, "id" | "sky">) =>
 
 export interface SpawnFront { x: number; z0: number; z1: number }
 
-const fronts = new WeakMap<MapDefinition, Partial<Record<Team, SpawnFront>>>();
+const fronts = new WeakMap<MapDefinition, Map<string, SpawnFront>>();
 
 // Where a side's line runs: across z at its spawn's x, as long as the land and
 // play area allow, and no longer than the side's own trench lines where it has them.
-export function spawnFront(map: MapDefinition, team: Team): SpawnFront {
+// Attack and defend moves a side's spawn as phases fall (src/offensive.ts).
+export function spawnFront(map: MapDefinition, team: Team, s: Vec = map.spawn[team]): SpawnFront {
   let cache = fronts.get(map);
-  if (!cache) fronts.set(map, (cache = {}));
-  const known = cache[team];
+  if (!cache) fronts.set(map, (cache = new Map()));
+  const key = `${team}:${s.x},${s.z}`;
+  const known = cache.get(key);
   if (known) return known;
-  const s = map.spawn[team], m = spawnFrontRules.edgeMargin;
+  const m = spawnFrontRules.edgeMargin;
   let limit = playArea(map).depth / 2 - m;
   const lines = map.terrain?.trenchLines?.filter((l) => l.team === team) ?? [];
   let lo = -limit, hi = limit;
@@ -48,13 +51,15 @@ export function spawnFront(map: MapDefinition, team: Team): SpawnFront {
   let z0 = s.z, z1 = s.z;
   while (z0 - 1 >= lo && land(z0 - 1)) z0--;
   while (z1 + 1 <= hi && land(z1 + 1)) z1++;
-  return (cache[team] = { x: s.x, z0, z1 });
+  const front = { x: s.x, z0, z1 };
+  cache.set(key, front);
+  return front;
 }
 
 // How far a point is from a side's spawn line, for keeping shells and gas off it.
-export function spawnLineDistance(map: MapDefinition, team: Team, at: Vec): number {
-  if (!spreadsAlongFront(map)) return dist(at, map.spawn[team]);
-  const f = spawnFront(map, team);
+export function spawnLineDistance(map: MapDefinition, team: Team, at: Vec, spawn: Vec = map.spawn[team]): number {
+  if (!spreadsAlongFront(map)) return dist(at, spawn);
+  const f = spawnFront(map, team, spawn);
   return Math.hypot(at.x - f.x, Math.max(f.z0 - at.z, 0, at.z - f.z1));
 }
 
@@ -113,7 +118,7 @@ export function frontSlot(front: SpawnFront, index: number, size: number) {
 // The line position for a soldier on a map that spreads along its front, or null.
 export function frontSpawn(g: Game, p: Soldier): Vec | null {
   if (!spreadsAlongFront(g.map)) return null;
-  const front = spawnFront(g.map, p.team);
+  const front = spawnFront(g.map, p.team, teamSpawn(g, p.team));
   const back = -Math.sign(g.map.spawn[p.team === "blue" ? "red" : "blue"].x - front.x) || (p.team === "blue" ? -1 : 1);
   const slot = frontSlot(front, p.teamIndex, g.teamSize);
   return clearSpawnSpot(g, p, { x: front.x + back * slot.row * spawnFrontRules.rowGap, z: slot.z }, back);
