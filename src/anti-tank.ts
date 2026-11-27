@@ -21,6 +21,8 @@ export const antiTankRules = {
   // cannot yet see or reach, closing to `huntStandoff` metres.
   huntRange: 150,
   huntStandoff: 35,
+  // Ticks a hunter with no route to its standoff point keeps to its other orders.
+  huntRetryTicks: 150,
   // Where on the hull a bot aims, above the bottom of the tracks: the cab and
   // the slits on a tank coming on, the side plates otherwise.
   aimHeight: 1.5,
@@ -41,11 +43,21 @@ export function antiTankTarget(g: Game, p: Soldier): Tank | undefined {
     .find(t => g.collision.ray(eye, { x: t.x, y: t.y + antiTankRules.aimHeight, z: t.z }) > 0.99);
 }
 
+// Hunters whose standoff point had no route, until the tick they try again.
+const huntBlocked = new WeakMap<Soldier, number>();
+// The planner found no route to the hunt point (it may lie in a shell hole,
+// wire or a building): go on with the soldier's other orders for a while
+// instead of standing still. Without this, anti-tank riflemen waited at the
+// spawn for the whole battle when the tank sat beyond a trench.
+export function blockAntiTankHunt(g: Pick<Game, "tick">, p: Soldier) {
+  huntBlocked.set(p, g.tick + antiTankRules.huntRetryTicks);
+}
 // Where a kit-carrying bot should go to get a shot at an enemy tank it can't
 // yet see or reach: a spot short of the tank, on its own side of it. Nothing
 // once it has a shot (antiTankBotAim takes over) or no tank is in the field.
 export function antiTankHunt(g: Game, p: Soldier): Vec | undefined {
   if (!carriesAntiTank(p) || p.tank !== undefined || p.hp <= 0 || !g.tanks?.list.length) return undefined;
+  if (g.tick < (huntBlocked.get(p) ?? -Infinity)) return undefined;
   const tank = g.tanks.list
     .filter(t => t.team !== p.team && t.state !== "wreck" && dist(p, t) < antiTankRules.huntRange)
     .sort((a, b) => dist(p, a) - dist(p, b))[0];
