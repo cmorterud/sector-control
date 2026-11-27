@@ -3,7 +3,7 @@ import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
 import { spawnLineDistance } from "./spawn-front";
 import { teamSpawn } from "./offensive";
-import { deadGround } from "./naval-gunfire";
+import { deadGround, shellProfileFor } from "./naval-gunfire";
 import { hillHeight, beyondPlayArea, blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
 import {
   idle,
@@ -356,7 +356,7 @@ export function requestArtillery(
     team: p.team,
     target: { x: target.x, z: target.z },
     uncertainty,
-    dangerRadius: artilleryRules.dangerRadius + uncertainty,
+    dangerRadius: artilleryRules.dangerRadius + uncertainty + shellProfileFor(g.map, p.team).radius - artilleryExplosionProfile.radius,
     calledAt: g.tick,
     firstImpactAt: g.tick + artilleryRules.warning,
     endsAt:
@@ -475,7 +475,7 @@ export function advanceArtillery(g: Game) {
         ? boundaryArtilleryExplosionProfile
         : shell.ambient
           ? ambientArtilleryExplosionProfile
-          : artilleryExplosionProfile;
+          : shellProfileFor(g.map, shell.team);
       const hits = g.explode(
         at,
         shell.actor,

@@ -5,7 +5,8 @@ import { artillerySectors } from "./artillery-sectors";
 import { gallipoliShips, gallipoliTurrets } from "./backdrop";
 import { gallipoliMap } from "./gallipoli-map";
 import { groundHeight } from "./map";
-import { deadGround } from "./naval-gunfire";
+import { deadGround, navalExplosionProfile, navalRules, shellProfileFor } from "./naval-gunfire";
+import { artilleryExplosionProfile } from "./destruction";
 import { Game, TestCollision, idle } from "./simulation";
 import { trenchMap } from "./trench-map";
 import { headlandMap } from "./headland-map";
@@ -61,4 +62,14 @@ it("refuses a fire mission into dead ground and fires one onto the ridge from th
   const shots = new BatteryPlan().update(g).filter((s) => s.team === "blue");
   expect(shots.length).toBeGreaterThan(0);
   for (const s of shots) expect(s.muzzle.x).toBeLessThan(-200);
+});
+
+it("hits a quarter harder and wider than field artillery, for the fleet's side only", () => {
+  expect(navalRules.power).toBe(1.25);
+  expect(navalExplosionProfile.radius).toBeCloseTo(artilleryExplosionProfile.radius * 1.25, 6);
+  expect(navalExplosionProfile.damage).toBe(Math.round(artilleryExplosionProfile.damage * 1.25));
+  expect(navalExplosionProfile.label).toBe("Naval gunfire");
+  expect(shellProfileFor(gallipoliMap, "blue")).toBe(navalExplosionProfile);
+  expect(shellProfileFor(gallipoliMap, "red")).toBe(artilleryExplosionProfile);
+  expect(shellProfileFor(trenchMap, "blue")).toBe(artilleryExplosionProfile);
 });

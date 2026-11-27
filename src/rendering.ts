@@ -6168,7 +6168,7 @@ export class Renderer implements CollisionWorld {
       const burst = this.burstLights.reduce((a, b) => (a.bornAt <= b.bornAt ? a : b));
       {
         burst.bornAt = e.tick;
-        burst.radius = burstRadius(e.type === "artilleryImpact" ? artilleryExplosionProfile.radius : grenadeExplosionProfile.radius);
+        burst.radius = burstRadius(e.type === "artilleryImpact" ? e.radius : grenadeExplosionProfile.radius);
         burst.light.setPosition(e.at.x, e.at.y + 2.5, e.at.z);
         burst.light.light!.range = burst.radius * 1.25;
       }
