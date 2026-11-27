@@ -344,7 +344,7 @@ export const springOffensiveMap: MapDefinition = {
   // Britain holds a line between its outpost line and the battle zone. Once
   // the forward zone falls Germany comes up behind the outpost line and
   // Britain falls back behind its switch line. Tuned on 8 seeded 64-a-side
-  // bot matches (tools/offensive-audit.ts): Germany won 5, took phase 1 in 7.
+  // bot matches (tools/offensive-audit.ts): Germany won 4, took phase 1 in 7.
   offensive: {
     attacker: "red",
     phases: [
