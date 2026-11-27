@@ -13,17 +13,24 @@ const seconds = (ticks: number) => Math.max(0, Math.ceil(ticks / 30));
 export const teamName = (g: Pick<Game, "map">, team: Team) => factions[factionFor(g.map, team)].name;
 const other = (team: Team): Team => (team === "blue" ? "red" : "blue");
 
-// Domination or capture the flag on a map that offers both, as briefing links.
-export function modeChoice(map: MapDefinition, ctf: boolean, query: URLSearchParams) {
-  if (!supportsCtf(map)) return "";
-  const link = (mode: "domination" | "ctf", label: string, note: string) => {
+// The modes a map offers, as briefing links: attack and defend where the map
+// plans one (src/offensive.ts), domination, and capture the flag where laid out.
+export type GameMode = "offensive" | "domination" | "ctf";
+export function modeChoice(map: MapDefinition, mode: GameMode, query: URLSearchParams) {
+  const modes: [GameMode, string, string][] = [];
+  if (map.offensive) modes.push(["offensive", "Attack and defend", `${map.offensive.phases.length} phases in order · against the clock`]);
+  if (map.offensive || supportsCtf(map)) modes.push(["domination", "Domination", "Hold flags to score"]);
+  if (supportsCtf(map)) modes.push(["ctf", "Capture the flag", `Three flags a side · first to ${ctfRules.captureLimit}`]);
+  if (modes.length < 2) return "";
+  const fallback = modes[0][0];
+  const link = ([id, label, note]: [GameMode, string, string]) => {
     const q = new URLSearchParams(query);
-    if (mode === "ctf") q.set("mode", "ctf");
-    else q.delete("mode");
+    if (id === fallback) q.delete("mode");
+    else q.set("mode", id);
     const content = `<strong>${label}</strong><small>${note}</small>`;
-    return (mode === "ctf") === ctf ? `<span aria-current="page">${content}</span>` : `<a href="?${q}">${content}</a>`;
+    return id === mode ? `<span aria-current="page">${content}</span>` : `<a href="?${q}">${content}</a>`;
   };
-  return `<nav class="mode-choice" aria-label="Game mode">${link("domination", "Domination", "Hold flags to score")}${link("ctf", "Capture the flag", `Three flags a side · first to ${ctfRules.captureLimit}`)}</nav>`;
+  return `<nav class="mode-choice" aria-label="Game mode">${modes.map(link).join("")}</nav>`;
 }
 
 export function ctfBrief(g: Pick<Game, "map">) {

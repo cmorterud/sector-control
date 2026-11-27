@@ -86,8 +86,9 @@ export const supportsCtf = (map: Pick<MapDefinition, "id" | "ctfLayout">) => !!c
 export function ctfMap(map: MapDefinition): MapDefinition {
   const layout = ctfLayout(map);
   if (!layout) return map;
+  const { offensive: _, ...rest } = map;
   return {
-    ...map,
+    ...rest,
     scoring: "ctf",
     sectors: layout.pickups.map(({ id, team, name, x, z }) => ({ id, name, x, z, home: team })),
   };

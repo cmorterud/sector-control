@@ -167,6 +167,21 @@ export interface KitRuntime {
   // Fallen upper levels per 4 m rubble cell, which sets the rubble height there.
   fallen: Record<string, number[]>;
 }
+export interface OffensivePlan {
+  attacker: "blue" | "red";
+  // Each phase's flags, opened together. A spawn listed on a phase is where
+  // that side deploys while the phase is open; otherwise the last one listed
+  // before it, or the map's spawn.
+  phases: { flags: string[]; spawn?: Partial<Record<"blue" | "red", Vec>> }[];
+  // The attacker's respawns: perSoldier for each man at the start, perPhase
+  // more for each man as each phase falls. The defender's are unlimited.
+  pool: { perSoldier: number; perPhase: number };
+  // Seconds on the clock at the start, and added as each phase falls.
+  clock: { start: number; perPhase: number };
+  // Seconds the defender waits to redeploy; 5 (everyone's usual) when unset.
+  defenderRespawn?: number;
+}
+
 export interface MapDefinition {
   id: "industrial" | "trenches" | "night-raid" | "village" | "verdun" | "headland" | "training" | "fort-vaux" | "zeppelin" | "spring-offensive" | "gallipoli";
   // A night map (src/night.ts): an unlit soldier is seen only within `sight`
@@ -233,6 +248,10 @@ export interface MapDefinition {
   // (src/backdrop.ts) instead of a perimeter wall.
   backdrop?: boolean;
   scoring?: "sectors" | "eliminations" | "domination" | "ctf";
+  // Attack and defend (src/offensive.ts): the flags fall in order, phase by
+  // phase, to an attacker with a limited pool and a clock. Flag capture works
+  // as in domination; ?mode=domination plays the map without it.
+  offensive?: OffensivePlan;
   spawn: Record<"blue" | "red", Vec>;
   landmarks?: Landmark[];
   farmland?: FarmFront;

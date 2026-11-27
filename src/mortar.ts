@@ -9,6 +9,7 @@ import { dist, groundHeight, type Vec } from "./map";
 import { mortarExplosionProfile, mortarRules } from "./mortar-stats";
 import type { Command, Game, Soldier, Team, V3 } from "./simulation";
 import { spawnLineDistance } from "./spawn-front";
+import { teamSpawn } from "./offensive";
 
 export interface MortarBomb extends V3 {
   id: number;
@@ -62,7 +63,7 @@ function surfaceAt(g: Game, x: number, z: number) {
 export function mortarTargetBlocked(g: Game, at: Vec) {
   return (["blue", "red"] as const).some(team =>
     dist(g.map.spawn[team], at) < mortarRules.spawnClearance ||
-    spawnLineDistance(g.map, team, at) < mortarRules.spawnClearance);
+    spawnLineDistance(g.map, team, at, teamSpawn(g, team)) < mortarRules.spawnClearance);
 }
 
 export function operateMortar(g: Game, p: Soldier, gun: Emplacement, c: Command) {

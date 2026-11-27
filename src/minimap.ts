@@ -1,6 +1,8 @@
 import { playArea, type MapDefinition, type Vec } from "./map";
 import type { Game } from "./simulation";
 import { flagPosition } from "./ctf";
+import { flagStatus } from "./offensive";
+import { padlock } from "./offensive-hud";
 import { createTacticalRoutes, drawTacticalTerrain } from "./tactical-terrain";
 
 export class Minimap {
@@ -67,6 +69,12 @@ export class Minimap {
         const f = g.ctf?.flags[i];
         // A pickup point shows its team while its flag is on the stand.
         flag.dataset.state = f ? (f.state === "home" ? f.team : "empty") : sector.contested ? "contested" : sector.owner ?? "neutral";
+        // Attack and defend: a flag outside the open phase is greyed with a padlock.
+        const status = flagStatus(g, i);
+        if (flag.dataset.status !== status) {
+          flag.dataset.status = status;
+          flag.innerHTML = sector.id + (status === "open" ? "" : padlock);
+        }
       }
     });
     this.drops.forEach((drop, i) => {

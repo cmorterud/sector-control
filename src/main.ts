@@ -69,10 +69,12 @@ import { nightRaidMap } from "./night-map";
 import { lightAt } from "./night";
 import { flareRules } from "./flares";
 import { carriedFlag, ctfMap, ctfRules, supportsCtf } from "./ctf";
-import { CtfAnnouncer, ctfBrief, ctfLabels, ctfPrompt, ctfStrip, modeChoice } from "./ctf-hud";
+import { CtfAnnouncer, ctfBrief, ctfLabels, ctfPrompt, ctfStrip, modeChoice, type GameMode } from "./ctf-hud";
 import { gasAgent, gasMap, masked } from "./gas";
 import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
 import { reinforcementsLeft } from "./reinforcements";
+import { dominationMap, flagStatus } from "./offensive";
+import { OffensiveNotices, offensiveBrief, offensiveClock, offensiveEndReason, offensiveFlagNote, offensiveStrip, offensiveSummary, padlock } from "./offensive-hud";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
 import { soldierName } from "./soldier-names";
 import { rainChoice, rainIntensity, rainStorageKey, supportsRain } from "./weather";
@@ -115,6 +117,7 @@ el("hud").append(battleSidebar, killNotice, boundaryNotice, flagNotice, reinforc
 const gasScreen = new GasScreen(el("hud")), minimapGas = new GasOverlay(), tacticalGas = new GasOverlay();
 const gasAudio = new GasAudio(() => audio);
 root.querySelector(".match")!.append(reinforcementTallyBox);
+const offensiveNotices = new OffensiveNotices();
 const reinforcementNotices = new ReinforcementNotices(), teamName = (team: "blue" | "red") => factions[factionFor(map, team)].name;
 const minimap = new Minimap(el("minimap")), killFeed = el("kill-feed");
 let displayedFeed = "";
@@ -238,9 +241,13 @@ const duration = Number(params.get("duration") ?? 480);
 const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, gallipoliMap, headlandMap];
 const requestedMap = params.get("map");
 const chosenMap = [...battlefields, industrialMap].find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
-// ?mode=ctf plays capture the flag on a map that lays it out; domination stays the default.
+// ?mode=ctf plays capture the flag on a map that lays it out, and
+// ?mode=domination plain domination on a map that plans an attack
+// (src/offensive.ts). Otherwise the map's own mode: attack and defend where it
+// plans one, else domination.
 const ctfMode = params.get("mode") === "ctf" && supportsCtf(chosenMap);
-const map = ctfMode ? ctfMap(chosenMap) : chosenMap;
+const map = ctfMode ? ctfMap(chosenMap) : params.get("mode") === "domination" ? dominationMap(chosenMap) : chosenMap;
+const gameMode: GameMode = ctfMode ? "ctf" : map.offensive ? "offensive" : "domination";
 const training=map.id==="training"?new TrainingSession():undefined;
 root.classList.toggle("training-active",!!training);
 let trainingReset=false;
@@ -445,6 +452,7 @@ function start() {
   combatFeedback.reset();tankHits.reset();tankHit=undefined;
   ctfAnnouncer.reset();
   reinforcementNotices.reset();
+  offensiveNotices.reset();
   displayedScoreboard = "";
   el("scoreboard").replaceChildren();
   audio ??= new BattleAudio();
@@ -537,6 +545,8 @@ window.addEventListener("pageshow", (e) => {
 function handle(e: Event) {
   combatFeedback.event(game,e);
   reinforcementNotices.event(game, e, performance.now(), teamName);
+  offensiveNotices.event(game, e, performance.now());
+  if (e.type === "offensive" && e.phase === "taken" && e.next !== null) sound(game.players[0].team === game.offensive?.attacker ? 660 : 300, 0.7, 0.05);
   if (["death","artilleryImpact","grenadeExplosion","destruction"].includes(e.type)) battlePerformance.count(e.type);
   if (e.type === "melee" && e.phase === "strike" && e.actor === 0 && e.damage)
     hitUntil = performance.now() + 150;
@@ -676,9 +686,10 @@ function handle(e: Event) {
     sound(440, 0.6);
     const result =
       e.winner === "draw" ? "Draw" : e.winner === "blue" ? "Victory" : "Defeat";
-    const reason = reinforcementEndReason(game, teamName);
+    const reason = offensiveEndReason(game) || reinforcementEndReason(game, teamName);
     menu(
       result,
+      game.offensive ? `Operation complete · ${reason ? reason + " · " : ""}${offensiveSummary(game.offensive)}` :
       `Operation complete · ${reason ? reason + " · " : ""}${game.scoring === "ctf" ? "Capture the flag · " : game.scoring === "domination" ? "Domination · " : game.scoring === "eliminations" ? "Eliminations · " : ""}${factions[factionFor(map,"blue")].name} ${game.scores.blue} / ${factions[factionFor(map,"red")].name} ${game.scores.red}`,
       "Deploy again",
       start,
@@ -728,10 +739,12 @@ function hud(now: number) {
   gasWarning.classList.toggle("danger", gasLine.danger);
   gasScreen.update(game, p, preferredFirstPerson && !renderer.deathView, !paused && !tacticalMap.open);
   root.classList.toggle("out-of-bounds", outside);
-  const tally = training ? "" : reinforcementTally(game), notice = paused ? "" : reinforcementNotices.text(now);
+  offensiveNotices.tick(game, now);
+  const attackNotice = paused ? "" : offensiveNotices.text(now);
+  const tally = training ? "" : reinforcementTally(game), notice = paused ? "" : attackNotice || reinforcementNotices.text(now);
   if (reinforcementTallyBox.innerHTML !== tally) reinforcementTallyBox.innerHTML = tally;
   if (reinforcementNotice.textContent !== notice) reinforcementNotice.textContent = notice;
-  reinforcementNotice.classList.toggle("urgent", reinforcementNotices.urgent(now));
+  reinforcementNotice.classList.toggle("urgent", attackNotice ? offensiveNotices.urgent(now) : reinforcementNotices.urgent(now));
   renderer.spectating = spectateTarget(game, renderer.spectating, spectateNext);
   spectateNext = false;
   const watched = renderer.spectating === null ? undefined : game.players[renderer.spectating];
@@ -749,7 +762,8 @@ function hud(now: number) {
     .toString()
     .padStart(2, "0")}:${(t % 60).toString().padStart(2, "0")}`;
   if(training)el("clock").textContent="TRAINING";
-  staged.sectors = game.ctf ? ctfStrip(game) :
+  if (game.offensive) el("clock").textContent = offensiveClock(game);
+  staged.sectors = game.ctf ? ctfStrip(game) : game.offensive ? offensiveStrip(game) :
     game.scoring === "eliminations"
       ? '<span class="sector">TRENCH DUEL · ELIMINATIONS</span>'
       : (game.scoring === "domination"
@@ -813,7 +827,7 @@ function hud(now: number) {
           : chargePromptReady(game, p)
             ? `<small class="charge-prompt">${keyLabel(settings.bindings.melee)} · BAYONET CHARGE</small>`
           : sector
-            ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING"}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
+            ? `<small>${game.scoring === "domination" ? "FLAG" : "SECTOR"} ${sector.id}${sector.name ? " · " + sector.name.toUpperCase() : ""} · ${offensiveFlagNote(game, sector) ?? (sector.contested ? "CONTESTED" : sector.owner === p.team ? "DEFENDING" : sector.owner ? "NEUTRALIZING" : "CAPTURING")}</small><div class="bar"><i class="${sector.control < 0 ? "redbar" : ""}" style="width:${Math.abs(sector.control) * 100}%"></i></div>`
             : "";
   const flagPrompt = game.ctf && !p.mantle ? ctfPrompt(game, p) : "";
   if (flagPrompt) staged.capture = flagPrompt + (ledge ? `<small>${keyLabel(settings.bindings.mantle)} · MANTLE</small>` : "");
@@ -908,7 +922,7 @@ function hud(now: number) {
               z: s.z,
             });
             return v.z > 0
-              ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")}" aria-label="${s.id}${s.name ? " · " + s.name : ""}${s.contested ? " · Contested" : ""}" style="left:${v.x}px;top:${v.y}px">${s.id}${s.contested ? " · !" : ""}<small>${Math.round(dist(p, s))}m</small></div>`
+              ? `<div class="objective ${s.contested ? "contested" : (s.owner ?? "")} ${flagStatus(game, s)}" aria-label="${s.id}${s.name ? " · " + s.name : ""}${s.contested ? " · Contested" : ""}${flagStatus(game, s) === "open" ? "" : " · Locked"}" style="left:${v.x}px;top:${v.y}px">${s.id}${flagStatus(game, s) === "open" ? "" : padlock}${s.contested ? " · !" : ""}<small>${Math.round(dist(p, s))}m</small></div>`
               : "";
           })
           .join("");
@@ -1432,7 +1446,7 @@ try {
       : map.id === "spring-offensive"
       ? `21 March 1918. Imperial Germany comes out of the morning fog against Britain's lines in depth: a broken outpost line, the battle zone and a rear switch line on each side. Take the Hill Redoubt, the ruined village and the windmill crossroads, then break through to the enemy's home flags. While your side holds one of its own home flags you may deploy behind it: choose with the number keys while down. ${teamSize} soldiers per team · seven-flag domination · first to 300 or eight minutes.`
       : map.id === "gallipoli"
-      ? `Anzac, August 1915. Australian and New Zealand troops come up from the beach through the scrub gullies; the Ottoman army holds the ridge above them and the summit behind it. Take Table Top and Owen's Gully, storm the trenches at the Nek and Lone Pine, then climb to Scrubby Knoll and Chunuk Bair. Cliffs too steep to climb funnel the attack into the gullies and spurs. No gas and no tanks on this front. ${teamSize} soldiers per team · six-flag domination · first to 300 or eight minutes.`
+      ? `Anzac, August 1915. Australian and New Zealand troops come up from the beach through the scrub gullies; the Ottoman army holds the ridge above them and the summit behind it. Take Table Top and Owen's Gully, storm the trenches at the Nek and Lone Pine, then climb to Scrubby Knoll and Chunuk Bair. Cliffs too steep to climb funnel the attack into the gullies and spurs. No gas and no tanks on this front. ${teamSize} soldiers per team · ${map.offensive ? "attack and defend in three phases · ANZAC attacks against the clock" : "six-flag domination · first to 300 or eight minutes"}.`
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
       : map.sky
@@ -1448,7 +1462,7 @@ try {
         : "Capture. Hold. Prevail. Lead Blue Team through an eight-minute fight for three industrial sectors.",
     "Begin operation",
     start,
-    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}${modeChoice(chosenMap, ctfMode, params)}<div class="brief"><b>01 / ${ctfMode ? "CAPTURE THE FLAG" : map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${ctfMode ? ctfBrief({ map }) : map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p>${supportsTanks(map) ? `<b>04 / TANKS</b><p>${tankBrief(keyLabel(settings.bindings.interact))}</p>` : ""}</div>`,
+    training ? `<details class="training-settings"><summary>Choose another battlefield</summary>${battlefieldChoices()}</details>` : `${battlefieldChoices()}${modeChoice(chosenMap, gameMode, params)}<div class="brief"><b>01 / ${ctfMode ? "CAPTURE THE FLAG" : map.offensive ? "ATTACK AND DEFEND" : map.scoring === "domination" ? "DOMINATION" : map.scoring === "eliminations" ? "HOLD THE LINE" : "CAPTURE"}</b><p>${ctfMode ? ctfBrief({ map }) : map.offensive ? offensiveBrief(map) : map.scoring === "domination" ? `Capture flags ${map.sectors[0].id}–${map.sectors.at(-1)!.id}. Each uncontested flag earns one point every three seconds. Neutral flags take 15 seconds to capture; enemy flags must first be neutralized. Stay near the flag with a clear path to it. First to 300 points wins, or the higher score after eight minutes. Kills do not award team points.` : map.scoring === "eliminations" ? "Eliminate exposed enemies from the firing step. The trench floor hides you from opposing trenches. Near misses can drive bots into cover, opening a chance to advance." : "Hold sectors A, B, and C to earn points."}</p><b>02 / ENGAGE</b><p>Move with WASD. Press T to switch first/third person. Hold right mouse to aim through the iron sights; release to return to your chosen view. Click left mouse once per shot.${map.id !== "industrial" ? " Your five-round service rifle cycles its bolt between shots; R loads a clip. V thrusts with the bayonet; sprint forward before pressing V to charge. Charges turn slowly and leave a longer recovery. Press Z to blow your whistle: riflemen near you fix bayonets and go over the top with you, toward where you aim. Charges into alert rifles and machine guns die in the open; cover them with smoke, fire or shells. Machine gunners provide covering bursts." : ""} Press G for a brief overhand grenade throw: three per spawn, three-second fuse after release. Press C to crouch and move slowly behind cover; press C again to stand. Space stands you up to hop or mantle when there is room. Press F for a smoke grenade: ${smokeRules.perSpawn} per spawn, about 20 seconds of concealing smoke. Bots lose sight through it. Throws follow your look direction in a shallow arc; aim higher for more range. Throwing keeps your chosen view.${map.terrain ? ` Press Space to hop or climb out of a trench; walk over an edge to drop in.${map.id === "trenches" ? " Use raised firing steps to shoot and throw over the trench lip." : " Use ruined walls and sunken approaches for cover."}` : " Press Space for a small hop."}</p><b>03 / SURVIVE</b><p>${map.sky ? "Press Q to open the floor plan. Stair towers at each end and amidships climb to the gallery and the top walk; the engine stations' stairs reach the gallery. Rails keep you aboard, and grenades break only crates." : map.artillery === false ? "Press Q to open the floor plan. Use the service passage or sunken yard to go around a blocked gallery. Grenades can break timber cover." : "Press Q for the tactical map, then click a broad sector. Press Q or right-click to cancel. You can call from cover; blind calls drift farther, and shells scatter. The battle continues while choosing. First charge at 10 seconds, then a shared 30-second cooldown. Listen for falling shells and use earth cover; direct hits remain deadly."} Reload with R; trying to fire an empty weapon reloads it if you have reserve ammo. You redeploy five seconds after death.</p>${supportsTanks(map) ? `<b>04 / TANKS</b><p>${tankBrief(keyLabel(settings.bindings.interact))}</p>` : ""}</div>`,
   );
   // The briefing is painted before the battlefield is built: building the
   // renderer takes seconds on big maps, and picking another map reloads the

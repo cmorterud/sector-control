@@ -227,6 +227,20 @@ export const gallipoliMap: MapDefinition = {
   navigationPoints: [],
   // ANZAC on the beach; the Ottoman army behind the crest, out of sight of the sea.
   spawn: { blue: { x: -85, z: 0 }, red: { x: 96, z: 0 } },
+  // Attack and defend by default (?mode=domination for flags both ways). The
+  // Ottoman line comes forward to hold the first spurs, then falls back to the
+  // crest; ANZAC follows up behind each line it takes.
+  offensive: {
+    attacker: "blue",
+    phases: [
+      { flags: ["A", "B"], spawn: { red: { x: 30, z: 0 } } },
+      { flags: ["C", "D"], spawn: { blue: { x: -24, z: 0 }, red: { x: 74, z: 0 } } },
+      { flags: ["E", "F"], spawn: { blue: { x: 25, z: 0 }, red: { x: 96, z: 0 } } },
+    ],
+    pool: { perSoldier: 2, perPhase: 1 },
+    clock: { start: 300, perPhase: 240 },
+    defenderRespawn: 10,
+  },
   boxes, vegetation, terrain, sectors,
   landmarks: [
     { id: "A", name: "Table Top", kind: "gunpit", x: flag("A").x, z: flag("A").z, radius: 9 },

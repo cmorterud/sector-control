@@ -37,6 +37,8 @@ export interface ReinforcementState {
   low: Record<Team, boolean>;
   // The side or sides that ran out with nobody standing.
   eliminated: Team[];
+  // Attack and defend: the defender's respawns are never counted.
+  unlimited?: Team;
 }
 
 export type ReinforcementEvent =
@@ -53,6 +55,24 @@ export const finalPhaseTicks = (duration: number) =>
 export function createReinforcements(g: Game): ReinforcementState {
   const count = (t: Team) => g.players.filter((p) => p.team === t).length;
   const size = { blue: count("blue"), red: count("red") };
+  // Attack and defend counts the attacker's respawns from the first death
+  // (src/offensive.ts); the defender comes back as often as it falls.
+  const plan = g.offensive && g.map.offensive;
+  if (plan) {
+    const attacker = plan.attacker, defender = attacker === "blue" ? "red" : "blue";
+    const pool = { [attacker]: Math.max(1, Math.round(size[attacker] * plan.pool.perSoldier)), [defender]: 0 } as Record<Team, number>;
+    return {
+      enabled: size.blue > 0 && size.red > 0,
+      clockAt: 0,
+      finalAt: 0,
+      trigger: null,
+      pool,
+      remaining: { ...pool },
+      low: { blue: false, red: false },
+      eliminated: [],
+      unlimited: defender,
+    };
+  }
   // Training keeps its own respawn rules, and a lone soldier with no enemy
   // (?bots=0) can't be eliminated by anyone.
   const enabled = (g.scoring === "domination" || g.scoring === "ctf") && g.scoreLimit !== null && size.blue > 0 && size.red > 0;
@@ -76,7 +96,10 @@ export const finalPhase = (g: Game) => g.reinforcements.enabled && g.reinforceme
 
 // Whether a soldier of this team could come back now.
 export const reinforcementsLeft = (g: Game, team: Team) =>
-  !finalPhase(g) || g.reinforcements.remaining[team] > 0;
+  !limited(g, team) || g.reinforcements.remaining[team] > 0;
+
+// Whether this side's respawns are counted now.
+export const limited = (g: Game, team: Team) => finalPhase(g) && g.reinforcements.unlimited !== team;
 
 // Never "low" from the start, however small the side.
 export const lowThreshold = (g: Game, team: Team) => {
@@ -88,7 +111,7 @@ export const lowThreshold = (g: Game, team: Team) => {
 // phase is on, and refuses when the pool is empty.
 export function takeReinforcement(g: Game, p: Soldier): boolean {
   const r = g.reinforcements;
-  if (!finalPhase(g)) return true;
+  if (!limited(g, p.team)) return true;
   if (r.remaining[p.team] <= 0) return false;
   r.remaining[p.team]--;
   if (!r.remaining[p.team]) g.emit({ type: "reinforcements", phase: "empty", team: p.team, remaining: 0 });
@@ -112,12 +135,13 @@ export function advanceReinforcements(g: Game): Team | "draw" | undefined {
     r.trigger = trigger;
     g.emit({ type: "reinforcements", phase: "final", trigger, pool: { ...r.pool } });
   }
-  for (const team of teams)
+  const counted = teams.filter((team) => team !== r.unlimited);
+  for (const team of counted)
     // A side short of men holds what it has rather than charging across
     // open ground it can no longer replace.
     if (r.remaining[team] <= lowThreshold(g, team))
       g.assaults.readyAt[team] = Math.max(g.assaults.readyAt[team], g.tick + reinforcementRules.assaultHoldTicks);
-  const out = teams.filter(
+  const out = counted.filter(
     (team) => !r.remaining[team] && !g.players.some((p) => p.team === team && p.hp > 0),
   );
   if (!out.length) return undefined;

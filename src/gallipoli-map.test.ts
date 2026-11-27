@@ -78,9 +78,12 @@ it("fields ANZAC against the Ottoman army with no tanks, gas or flame kits, and 
   for (const p of g.players) {
     expect(blocked(p.x, p.z, 0.4, g.map), `soldier ${p.id} at ${p.x},${p.z}`).toBe(false);
     expect(coastDistance(p.x, p.z, map)).toBeGreaterThan(4);
-    // ANZAC deploys on the beach, the Ottomans on the reverse slope.
+    // ANZAC deploys on the beach; the Ottomans hold the first phase from behind their front lines.
     if (p.team === "blue") expect(above(p.x, p.z)).toBeLessThan(3);
-    else expect(above(p.x, p.z)).toBeGreaterThan(30);
+    else {
+      expect(above(p.x, p.z)).toBeGreaterThan(24);
+      expect(p.x).toBeGreaterThan(map.sectors.find((s) => s.id === "C")!.x + 8);
+    }
   }
 });
 
@@ -101,7 +104,7 @@ it("reaches every flag from both spawns, and keeps every trench route and ramp w
   }
 });
 
-it("plays a 100-soldier battle in which both sides climb, fight and capture", () => {
+it("plays a 100-soldier attack in which both sides climb, fight and capture", () => {
   const g = scene(true);
   let shots = 0, deaths = 0, captures = 0;
   for (let i = 0; i < 120 * 30; i++) {
@@ -115,4 +118,6 @@ it("plays a 100-soldier battle in which both sides climb, fight and capture", ()
   expect(shots).toBeGreaterThan(200);
   expect(deaths).toBeGreaterThan(10);
   expect(captures).toBeGreaterThan(1);
+  // Played as attack and defend, ANZAC takes the first spurs inside two minutes.
+  expect(g.offensive!.phase).toBeGreaterThanOrEqual(1);
 });
