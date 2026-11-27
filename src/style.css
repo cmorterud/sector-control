@@ -1064,3 +1064,10 @@ a.armory-link:hover { background: #3f5856; }
   letter-spacing: .08em;
 }
 .spectate-label:empty { display: none; }
+
+/* A picked map card shows at once while its page loads. */
+.map-choice.switching > :not(.loading) { opacity: .45; transition: opacity .12s; }
+.map-choice a.loading { border-color: #c8ba8a; color: #eee0b0; background: #c8ba8a12; cursor: progress; }
+.map-choice a.loading::after { content: "LOADING BATTLEFIELD…"; position: absolute; top: 8px; right: 8px; padding: 4px 9px; background: #142323eb; border-right: 3px solid #f3d49a; color: #f3d49a; font-size: 11px; font-weight: 700; letter-spacing: .12em; animation: map-loading 1s ease-in-out infinite alternate; }
+@keyframes map-loading { from { opacity: 1; } to { opacity: .55; } }
+#primary:disabled { opacity: .6; cursor: progress; }
