@@ -13,9 +13,10 @@ const killFeedTicks = 6 * 30, killConfirmationTicks = 3 * 30;
 type FeedSoldier = { name: string; team: Team };
 type FeedDeath = { tick: number; victim: FeedSoldier; killer?: FeedSoldier; cause?: string };
 
-export function deathCard(report:DeathReport,seconds:number,countdown?:string,extra="") {
+// head: trusted markup at the top of the card (the casualty note).
+export function deathCard(report:DeathReport,seconds:number,countdown?:string,extra="",head="") {
   const voluntary=report.kind==="redeploy",blast=report.kind==="grenade"||report.kind==="artillery";
-  return `<section class="death-card" aria-label="Death report"><small>${voluntary?"REDEPLOYING":"KILLED BY"}</small><h2>${escape(report.sourceName)}</h2>${voluntary?"":`<p>${escape(report.weapon)}${report.distance!==undefined?` · ${blast?"BLAST":"DISTANCE"} ${Math.round(report.distance)} m`:""}</p><div class="death-damage">${damageText(report.damage)} damage · ${report.hits} ${report.hits===1?"hit":"hits"} from this attacker</div>`}<div class="death-countdown">${escape(countdown??`Redeploying in ${Math.max(0,seconds).toFixed(1)}s`)}</div>${!voluntary&&report.from?`<small>${blast?"IMPACT LOCATION":"LAST ATTACK DIRECTION"}</small>`:""}${extra}</section>`;
+  return `<section class="death-card" aria-label="Death report">${head}<small>${voluntary?"REDEPLOYING":"KILLED BY"}</small><h2>${escape(report.sourceName)}</h2>${voluntary?"":`<p>${escape(report.weapon)}${report.distance!==undefined?` · ${blast?"BLAST":"DISTANCE"} ${Math.round(report.distance)} m`:""}</p><div class="death-damage">${damageText(report.damage)} damage · ${report.hits} ${report.hits===1?"hit":"hits"} from this attacker</div>`}<div class="death-countdown">${escape(countdown??`Redeploying in ${Math.max(0,seconds).toFixed(1)}s`)}</div>${!voluntary&&report.from?`<small>${blast?"IMPACT LOCATION":"LAST ATTACK DIRECTION"}</small>`:""}${extra}</section>`;
 }
 
 // All directions and camera targets are frozen from real damage events. The
@@ -101,12 +102,13 @@ export class CombatFeedback {
       pitch:base.pitch+(Math.max(-.6,Math.min(.6,Math.atan2(r.from.y-r.at.y-1.65,d)))-base.pitch)*blend,
       zoom:this.clearView?blend:0};
   }
-  // extra: trusted markup added to the foot of the death card (the deploy choice).
-  html(g:Game,yaw:number,extra="") {
+  // extra: trusted markup added to the foot of the death card (the deploy choice);
+  // head: trusted markup at its top (the casualty note).
+  html(g:Game,yaw:number,extra="",head="") {
     const p=g.players[0];
     const arcs=p.hp>0?this.arcs.filter(a=>g.tick-a.tick<combatRules.indicatorTicks).map(a=>
       `<svg class="damage-bearing" aria-label="Incoming damage direction" viewBox="0 0 200 200" style="transform:rotate(${angleDelta(yaw,a.bearing)}rad);opacity:${a.strength*(1-(g.tick-a.tick)/combatRules.indicatorTicks)}"><path d="M76 20 Q100 8 124 20"/></svg>`).join(""):"";
-    const card=p.hp<=0&&p.lastDeath?deathCard(p.lastDeath,(p.respawnAt-g.tick)/30,reinforcementCountdown(g,p,(p.respawnAt-g.tick)/30),extra):"";
+    const card=p.hp<=0&&p.lastDeath?deathCard(p.lastDeath,(p.respawnAt-g.tick)/30,reinforcementCountdown(g,p,(p.respawnAt-g.tick)/30),extra,head):"";
     const notices=this.notices.filter(n=>g.tick-n.tick<90).map(n=>`<div class="assist-notice">${escape(n.text)}</div>`).join("");
     return arcs+card+`<div class="combat-notices" role="status">${notices}</div>`;
   }

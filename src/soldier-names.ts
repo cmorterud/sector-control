@@ -1,7 +1,7 @@
 import { factionFor } from "./loadouts";
 import type { Game, Soldier } from "./simulation";
 
-const british = {
+export const british = {
   initials: "AEJTWCRH",
   surnames: [
     "Smith", "Taylor", "Wilson", "Brown", "Davies", "Evans", "Walker", "Wright", "Thompson",
@@ -9,7 +9,7 @@ const british = {
     "Jackson", "Cooper", "Hill", "Ward", "Morris", "Baker", "Cook",
   ],
 };
-const french = {
+export const french = {
   initials: "JPLMECAH",
   surnames: [
     "Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau",
@@ -17,7 +17,7 @@ const french = {
     "Fournier", "Girard", "Bonnet", "Dupont", "Lambert", "Fontaine", "Rousseau",
   ],
 };
-const german = {
+export const german = {
   initials: "FWHOKEGP",
   surnames: [
     "Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Hoffmann",
@@ -27,7 +27,7 @@ const german = {
 };
 // Australians and New Zealanders, with a few names from the Māori Contingent
 // that reached Anzac in July 1915.
-const anzac = {
+export const anzac = {
   initials: "JWAHGTCR",
   surnames: [
     "Murphy", "Kelly", "Ryan", "Campbell", "Stewart", "Macdonald", "Robertson", "Anderson", "Mitchell",
@@ -37,7 +37,7 @@ const anzac = {
 };
 // Ottoman soldiers had no surnames until 1934; records named a man by his
 // father, "Mehmed oğlu Ali": Ali, son of Mehmed.
-const ottoman = {
+export const ottoman = {
   fathers: ["Mehmed", "Ahmed", "Hüseyin", "Mustafa", "İbrahim", "Osman", "Halil", "Yusuf"],
   names: [
     "Ali", "Hasan", "Mehmed", "Ahmed", "Hüseyin", "Mustafa", "İsmail", "Osman", "Süleyman",
