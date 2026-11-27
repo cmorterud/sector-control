@@ -206,8 +206,8 @@ export interface MapDefinition {
   };
   artillery?: false;
   // One side's artillery is its warships offshore (src/naval-gunfire.ts):
-  // they fire from these points and cannot reach dead ground.
-  navalGunfire?: { team: "blue" | "red"; ships: Vec[] };
+  // their guns fire from these points and cannot reach dead ground.
+  navalGunfire?: { team: "blue" | "red"; guns: (Vec & { y: number })[] };
   // No gas shells (and no mask) on a front where gas was never used.
   gas?: false;
   // No flame kits at the trench ends.

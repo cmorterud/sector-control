@@ -178,6 +178,10 @@ export const gallipoliShips = [
   { x: -300, z: 30, length: 64, beam: 10, funnels: 2, turrets: true },
   { x: -225, z: 135, length: 52, beam: 9, funnels: 1, turrets: false },
 ];
+// The warships' turret guns, laid toward the shore: ANZAC's artillery
+// (MapDefinition.navalGunfire) fires from these points.
+export const gallipoliTurrets = () => gallipoliShips.filter((s) => s.turrets).flatMap((s) =>
+  [-0.36, 0.34].map((t) => ({ x: s.x + 2.4, y: coastalRules.seaLevel + 4.4, z: s.z + t * s.length })));
 function warships(boxes: BackdropBox[], lines: number[]) {
   const sea = coastalRules.seaLevel, grey = "#5d666b", dark = "#454c50";
   for (const ship of gallipoliShips) {
@@ -188,8 +192,11 @@ function warships(boxes: BackdropBox[], lines: number[]) {
     boxes.push({ x, y: sea + 6.6, z: z - l * 0.2, w: b * 0.4, h: 2.4, d: 5, color: dark });
     for (let i = 0; i < ship.funnels; i++)
       boxes.push({ x, y: sea + 3.4, z: z - l * 0.02 + i * 6.5, w: 2.4, h: 9, d: 3, color: dark });
-    if (ship.turrets) for (const t of [-0.36, 0.34])
+    if (ship.turrets) for (const t of [-0.36, 0.34]) {
       boxes.push({ x, y: sea + 3.4, z: z + t * l, w: 4.4, h: 2, d: 5, color: dark });
+      // Twin barrels trained on the shore.
+      for (const dz of [-0.7, 0.7]) lines.push(x + 2.2, sea + 4.4, z + t * l + dz, x + 9, sea + 5.2, z + t * l + dz);
+    }
     // Masts and the stay between them.
     const fore = z - l * 0.3, aft = z + l * 0.3;
     for (const mz of [fore, aft]) lines.push(x, sea + 3.4, mz, x, sea + 24, mz);

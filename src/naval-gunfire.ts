@@ -1,6 +1,6 @@
 import { hillHeight, type MapDefinition, type Vec } from "./map";
-import { coastalRules } from "./coastal-scenery";
 import { backdropHeight } from "./backdrop";
+import { artilleryExplosionProfile, type ExplosionProfile } from "./destruction";
 
 // Naval gunfire (MapDefinition.navalGunfire): one side's artillery is its
 // warships offshore. A ship's gun fires flat, so its shell comes down at a
@@ -14,15 +14,27 @@ export const navalRules = {
   // The point the shell must reach, above the ground (a man's chest).
   aim: 1,
   step: 1,
-  // The guns' height above the sea, for the muzzle flash and the shell's start.
-  gunHeight: 6,
+  // A warship's shell is heavier than a field gun's: this much more blast
+  // radius and damage than artillery on other maps (Cody's ask, 2026-11-27).
+  power: 1.25,
 };
 
-// The ship nearest the mark along the coast fires.
+// The blast of a fleet's fire-mission shell. Strays keep the usual profile.
+export const navalExplosionProfile: ExplosionProfile = {
+  ...artilleryExplosionProfile,
+  kind: "artillery-naval",
+  radius: artilleryExplosionProfile.radius * navalRules.power,
+  damage: Math.round(artilleryExplosionProfile.damage * navalRules.power),
+  structuralRadius: artilleryExplosionProfile.structuralRadius * navalRules.power,
+  craterRadius: artilleryExplosionProfile.craterRadius * navalRules.power,
+  label: "Naval gunfire",
+};
+export const shellProfileFor = (map: MapDefinition, team: "blue" | "red") =>
+  map.navalGunfire?.team === team ? navalExplosionProfile : artilleryExplosionProfile;
+
+// The turret nearest the mark along the coast fires.
 export function navalGun(map: MapDefinition, target: Vec) {
-  const ships = map.navalGunfire!.ships;
-  const ship = ships.reduce((a, b) => (Math.abs(b.z - target.z) < Math.abs(a.z - target.z) ? b : a));
-  return { x: ship.x, y: coastalRules.seaLevel + navalRules.gunHeight, z: ship.z };
+  return map.navalGunfire!.guns.reduce((a, b) => (Math.abs(b.z - target.z) < Math.abs(a.z - target.z) ? b : a));
 }
 
 // The lie of the land, without the trenches cut into it: a shell that clears

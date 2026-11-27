@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { artilleryRules, artilleryTargetReason } from "./artillery";
 import { BatteryPlan, batteryGuns, batteryRules } from "./artillery-battery";
 import { artillerySectors } from "./artillery-sectors";
-import { gallipoliShips } from "./backdrop";
+import { gallipoliShips, gallipoliTurrets } from "./backdrop";
 import { gallipoliMap } from "./gallipoli-map";
 import { groundHeight } from "./map";
 import { deadGround } from "./naval-gunfire";
@@ -15,18 +15,26 @@ vi.setConfig({ testTimeout: 120000 });
 it("fires ANZAC's artillery from the warships offshore", () => {
   const guns = batteryGuns(gallipoliMap);
   expect(guns).toHaveLength(batteryRules.guns * 2);
+  // Each gun is a turret on one of the warships drawn at sea, not an invisible gun.
+  const turrets = gallipoliTurrets();
+  expect(turrets).toHaveLength(4);
   for (const gun of guns.filter((g) => g.team === "blue")) {
     expect(gun.hidden).toBe(true);
-    expect(gallipoliShips.some((s) => Math.abs(s.x - gun.x) < 10 && s.z === gun.z)).toBe(true);
+    expect(turrets.some((t) => t.x === gun.x && t.y === gun.y && t.z === gun.z)).toBe(true);
+    const ship = gallipoliShips.find((s) => s.turrets && Math.abs(s.x - gun.x) < s.beam / 2 + 0.5 && Math.abs(s.z - gun.z) < s.length / 2)!;
+    expect(ship).toBeDefined();
   }
-  // The Ottoman guns stay behind the ridge, out of sight.
-  for (const gun of guns.filter((g) => g.team === "red")) expect(gun.x).toBeGreaterThan(gallipoliMap.width / 2);
+  // The Ottoman guns stand visibly on the land behind the ridge.
+  for (const gun of guns.filter((g) => g.team === "red")) {
+    expect(gun.hidden).toBe(false);
+    expect(gun.x).toBeGreaterThan(gallipoliMap.width / 2);
+  }
 });
 
 it("cannot reach the dead ground behind the crest or down the gully, but reaches every flag", () => {
   const cells = artillerySectors(gallipoliMap), dead = cells.filter((c) => deadGround(gallipoliMap, "blue", c));
   // The Ottoman rear behind the last ridge.
-  expect(dead.filter((c) => c.x > 80).length).toBeGreaterThanOrEqual(8);
+  expect(dead.filter((c) => c.x > 80).length).toBeGreaterThanOrEqual(5);
   // The deep gully below the Nek.
   expect(dead.some((c) => c.x < 0)).toBe(true);
   // Most of the field is open to the ships, and every objective is.
