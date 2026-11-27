@@ -1,7 +1,7 @@
 {
   "name": "Sector Control",
   "short_name": "Sector Control",
-  "description": "A First World War trench shooter in your browser: 50 v 50 battles with bots, artillery, gas and tanks. Free, no sign-in.",
+  "description": "Squad infantry battles for capture sectors. Free in your browser.",
   "start_url": ".",
   "scope": ".",
   "display": "fullscreen",
