@@ -9,13 +9,11 @@ import { frameSeconds } from "./frame-timing";
 import {CombatFeedback} from "./combat-feedback";
 import {scoreboardTable} from "./scoreboard";
 import type {Entity} from "playcanvas";
-import {trainingMap} from "./training-map";
 import {TrainingSession} from "./training";
 import {trainingHUD,trainingMenu} from "./training-ui";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { nearestFlame } from "./flamethrower";
-import { verdunMap } from "./verdun-map";
 import { equipLoadout, factionOverride, factions, factionFor, kitFor, parseFactionOverride, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
@@ -25,13 +23,9 @@ import { forwardMenuWheel } from "./menu-wheel";
 import { EscapePause } from "./escape-pause";
 import { sighted } from "./player-view";
 import { spreadRingRadius } from "./spread-reticle";
-import { villageMap } from "./village-map";
-import { headlandMap } from "./headland-map";
-import { springOffensiveMap } from "./spring-offensive-map";
-import { gallipoliMap } from "./gallipoli-map";
 import { deploymentPoints } from "./deployment";
 import { fortVauxMap } from "./fort-vaux-map";
-import { zeppelinMap } from "./zeppelin-map";
+import { battlefields } from "./battlefields";
 import { weaponProfiles } from "./weapons";
 import "./style.css";
 import { ArtilleryMap, mapCallKey } from "./artillery-map";
@@ -64,8 +58,6 @@ import { AutoQuality, parseQuality, qualityStorageKey, type Quality, type Qualit
 import { mantleLanding, dist, groundHeight, industrialMap, blocked, beyondPlayArea, trenchGround, bodyBlocked, supportHeight } from "./map";
 import { boundaryCountdown } from "./boundary";
 import { dugouts, signboards } from "./trench-dressing";
-import { trenchMap } from "./trench-map";
-import { nightRaidMap } from "./night-map";
 import { lightAt } from "./night";
 import { flareRules } from "./flares";
 import { carriedFlag, ctfMap, ctfRules, supportsCtf } from "./ctf";
@@ -237,9 +229,6 @@ const saveQuality = (value: string) => { try { localStorage.setItem(qualityStora
 let reviewFrames = 0;
 let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
-// Maps offered in the briefing. Industrial is no longer offered, but ?map=industrial
-// still opens it for the CI combat and Armory browser checks.
-const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, gallipoliMap, headlandMap];
 const requestedMap = params.get("map");
 const chosenMap = [...battlefields, industrialMap].find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
 // ?mode=ctf plays capture the flag on a map that lays it out, and
