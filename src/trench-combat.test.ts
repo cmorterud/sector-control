@@ -144,7 +144,8 @@ it("keeps the firing-step battle active through a full eight-minute match", () =
       if (e.type === "death") {
         const source = damageSources.get(e.actor);
         if (source === -1) environmentalDeaths++;
-        else if (source !== undefined && source !== e.actor) creditedDeaths++;
+        // Mortar bombs hurt both sides; a kill only scores against the enemy.
+        else if (source !== undefined && source !== e.actor && game.players[source]?.team !== game.players[e.actor].team) creditedDeaths++;
         deaths++;
         if (i >= 420 * 30) lateDeaths++;
       }
