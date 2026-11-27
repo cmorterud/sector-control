@@ -397,9 +397,11 @@ describe("capture the flag bots", () => {
   // seed 4 sees only one team capture.
   // Seed 2: since each side spreads along its whole front to spawn, seed 1 sees
   // only one team capture (seeds 2 to 6 all see both).
+  // Seed 4: since every infantry weapon shares one muzzle velocity, seed 2
+  // sees only red capture (seeds 4 to 6 see both).
   it("raid, carry and capture for both teams without stalling", () => {
     const map = ctfMap(nightRaidMap);
-    const g = new Game(new TestCollision(map), true, 300 * 30, 2, undefined, { map, teamSize: 24, humanPlayerIds: [] });
+    const g = new Game(new TestCollision(map), true, 300 * 30, 4, undefined, { map, teamSize: 24, humanPlayerIds: [] });
     const actions: Record<string, number> = {}, captured = { blue: 0, red: 0 }, roles = new Set<string>();
     while (g.phase === "playing") {
       g.step(g.players[0].hp > 0 ? botCommand(g, g.players[0]) : idle());

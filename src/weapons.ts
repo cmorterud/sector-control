@@ -30,7 +30,7 @@ export const weaponProfiles = {
     shotTicks: 3,
     reloadTicks: 45,
     damage: 25,
-    projectileSpeed: 72,
+    projectileSpeed: 288,
     muzzle: 1.27,
     label: "LIGHT MACHINE GUN",
   },

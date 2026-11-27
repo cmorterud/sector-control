@@ -299,10 +299,9 @@ describe("combat and lifecycle", () => {
     g.tick = 1;
     const c = botCommand(g, p);
     expect(c.yaw).toBeCloseTo(Math.asin(4.5 / projectileSpeed));
+    // Infantry machine guns share the rifle's velocity, so they need the same lead.
     p.weapon = "machineGun";
-    const slower = botCommand(g, p);
-    expect(slower.yaw).toBeGreaterThan(c.yaw + 0.04);
-    expect(slower.yaw).toBeLessThan(0.3);
+    expect(botCommand(g, p).yaw).toBeCloseTo(c.yaw);
   });
   it("aligns the autoplay driver with the first-person sight camera", () => {
     const { g, p, enemy } = scene();
