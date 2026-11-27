@@ -1,3 +1,4 @@
+import type { HudPreset } from "./hud-preset";
 export const defaultBindings = {
   forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
   sprint: "ShiftLeft", crouch: "KeyC", reload: "KeyR", melee: "KeyV",
@@ -11,6 +12,8 @@ export interface ControlSettings {
   bindings: Record<ControlAction, string>;
   toggleSprint: boolean;
   firstPerson: boolean;
+  /** "frontLine" is the minimal HUD preset; see hud-preset.ts. */
+  hud: HudPreset;
 }
 const canonicalKey = (code: string) => code === "ShiftRight" ? "ShiftLeft" : code;
 export const keyLabel = (code: string) => code.replace(/^Key|^Digit/, "").replace("Left", "").replace("Right", "");
@@ -23,7 +26,7 @@ export const controlLabels: Record<ControlAction, string> = {
   mask: "Gas mask on / off",
 };
 export function freshControls(): ControlSettings {
-  return { bindings: { ...defaultBindings }, toggleSprint: false, firstPerson: true };
+  return { bindings: { ...defaultBindings }, toggleSprint: false, firstPerson: true, hud: "standard" };
 }
 export function loadControls(storage?: Pick<Storage, "getItem">): ControlSettings {
   const settings = freshControls();
@@ -32,6 +35,7 @@ export function loadControls(storage?: Pick<Storage, "getItem">): ControlSetting
     if (!saved) return settings;
     if (typeof saved.firstPerson === "boolean") settings.firstPerson = saved.firstPerson;
     if (typeof saved.toggleSprint === "boolean") settings.toggleSprint = saved.toggleSprint;
+    if (saved.hud === "frontLine") settings.hud = "frontLine";
     const bindings = saved.bindings ? { ...saved.bindings } : undefined;
     // Actions added since a layout was saved take their default key, or the
     // first free one, so an older custom layout survives.
