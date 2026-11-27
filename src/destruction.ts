@@ -322,6 +322,21 @@ export function deformExplosion(
     }
     return base;
   };
+  // The same height above the hillside (src/gallipoli-terrain.ts), equal to
+  // the base on a map without one. The crater rules below shape the cut
+  // relative to the slope it falls on; measured against absolute height, the
+  // slope itself read as a ledge, and one bomb on a hillside cut a scar tens
+  // of metres up it.
+  const locals = new Map<number, number>();
+  const localAt = (x: number, z: number) => {
+    const key = cellKey(x, z);
+    let local = locals.get(key);
+    if (local === undefined) {
+      local = baseAt(x, z) - hillHeight(x * terrainResolution, z * terrainResolution, map);
+      locals.set(key, local);
+    }
+    return local;
+  };
   const queue: { x: number; z: number }[] = [];
   const read = (x: number, z: number) => {
     const key = cellKey(x, z);
@@ -350,7 +365,7 @@ export function deformExplosion(
     )
       return;
     // Never below 0.9 m under the hillside's own level.
-    const limit = Math.max(0, base - hillHeight(wx, wz, map) + 0.9);
+    const limit = Math.max(0, localAt(x, z) + 0.9);
     const next = Math.min(limit, depth);
     if (next <= read(x, z) + 0.0001) return;
     edits.set(cellKey(x, z), next);
@@ -449,7 +464,7 @@ export function deformExplosion(
   const relax = () => {
     for (; relaxed < queue.length; relaxed++) {
       const { x, z } = queue[relaxed];
-      const base = baseAt(x, z);
+      const base = localAt(x, z);
       const height = base - read(x, z);
       for (const [dx, dz] of [
         [1, 0],
@@ -459,7 +474,7 @@ export function deformExplosion(
       ]) {
         const nx = x + dx,
           nz = z + dz;
-        const neighborBase = baseAt(nx, nz);
+        const neighborBase = localAt(nx, nz);
         if (Math.abs(neighborBase - base) > 0.3) {
           const high =
             base > neighborBase
@@ -518,13 +533,13 @@ export function deformExplosion(
         eligible.set(cellKey(nx, nz), { x: nx, z: nz });
       }
     const surface = (x: number, z: number) =>
-      Math.max(-0.9, baseAt(x, z) - read(x, z));
+      Math.max(-0.9, localAt(x, z) - read(x, z));
     // Five samples span 1.25 m on each side: a damaged strip narrower than
     // 2.5 m cannot keep a near-vertical crest > 0.75 m above both shoulders.
     for (let pass = 0; pass < 3; pass++) {
       let changed = false;
       for (const { x, z } of eligible.values()) {
-        const base = baseAt(x, z);
+        const base = localAt(x, z);
         if (base < 1.1) continue;
         for (const [dx, dz] of [
           [5, 0],
