@@ -71,6 +71,7 @@ import { flareRules } from "./flares";
 import { carriedFlag, ctfMap, ctfRules, supportsCtf } from "./ctf";
 import { CtfAnnouncer, ctfBrief, ctfLabels, ctfPrompt, ctfStrip, modeChoice } from "./ctf-hud";
 import { gasAgent, gasMap, masked } from "./gas";
+import { artilleryTargetReason, requestArtillery } from "./artillery";
 import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
 import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
@@ -1418,6 +1419,31 @@ try {
       yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson};
       renderer.remember(game);renderer.draw(game,1,0,false);hud(performance.now());
       return {tick:game.tick,hp:p.hp,masked:masked(p,game.tick)};
+    },
+    // Field batteries: with `target`, Blue's tactical-map fire mission on that
+    // point; then stand the player at (x, z) looking at (tx, ty, tz) and run on.
+    // Field batteries: with `target`, a tactical-map fire mission on that point
+    // (Blue's, or Red's with target.red); then stand the player at (x, z)
+    // looking at (tx, ty, tz) and run on.
+    battery:(x:number,z:number,tx:number,ty:number,tz:number,ticks:number,target?:{x:number;z:number;red?:boolean},firstPerson=true)=>{
+      reviewManual=true;const p=game.players[0];
+      if(target){
+        const team=target.red?"red":"blue",caller=target.red?game.players.find(q=>q.team==="red")!:p,side=target.red?1:-1;
+        game.respawn(caller);game.artillery.readyAt[team]=0;game.artillery.missions=game.artillery.missions.filter(m=>m.team!==team);
+        Object.assign(caller,{x:target.x+side*40,z:target.z,y:groundHeight(target.x+side*40,target.z,game.map),hp:100});
+        // Autoplay has no human soldier; stand one in for the call only.
+        const humans=game.humanPlayerIds as number[],stand=!humans.includes(caller.id);if(stand)humans.push(caller.id);
+        const spot={x:target.x,z:target.z,area:true},why=artilleryTargetReason(game,caller,spot),called=!why&&requestArtillery(game,caller,spot);
+        if(stand)humans.splice(humans.indexOf(caller.id),1);
+        if(!called)throw Error("Fire mission refused: "+why);
+      }
+      const y=groundHeight(x,z,game.map),eye=y+1.6;
+      Object.assign(p,{x,z,y,yaw:Math.atan2(tx-x,-(tz-z)),pitch:Math.atan2(ty-eye,Math.hypot(tx-x,tz-z)),protectedUntil:Infinity,vx:0,vz:0,hp:100});
+      yaw=p.yaw;pitch=p.pitch;preferredFirstPerson=firstPerson;p.command={...idle(),firstPerson,yaw,pitch};
+      const weapon=renderer.app.root.findByName("first-person weapon and arms") as Entity|null;
+      for(const component of weapon?.findComponents("render")??[])component.enabled=false;
+      renderer.remember(game);advanceReview(Math.round(ticks));
+      return {tick:game.tick,...renderer.batteries};
     },
     finish:()=>recording?.stop(),
   }});

@@ -42,8 +42,15 @@ const profiles: Record<WeaponKind | "emplaced", MuzzleProfile> = {
 export const tankGunMuzzle = "tank gun";
 const tankGun: MuzzleProfile = { flash: 1.5, jet: 1.9, smoke: 16, smokeSize: 3.6, smokeAlpha: 0.9, smokeRise: 2.2, smokeLift: 1.1, flashLife: 0.09, dust: 6, brass: 0, light: 6, lightRange: 16 };
 
+// A field gun behind the lines (src/battery-render.ts): seen from a hundred
+// metres and more, so the flash is metres across, the jet long and the cloud
+// of smoke big enough to hang over the battery after the shot.
+export const fieldGunMuzzle = "field gun";
+const fieldGun: MuzzleProfile = { flash: 8, jet: 11, smoke: 14, smokeSize: 9, smokeAlpha: 0.8, smokeRise: 3, smokeLift: 0.6, flashLife: 0.18, dust: 0, brass: 0, light: 9, lightRange: 35 };
+
 export function muzzleProfile(weapon: WeaponKind | undefined, weaponId: string | undefined, mounted: boolean): MuzzleProfile {
   if (weaponId === tankGunMuzzle) return tankGun;
+  if (weaponId === fieldGunMuzzle) return fieldGun;
   if (mounted) return profiles.emplaced;
   const base = profiles[weapon ?? "rifle"];
   // A revolver keeps its empties in the cylinder; a short carbine barrel

@@ -1,3 +1,4 @@
+import { BatteryPlan, batteryGuns } from "./artillery-battery";
 import { distantFlashes } from "./backdrop";
 import { inCraterPond } from "./no-mans-land";
 import { floodAt, waterDepth } from "./weather";
@@ -153,6 +154,10 @@ export class BattlefieldFeedback {
   private nextGun = 0;
   private nextCrow = 0;
   private nextDrip = 0;
+  // The field batteries behind the spawns (src/artillery-battery.ts): each
+  // gun's report, heard when its sound has come the distance.
+  private battery = new BatteryPlan();
+  private heard = new Set<string>();
   stats = {
     footsteps: 0,
     woodSteps: 0,
@@ -194,6 +199,7 @@ export class BattlefieldFeedback {
     this.nextGun = 240;
     this.nextCrow = 600;
     this.nextDrip = 60;
+    this.heard.clear();
     for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[])
       this.stats[key] = 0;
     this.recent = [];
@@ -415,6 +421,7 @@ export class BattlefieldFeedback {
       this.lastLife = g.players[0].deaths;
     }
     const listener = g.players[0];
+    if (g.phase === "playing" && g.artillery.enabled && !g.map.sky) this.batteryReports(g);
     if (g.map.woodland && g.phase === "playing" && listener.hp > 0) this.forestAmbience(g);
     if (g.map.backdrop && g.phase === "playing" && listener.hp > 0) {
       this.backdropRumble(g);
@@ -540,6 +547,20 @@ export class BattlefieldFeedback {
       this.cue(g,"distantBattle",{x:side*(g.map.width/2+45),y:3,z:(n-.5)*g.map.depth},.4,false,false,g.tick);
       this.stats.forestSounds++;
     }
+  }
+  private batteryReports(g: Game) {
+    const p = g.players[0], ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z }, guns = batteryGuns(g.map);
+    const shots = this.battery.update(g);
+    for (const shot of shots) {
+      if (this.heard.has(shot.key)) continue;
+      const distance = Math.hypot(shot.muzzle.x - ear.x, shot.muzzle.y - ear.y, shot.muzzle.z - ear.z);
+      const late = g.tick - (shot.fireTick + Math.round((distance / 343) * 30));
+      if (late < 0) continue;
+      this.heard.add(shot.key);
+      if (late < 3 && distance < 340)
+        this.cue(g, "artillery", { ...guns[shot.gun], y: shot.muzzle.y }, 0.42, false, false, shot.fireTick * 3 + shot.gun);
+    }
+    if (this.heard.size > 64) for (const key of this.heard) if (!shots.some((s) => s.key === key)) this.heard.delete(key);
   }
   state(tick: number, enabled = true) {
     const age = Math.max(0, (tick - this.shock.tick) / 30);
