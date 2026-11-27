@@ -27,11 +27,12 @@ export function factionFor(map: {id:string}, team: "blue"|"red"): FactionId {
 // rifle; the rest are spread through the roster so every squad has a mix:
 // light machine gunners (the roster's machine-gun slots, src/weapons.ts
 // rosterWeapon), gunners who set up an emplaced gun, marksmen with scoped
-// rifles, and, where tanks fight, the anti-tank kit.
-export const rosterShares = { emplacement: 0.06, marksman: 0.06, antiTank: 0.06 };
+// rifles, where tanks fight, the anti-tank kit, and on maps with artillery,
+// a trench mortar or two (src/bot-mortar.ts).
+export const rosterShares = { emplacement: 0.06, marksman: 0.06, antiTank: 0.06, mortar: 0.04 };
 const rosterCache = new Map<string, Loadout[]>();
-export function rosterRoles(size: number, tanks = false): Loadout[] {
-  const key = `${size}:${tanks}`;
+export function rosterRoles(size: number, tanks = false, mortars = false): Loadout[] {
+  const key = `${size}:${tanks}:${mortars}`;
   const cached = rosterCache.get(key);
   if (cached) return cached;
   const roles: Loadout[] = Array.from({ length: size }, () => "rifleman");
@@ -42,6 +43,7 @@ export function rosterRoles(size: number, tanks = false): Loadout[] {
     ["marksman", count(rosterShares.marksman, 12), 0.2],
     ["emplacement", count(rosterShares.emplacement, 10), 0.7],
     ["antiTank", tanks ? count(rosterShares.antiTank, 8) : 0, 0.45],
+    ["mortar", mortars ? count(rosterShares.mortar, 16) : 0, 0.85],
   ];
   for (const [role, n, phase] of spread)
     for (let i = 0; i < n; i++) {
@@ -53,9 +55,9 @@ export function rosterRoles(size: number, tanks = false): Loadout[] {
   rosterCache.set(key, roles);
   return roles;
 }
-export function rosterLoadout(index:number, size:number, kind:WeaponKind, tanks = false): Loadout {
+export function rosterLoadout(index:number, size:number, kind:WeaponKind, tanks = false, mortars = false): Loadout {
   if (kind === "machineGun") return "support";
-  const role = rosterRoles(size, tanks)[index] ?? "rifleman";
+  const role = rosterRoles(size, tanks, mortars)[index] ?? "rifleman";
   // A machine-gun slot without the gun (a human's, say) carries a rifle.
   return role === "support" ? "rifleman" : role;
 }

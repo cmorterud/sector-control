@@ -25,9 +25,11 @@ test("100-soldier roster: riflemen are the clear majority beside every other rol
    expect(count("marksman")).toBe(3);
    expect(count("emplacement")).toBe(3);
    expect(count("antiTank")).toBe(tanks ? 3 : 0);
+   expect(count("mortar")).toBe(2);
    // The player's slot on blue takes a rifle.
-   expect(count("rifleman")).toBe(tanks ? 37 : 40);
-   expect(count("rifleman")/list.length).toBeGreaterThan(.7);
+   expect(count("rifleman")).toBe(tanks ? 35 : 38);
+   // 70% with tanks and mortars both on (Cody agreed 2 mortars per 50, 2026-11-26).
+   expect(count("rifleman")/list.length).toBeGreaterThanOrEqual(.7);
   }
  }
 });

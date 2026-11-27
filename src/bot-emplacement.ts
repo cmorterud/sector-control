@@ -145,7 +145,7 @@ export function emplacementBotCommand(g: Game, p: Soldier, c: Command): Command 
 
 // Where the gun can go down facing about `yaw`: here, turned a little, or a
 // short step away.
-function gunSite(g: Game, p: Soldier, yaw: number): (Vec & { yaw: number }) | undefined {
+export function gunSite(g: Game, p: Soldier, yaw: number): (Vec & { yaw: number }) | undefined {
   const turns = [0, 0.35, -0.35, 0.7, -0.7];
   for (const turn of turns) if (placementFor(g, p, yaw + turn).valid) return { x: p.x, z: p.z, yaw: yaw + turn };
   for (const r of [1.2, 2.4]) for (let i = 0; i < 8; i++) {
