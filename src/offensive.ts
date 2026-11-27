@@ -21,6 +21,8 @@ export interface OffensiveState {
   phase: number;
   // Sector indices, phase by phase.
   phases: number[][];
+  // Sector indices the attacker holds from the start and never loses (OffensivePlan.held).
+  held: number[];
   // Tick at which the attack fails if the open phase still stands.
   deadline: number;
   // When the open phase opened.
@@ -47,14 +49,16 @@ export const offensiveTicks = (plan: OffensivePlan, taken: number) =>
 // The longest the attack can run: every phase taken on its last second.
 export const offensiveDuration = (plan: OffensivePlan) => offensiveTicks(plan, plan.phases.length - 1);
 
-// Every flag starts in the defender's hands.
+// Every flag starts in the defender's hands, except those behind the
+// attacker's own start line (OffensivePlan.held).
 export function createOffensive(map: MapDefinition, sectors: Sector[]): OffensiveState | undefined {
   const plan = map.offensive;
   if (!plan) return undefined;
   const defender = other(plan.attacker);
   for (const s of sectors) {
-    s.owner = defender;
-    s.control = defender === "blue" ? 1 : -1;
+    const side = plan.held?.includes(s.id) ? plan.attacker : defender;
+    s.owner = side;
+    s.control = side === "blue" ? 1 : -1;
     s.contested = false;
   }
   return {
@@ -62,6 +66,7 @@ export function createOffensive(map: MapDefinition, sectors: Sector[]): Offensiv
     defender,
     phase: 0,
     phases: plan.phases.map((p) => p.flags.map((id) => sectors.findIndex((s) => s.id === id)).filter((i) => i >= 0)),
+    held: (plan.held ?? []).map((id) => sectors.findIndex((s) => s.id === id)).filter((i) => i >= 0),
     deadline: offensiveTicks(plan, 0),
     since: 0,
     result: null,
@@ -92,7 +97,8 @@ export const flagPhase = (o: OffensiveState, i: number) => o.phases.findIndex((p
 export function flagStatus(g: Pick<Game, "offensive" | "sectors">, s: Sector | number): "open" | "taken" | "locked" {
   const o = g.offensive;
   if (!o) return "open";
-  const phase = flagPhase(o, indexOf(g, s));
+  const i = indexOf(g, s), phase = flagPhase(o, i);
+  if (phase < 0 && o.held.includes(i)) return "taken";
   return phase === o.phase ? "open" : phase >= 0 && phase < o.phase ? "taken" : "locked";
 }
 

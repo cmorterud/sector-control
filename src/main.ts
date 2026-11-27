@@ -1009,7 +1009,7 @@ function command(): Command {
 }
 // The deploy choice shown while down: the main spawn and every open forward point.
 function deploymentChoice(p: Soldier) {
-  if (!map.deployments) return "";
+  if (!map.deployments || map.offensive) return "";
   const points = deploymentPoints(game, p.team);
   if (p.deployAt && !points.some((q) => q.sector === p.deployAt)) p.deployAt = undefined;
   if (!points.length) return `<small class="deploy-heading">DEPLOYING AT THE REAR LINES · HOLD A HOME FLAG TO DEPLOY FORWARD</small>`;
@@ -1531,7 +1531,7 @@ try {
       : map.id === "verdun"
       ? `Verdun, 23 June 1916. Under a phosgene barrage, Imperial Germany pushes through the shattered woods from Fort Douaumont toward Fleury; France holds the line in front of Fort Souville. Capture the ruined Thiaumont crossroads between the trench systems. ${teamSize} soldiers per team · five-flag domination.`
       : map.id === "spring-offensive"
-      ? `21 March 1918. Imperial Germany comes out of the morning fog against Britain's lines in depth: a broken outpost line, the battle zone and a rear switch line on each side. Take the Hill Redoubt, the ruined village and the windmill crossroads, then break through to the enemy's home flags. While your side holds one of its own home flags you may deploy behind it: choose with the number keys while down. ${teamSize} soldiers per team · seven-flag domination · first to 300 or eight minutes.`
+      ? `21 March 1918. Imperial Germany comes out of the morning fog against Britain's lines in depth: a broken outpost line, the battle zone and a rear switch line on each side. Take the Hill Redoubt, the ruined village and the windmill crossroads, then break through to the enemy's home flags. ${map.offensive ? `Played as attack and defend, Germany storms the British forward zone, then the battle zone behind it. ${teamSize} soldiers per team · attack and defend in two phases · Germany attacks against the clock.` : `While your side holds one of its own home flags you may deploy behind it: choose with the number keys while down. ${teamSize} soldiers per team · seven-flag domination · first to 300 or eight minutes.`}`
       : map.id === "gallipoli"
       ? `Anzac, August 1915. Australian and New Zealand troops come up from the beach through the scrub gullies; the Ottoman army holds the ridge above them and the summit behind it. Take Table Top and Owen's Gully, storm the trenches at the Nek and Lone Pine, then climb to Scrubby Knoll and Chunuk Bair. Cliffs too steep to climb funnel the attack into the gullies and spurs. No gas and no tanks on this front. ${teamSize} soldiers per team · ${map.offensive ? "attack and defend in three phases · ANZAC attacks against the clock" : "six-flag domination · first to 300 or eight minutes"}.`
       : map.id === "headland"

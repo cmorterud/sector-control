@@ -16,6 +16,7 @@ const flagNames = (map: Pick<MapDefinition, "sectors">, ids: string[]) => {
   const names = ids.map((id) => map.sectors.find((s) => s.id === id)?.name ?? id);
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "";
 };
+const ids = (list: string[]) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0] ?? "");
 const minutes = (seconds: number) => (seconds % 60 ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : `${seconds / 60}`);
 
 // A small padlock for locked flags, drawn in the text colour.
@@ -28,8 +29,9 @@ export const offensiveClock = (g: Game) => clock(g.offensive!.deadline - g.tick)
 export function offensiveBrief(map: MapDefinition) {
   const plan = map.offensive!;
   const attacker = escape(name(map, plan.attacker)), defender = escape(name(map, plan.attacker === "blue" ? "red" : "blue"));
-  const phases = plan.phases.map((p, i) => `${i + 1}: ${escape(flagNames(map, p.flags))} (${p.flags.join(" and ")})`).join("; ");
-  return `${attacker} attacks and ${defender} defends. ${defender} starts holding every flag. Take them phase by phase: ${phases}. Only the open phase's flags can be captured; later flags are locked. Once every flag of a phase is yours it locks in your hands and the next opens. The attack starts with ${minutes(plan.clock.start)} minutes and ${plan.pool.perSoldier} reinforcements per soldier; each phase taken adds ${minutes(plan.clock.perPhase)} minutes and ${plan.pool.perPhase} more per soldier, ${attacker} deploys closer behind the line it took, and ${defender} falls back to the next. Capture works as in domination: neutralize, then hold the ring for 15 seconds. ${defender} redeploys without limit, ${plan.defenderRespawn ?? 5} seconds after falling. ${attacker} wins by taking the last phase; ${defender} wins if the clock runs out, or if ${attacker} runs out of reinforcements with nobody left standing.`;
+  const phases = plan.phases.map((p, i) => `${i + 1}: ${escape(flagNames(map, p.flags))} (${ids(p.flags)})`).join("; ");
+  const held = plan.held?.length ? ` but ${attacker}'s own ${escape(flagNames(map, plan.held))} (${ids(plan.held)}), which stay locked in ${attacker}'s hands` : "";
+  return `${attacker} attacks and ${defender} defends. ${defender} starts holding every flag${held}. Take them phase by phase: ${phases}. Only the open phase's flags can be captured; later flags are locked. Once every flag of a phase is yours it locks in your hands and the next opens. The attack starts with ${minutes(plan.clock.start)} minutes and ${plan.pool.perSoldier} reinforcements per soldier; each phase taken adds ${minutes(plan.clock.perPhase)} minutes and ${plan.pool.perPhase} more per soldier, ${attacker} deploys closer behind the line it took, and ${defender} falls back to the next. Capture works as in domination: neutralize, then hold the ring for 15 seconds. ${defender} redeploys without limit, ${plan.defenderRespawn ?? 5} seconds after falling. ${attacker} wins by taking the last phase; ${defender} wins if the clock runs out, or if ${attacker} runs out of reinforcements with nobody left standing.`;
 }
 
 // The strip under the score: the phase, the attacker's pool and each flag.

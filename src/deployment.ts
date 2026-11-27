@@ -12,7 +12,9 @@ export interface DeploymentPoint extends Vec {
   name: string;
 }
 
+// Attack and defend moves the spawns with the front instead (src/offensive.ts).
 export function deploymentPoints(g: Game, team: Team): DeploymentPoint[] {
+  if (g.map.offensive) return [];
   return (g.map.deployments ?? []).flatMap((d) => {
     const s = g.sectors.find((q) => q.id === d.sector);
     return s && s.home === team && s.owner === team ? [{ sector: d.sector, name: s.name ?? s.id, x: d.x, z: d.z }] : [];

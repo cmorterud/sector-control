@@ -334,6 +334,28 @@ export const springOffensiveMap: MapDefinition = {
   defaultTeamSize: 64, maxTeamSize: 64,
   navigationPoints: [],
   spawn: { blue: { x: -132, z: 0 }, red: { x: 132, z: 0 } },
+  // Attack and defend by default (?mode=domination for the symmetric seven
+  // flags). Germany comes out of its jump-off trench against the British
+  // forward zone, then on into the battle zone; its own Chalk quarry and
+  // Sunken road stay in German hands behind the start line. The assault forms
+  // up in front of the jump-off trench, inside its wire, as the stormtroopers
+  // did in the fog (the ground between the first two German lines is also
+  // boxed in by trenches at the north end, so a line there leaves a gap);
+  // Britain holds a line between its outpost line and the battle zone. Once
+  // the forward zone falls Germany comes up behind the outpost line and
+  // Britain falls back behind its switch line. Tuned on 8 seeded 64-a-side
+  // bot matches (tools/offensive-audit.ts): Germany won 4, took phase 1 in 7.
+  offensive: {
+    attacker: "red",
+    phases: [
+      { flags: ["C", "D", "E"], spawn: { blue: { x: -66, z: 0 }, red: { x: 34, z: 0 } } },
+      { flags: ["A", "B"], spawn: { blue: { x: -128, z: 0 }, red: { x: -28, z: 0 } } },
+    ],
+    held: ["F", "G"],
+    pool: { perSoldier: 3, perPhase: 1 },
+    clock: { start: 360, perPhase: 240 },
+    defenderRespawn: 15,
+  },
   // The Mark IV and the A7V come up the open plain to the south, on the tank lane.
   tankDepot: { blue: { x: -130, z: 62 }, red: { x: 130, z: 62 } },
   boxes, vegetation, terrain, sectors,

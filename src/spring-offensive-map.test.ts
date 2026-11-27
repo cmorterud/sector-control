@@ -1,13 +1,18 @@
 import { expect, it, vi } from "vitest";
-import { springOffensiveMap as map, springOffensiveCtf } from "./spring-offensive-map";
+import { springOffensiveMap, springOffensiveCtf } from "./spring-offensive-map";
+import { dominationMap, flagStatus, objectiveOpen, teamSpawn } from "./offensive";
 import { blocked, groundHeight, walkSegment, dist } from "./map";
-import { Game, TestCollision, pathfind, botCommand, resolveTeamSize } from "./simulation";
+import { Game, TestCollision, pathfind, botCommand, prepareNavigation, resolveTeamSize } from "./simulation";
 import { deploymentPoints, deploymentRules, forwardDeployment } from "./deployment";
 import { dominationRules } from "./domination";
 import { trenchMap } from "./trench-map";
 import { verdunMap } from "./verdun-map";
 import { ctfLayout } from "./ctf";
 import { supportsTanks } from "./tanks";
+
+// Most of these play the symmetric seven flags (?mode=domination); attack and
+// defend, the default, has its own tests at the end.
+const map = dominationMap(springOffensiveMap);
 
 // Building the navigation graph for a field this size takes a few seconds on a busy machine.
 vi.setConfig({ testTimeout: 60000 });
@@ -194,4 +199,36 @@ it("never routes soldiers up the railway cutting's walls, and the cutting has wa
   // soldier can still reach the field and every flag.
   for (const from of [{ x: -132, z: b.z - 2.8 }, { x: -132, z: b.z + 0.4 }, { x: -100, z: b.z }])
     for (const s of g.sectors) expect(pathfind(from, s, g.map).length, `${from.x},${from.z} to ${s.id}`).toBeGreaterThan(0);
+});
+
+it("plays attack and defend by default: Germany attacks the forward zone, then the battle zone", () => {
+  const attack = springOffensiveMap;
+  const g = new Game(new TestCollision(attack), true, 3600, 2103, undefined, { map: attack, humanPlayerIds: [], ambientArtillery: false, teamSize: 16 });
+  const o = g.offensive!;
+  expect(o.attacker).toBe("red");
+  expect(attack.offensive!.phases.map((p) => p.flags)).toEqual([["C", "D", "E"], ["A", "B"]]);
+  // Britain holds everything but Germany's own Chalk quarry and Sunken road, which stay locked in German hands.
+  expect(g.sectors.map((s) => `${s.id}:${s.owner}:${flagStatus(g, s)}`)).toEqual([
+    "A:blue:locked", "B:blue:locked", "C:blue:open", "D:blue:open", "E:blue:open", "F:red:taken", "G:red:taken",
+  ]);
+  expect(objectiveOpen(g, g.sectors.findIndex((s) => s.id === "F"))).toBe(false);
+  // The spawns move with the front, so forward deployment is off.
+  for (const s of g.sectors) if (s.home) s.owner = s.home;
+  expect(deploymentPoints(g, "blue")).toEqual([]);
+  expect(deploymentPoints(g, "red")).toEqual([]);
+  expect(teamSpawn(g, "red").x).toBeGreaterThan(0);
+  o.phase = 1;
+  expect(teamSpawn(g, "red").x).toBeLessThan(attack.sectors.find((s) => s.id === "C")!.x);
+  expect(teamSpawn(g, "blue").x).toBeLessThan(attack.sectors.find((s) => s.id === "A")!.x);
+  // Every phase spawn joins the field: the planner reaches both phases' flags from it.
+  prepareNavigation(attack);
+  for (const phase of attack.offensive!.phases) for (const [team, at] of Object.entries(phase.spawn!))
+    for (const id of [...phase.flags, ...attack.offensive!.phases.at(-1)!.flags]) {
+      const flag = attack.sectors.find((s) => s.id === id)!;
+      expect(pathfind(at, flag, attack, true).length, `${team} ${JSON.stringify(at)} to ${id}`).toBeGreaterThan(0);
+    }
+  // ?mode=domination keeps the seven symmetric flags and the forward points.
+  const plain = new Game(new TestCollision(map), true, 3600, 2103, undefined, { map, humanPlayerIds: [], ambientArtillery: false, teamSize: 16 });
+  expect(plain.offensive).toBeUndefined();
+  expect(plain.sectors.filter((s) => s.owner).map((s) => s.id)).toEqual([]);
 });
