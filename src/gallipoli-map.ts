@@ -289,13 +289,69 @@ for (const [i, [dx, dz]] of [[-6, -13], [-4, 14]].entries()) {
   add("summit-bags-0", x - 7.6, z, 0.8, 3, 0.75, "sandbag", { landmark: "F" });
   add("summit-bags-1", x + 1, z - 6.7, 3, 0.8, 0.75, "sandbag", { landmark: "F" });
 }
-// The beach: stacked stores and a sandbag wall at each end of the ANZAC line.
+// The beach: stacked stores and a sandbag wall at each end of the ANZAC line,
+// lighters drawn up on the sand, and dugouts terraced into the foot of the slope.
 for (const [i, [x, z, w, d, h, kind]] of ([
   [-88, -30, 2.4, 1.4, 1.1, "wood"], [-86, -27, 1.4, 1.2, 0.9, "wood"], [-82, 12, 2.6, 1.6, 1.2, "wood"],
   [-84, 30, 1.6, 1.2, 0.9, "wood"], [-83, -52, 3, 0.8, 0.8, "sandbag"], [-83, 58, 3, 0.8, 0.8, "sandbag"],
+  [-89, 18, 1.2, 1.2, 0.7, "wood"], [-87, 20.5, 2, 1.2, 1, "wood"], [-88, -12, 1.6, 2.4, 0.9, "wood"],
+  [-86, 44, 1.2, 1.6, 0.8, "wood"], [-89, -40, 2.2, 1.2, 1, "wood"],
 ] as const).entries())
   add(`beach-${i}`, x, z, w, d, h, kind, kind === "wood" ? { farmProp: "crate" } : {});
+for (const [i, z] of [-20, 36].entries()) {
+  const x = shoreX(z) + 4.5;
+  add(`lighter-${i}`, x, z, 2.4, 7, 0.95, "wood", { landmark: "beach" });
+}
+for (const [i, z] of [-46, -24, -6, 8, 26, 50].entries()) {
+  // A sandbag front and a timber lintel where the beach meets the first slope.
+  const x = -77.5;
+  add(`dugout-${i}-bags`, x - 0.4, z, 0.8, 2.6, 0.9, "sandbag", { landmark: "beach" });
+  add(`dugout-${i}-lintel`, x - 0.1, z, 0.3, 2.2, 0.22, "wood", { landmark: "beach", baseY: 1.25 });
+  add(`dugout-${i}-post-0`, x - 0.1, z - 1.05, 0.22, 0.22, 1.25, "wood", { landmark: "beach" });
+  add(`dugout-${i}-post-1`, x - 0.1, z + 1.05, 0.22, 0.22, 1.25, "wood", { landmark: "beach" });
+}
 for (const b of boxes) b.baseY = groundHeight(b.x, b.z, map) - 0.03 + (b.baseY ?? 0);
+
+// Lone Pine: the Ottoman front trench roofed with pine logs, earthed over and
+// flush with the ground, in short lengths with gaps between them where the
+// attackers dropped in. The roof covers the rear half of the floor, so the
+// firing step and the ramp up to it stay open along the front wall, and the
+// flag pole stands in a gap. Each length rests on log posts
+// against the rear wall: shell the posts away and the roof comes down.
+{
+  const s = sideOf(pineOttoman.team), half = pineOttoman.floor!.half, d = flag("D");
+  for (const section of pineOttoman.sections) {
+    const floorX = section.x - s * pineOttoman.floor!.offset;
+    const x0 = floorX + s * 0.3, x1 = floorX + s * half, cx = (x0 + x1) / 2, w = Math.abs(x1 - x0);
+    for (let z = section.z - section.length / 2 + 0.6; z + 3 <= section.z + section.length / 2 - 0.6; z += 4) {
+      const cz = z + 1.5;
+      if (Math.abs(cz - d.z) < 3.5 || atJunction(cx, z, 0.6) || atJunction(cx, z + 3, 0.6)) continue;
+      const floor = groundHeight(cx, cz, map), id = `pine-roof-${boxes.length}`;
+      const posts = [z + 0.15, z + 2.85].map((pz, j) =>
+        add(`${id}-post-${j}`, x1 - s * 0.12, pz, 0.22, 0.22, bankHeight - 0.25, "log", { landmark: "D", baseY: floor - 0.03 }));
+      add(id, cx, cz, w, 3, 0.25, "log", { landmark: "D", baseY: floor + bankHeight - 0.25, supports: posts.map((b) => b.id!) });
+    }
+  }
+}
+// The Nek: sandbag parados along the rear lip of both lines, broken where a
+// route or ramp leaves, so the step's view over the front lip stays clear.
+for (const line of [nekAnzac, nekOttoman]) {
+  const s = sideOf(line.team), half = line.floor!.half;
+  for (const section of line.sections) {
+    const x = section.x - s * line.floor!.offset + s * (half + 0.55);
+    for (let z = section.z - section.length / 2 + 0.6; z + 1.6 <= section.z + section.length / 2; z += 2.2) {
+      if (atJunction(x, z + 0.8, 0.6)) continue;
+      add(`nek-parados-${boxes.length}`, x, z + 0.8, 0.9, 1.6, 0.6, "sandbag", { landmark: "C", baseY: groundHeight(x, z + 0.8, map) - 0.03 });
+    }
+  }
+}
+// Watson's pier, run out from the beach into the sea on piles.
+{
+  const z = 2, x0 = shoreX(z) + 3, length = 30, deck = coastalRules.seaLevel + 0.7;
+  add("pier-deck", x0 - length / 2, z, length, 2.6, 0.18, "wood", { landmark: "beach", baseY: deck, walkable: true });
+  for (let x = x0 - 2; x > x0 - length; x -= 4)
+    for (const dz of [-1.1, 1.1]) add(`pier-pile-${boxes.length}`, x, z + dz, 0.25, 0.25, deck + 3, "wood", { landmark: "beach", baseY: -3 });
+}
 
 // Revetment along the dug walls of the front lines.
 for (const line of lines.filter((l) => l.role === "front")) {
@@ -321,7 +377,7 @@ const plantClear = (x: number, z: number) => {
     if (local(x + dx, z + dz) < bankHeight - 0.3) return false;
   return true;
 };
-for (let tries = 0; vegetation.length < 190 && tries < 3000; tries++) {
+for (let tries = 0; vegetation.length < 280 && tries < 5000; tries++) {
   const x = -76 + rand() * 172, z = (rand() * 2 - 1) * (playDepth / 2 - 2);
   // Thickest in the gully country, sparse on the ridge.
   if (rand() > (x < -20 ? 0.9 : x < 40 ? 0.35 : 0.55)) continue;
