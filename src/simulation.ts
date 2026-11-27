@@ -14,6 +14,7 @@ import { reloadCue, switchPose, switchRules, updateAimMotion } from "./weapon-ha
 import { freshArtilleryAudit } from "./artillery-audit";
 import { antiTankBotAim, antiTankHunt } from "./anti-tank";
 import { emplacementBotCommand } from "./bot-emplacement";
+import { mortarBotCommand } from "./bot-mortar";
 import { advanceMortars, createMortarState, mortarMap, operateMortar, type MortarState } from "./mortar";
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
@@ -1230,7 +1231,7 @@ export class Game {
     const retainedPrimary = p.pendingLoadout === p.loadout ? p.inventory?.primary : undefined;
     const legacyWeapon = p.inventory && p.inventory[p.equippedSlot ?? "primary"].kind !== p.weapon ? p.weapon : undefined;
     p.faction = factionFor(this.map, p.team);
-    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon, this.tanks.enabled)), kitFor(this.map));
+    equipLoadout(p, p.pendingLoadout ?? (this.humanPlayerIds.includes(p.id) ? "rifleman" : rosterLoadout(p.teamIndex, this.teamSize, p.weapon, this.tanks.enabled, mortarMap(this.map))), kitFor(this.map));
     const retainedKind = legacyWeapon ?? (retainedPrimary?.kind !== "flamethrower" ? retainedPrimary?.kind : undefined);
     if (retainedKind && p.inventory && p.loadout !== "emplacement" && p.loadout !== "mortar") {
       p.weapon = retainedKind; p.inventory.primary.kind = retainedKind;
@@ -2842,9 +2843,9 @@ export function safeBotDestination(g: Game, p: Soldier): Vec | undefined {
   return dest;
 }
 export function botCommand(g: Game, p: Soldier): Command {
-  if (!battlePerformance.enabled) return emplacementBotCommand(g,p,chooseBotCommand(g,p));
+  if (!battlePerformance.enabled) return mortarBotCommand(g,p,emplacementBotCommand(g,p,chooseBotCommand(g,p)));
   const start = battlePerformance.begin();
-  try { return emplacementBotCommand(g,p,chooseBotCommand(g,p)); } finally { battlePerformance.end("bots",start); }
+  try { return mortarBotCommand(g,p,emplacementBotCommand(g,p,chooseBotCommand(g,p))); } finally { battlePerformance.end("bots",start); }
 }
 function chooseBotCommand(g: Game, p: Soldier): Command {
   const evasion = evadeArtillery(g, p);

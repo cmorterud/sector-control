@@ -150,7 +150,7 @@ describe("trench prototype", () => {
       // A machine gunner sets the gun down at the post and mans it from just
       // behind, which can leave the gunner a little over a metre from the post.
       expect(dist(p, firingPosition(game, p)!), `soldier ${p.id}`).toBeLessThan(
-        p.loadout === "emplacement" ? 1.6 : 1,
+        p.loadout === "emplacement" || p.loadout === "mortar" ? 1.6 : 1,
       );
       expect(p.y).toBeCloseTo(0.85);
     }
