@@ -37,6 +37,8 @@ const barrageDuration = 4 * 30;
 const shellHeight = 35;
 const shellApproach = 12;
 const shellGravity = 10;
+// The pull on a shell over its last drop (for presentation that follows it).
+export const shellDrop = { gravity: shellGravity };
 export const artilleryRules = {
   initialDelay: 10 * 30,
   cooldown: 30 * 30,

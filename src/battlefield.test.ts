@@ -42,9 +42,12 @@ describe("battlefield presentation", () => {
     expect(g.snapshot()).toEqual(snapshot);
     // Verdun's backdrop adds the battlefield ambience and times its distant
     // rumble to the bursts on its horizon, so the forest no longer adds its own.
-    expect(cues.map(c=>c.kind)).toEqual(["forestWind","forestCreak","wireWind","distantGun"]);
+    // The match's next stray is already on its way in at this moment, heard
+    // from the battery plan (src/shell-sound.ts); the rest is the ambience.
+    const ambience=()=>cues.filter(c=>c.kind!=="incoming");
+    expect(ambience().map(c=>c.kind)).toEqual(["forestWind","forestCreak","wireWind","distantGun"]);
     expect(cues.find(c=>c.kind==="forestWind")!.volume).toBeLessThan(.05);
-    f.step(g);expect(cues).toHaveLength(4);
+    f.step(g);expect(ambience()).toHaveLength(4);
     g.explode({...point!,y:g.players[0].y+.03},-1,null,{...grenadeExplosionProfile,damage:0});
     expect(footSurface(point!,g.map)).toBe("mud");
     const plain=scene(false);plain.g.tick=500;plain.feedback.step(plain.g);
@@ -223,7 +226,7 @@ describe("battlefield presentation", () => {
       g.tick += 400;
     }
     expect(cues.map((c) => c.kind)).toEqual([
-      "whistle",
+      "incoming",
       "artillery",
       "debris",
       "rifle",
@@ -309,9 +312,12 @@ describe("battlefield presentation", () => {
       g,
       event({ type: "artilleryLaunch", from: { x: 0, y: 35, z: 0 } }),
     );
-    const whistle = cues.find((c) => c.kind === "whistle")!;
+    // A shell the plan does not follow is heard over its drop from the launch point.
+    const whistle = cues.find((c) => c.kind === "incoming")!;
     expect(whistle).toBeDefined();
-    expect(whistle.at.y).toBe(35);
+    expect(whistle.shell).toBe("field");
+    expect(whistle.path![0].at.y).toBe(35);
+    expect(whistle.at.y).toBeLessThan(35);
     const beforeDistantShot = cues.length;
     feedback.event(
       g,

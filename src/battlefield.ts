@@ -1,4 +1,4 @@
-import { BatteryPlan, batteryGuns } from "./artillery-battery";
+import { BatteryPlan, batteryGuns, type BatteryShot } from "./artillery-battery";
 import { distantFlashes } from "./backdrop";
 import { inCraterPond } from "./no-mans-land";
 import { floodAt, waterDepth } from "./weather";
@@ -6,6 +6,7 @@ import { groundField, villageRoad } from "./ground-surface";
 import { treeHasCrown } from "./vegetation";
 import { inFortRect } from "./fort-vaux-map";
 import type { VoiceLine } from "./soldier-chatter";
+import { batteryPath, ballisticPath, closestApproach, mortarSound, overheadPass, shellVoices, type PathPoint, type ShellSound } from "./shell-sound";
 import { hillHeight,
   baseGroundHeight,
   groundHeight,
@@ -16,6 +17,8 @@ import { hillHeight,
   type Vec,
 } from "./map";
 import { eyeHeightOf } from "./crouch";
+import { artilleryRules, shellDrop } from "./artillery";
+import { mortarRules } from "./mortar-stats";
 import type { Event, Game, V3 } from "./simulation";
 
 export type SoundKind =
@@ -45,6 +48,8 @@ export type SoundKind =
   | "grenade"
   | "artillery"
   | "whistle"
+  // A shell or mortar bomb on its way in, with its own voice (src/shell-sound.ts).
+  | "incoming"
   | "debris"
   | "timber"
   | "leaves"
@@ -70,6 +75,9 @@ export type SoundCue = {
   action?: string;
   // Seconds after now; a spent case lands a moment after its shot.
   delay?: number;
+  // An incoming shell's voice and the way it comes in, from the sound's start.
+  shell?: ShellSound;
+  path?: PathPoint[];
 };
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
@@ -153,11 +161,16 @@ export class BattlefieldFeedback {
   private nextSnag = 0;
   private nextGun = 0;
   private nextCrow = 0;
+  private nextOverhead = 0;
   private nextDrip = 0;
   // The field batteries behind the spawns (src/artillery-battery.ts): each
   // gun's report, heard when its sound has come the distance.
   private battery = new BatteryPlan();
   private heard = new Set<string>();
+  // Shells heard on their way in, by voice (for tests and audits).
+  incomingByShell: Partial<Record<ShellSound, number>> = {};
+  // Planned shells already heard on their way in.
+  private voiced = new Set<string>();
   stats = {
     footsteps: 0,
     woodSteps: 0,
@@ -198,8 +211,11 @@ export class BattlefieldFeedback {
     this.nextSnag = 0;
     this.nextGun = 240;
     this.nextCrow = 600;
+    this.nextOverhead = 900;
     this.nextDrip = 60;
     this.heard.clear();
+    this.voiced.clear();
+    this.incomingByShell = {};
     for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[])
       this.stats[key] = 0;
     this.recent = [];
@@ -213,7 +229,7 @@ export class BattlefieldFeedback {
     occlusion = true,
     seed = g.tick,
     line?: VoiceLine,
-    weapon?: {weaponId?:string;action?:string;delay?:number},
+    weapon?: {weaponId?:string;action?:string;delay?:number;shell?:ShellSound;path?:PathPoint[]},
   ) {
     const p = g.players[0];
     const ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
@@ -357,17 +373,22 @@ export class BattlefieldFeedback {
       this.nextCrack = g.tick + 4;
       this.stats.cracks++;
     }
-    if (
-      e.type === "artilleryLaunch" &&
-      Math.hypot(p.x - e.from.x, p.z - e.from.z) < 85
-    ) {
-      this.cue(g, "whistle", e.from, 0.3, false, false, e.id);
-      this.stats.whistles++;
+    // A shell the battery plan does not follow (a boundary salvo, or any
+    // shell while the plan is off) is heard from its launch over its drop.
+    if (e.type === "artilleryLaunch" && !this.followed(g, e.shell)) {
+      const shell = g.artillery.shells.find((s) => s.id === e.shell);
+      const velocity = shell ? { x: shell.vx, y: shell.vy, z: shell.vz } : { x: 0, y: 0, z: 0 };
+      this.incoming(g, e.ambient ? "heavy" : shell?.gas !== undefined ? "gas" : "field",
+        ballisticPath(e.from, velocity, shellDrop.gravity, artilleryRules.flightTicks / 30), e.id);
     }
-    // A mortar bomb's short whistle, heard close to where it will land.
-    if (e.type === "mortar" && e.phase === "whistle" && Math.hypot(p.x - e.at.x, p.z - e.at.z) < 45) {
-      this.cue(g, "whistle", e.at, 0.18, false, false, e.id);
-      this.stats.whistles++;
+    // A mortar bomb's voice over its last second and more, along its real flight.
+    if (e.type === "mortar" && e.phase === "whistle") {
+      const bomb = g.mortars.bombs.find((b) => b.id === e.bomb);
+      const seconds = ((e.landsAt ?? g.tick) - g.tick) / 30;
+      const path = bomb
+        ? ballisticPath({ x: bomb.x, y: bomb.y, z: bomb.z }, { x: bomb.vx, y: bomb.vy, z: bomb.vz }, mortarRules.gravity, seconds)
+        : [{ t: 0, at: { ...e.at, y: e.at.y + 20 } }, { t: seconds, at: e.at }];
+      this.incoming(g, mortarSound(bomb?.weaponId), path, e.id, 0.7);
     }
     // A gas shell lands with a dull plop, not a blast.
     if (e.type === "gasShellImpact" && Math.hypot(p.x - e.at.x, p.z - e.at.z) < 90)
@@ -421,7 +442,10 @@ export class BattlefieldFeedback {
       this.lastLife = g.players[0].deaths;
     }
     const listener = g.players[0];
-    if (g.phase === "playing" && g.artillery.enabled && !g.map.sky) this.batteryReports(g);
+    if (this.planned(g)) {
+      this.batteryReports(g);
+      if (listener.hp > 0) this.overhead(g);
+    }
     if (g.map.woodland && g.phase === "playing" && listener.hp > 0) this.forestAmbience(g);
     if (g.map.backdrop && g.phase === "playing" && listener.hp > 0) {
       this.backdropRumble(g);
@@ -552,6 +576,7 @@ export class BattlefieldFeedback {
     const p = g.players[0], ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z }, guns = batteryGuns(g.map);
     const shots = this.battery.update(g);
     for (const shot of shots) {
+      this.shellOnItsWay(g, shot);
       if (this.heard.has(shot.key)) continue;
       const distance = Math.hypot(shot.muzzle.x - ear.x, shot.muzzle.y - ear.y, shot.muzzle.z - ear.z);
       const late = g.tick - (shot.fireTick + Math.round((distance / 343) * 30));
@@ -561,6 +586,53 @@ export class BattlefieldFeedback {
         this.cue(g, "artillery", { ...guns[shot.gun], y: shot.muzzle.y }, 0.42, false, false, shot.fireTick * 3 + shot.gun);
     }
     if (this.heard.size > 64) for (const key of this.heard) if (!shots.some((s) => s.key === key)) this.heard.delete(key);
+    if (this.voiced.size > 64) for (const key of this.voiced) if (!shots.some((s) => s.key === key)) this.voiced.delete(key);
+  }
+  // Whether every planned shell (fire missions, gas, strays) is voiced from
+  // the battery plan, which hears it coming earlier than its launch event.
+  private planned(g: Game) {
+    return g.phase === "playing" && g.artillery.enabled && !g.map.sky;
+  }
+  // Each planned shell is heard coming for its voice's lead before it lands:
+  // a heavy for seconds, a warship's flat shell for a quarter of one.
+  private shellOnItsWay(g: Game, shot: BatteryShot) {
+    if (this.voiced.has(shot.key)) return;
+    const stray = shot.key.startsWith("a");
+    const shell: ShellSound = shot.gas ? "gas" : stray ? "heavy" : g.map.navalGunfire?.team === shot.team ? "naval" : "field";
+    const impact = shot.handoffTick + artilleryRules.flightTicks;
+    if (g.tick < impact - Math.round(shellVoices[shell].lead * 30) || g.tick >= impact) return;
+    this.voiced.add(shot.key);
+    this.incoming(g, shell, batteryPath(shot, g.tick, artilleryRules.flightTicks), shot.handoffTick * 7 + shot.gun);
+  }
+  // Now and then a heavy shell passes high over the sector for the rear
+  // areas, and lands far off a few seconds later: the war beyond this sector.
+  private overhead(g: Game) {
+    if (g.tick < this.nextOverhead) return;
+    const n = Math.abs(Math.sin(g.tick * 1.913 + g.map.width * 0.37)) % 1;
+    this.nextOverhead = g.tick + 750 + Math.floor(n * 900);
+    const p = g.players[0], path = overheadPass({ x: p.x, y: p.y, z: p.z }, n);
+    this.incoming(g, "overhead", path, g.tick, 1.4);
+    const far = path.at(-1)!.at;
+    this.cue(g, "artillery", { x: far.x * 1.4, y: 3, z: far.z }, 0.25, false, false, g.tick + 1, undefined, { delay: shellVoices.overhead.lead + 1.1 });
+  }
+  // Whether the battery plan already voiced this shell: a fire mission's,
+  // a gas strike's (negative mission ids) or a stray. Boundary salvos are not
+  // in the plan, so they are voiced from their launch.
+  private followed(g: Game, id: number) {
+    const shell = g.artillery.shells.find((s) => s.id === id);
+    if (!shell || shell.boundary || !this.planned(g)) return false;
+    return !!shell.ambient || shell.gas !== undefined || g.artillery.missions.some((m) => m.id === shell.mission);
+  }
+  // A shell or bomb on its way in, heard if its path comes close enough.
+  private incoming(g: Game, shell: ShellSound, path: PathPoint[], seed: number, volume = 1) {
+    const p = g.players[0], ear = { x: p.x, y: p.y + eyeHeightOf(p), z: p.z };
+    const voice = shellVoices[shell];
+    if (path.length < 2 || closestApproach(path, ear) > voice.reach) return;
+    // In the air there is nothing between, so no cover muffling; the voice
+    // is placed where it lands and moves along the path as it plays.
+    this.cue(g, "incoming", path.at(-1)!.at, 0.3 * volume, false, false, seed, undefined, { shell, path });
+    this.stats.whistles++;
+    this.incomingByShell[shell] = (this.incomingByShell[shell] ?? 0) + 1;
   }
   state(tick: number, enabled = true) {
     const age = Math.max(0, (tick - this.shock.tick) / 30);

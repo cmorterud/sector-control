@@ -5,6 +5,7 @@ import type { SoundCue } from "./battlefield";
 import { treeFallTime } from "./environment-effects";
 import { forestVoice } from "./forest-sound";
 import type { V3 } from "./simulation";
+import { shellVoices } from "./shell-sound";
 
 // Local synthesized effects and bundled voice clips; no microphone or speech service.
 export class BattleAudio {
@@ -179,6 +180,7 @@ export class BattleAudio {
   }
   play(cue: SoundCue) {
     if (!this.running) return;
+    if (cue.kind === "incoming") return this.incoming(cue);
     const speech = cue.kind === "voice";
     const background = ["forestWind","forestCreak","distantBattle","wireWind","distantGun","crow"].includes(cue.kind);
     const forest = forestVoice(cue.kind);
@@ -566,6 +568,117 @@ export class BattleAudio {
     };
     noise.onended = stop;
     this.voices.set(stop, priority);
+    this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
+  }
+  // A shell or bomb on its way in (src/shell-sound.ts): a sweeping band of
+  // torn air, a whistle or wail over it, a throb for tumbling bombs and a
+  // heavy's low roar, swelling as it comes and moving along its real path.
+  private incoming(cue: SoundCue) {
+    const voice = shellVoices[cue.shell ?? "field"];
+    const path = cue.path?.length ? cue.path : [{ t: 0, at: cue.at }, { t: voice.lead, at: cue.at }];
+    if (this.voices.size >= 40) {
+      const victim = [...this.voices.entries()].sort((a, b) => a[1] - b[1]).find(([, rank]) => rank < 3);
+      if (!victim) {
+        this.stats.dropped++;
+        return;
+      }
+      victim[0]();
+      this.stats.stolen++;
+    }
+    this.stats.played++;
+    this.stats.byKind[cue.kind] = (this.stats.byKind[cue.kind] ?? 0) + 1;
+    this.stats.spatial++;
+    const c = this.context, start = c.currentTime + (cue.delay ?? 0);
+    const length = Math.max(0.12, path.at(-1)!.t), end = start + length + 0.035;
+    const sources: AudioScheduledSourceNode[] = [], nodes: AudioNode[] = [];
+    // The swell, as a run of ramps: built to the burst, or up and away.
+    // (Ramps rather than a value curve: a curve whose start Chrome has
+    // clamped to a later current time refuses any event inside it.)
+    const envelope = c.createGain(), steps = 16;
+    envelope.gain.setValueAtTime(0.0001, start);
+    for (let i = 1; i <= steps; i++) {
+      const f = i / steps;
+      const shape = voice.pass ? Math.pow(Math.sin(f * Math.PI), 1.5) : Math.pow(f, voice.swell);
+      envelope.gain.linearRampToValueAtTime(Math.max(0.0001, cue.volume * (0.015 + 0.985 * shape)), start + length * f);
+    }
+    envelope.gain.exponentialRampToValueAtTime(0.0001, end);
+    nodes.push(envelope);
+    let into: AudioNode = envelope;
+    if (voice.flutter) {
+      const throb = c.createGain(), lfo = c.createOscillator(), depth = c.createGain();
+      throb.gain.value = 1 - voice.flutter.depth / 2;
+      lfo.frequency.value = voice.flutter.rate * (0.94 + (Math.abs(cue.seed) % 7) * 0.02);
+      depth.gain.value = voice.flutter.depth / 2;
+      lfo.connect(depth).connect(throb.gain);
+      envelope.connect(throb);
+      into = throb;
+      lfo.start(start);
+      lfo.stop(end);
+      sources.push(lfo);
+      nodes.push(throb, depth, lfo);
+    }
+    const pan = c.createPanner();
+    pan.panningModel = "equalpower";
+    pan.distanceModel = "inverse";
+    pan.refDistance = voice.reach >= 150 ? 45 : voice.reach <= 45 ? 14 : 30;
+    pan.rolloffFactor = 1;
+    pan.maxDistance = Math.max(160, voice.reach * 2);
+    const [first] = path;
+    pan.positionX.setValueAtTime(first.at.x, start);
+    pan.positionY.setValueAtTime(first.at.y, start);
+    pan.positionZ.setValueAtTime(first.at.z, start);
+    for (const point of path.slice(1)) {
+      pan.positionX.linearRampToValueAtTime(point.at.x, start + point.t);
+      pan.positionY.linearRampToValueAtTime(point.at.y, start + point.t);
+      pan.positionZ.linearRampToValueAtTime(point.at.z, start + point.t);
+    }
+    into.connect(pan).connect(this.world);
+    nodes.push(pan);
+    const noise = (rate: number, type: BiquadFilterType, from: number, to: number, q: number, level: number) => {
+      const source = c.createBufferSource(), filter = c.createBiquadFilter(), gain = c.createGain();
+      source.buffer = this.noise;
+      source.loop = true;
+      source.playbackRate.value = rate;
+      filter.type = type;
+      filter.Q.value = q;
+      filter.frequency.setValueAtTime(from, start);
+      filter.frequency.exponentialRampToValueAtTime(to, start + length);
+      gain.gain.value = level;
+      source.connect(filter).connect(gain).connect(envelope);
+      source.start(start, Math.abs(Math.sin(cue.seed * 1.7)) * 6);
+      source.stop(end);
+      sources.push(source);
+      nodes.push(source, filter, gain);
+    };
+    const { rush, tone } = voice;
+    noise(1, "bandpass", rush.from, rush.to, rush.q, rush.level);
+    if (voice.rumble) noise(0.6, "lowpass", 220, 110, 0.6, voice.rumble);
+    if (tone)
+      for (const [ratio, level] of tone.interval ? [[1, 1], [tone.interval, 0.6]] : [[1, 1]]) {
+        const o = c.createOscillator(), gain = c.createGain();
+        o.type = tone.type;
+        o.frequency.setValueAtTime(tone.from * ratio, start);
+        o.frequency.exponentialRampToValueAtTime(tone.to * ratio, start + length);
+        gain.gain.value = tone.level * level;
+        o.connect(gain).connect(envelope);
+        o.start(start);
+        o.stop(end);
+        sources.push(o);
+        nodes.push(o, gain);
+      }
+    let cleaned = false;
+    const stop = () => {
+      if (cleaned) return;
+      cleaned = true;
+      for (const source of sources) {
+        source.onended = null;
+        source.stop();
+      }
+      for (const node of nodes) node.disconnect();
+      this.voices.delete(stop);
+    };
+    sources[0].onended = stop;
+    this.voices.set(stop, 3);
     this.stats.peakVoices = Math.max(this.stats.peakVoices, this.voices.size);
   }
   tone(freq: number, length = 0.08, volume = 0.04) {
