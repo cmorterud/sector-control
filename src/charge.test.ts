@@ -331,9 +331,11 @@ describe("period balance", () => {
     const open = [35, 45].map((gap) => assault(gap, false));
     const screened = [35, 45].map((gap) => assault(gap, true));
     const sum = (r: { lost: number; killed: number }[], k: "lost" | "killed") => r.reduce((n, x) => n + x[k], 0);
-    // In the open most of the ten chargers fall and the line holds.
+    // In the open most of the ten chargers fall and the line holds. Survivors
+    // who stand and fight it out rather than fall back (src/bot-engage.ts)
+    // can still take a defender each run.
     expect(sum(open, "lost")).toBeGreaterThanOrEqual(6);
-    expect(sum(open, "killed")).toBeLessThanOrEqual(1);
+    expect(sum(open, "killed")).toBeLessThanOrEqual(2);
     // Out of the smoke the charge arrives and takes defenders with it.
     expect(sum(screened, "killed")).toBeGreaterThanOrEqual(3);
     expect(sum(screened, "lost")).toBeLessThan(sum(open, "lost"));

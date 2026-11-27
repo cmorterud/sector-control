@@ -7,6 +7,7 @@
 // and damage. Bots get their CTF orders from ctfGoal; see docs/GAME_GUIDE.md.
 import { dist, groundHeight, mantleLanding, playArea, type MapDefinition, type Vec } from "./map";
 import type { Command, Game, Soldier, Team, V3 } from "./simulation";
+import { behind } from "./bot-engage";
 
 export const ctfRules = {
   // Touch distances. A pickup is a small dugout stand, so you must reach it;
@@ -295,12 +296,20 @@ function pressOn(g: Game, p: Soldier, c: Command) {
   const direct = !p.path.length;
   const next = p.path[0] ?? goal;
   if (direct && dist(p, goal) < 1) return;
-  if (direct || p.mode === "Engage" || p.mode === "Reposition") {
+  // A lapse of attention mid-fight ("Scanning") doesn't stop a party either.
+  const scanning = p.mode === "Scanning";
+  if (direct || scanning || p.mode === "Engage" || p.mode === "Reposition") {
+    if (scanning) c.sprint = true;
     const d = Math.max(0.1, dist(p, next));
     c.x = (next.x - p.x) / d;
     c.z = (next.z - p.z) / d;
+    // An enemy already behind a party on the move is left behind: it keeps
+    // going and stops shooting over its shoulder instead of walking on away
+    // from the man it is firing at (src/bot-engage.ts).
+    const enemy = c.aim && p.target >= 0 ? g.players.find((q) => q.id === p.target && q.hp > 0) : undefined;
+    if (enemy && behind(p, enemy, c)) c.aim = c.fire = false;
     if (!c.aim) c.yaw = Math.atan2(c.x, -c.z);
-    p.mode = c.aim ? "Engage" : "Crossing";
+    if (!scanning) p.mode = c.aim ? "Engage" : "Crossing";
   }
   if (direct && g.tick >= p.nextMantle && g.tick % 6 === p.id % 6 && !p.crouched) {
     const landing = mantleLanding(p, c, g.map);

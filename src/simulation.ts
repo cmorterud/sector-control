@@ -15,6 +15,7 @@ import { freshArtilleryAudit } from "./artillery-audit";
 import { antiTankBotAim, antiTankHunt, blockAntiTankHunt } from "./anti-tank";
 import { emplacementBotCommand } from "./bot-emplacement";
 import { mortarBotCommand } from "./bot-mortar";
+import { respectTarget } from "./bot-engage";
 import { advanceMortars, createMortarState, mortarMap, operateMortar, type MortarState } from "./mortar";
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
@@ -488,6 +489,8 @@ export interface Soldier extends Vec {
   spottedAt: number;
   focusUntil: number;
   distractedUntil: number;
+  // The enemy a bot was fighting when its attention broke (src/bot-engage.ts).
+  distractedFrom: number;
   mode: string;
   artilleryEvade: ArtilleryEvade | null;
   // Bayonet charges and the shock of one arriving (src/charge.ts).
@@ -1176,6 +1179,7 @@ export class Game {
         spottedAt: 0,
         focusUntil: 0,
         distractedUntil: 0,
+        distractedFrom: -1,
         mode: "Navigate",
         artilleryEvade: null,
       });
@@ -1354,6 +1358,7 @@ export class Game {
     p.spottedAt = this.tick;
     p.focusUntil = 0;
     p.distractedUntil = 0;
+    p.distractedFrom = -1;
     p.mode = "Navigate";
     p.nextThink = this.tick + (p.teamIndex % 30);
     p.command = idle();
@@ -2972,6 +2977,7 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       phase: "distracted",
       until: p.distractedUntil,
     });
+    p.distractedFrom = p.target;
     p.target = -1;
     p.spottedAt = g.tick;
     p.focusUntil = 0;
@@ -3097,6 +3103,19 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       c.x += ((p.x - q.x) / d) * 0.7;
       c.z += ((p.z - q.z) / d) * 0.7;
     }
+  // A short lapse of attention mid-fight is not a cue to set off along the
+  // route again: the enemy is still there, so keep the same footing on him.
+  const lapsed = !target && !station && g.tick < p.distractedUntil
+    ? g.players.find((q) => q.id === p.distractedFrom && q.hp > 0)
+    : undefined;
+  if (lapsed) {
+    if (!p.villagePlan) {
+      c.x *= 0.2;
+      c.z *= 0.2;
+      c.sprint = false;
+    }
+    respectTarget(p, lapsed, c, !!p.villagePlan);
+  }
   if (target) {
     p.mode = "Engage";
     const d = dist(p, target);
@@ -3187,6 +3206,8 @@ function chooseBotCommand(g: Game, p: Soldier): Command {
       p.villagePlan && dist(p, p.villagePlan.goal) > 1.4 ? 0.75 : 0.2;
     c.x *= advance;
     c.z *= advance;
+    // Don't creep on along the route past (or away from) the man being shot at.
+    if (!station) respectTarget(p, target, c, !!p.villagePlan);
     if (!station && !p.villagePlan && g.tick % 90 < 30) {
       c.x += Math.cos(c.yaw) * 0.5;
       c.z += Math.sin(c.yaw) * 0.5;

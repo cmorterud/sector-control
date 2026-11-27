@@ -11,8 +11,11 @@ import { supportsTanks } from "./tanks";
 // is listed there. Each soldier must get clear of where it spawned, and the
 // battle must move: flags change hands or enemy flags are taken.
 export const botProgressRules = {
-  // Simulated seconds per battle.
+  // Simulated seconds per battle. Capture the flag gets longer: at 64 a
+  // side on Spring Offensive the first raid reaches the enemy flag only
+  // around the 50 s mark.
   seconds: 50,
+  ctfSeconds: 65,
   // A soldier has left its spawn once it is this far from where it appeared.
   leave: 12,
   // ...and it must do so within this long of appearing, unless it dies first.
@@ -38,7 +41,7 @@ function atPost(g: Game, p: Game["players"][number]) {
 
 interface Life { at: { x: number; z: number }; tick: number; left: boolean }
 
-function battle(map: (typeof botProgressCases)[number]["map"]) {
+function battle(map: (typeof botProgressCases)[number]["map"], seconds: number) {
   const g = new Game(new TestCollision(map), true, 480 * 30, 12345, { difficulty: "regular" }, {
     map, humanPlayerIds: [], tanks: supportsTanks(map), rain: true,
   });
@@ -47,7 +50,7 @@ function battle(map: (typeof botProgressCases)[number]["map"]) {
   const stranded: string[] = [];
   let captures = 0, takes = 0;
   const limit = botProgressRules.within * 30;
-  while (g.phase === "playing" && g.tick < botProgressRules.seconds * 30) {
+  while (g.phase === "playing" && g.tick < seconds * 30) {
     g.step(g.players[0].hp > 0 ? botCommand(g, g.players[0]) : idle());
     for (const e of g.events) {
       // Neutralizing counts: in attack and defend the first flags must be
@@ -78,9 +81,10 @@ export function botProgressShard(shard: number, count: number) {
     botProgressCases.forEach((c, i) => {
       if (i % count !== shard) return;
       it(c.name, { timeout: 120_000 }, () => {
-        const { stranded, captures, takes } = battle(c.map);
+        const seconds = c.mode === "ctf" ? botProgressRules.ctfSeconds : botProgressRules.seconds;
+        const { stranded, captures, takes } = battle(c.map, seconds);
         expect(stranded, `${c.name}: soldiers still within ${botProgressRules.leave} m of their spawn after ${botProgressRules.within} s`).toEqual([]);
-        if (c.mode === "ctf") expect(takes, `${c.name}: no enemy flag taken in ${botProgressRules.seconds} s`).toBeGreaterThan(0);
+        if (c.mode === "ctf") expect(takes, `${c.name}: no enemy flag taken in ${seconds} s`).toBeGreaterThan(0);
         else expect(captures, `${c.name}: no flag captured or neutralized in ${botProgressRules.seconds} s`).toBeGreaterThan(0);
       });
     });
