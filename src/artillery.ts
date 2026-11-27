@@ -2,7 +2,7 @@ import { auditArtilleryCall } from "./artillery-audit";
 import { eyeHeightOf } from "./crouch";
 import { smokeBlocks } from "./smoke";
 import { spawnLineDistance } from "./spawn-front";
-import { beyondPlayArea, blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
+import { hillHeight, beyondPlayArea, blocked, dist, groundHeight, playArea, walkSegment, type Vec } from "./map";
 import {
   idle,
   pathfind,
@@ -268,7 +268,7 @@ export function artilleryTargetReason(
   if (
     !target.area &&
     g.map.terrain &&
-    p.y + eyeHeightOf(p) < g.map.terrain.bankHeight + 0.04
+    p.y - hillHeight(p.x, p.z, g.map) + eyeHeightOf(p) < g.map.terrain.bankHeight + 0.04
   )
     return "Use a firing step to spot over the parapet";
   const range = dist(p, target);
@@ -285,7 +285,7 @@ export function artilleryTargetReason(
     ...target,
     y: Math.max(
       groundHeight(target.x, target.z, g.map) + 0.15,
-      (g.map.terrain?.bankHeight ?? 0) + 0.1,
+      (g.map.terrain?.bankHeight ?? 0) + hillHeight(target.x, target.z, g.map) + 0.1,
     ),
   };
   if (
@@ -304,10 +304,10 @@ export function artilleryUncertainty(g: Game, p: Soldier, target: Vec): number {
     ...target,
     y: Math.max(
       groundHeight(target.x, target.z, g.map) + 0.15,
-      (g.map.terrain?.bankHeight ?? 0) + 0.1,
+      (g.map.terrain?.bankHeight ?? 0) + hillHeight(target.x, target.z, g.map) + 0.1,
     ),
   };
-  return (g.map.terrain && from.y < g.map.terrain.bankHeight + 0.04) ||
+  return (g.map.terrain && from.y - hillHeight(p.x, p.z, g.map) < g.map.terrain.bankHeight + 0.04) ||
     smokeBlocks(g, from, to) ||
     g.collision.ray(from, to) < 0.995
     ? 10

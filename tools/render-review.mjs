@@ -10,7 +10,7 @@ import {checkArmory,checkBriefing} from './briefing-review.mjs';
 import {expectedCI,awaitPublishedManifest} from './pages-preview.mjs';
 
 const map=process.argv[2]??'village';
-const maps=['fort-vaux','zeppelin','training','trenches','night-raid','village','verdun','spring-offensive','headland','industrial'];
+const maps=['fort-vaux','zeppelin','training','trenches','night-raid','village','verdun','spring-offensive','gallipoli','headland','industrial'];
 // Industrial still renders for CI checks but is not offered in the briefing.
 const pickerMaps=maps.filter(id=>id!=='industrial');
 if(!maps.includes(map))throw Error('Unknown map');

@@ -115,7 +115,7 @@ import { treeHasCrown } from "./vegetation";
 import { battlefieldProps, trenchRoots } from "./battlefield-dressing";
 import { forestFloorProps } from "./forest-floor";
 import { forestGeometry, forestVariant, type ForestShape } from "./forest-geometry";
-import {
+import { hillHeight,
   playArea,
   trenchGround,
   industrialMap,
@@ -640,7 +640,7 @@ export class Renderer implements CollisionWorld {
           batchGroupId: -1,
         });
         disk.setLocalScale(crater.radius * 2, 0.025, crater.radius * 2);
-        disk.setLocalPosition(crater.x, terrain.bankHeight + 0.015, crater.z);
+        disk.setLocalPosition(crater.x, terrain.bankHeight + hillHeight(crater.x, crater.z, this.map) + 0.015, crater.z);
         root.addChild(disk);
       }
       const scar = terrain.shellScars?.[index] ?? {
@@ -2050,17 +2050,22 @@ export class Renderer implements CollisionWorld {
     soil.update();
     const scenery = this.map.id === "verdun" ? verdunBackdropScenery(this.map) : backdropScenery(this.map);
     const solids = backdropBoxMesh(scenery.boxes), shapes = new pc.Mesh(device);
-    shapes.setPositions(solids.positions);
-    shapes.setNormals(solids.normals);
-    shapes.setColors(solids.colors);
-    shapes.setIndices(solids.indices);
-    shapes.update(pc.PRIMITIVE_TRIANGLES);
+    if (solids.indices.length) {
+      shapes.setPositions(solids.positions);
+      shapes.setNormals(solids.normals);
+      shapes.setColors(solids.colors);
+      shapes.setIndices(solids.indices);
+      shapes.update(pc.PRIMITIVE_TRIANGLES);
+    }
     const painted = this.paintedMaterial();
     const wires = new pc.Mesh(device), wireLines = new Float32Array(scenery.lines);
-    wires.setPositions(wireLines);
-    wires.setNormals(new Float32Array(wireLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
-    wires.update(pc.PRIMITIVE_LINES);
-    const instances = [new pc.MeshInstance(land, soil, root), new pc.MeshInstance(shapes, painted, root), new pc.MeshInstance(wires, this.material("#2b2824"), root)];
+    if (wireLines.length) {
+      wires.setPositions(wireLines);
+      wires.setNormals(new Float32Array(wireLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
+      wires.update(pc.PRIMITIVE_LINES);
+    }
+    // A backdrop may have no silhouettes or wires (Gallipoli): an empty mesh cannot be drawn.
+    const instances = [new pc.MeshInstance(land, soil, root), ...(solids.indices.length ? [new pc.MeshInstance(shapes, painted, root)] : []), ...(wireLines.length ? [new pc.MeshInstance(wires, this.material("#2b2824"), root)] : [])];
     for (const instance of instances) instance.castShadow = false;
     root.addComponent("render", { meshInstances: instances });
     const life = this.joint("backdrop life", root);
@@ -2305,28 +2310,36 @@ export class Renderer implements CollisionWorld {
     const props = trenchProps(this.map, brazierSites(this.map));
     const solids = backdropBoxMesh([...paradosBags(this.map), ...props.boxes, ...dugouts(this.map).flatMap(dugoutBoxes)]);
     const shapes = new pc.Mesh(device);
-    shapes.setPositions(solids.positions);
-    shapes.setNormals(solids.normals);
-    shapes.setColors(solids.colors);
-    shapes.setIndices(solids.indices);
-    shapes.update(pc.PRIMITIVE_TRIANGLES);
+    if (solids.indices.length) {
+      shapes.setPositions(solids.positions);
+      shapes.setNormals(solids.normals);
+      shapes.setColors(solids.colors);
+      shapes.setIndices(solids.indices);
+      shapes.update(pc.PRIMITIVE_TRIANGLES);
+    }
     const cable = new pc.Mesh(device), cableLines = new Float32Array(props.cable);
-    cable.setPositions(cableLines);
-    cable.setNormals(new Float32Array(cableLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
-    cable.update(pc.PRIMITIVE_LINES);
+    if (cableLines.length) {
+      cable.setPositions(cableLines);
+      cable.setNormals(new Float32Array(cableLines.length).map((_, i) => (i % 3 === 1 ? 1 : 0)));
+      cable.update(pc.PRIMITIVE_LINES);
+    }
     const water = new pc.Mesh(device), wp: number[] = [], wn: number[] = [], wi: number[] = [];
     for (const p of props.water) {
       const y = groundHeight(p.x, p.z, this.map) + 0.012, first = wp.length / 3;
       for (const [dx, dz] of [[-0.62, -0.42], [-0.62, 0.42], [0.62, 0.42], [0.62, -0.42]]) { wp.push(p.x + dx, y, p.z + dz); wn.push(0, 1, 0); }
       wi.push(first, first + 1, first + 2, first, first + 2, first + 3);
     }
-    water.setPositions(wp);
-    water.setNormals(wn);
-    water.setIndices(wi);
-    water.update(pc.PRIMITIVE_TRIANGLES);
-    const instances = [new pc.MeshInstance(shapes, this.paintedMaterial(), root), new pc.MeshInstance(cable, this.material("#1f1c18"), root), new pc.MeshInstance(water, this.sumpWater(), root)];
-    instances[0].castShadow = true;
-    instances[1].castShadow = instances[2].castShadow = false;
+    if (wi.length) {
+      water.setPositions(wp);
+      water.setNormals(wn);
+      water.setIndices(wi);
+      water.update(pc.PRIMITIVE_TRIANGLES);
+    }
+    const solidsInstance = new pc.MeshInstance(shapes, this.paintedMaterial(), root), cableInstance = new pc.MeshInstance(cable, this.material("#1f1c18"), root), waterInstance = new pc.MeshInstance(water, this.sumpWater(), root);
+    solidsInstance.castShadow = true;
+    cableInstance.castShadow = waterInstance.castShadow = false;
+    // Short lines (Gallipoli's) may have no cable or sump water: leave empty meshes out.
+    const instances = [[solidsInstance, solids.indices.length], [cableInstance, cableLines.length], [waterInstance, wi.length]].filter(([, n]) => n).map(([m]) => m as pc.MeshInstance);
     root.addComponent("render", { meshInstances: instances });
     for (const e of props.embers) this.cube("brazier embers", e.x, (e.y ?? 0) + 0.02, e.z, 0.36, 0.04, 0.36, "#000000", false, root).render!.material = this.glowMaterial("#ff7a2a");
     for (const l of props.lanterns) {
@@ -2598,6 +2611,8 @@ export class Renderer implements CollisionWorld {
     const ocean=this.cube("sea",0,coastalRules.seaLevel-.05,0,map.width+600,.1,map.depth+600,"#33586a");
     ocean.render!.material=water;ocean.render!.castShadows=false;
     for(const [name,data,material] of [["rock",meshes.rock,this.materials.get("coastal rock")!],["foam",meshes.foam,foam]] as const) {
+      // A coast that is all beach (Gallipoli) has no rock to draw.
+      if(!data.indices.length)continue;
       const e=this.cube("coastal "+name,0,0,0,1,1,1,"#ffffff",false,this.mapRoot);
       e.render!.meshInstances=[new pc.MeshInstance(this.modelMesh("coast-"+map.id+"-"+name,()=>data),material,e)];
       e.render!.castShadows=false;

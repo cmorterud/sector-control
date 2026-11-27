@@ -1,7 +1,7 @@
 import { artillerySector, artillerySectors } from "./artillery-sectors";
 import { artilleryTargetReason, artilleryUncertainty } from "./artillery";
 import { flareRules, flareTargetReason } from "./flares";
-import { gasAgent, gasStrikeReason, gasStrikeRules } from "./gas";
+import { gasAgent, gasMap, gasStrikeReason, gasStrikeRules } from "./gas";
 
 // What a click on the map asks for. Flares exist only on night maps; gas
 // shells are an alternate artillery strike wherever artillery is offered.
@@ -66,7 +66,7 @@ export class ArtilleryMap {
   }
   private modes(): MapCall[] {
     const g = this.game();
-    return ["shell", ...(g.map.night ? ["flare" as const] : []), ...(g.map.artillery !== false ? ["gas" as const] : [])];
+    return ["shell", ...(g.map.night ? ["flare" as const] : []), ...(gasMap(g.map) ? ["gas" as const] : [])];
   }
   // Step the map through what it can call: shells, gas shells, and flares at night.
   toggleMode() {

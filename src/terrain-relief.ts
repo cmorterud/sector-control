@@ -1,4 +1,4 @@
-import {
+import { hillHeight,
   baseGroundHeight,
   playArea,
   terrainResolution,
@@ -192,7 +192,7 @@ export function buildTrenchRelief(
           r2 = (nx * nx + nz * nz) / (edge * edge);
         if (r2 >= 1 || Math.abs(x) >= half - 1 || Math.abs(z) >= playArea(map).depth / 2 - 2)
           continue;
-        if (baseGroundHeight(x, z, authored) < map.terrain!.bankHeight - 0.01)
+        if (baseGroundHeight(x, z, authored) - hillHeight(x, z, authored) < map.terrain!.bankHeight - 0.01)
           continue;
         let protection = smooth((half - 1 - Math.abs(x)) / 3);
         for (const box of map.boxes) {

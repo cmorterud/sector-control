@@ -32,8 +32,10 @@ export function terrainRayCeiling(
     let base = t.bankHeight;
     for (const height of t.heights) base = Math.max(base, height);
     for (const ramp of t.ramps) base = Math.max(base, ramp.high, ramp.low);
-    const field = t.elevation;
-    if (field)
+    // Each patch's highest rolling-ground sample, plus (separately, since the
+    // two add) its highest hillside sample: a bound that stays above both.
+    const patchPeaks = (field: NonNullable<typeof t.elevation>) => {
+      const out = new Float32Array(columns * rows);
       for (let row = 0; row < field.rows; row++)
         for (let col = 0; col < field.columns; col++) {
           const height = field.values[row * field.columns + col];
@@ -45,16 +47,20 @@ export function terrainRayCeiling(
               const ix = Math.floor((wx + dx) / terrainPatchSize) - x,
                 iz = Math.floor((wz + dz) / terrainPatchSize) - z;
               if (ix >= 0 && iz >= 0 && ix < columns && iz < rows)
-                peaks[iz * columns + ix] = Math.max(
-                  peaks[iz * columns + ix],
-                  height,
-                );
+                out[iz * columns + ix] = Math.max(out[iz * columns + ix], height);
             }
         }
+      return out;
+    };
+    if (t.elevation) peaks.set(patchPeaks(t.elevation));
+    if (t.hill) {
+      const hill = patchPeaks(t.hill);
+      for (let i = 0; i < peaks.length; i++) peaks[i] += hill[i];
+    }
     bound = { base, columns, rows, x, z, peaks };
     cache.set(t, bound);
   }
-  if (!t.elevation) return bound.base;
+  if (!t.elevation && !t.hill) return bound.base;
   let peak = 0;
   for (
     let z = Math.max(0, Math.floor(minZ / terrainPatchSize) - bound.z);

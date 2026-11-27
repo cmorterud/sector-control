@@ -1,5 +1,5 @@
 import type { BackdropBox } from "./backdrop";
-import { groundHeight, type MapDefinition, type Vec, type WireSegment } from "./map";
+import { hillHeight, groundHeight, type MapDefinition, type Vec, type WireSegment } from "./map";
 
 // No-man's land dressing: wire belts (simulated in map.wireBelts and cut by
 // blasts), water standing in the old craters, and the debris of earlier
@@ -174,7 +174,7 @@ export function noMansLandDebris(map: MapDefinition): BackdropBox[] {
     if (wet.some((p) => Math.hypot(x - p.x, z - p.z) < p.radius + 0.4)) continue;
     if (belts.some((b) => Math.abs(x - b.x) < b.w / 2 + 0.5 && Math.abs(z - b.z) < b.d / 2 + 0.5)) continue;
     const y = groundHeight(x, z, map);
-    if (y < (map.terrain?.bankHeight ?? 0) - 1.2) continue;
+    if (y - hillHeight(x, z, map) < (map.terrain?.bankHeight ?? 0) - 1.2) continue;
     const kind = kinds[i % kinds.length];
     out.push({ ...kind, x, y: y - 0.02, z, yaw: hash(i * 3.7) * Math.PI, lean: kind.h > 0.1 ? 0 : (hash(i * 4.1) - 0.5) * 0.1 });
   }

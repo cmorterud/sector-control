@@ -1,6 +1,7 @@
 import { soilColor } from "./battlefield-look";
 import { exposedEarth } from "./environment-surface";
-import type { MapDefinition } from "./map";
+import { hillHeight, type MapDefinition } from "./map";
+import { coastalRules } from "./coastal-scenery";
 
 // Presentation only: the land beyond a map's terrain edge, out to the horizon.
 // Nothing here collides, navigates or simulates. A ring of rolling ground meets
@@ -49,6 +50,8 @@ const beyondEdge = (map: MapDefinition, x: number, z: number) =>
 export type BackdropRelief = { roll: number; rise: number; riseFrom: number; hills: { x: number; z: number; radius: number; height: number }[] };
 const reliefs: Partial<Record<MapDefinition["id"], BackdropRelief>> = {
   verdun: { roll: 3.4, rise: 15, riseFrom: 70, hills: [{ x: 222, z: -46, radius: 75, height: 9 }] },
+  // The Sari Bair range climbing on north-east toward Koja Chemen Tepe.
+  gallipoli: { roll: 2.2, rise: 26, riseFrom: 40, hills: [{ x: 170, z: -210, radius: 150, height: 34 }, { x: 260, z: 60, radius: 90, height: 12 }] },
 };
 export const backdropRelief = (map: Pick<MapDefinition, "id">): BackdropRelief =>
   reliefs[map.id] ?? { roll: 2.4, rise: 7, riseFrom: 130, hills: [] };
@@ -65,7 +68,14 @@ export function backdropHeight(map: MapDefinition, x: number, z: number) {
     if (r < 1) hills += hill.height * (1 - r * r) ** 2;
   }
   const away = smooth(backdropRules.flatBand, backdropRules.flatBand + 70, d);
-  return bank + (rolling * relief.roll + hills) * away + relief.rise * smooth(relief.riseFrom, backdropRules.radius, d);
+  const land = bank + (rolling * relief.roll + hills) * away + relief.rise * smooth(relief.riseFrom, backdropRules.radius, d);
+  if (!map.terrain?.hill) return land;
+  // A hillside runs on past the edge as the edge's own ground, read from the
+  // nearest edge point. Under the sea it sinks away out of sight; on land the
+  // usual roll and rise come in once clear of the beach.
+  const sea = coastalRules.seaLevel, edge = bank + hillHeight(x, z, map);
+  if (edge < sea) return edge - 3 * away;
+  return edge + (land - bank) * smooth(sea + 1.5, sea + 8, edge);
 }
 
 // The ground material paints the whole map onto one clamped texture, so a
@@ -148,6 +158,9 @@ export function backdropTrenches(map: MapDefinition) {
 // Every solid silhouette: parapets, wire pickets, end caps, woods, ruins and poles.
 export function backdropScenery(map: MapDefinition): { boxes: BackdropBox[]; lines: number[] } {
   const boxes: BackdropBox[] = [], lines: number[] = [];
+  // Gallipoli's trenches stop short of its edges, and the Western Front's
+  // woods, villages and towns have no place on the peninsula.
+  if (map.id === "gallipoli") return { boxes, lines };
   continuingFront(map, backdropTrenches(map), boxes, lines, true);
   trenchFrontScenery(map, boxes, lines);
   return { boxes, lines };
@@ -363,8 +376,16 @@ const verdunLife = {
     { x: -40, z: 220, scale: 0.9 },
   ],
 };
+// No kite balloons over Anzac's ridge; smoke from fires inland and up the coast.
+const gallipoliLife = {
+  balloons: [],
+  smoke: [
+    { x: 190, z: -150, scale: 1 },
+    { x: 230, z: 120, scale: 0.9 },
+  ],
+};
 export const backdropLife = (map: Pick<MapDefinition, "id">) =>
-  map.id === "verdun" ? verdunLife : { balloons: backdropBalloons, smoke: backdropSmoke };
+  map.id === "verdun" ? verdunLife : map.id === "gallipoli" ? gallipoliLife : { balloons: backdropBalloons, smoke: backdropSmoke };
 
 // Distant shell bursts and flares follow a fixed timetable from the match tick,
 // so the flash and its delayed rumble can be produced independently and agree.
@@ -375,8 +396,10 @@ export function distantFlashes(map: MapDefinition, from: number, to: number): Di
     const tick = slot * 150 + Math.floor(hash(slot * 1.31) * 140);
     if (tick < from || tick >= to) continue;
     const angle = hash(slot * 2.77) * Math.PI * 2, distance = 150 + hash(slot * 3.91) * 110;
-    const x = Math.cos(angle) * distance, z = Math.sin(angle) * distance;
-    out.push({ tick, x, y: backdropHeight(map, x, z), z });
+    const x = Math.cos(angle) * distance, z = Math.sin(angle) * distance, y = backdropHeight(map, x, z);
+    // Nothing bursts under the sea.
+    if (map.coast && y < coastalRules.seaLevel) continue;
+    out.push({ tick, x, y, z });
   }
   return out;
 }

@@ -5,7 +5,7 @@ import { groundField, villageRoad } from "./ground-surface";
 import { treeHasCrown } from "./vegetation";
 import { inFortRect } from "./fort-vaux-map";
 import type { VoiceLine } from "./soldier-chatter";
-import {
+import { hillHeight,
   baseGroundHeight,
   groundHeight,
   inWire,
@@ -94,13 +94,13 @@ export function duckboards(map: MapDefinition): Vec[] {
     .filter((p) =>
       boardOffsets.every(
         ([dx, dz]) =>
-          Math.abs(baseGroundHeight(p.x + dx, p.z + dz, map)) < 0.06,
+          Math.abs(baseGroundHeight(p.x + dx, p.z + dz, map) - hillHeight(p.x + dx, p.z + dz, map)) < 0.06,
       ),
     );
 }
 export function intactBoard(p: Vec, map: MapDefinition) {
   return boardOffsets.every(
-    ([dx, dz]) => Math.abs(groundHeight(p.x + dx, p.z + dz, map)) < 0.06,
+    ([dx, dz]) => Math.abs(groundHeight(p.x + dx, p.z + dz, map) - hillHeight(p.x + dx, p.z + dz, map)) < 0.06,
   );
 }
 export function footSurface(

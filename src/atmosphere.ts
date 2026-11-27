@@ -1,5 +1,5 @@
 import { boundaryWireLayout } from "./boundary-wire";
-import { groundHeight, playArea, type MapDefinition, type Vec } from "./map";
+import { hillHeight, groundHeight, playArea, type MapDefinition, type Vec } from "./map";
 
 // Presentation-only atmosphere for maps whose look asks for it: drifting
 // ground mist, smoke from trench braziers and fresh craters, and scraps of
@@ -25,7 +25,7 @@ export function mistBanks(map: MapDefinition, fieldWidth = 64): MistBank[] {
   const count = Math.round((60 * fieldWidth) / 64);
   for (let i = 0; i < count; i++) {
     const x = (hash(i * 1.7) - 0.5) * fieldWidth, z = (hash(i * 2.9) - 0.5) * (area.depth + 30);
-    banks.push({ x, y: bank + 0.7 + hash(i * 3.1) * 0.5, z, w: 9 + hash(i * 4.3) * 9, h: 2.2 + hash(i * 5.1) * 1.6, drift: 0.25 + hash(i * 6.7) * 0.3, trench: false });
+    banks.push({ x, y: bank + hillHeight(x, z, map) + 0.7 + hash(i * 3.1) * 0.5, z, w: 9 + hash(i * 4.3) * 9, h: 2.2 + hash(i * 5.1) * 1.6, drift: 0.25 + hash(i * 6.7) * 0.3, trench: false });
   }
   const lines = map.terrain?.trenchLines ?? [];
   let n = 0;
@@ -33,8 +33,9 @@ export function mistBanks(map: MapDefinition, fieldWidth = 64): MistBank[] {
     for (const s of line.sections) {
       if (n++ % 2) continue;
       const z = s.z + (hash(n * 7.3) - 0.5) * s.length * 0.6;
-      if (groundHeight(s.x, z, map) > 1) continue;
-      banks.push({ x: s.x, y: 0.55, z, w: 4 + hash(n * 8.1) * 2.5, h: 1.2 + hash(n * 9.7) * 0.6, drift: 0.12, trench: true });
+      const hill = hillHeight(s.x, z, map);
+      if (groundHeight(s.x, z, map) - hill > 1) continue;
+      banks.push({ x: s.x, y: hill + 0.55, z, w: 4 + hash(n * 8.1) * 2.5, h: 1.2 + hash(n * 9.7) * 0.6, drift: 0.12, trench: true });
     }
   return banks;
 }

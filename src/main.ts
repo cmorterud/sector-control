@@ -28,6 +28,7 @@ import { spreadRingRadius } from "./spread-reticle";
 import { villageMap } from "./village-map";
 import { headlandMap } from "./headland-map";
 import { springOffensiveMap } from "./spring-offensive-map";
+import { gallipoliMap } from "./gallipoli-map";
 import { deploymentPoints } from "./deployment";
 import { fortVauxMap } from "./fort-vaux-map";
 import { zeppelinMap } from "./zeppelin-map";
@@ -69,7 +70,7 @@ import { lightAt } from "./night";
 import { flareRules } from "./flares";
 import { carriedFlag, ctfMap, ctfRules, supportsCtf } from "./ctf";
 import { CtfAnnouncer, ctfBrief, ctfLabels, ctfPrompt, ctfStrip, modeChoice } from "./ctf-hud";
-import { gasAgent, masked } from "./gas";
+import { gasAgent, gasMap, masked } from "./gas";
 import { GasAudio, GasOverlay, GasScreen, gasNotice, gasStatus } from "./gas-ui";
 import { reinforcementsLeft } from "./reinforcements";
 import { ReinforcementNotices, outOfReinforcements, reinforcementEndReason, reinforcementTally, spectateTarget } from "./reinforcement-hud";
@@ -234,7 +235,7 @@ let reviewManual = false;
 const duration = Number(params.get("duration") ?? 480);
 // Maps offered in the briefing. Industrial is no longer offered, but ?map=industrial
 // still opens it for the CI combat and Armory browser checks.
-const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, headlandMap];
+const battlefields = [fortVauxMap, zeppelinMap, trainingMap, trenchMap, nightRaidMap, villageMap, verdunMap, springOffensiveMap, gallipoliMap, headlandMap];
 const requestedMap = params.get("map");
 const chosenMap = [...battlefields, industrialMap].find(battlefield => battlefield.id === requestedMap) ?? fortVauxMap;
 // ?mode=ctf plays capture the flag on a map that lays it out; domination stays the default.
@@ -321,7 +322,7 @@ function menu(
   } else {
   const faction = factions[factionFor(map,"blue")];
   const loadouts = document.createElement("div"); loadouts.className = "loadout-choice";
-  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option><option value="support">Support · ${faction.support}</option><option value="emplacement">Support · Emplacement kit</option>${mortarMap(map) ? `<option value="mortar">Support · Trench mortar · ${mortarFor(factionFor(map,"blue")).name}</option>` : ""}${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
+  loadouts.innerHTML = `<label>Deployment loadout <select id="loadout"><option value="rifleman">Rifleman · ${riflemanWeapon(factionFor(map,"blue"),kitFor(map))}</option><option value="marksman">Marksman · ${faction.scoped} · 4×</option>${faction.support ? `<option value="support">Support · ${faction.support}</option>` : ""}<option value="emplacement">Support · Emplacement kit</option>${mortarMap(map) ? `<option value="mortar">Support · Trench mortar · ${mortarFor(factionFor(map,"blue")).name}</option>` : ""}${supportsTanks(map) && faction.antiTank ? `<option value="antiTank" ${tanksOn ? "" : "disabled"}>Support · Anti-tank · ${faction.antiTank}${tanksOn ? "" : " (tanks on only)"}</option>` : ""}</select></label><small>${faction.pistol} sidearm · ${started ? "Changes apply on your next spawn" : "Choose before deployment"}</small>`;
   el("controls-settings").before(loadouts);
   const select = el("loadout") as HTMLSelectElement; select.value = chosenLoadout;
   if (supportsTanks(map)) {
@@ -779,7 +780,7 @@ function hud(now: number) {
   staged.ammo += `<small>${keyLabel(settings.bindings.whistle)} · WHISTLE ${whistleIn ? whistleIn + "s" : "READY"}</small>`;
   staged.ammo += `<small>${keyLabel(settings.bindings.tactical)} · ${game.map.artillery === false
     ? "FLOOR PLAN" : `ARTILLERY ${readyIn ? readyIn + "s" : "READY"}${game.map.night ? ` · FLARE ${flareIn ? flareIn + "s" : "READY"}` : ""}`}</small>`;
-  if (game.map.artillery !== false) staged.ammo += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
+  if (gasMap(game.map)) staged.ammo += `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>`;
   tacticalMap.update();
   el("artillery-status").textContent =
     now < artilleryNoticeUntil ? artilleryNotice : now < calloutUntil ? callout : "";
@@ -860,7 +861,7 @@ function hud(now: number) {
   if (crewed) {
     const key = (action: ControlAction) => keyLabel(settings.bindings[action]);
     staged.ammo = tankPanel(game, p, { interact: useKey, forward: key("forward"), backward: key("backward"), left: key("left"), right: key("right") }) +
-      (game.map.artillery !== false ? `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>` : "");
+      (gasMap(game.map) ? `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>` : "");
     staged.capture = "";
   } else if (!gun && !nearby && !placement && !pickup && p.hp > 0 && game.tanks.list.length) {
     const prompt = tankPrompt(game, p, useKey);
@@ -1356,7 +1357,7 @@ try {
       return {flag:f.id,state:f.state,carrier:f.carrier};
     },
     survey:(firstPerson:boolean,detail?:string)=>{
-      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],"night-raid":[-10,-16,8,-8],verdun:[-10,-18,8,0],"spring-offensive":[-30,-4,0,0],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-6.4,5.6,5,-3]};
+      const poses:Record<string,[number,number,number,number]>={training:[0,66,0,47],industrial:[-18,3,0,0],trenches:[-10,-16,8,-8],"night-raid":[-10,-16,8,-8],verdun:[-10,-18,8,0],"spring-offensive":[-30,-4,0,0],gallipoli:[-80,0,-40,8],village:[-23,-30,0,-15],headland:[-35,-4,5,-9],"fort-vaux":[-6.4,5.6,5,-3]};
       const villageDetails:Record<string,[number,number,number,number]>={school:[-41,-63,-46,-48],inn:[41,-63,46,-48],street:[-36,-19,-17,-5],"manor-room":[-3.3,-2.4,-6.8,-5.6]};
       const fortDetails:Record<string,[number,number,number,number]>={cistern:poses["fort-vaux"],barracks:[-35.4,2,-23,-1],casemate:[34.5,1,23,-1],yard:[-6,19,7,18]};
       if (map.fort) {
@@ -1387,7 +1388,9 @@ try {
         // Past a flooded shell scar to Blue's wire in front of its front line.
         "no-mans-land":[-46,-12,-58,-21]};
       if(map.id==="verdun"){if(trenchDetails["trench-dugout"])verdunDetails["trench-dugout"]=trenchDetails["trench-dugout"];if(trenchDetails["trench-sign"])verdunDetails["trench-sign"]=trenchDetails["trench-sign"];}
-      const view = detail ? (map.fort ? fortDetails[detail] : map.sky ? zeppelinDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : map.sky ? zeppelinDetails.keel : poses[map.id];
+      // Gallipoli: up from the beach, across the Nek and Lone Pine, along Monash Valley and down from the summit.
+      const gallipoliDetails:Record<string,[number,number,number,number]>={beach:[-84,-24,-20,-30],"north-lane":[-70,-50,10,-40],"south-lane":[-70,40,10,42],monash:[-21,30,-21,-20],nek:[-12,-42,30,-42],"lone-pine":[-14,42,30,42],summit:[70,-38,-60,10]};
+      const view = detail ? (map.fort ? fortDetails[detail] : map.sky ? zeppelinDetails[detail] : map.id === "village" ? villageDetails[detail] : map.id === "verdun" ? verdunDetails[detail] : map.id === "gallipoli" ? gallipoliDetails[detail] : trenchGround(map) ? trenchDetails[detail] : undefined) : map.sky ? zeppelinDetails.keel : poses[map.id];
       if (!view) throw Error("Unknown review viewpoint");
       const [x,z,tx,tz]=view,p=game.players[0],deck=map.sky?view[4]:undefined;
       const floor=(x:number,z:number)=>deck===undefined?groundHeight(x,z,game.map):supportHeight(x,z,game.map,deck+.23,.45);
@@ -1428,6 +1431,8 @@ try {
       ? `Verdun, 23 June 1916. Under a phosgene barrage, Imperial Germany pushes through the shattered woods from Fort Douaumont toward Fleury; France holds the line in front of Fort Souville. Capture the ruined Thiaumont crossroads between the trench systems. ${teamSize} soldiers per team · five-flag domination.`
       : map.id === "spring-offensive"
       ? `21 March 1918. Imperial Germany comes out of the morning fog against Britain's lines in depth: a broken outpost line, the battle zone and a rear switch line on each side. Take the Hill Redoubt, the ruined village and the windmill crossroads, then break through to the enemy's home flags. While your side holds one of its own home flags you may deploy behind it: choose with the number keys while down. ${teamSize} soldiers per team · seven-flag domination · first to 300 or eight minutes.`
+      : map.id === "gallipoli"
+      ? `Anzac, August 1915. Australian and New Zealand troops come up from the beach through the scrub gullies; the Ottoman army holds the ridge above them and the summit behind it. Take Table Top and Owen's Gully, storm the trenches at the Nek and Lone Pine, then climb to Scrubby Knoll and Chunuk Bair. Cliffs too steep to climb funnel the attack into the gullies and spurs. No gas and no tanks on this front. ${teamSize} soldiers per team · six-flag domination · first to 300 or eight minutes.`
       : map.id === "headland"
       ? `France pushes out along the headland from the mainland road; Imperial Germany holds the lighthouse on the tip. Take the park, the fountain square and the walled green. Low garden walls and street cover break up the approaches; shellfire clears a path through them. ${teamSize} soldiers per team · three-flag domination · first to 300 or eight minutes.`
       : map.sky

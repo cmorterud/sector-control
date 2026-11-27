@@ -9,8 +9,8 @@ export const flameRules = { fuel:240, range:8, damagePerTick:1, burnTicks:30, bu
 export interface FlameKit { id:number; home:Vec; at:Vec|null; fuel:number; carrier:number|null; readyAt:number; droppedAt:number|null }
 export interface FlameState { kits:FlameKit[] }
 export function createFlames(map:Game["map"]):FlameState {
- // No flame kits on Industrial, nor aboard a hydrogen airship.
- if(map.id==="industrial"||map.sky)return {kits:[]};
+ // No flame kits on Industrial, aboard a hydrogen airship, or where a map leaves them out.
+ if(map.id==="industrial"||map.sky||map.flamethrower===false)return {kits:[]};
  return {kits:(["blue","red"] as const).map((team,id)=>{
   const line=map.terrain?.trenchLines?.find(l=>l.team===team&&l.role==="front");
   const flag=map.sectors.find(s=>s.home===team);

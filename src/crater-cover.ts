@@ -1,4 +1,6 @@
-import { blocked, groundHeight, playArea, type MapDefinition, type Vec } from "./map";
+import { blocked, groundHeight as worldGround, hillHeight, playArea, type MapDefinition, type Vec } from "./map";
+// Measured from the hillside under it, so a slope is not a crater.
+const groundHeight = (x: number, z: number, map: MapDefinition) => worldGround(x, z, map) - hillHeight(x, z, map);
 export interface CraterCover extends Vec {
   radius: number;
   depth: number;

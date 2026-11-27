@@ -8,19 +8,26 @@ export type CoastalGrass={x:number;y:number;z:number;yaw:number;scale:[number,nu
 const empty=():CoastMesh=>({positions:[],normals:[],uvs:[],colors:[],indices:[]});
 const sample=(i:number)=>{const n=Math.sin(i*127.1+43.7)*43758.5453;return n-Math.floor(n);};
 function stations(map:MapDefinition) {
-  const coast=map.coast??[],points:{x:number;z:number;nx:number;nz:number}[]=[];
+  const coast=map.coast??[],points:{x:number;z:number;nx:number;nz:number;end?:boolean}[]=[];
   const area=coast.reduce((n,p,i)=>n+p.x*coast[(i+1)%coast.length].z-coast[(i+1)%coast.length].x*p.z,0);
   const normals=coast.map((p,i)=>{
     const next=coast[(i+1)%coast.length],dx=next.x-p.x,dz=next.z-p.z,n=Math.hypot(dx,dz)||1,sign=area>0?1:-1;
     return {x:-dz/n*sign,z:dx/n*sign};
   });
   const corners=coast.map((_,i)=>{const a=normals[i],b=normals[(i+coast.length-1)%coast.length],n=Math.hypot(a.x+b.x,a.z+b.z)||1;return{x:(a.x+b.x)/n,z:(a.z+b.z)/n};});
+  const outside=(p:{x:number;z:number})=>Math.abs(p.x)>map.width/2||Math.abs(p.z)>map.depth/2;
   for(let i=0;i<coast.length;i++) {
-    const a=coast[i],b=coast[(i+1)%coast.length],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/3.5));
+    const a=coast[i],b=coast[(i+1)%coast.length];
+    // A coastline may close beyond the terrain; nothing is drawn out there.
+    if(outside(a)&&outside(b))continue;
+    const n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/3.5));
     for(let j=0;j<n;j++) {
       const t=j/n,nx=corners[i].x*(1-t)+corners[(i+1)%coast.length].x*t,nz=corners[i].z*(1-t)+corners[(i+1)%coast.length].z*t,length=Math.hypot(nx,nz)||1;
       points.push({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,nx:nx/length,nz:nz/length});
     }
+    // Where the next stretch is skipped, finish this one at its end point and break the chain.
+    const c=coast[(i+2)%coast.length];
+    if(outside(b)&&outside(c)){const k=(i+1)%coast.length;points.push({x:b.x,z:b.z,nx:corners[k].x,nz:corners[k].z,end:true});}
   }
   return points;
 }
@@ -45,18 +52,23 @@ export function coastalGeometry(map:MapDefinition) {
   const bands=[0,.2,.46,.72,1];
   for(let i=0;i<points.length;i++) {
     const a=points[i],b=points[(i+1)%points.length];
+    if(a.end)continue;
+    // On a hillside map the land itself runs down into the water: a beach
+    // there has no cliff to draw.
+    const landTop=(p:typeof a)=>baseGroundHeight(p.x+p.nx*1.5,p.z+p.nz*1.5,map);
+    const beach=!!map.terrain?.hill&&landTop(a)<sea+.6&&landTop(b)<sea+.6;
     const profile=(p:typeof a,index:number,t:number):Point=>{
-      const top=Math.max(map.terrain?.bankHeight??2.4,baseGroundHeight(p.x+p.nx*1.5,p.z+p.nz*1.5,map));
+      const top=map.terrain?.hill?landTop(p):Math.max(map.terrain?.bankHeight??2.4,landTop(p));
       const offset=.15+(1-t)*2.9+(sample(index+71)-.5)*.36*Math.sin(t*Math.PI);
       return [p.x-p.nx*offset,sea-.12+(top-sea+.12)*t+(sample(index+113)-.5)*.12*Math.sin(t*Math.PI),p.z-p.nz*offset];
     };
-    for(let band=1;band<bands.length;band++) {
+    if(!beach)for(let band=1;band<bands.length;band++) {
       const t=bands[band],low=bands[band-1],shade=.83+sample(i+band*9)*.12;
       const tint=(band===1?[.43,.48,.44]:band%2?[.68,.67,.58]:[.57,.60,.53]).map(n=>n*shade);
       quad(profile(a,i,t),profile(b,(i+1)%points.length,t),profile(b,(i+1)%points.length,low),profile(a,i,low),tint);
     }
     const topA=profile(a,i,1),topB=profile(b,(i+1)%points.length,1);
-    quad(topA,[a.x+a.nx*.85,topA[1]-.035,a.z+a.nz*.85],[b.x+b.nx*.85,topB[1]-.035,b.z+b.nz*.85],topB,[.63,.65,.55]);
+    if(!beach)quad(topA,[a.x+a.nx*.85,topA[1]-.035,a.z+a.nz*.85],[b.x+b.nx*.85,topB[1]-.035,b.z+b.nz*.85],topB,[.63,.65,.55]);
     // Broken, feathered wash patches rather than a solid white outline.
     const x=(a.x+b.x)/2-a.nx*(3.4+sample(i)*.8),z=(a.z+b.z)/2-a.nz*(3.4+sample(i)*.8);
     if(i%3!==1&&coastDistance(x,z,map)<-.35) {
@@ -65,7 +77,7 @@ export function coastalGeometry(map:MapDefinition) {
       const corners:Point[]=[[-1,-1],[-1,1],[1,1],[1,-1]].map(([u,v])=>[x+dx/len*u*along+a.nx*v*across,sea+.018,z+dz/len*u*along+a.nz*v*across]);
       for(let j=0;j<4;j++)triangle(foam,center,corners[j],corners[(j+1)%4],[.83,.87,.78],[.75,0,0]);
     }
-    if(i%4===0) {
+    if(i%4===0&&!beach) {
       const x=a.x-a.nx*(3+sample(i+8)*2.5),z=a.z-a.nz*(3+sample(i+8)*2.5);
       if(coastDistance(x,z,map)>-.25)continue;
       const radius=.55+sample(i+7)*.7,top:Point=[x+.1,sea+.25+sample(i+9)*.5,z-.05];

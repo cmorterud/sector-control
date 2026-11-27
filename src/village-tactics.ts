@@ -40,7 +40,7 @@ const forward = (g: Game, p: Soldier) =>
   Math.sign(g.map.spawn[p.team === "blue" ? "red" : "blue"].x - g.map.spawn[p.team].x) || (p.team === "blue" ? 1 : -1);
 // Maps whose bots pick individual cover posts around a flag.
 export const usesVillageTactics = (map: { id: string }) =>
-  map.id === "village" || map.id === "verdun" || map.id === "spring-offensive" || map.id === "headland" || map.id === "fort-vaux" || map.id === "zeppelin";
+  map.id === "village" || map.id === "verdun" || map.id === "spring-offensive" || map.id === "gallipoli" || map.id === "headland" || map.id === "fort-vaux" || map.id === "zeppelin";
 
 // The next waypoint of a bot's lane aboard an airship: a third of each team
 // climbs to the gallery and a few go over the top to the bomb bay; the rest
