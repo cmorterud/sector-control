@@ -23,9 +23,9 @@ export function trainingForwardZ(station: {z:number;target:Vec}){
 
 const musterRoad = [
   {x:-61,z:78}, {x:-50,z:80}, {x:-33,z:83}, {x:-18,z:79},
-  {x:-5,z:78}, {x:13,z:78}, {x:25,z:69}, {x:32,z:59},
+  {x:-5,z:78}, {x:13,z:78}, {x:27,z:69}, {x:32,z:59},
   {x:42,z:57}, {x:54,z:57}, {x:62,z:49}, {x:64,z:37},
-  {x:59,z:29}, {x:48,z:28}, {x:31,z:30}, {x:25,z:21},
+  {x:59,z:29}, {x:48,z:28}, {x:31,z:30}, {x:28,z:21},
 ];
 // Checkpoints sit on the playable side of each obstacle.
 export const movementMarks = {
@@ -63,7 +63,7 @@ for(const [i,s] of trainingStations.entries()){
   sign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",signBothSides:true,sign:`${i+1}. ${s.name.toUpperCase()}`};
   add("post-"+s.id,s.x-7,s.z+downrange,.16,.3,2.5);
   const table=add("supply-"+s.id,s.x+6,s.z,2.2,1,.85);table.farmProp="worktable";
-  if(i<4)for(const side of [-1,1])for(let n=0;n<5;n++)add(`lane-${i}-${side}-${n}`,s.x+side*15,s.z+downrange*(5+n*6),.35,5.4,.9);
+  if(i<4 && s.id!=="weapons")for(const side of [-1,1])for(let n=0;n<5;n++)add(`lane-${i}-${side}-${n}`,s.x+side*15,s.z+downrange*(5+n*6),.35,5.4,.9);
 }
 // The camp side of the ready line stays occupied by ordinary range furniture.
 for(const [id,x,z,label] of [
@@ -85,7 +85,8 @@ for(const x of [-9,0,9]){
 // of the firing positions, road, and the separate fire-support checkpoint.
 const berms = [
   {x:-48,z:35,halfWidth:12,halfDepth:6,height:4.5},
-  {x:0,z:27,halfWidth:20,halfDepth:5,height:6},
+  {x:0,z:27,halfWidth:25,halfDepth:5,height:6},
+  ...[-19,19].map(x=>({x,z:49,halfWidth:6,halfDepth:22,height:5})),
   {x:48,z:98,halfWidth:19,halfDepth:6,height:5},
 ];
 const spacing=1, columns=width+1, rows=depth+1;

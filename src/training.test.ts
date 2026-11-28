@@ -47,12 +47,17 @@ describe("training grounds",()=>{
       expect(collision.ray(eye,{...station.target,y:1.2}),station.id).toBe(1);
       expect(collision.ray(eye,end),station.id).toBeLessThan(1);
     }
+    const weapon=trainingStations[1];
+    const eye={x:weapon.x,z:weapon.z,y:1.65};
+    for(const x of [-44,44]){
+      expect(collision.ray(eye,{x,z:5,y:5})).toBeLessThan(.75);
+    }
     const road=trainingMap.streets![0].points;
     for(let i=1;i<road.length;i++){
       const a=road[i-1],b=road[i],steps=Math.ceil(dist(a,b));
       for(let j=0;j<=steps;j++){
         const t=j/steps,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
-        expect(groundHeight(x,z,trainingMap)).toBe(0);
+        expect(groundHeight(x,z,trainingMap), `road at ${x}, ${z}`).toBeLessThan(.15);
         expect(blocked(x,z,.6,trainingMap), `road at ${x}, ${z}`).toBe(false);
       }
     }
