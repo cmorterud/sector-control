@@ -9,6 +9,7 @@ import {freshControls} from "./controls";
 import {trainingMarkerPosition} from "./training-markers";
 import {gasStrikeRules,gasRules} from "./gas";
 import {artillerySector} from "./artillery-sectors";
+import {placementFor} from "./emplacements";
 import {architecturePieces} from "./architecture-geometry";
 
 function freePractice(){
@@ -61,6 +62,14 @@ describe("training grounds",()=>{
         expect(blocked(x,z,.6,trainingMap), `road at ${x}, ${z}`).toBe(false);
       }
     }
+  });
+  it("allows an emplacement to deploy from the center firing position",()=>{
+    const session=freePractice();
+    session.loadout="emplacement";
+    const {g,p,step}=exercise(1,session);
+    expect(placementFor(g,p,p.yaw)).toMatchObject({valid:true});
+    step({deployGun:true,yaw:p.yaw});
+    expect(g.emplacements.get(p.id)?.weaponId).toBe("Vickers");
   });
   it("draws numbered instruction boards and every training letter on both faces",()=>{
     const board=trainingMap.boxes.find(b=>b.id==="training-board-weapons")!;

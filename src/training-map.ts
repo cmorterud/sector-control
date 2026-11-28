@@ -76,10 +76,11 @@ for(const [id,x,z,label] of [
 }
 add("muster-rations",-58,82,1.4,1,.9);
 add("muster-crates",-59.5,81,1,1,.65);
-for(const x of [-9,0,9]){
+for(const x of [-9,0,9])
   add(`ready-bench-${x}`,x,76,3,.65,.55).farmProp="worktable";
+// Leave the center position clear for the machine-gun tripod and its crew.
+for(const x of [-9,-3,3,9])
   add(`firing-line-${x}`,x,71,3,.12,.07);
-}
 
 // Real terrain closes the sightline behind each bay. Keep the berm feet out
 // of the firing positions, road, and the separate fire-support checkpoint.
