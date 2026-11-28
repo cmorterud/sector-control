@@ -8,7 +8,7 @@ import {weaponProfile} from "./weapons";
 import {soldierHealth} from "./weapon-stats";
 import {flagContains} from "./domination";
 import {smokeRules} from "./smoke";
-import {trainingStations, movementMarks, demolitionMarks, type TrainingStationId} from "./training-map";
+import {trainingStations, trainingForwardZ, trainingYaw, movementMarks, demolitionMarks, type TrainingStationId} from "./training-map";
 
 export const trainingLessons = [
   ["walk","sprint","crouch","hop","mantle","view","step"],
@@ -98,19 +98,20 @@ export class TrainingSession {
     if(this.id==="gas" && !this.passed){
       this.progress[this.lesson].clear();
     }
-    this.equip(p);this.place(g,p,s);
+    this.equip(p);this.place(g,p,s,trainingYaw(s));
     const combat=this.combat;
-    const kitAt={x:s.x+6,z:s.z-4};
+    const forward=trainingForwardZ(s);
+    const kitAt={x:s.x+6,z:s.z+forward*4};
     for(const q of g.players.slice(1)){q.hp=0;q.respawnAt=Infinity;}
     for(let n=0;n<(this.id==="movement"||this.id==="artillery"||this.id==="destruction"||this.id==="gas"?0:3);n++){
       const q=g.players[4+n];
       const at=this.lesson===3?{x:s.x+(n===2?5:0),z:s.z-[4,16,23][n]}:
-        {x:s.target.x+(n-1)*5,z:this.lesson===1&&n===2?s.z-40:s.target.z+(n===1?4:0)};
-      q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
+        {x:s.target.x+(n-1)*5,z:this.lesson===1&&n===2?s.z-40:s.target.z-(n===1?forward*4:0)};
+      q.hp=soldierHealth;this.place(g,q,at,trainingYaw(s)+Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
     }
     if(this.lesson===1){
       const q=g.players[7],at={x:kitAt.x,z:kitAt.z-6};
-      q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
+      q.hp=soldierHealth;this.place(g,q,at,trainingYaw(s)+Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
     }
     if(combat)for(const [i,dx] of [[1,-4],[2,4]]){
       const q=g.players[i];q.hp=soldierHealth;const at={x:s.x+dx,z:s.z-2};this.place(g,q,at);this.active.set(q.id,at);
@@ -130,7 +131,7 @@ export class TrainingSession {
     if(this.combat)return botCommand(g,p);
     const moving=this.lesson===1&&p.id===6;
     const home=this.active.get(p.id)!;
-    return {...idle(),yaw:Math.PI,...(moving?{x:Math.cos(g.tick/100)*.65,z:(home.z-p.z)*.4}: {})};
+    return {...idle(),yaw:trainingYaw(this.station)+Math.PI,...(moving?{x:Math.cos(g.tick/100)*.65,z:(home.z-p.z)*.4}: {})};
   }
   resupply(g:Game){
     const p=g.players[0],profile=weaponProfile(p);
@@ -176,8 +177,8 @@ export class TrainingSession {
     }
     this.previous={x:p.x,z:p.z};
     for(const e of events){
-      if(e.type==="respawn"&&this.active.has(e.actor)){const q=g.players[e.actor];this.place(g,q,this.active.get(e.actor)!,q.team==="red"?Math.PI:0);q.protectedUntil=0;}
-      if(e.type==="respawn"&&e.actor===0){this.resetDrill();this.equip(p);this.place(g,p,this.station);}
+      if(e.type==="respawn"&&this.active.has(e.actor)){const q=g.players[e.actor];this.place(g,q,this.active.get(e.actor)!,trainingYaw(this.station)+(q.team==="red"?Math.PI:0));q.protectedUntil=0;}
+      if(e.type==="respawn"&&e.actor===0){this.resetDrill();this.equip(p);this.place(g,p,this.station,trainingYaw(this.station));}
       if(e.type==="stance"&&e.actor===0){
         if(this.free && e.crouched) credit("crouch");
         if(goal==="crouch"){

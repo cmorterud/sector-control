@@ -14,6 +14,8 @@ Open `?map=training` from the map selector or the published game URL. This is a 
 | Squad exercise | Observe real suppression/cover reactions and defeat two enemies alongside friendly bots |
 | Capture exercise | Clear defenders, then stand in a blue objective for three seconds after its actual capture |
 
+The entrance road winds past the muster yard and separates the weapon range from the grenade bay. Both face away from the road into earth banks. The rifle range has a marked ready line, benches, and distance boards. The grenade bay has its own approach and downrange earth bank.
+
 Guided training starts at Movement & cover. A gold circle marks the current ground checkpoint, and a label points out the target, equipment or obstacle. The top-left panel shows the station, its progress and the direction and distance to the marker. The lower-center prompt names the current action and uses the player's bindings. The tactical map highlights the appropriate fire-support mode and target sector. The weapon range issues each kit when its drill comes up.
 
 When a station is complete, press the interact key to deploy directly to the next. Escape opens station selection, service rifle/marksman/support kits, faction equipment, Free practice, resupply and replay. Free practice lets players bring a chosen kit and use any numbered board to move between stations. Replay clears the selected station's progress and restores the authored terrain and structures. Course progress lasts for the current page session. Restarting a partially finished Gas drill begins with a fresh strike.
