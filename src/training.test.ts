@@ -1,6 +1,6 @@
 import {describe,it,expect} from "vitest";
 import {Game,TestCollision,idle,type Command} from "./simulation";
-import {trainingMap,trainingStations,movementMarks,demolitionMarks} from "./training-map";
+import {trainingMap,trainingStations,trainingYaw,movementMarks,demolitionMarks} from "./training-map";
 import {TrainingSession,trainingLessons} from "./training";
 import {blocked,dist,mantleLanding,groundHeight} from "./map";
 import {artilleryExplosionProfile} from "./destruction";
@@ -36,6 +36,26 @@ describe("training grounds",()=>{
       expect(blocked(s.x-7,s.z+2,.6,trainingMap),s.id).toBe(false);
     }
     expect(mantleLanding({x:-48,z:57,y:0},{x:0,z:-1},trainingMap)).not.toBeNull();
+  });
+  it("keeps the target lanes clear and screens the road and other exercises behind the earth banks",()=>{
+    const collision=new TestCollision(trainingMap);
+    for(const [station,end] of [
+      [trainingStations[1],{x:0,z:19,y:3}],
+      [trainingStations[2],{x:48,z:104,y:3}],
+    ] as const){
+      const eye={x:station.x,z:station.z,y:1.65};
+      expect(collision.ray(eye,{...station.target,y:1.2}),station.id).toBe(1);
+      expect(collision.ray(eye,end),station.id).toBeLessThan(1);
+    }
+    const road=trainingMap.streets![0].points;
+    for(let i=1;i<road.length;i++){
+      const a=road[i-1],b=road[i],steps=Math.ceil(dist(a,b));
+      for(let j=0;j<=steps;j++){
+        const t=j/steps,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
+        expect(groundHeight(x,z,trainingMap)).toBe(0);
+        expect(blocked(x,z,.6,trainingMap), `road at ${x}, ${z}`).toBe(false);
+      }
+    }
   });
   it("draws numbered instruction boards and every training letter on both faces",()=>{
     const board=trainingMap.boxes.find(b=>b.id==="training-board-weapons")!;
@@ -135,10 +155,12 @@ describe("training grounds",()=>{
   });
   it("recognizes a real grenade explosion in the target area and a smoke bloom",()=>{
     const {g,step,done}=exercise(2);let explosion:unknown;
-    step({grenade:true,yaw:0,pitch:.15});
-    for(let n=0;n<130;n++){step();explosion=g.events.find(e=>e.type==="grenadeExplosion")??explosion;}
+    expect(g.players[0].yaw).toBe(Math.PI);
+    const yaw=trainingYaw(trainingStations[2]);
+    step({grenade:true,yaw,pitch:.15});
+    for(let n=0;n<130;n++){step({yaw,pitch:.15});explosion=g.events.find(e=>e.type==="grenadeExplosion")??explosion;}
     expect(explosion).toBeTruthy();expect(done.has("grenade"),JSON.stringify(explosion)).toBe(true);
-    step({smoke:true});step({},150);expect(done.has("smoke")).toBe(true);
+    step({smoke:true,yaw});step({yaw},150);expect(done.has("smoke")).toBe(true);
   });
   it("recognizes both a real bayonet thrust and sustained charge hit",()=>{
     const {g,p,step,done}=exercise(3);

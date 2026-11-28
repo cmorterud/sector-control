@@ -1,5 +1,5 @@
 import {type TrainingSession} from "./training";
-import {demolitionMarks,movementMarks,trainingStations} from "./training-map";
+import {demolitionMarks,movementMarks,trainingForwardZ,trainingStations} from "./training-map";
 import {keyLabel,type ControlSettings,type ControlAction} from "./controls";
 import {dist,type Vec} from "./map";
 import {canDropEmptyFlame,flameRules} from "./flamethrower";
@@ -45,7 +45,7 @@ export function trainingCue(session:TrainingSession,g:Game):TrainingCue|undefine
     }
     case "reload": return;
     case "grenade": return {at:s.target,label:"Grenade target",height:2.7,radius:3};
-    case "smoke": return {at:{x:s.x,z:s.z-12},label:"Smoke practice area",radius:2.5};
+    case "smoke": return {at:{x:s.x,z:s.z+12*trainingForwardZ(s)},label:"Smoke practice area",radius:2.5};
     case "call": case "impact": return {at:s.target,label:"Target house",height:4.5};
     case "breach": return {at:demolitionMarks.breach,label:"Demolition house",height:8};
     case "tree": return {at:demolitionMarks.tree,label:"Marked pine",height:7.8};
