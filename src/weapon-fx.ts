@@ -4,11 +4,12 @@
 // destroyed per shot, so sustained fire adds no garbage and no entities.
 import * as pc from "playcanvas";
 import { FxQuads } from "./fx-quads";
+import { drawFlameJet, flameVisual, type FlameJet } from "./flame-visual";
 import { drawFlashAtlas, drawSmokeAtlas, flashColor, flashFrames, flashLayers, hash, muzzleProfile, smokeFrames, type FlashLayer, type MuzzleProfile } from "./muzzle-blast";
-import type { V3 } from "./simulation";
+import type { Event, V3 } from "./simulation";
 import type { WeaponKind } from "./weapons";
 
-export const weaponFxLimits = { flashes: 40, flashQuads: 160, particles: 360, brass: 72, lights: 2 };
+export const weaponFxLimits = { flashes: 40, flashQuads: 160 + flameVisual.streams * flameVisual.quadsPerStream, particles: 360, brass: 72, lights: 2 };
 
 export interface ShotFx {
   at: V3;
@@ -59,6 +60,7 @@ export class WeaponFx {
   private flashMaterial: pc.StandardMaterial;
   private smokeMaterial: pc.StandardMaterial;
   private flashes: Flash[] = [];
+  private flames = new Map<number, FlameJet>();
   private particles: Particle[] = [];
   private nextParticle = 0;
   private casings: Casing[] = [];
@@ -176,6 +178,31 @@ export class WeaponFx {
     if (profile.brass) this.eject(s, profile, dir);
     this.light(s.at, profile);
   }
+  flame(e: Extract<Event, { type: "flame" }>, near: boolean) {
+    let jet = this.flames.get(e.actor);
+    if (!jet) {
+      if (this.flames.size >= flameVisual.streams) return;
+      jet = { from: e.from, to: e.to, impact: e.impact, age: 0, elapsed: 0, seed: e.id };
+      this.flames.set(e.actor, jet);
+    }
+    jet.from = e.from;
+    jet.to = e.to;
+    jet.impact = e.impact;
+    jet.age = 0;
+    if (jet.elapsed < 0.12 || (this.sparse && e.tick % 6 !== 0)) return;
+    const r = (salt: number) => hash(e.id, salt);
+    const tip = e.impact ? 0.97 : 0.67 + 0.26 * r(1);
+    const size = e.impact ? 0.42 : 0.25;
+    this.particle({
+      x: e.from.x + (e.to.x - e.from.x) * tip,
+      y: e.from.y + (e.to.y - e.from.y) * tip + 0.16,
+      z: e.from.z + (e.to.z - e.from.z) * tip,
+      vx: (r(2) - 0.5) * 0.9, vy: 1.1 + r(3) * 0.8, vz: (r(4) - 0.5) * 0.9,
+      life: 1.1 + r(5) * 0.55, size, grow: size * 3, frame: smokeFrames.puff[e.id % smokeFrames.puff.length],
+      roll: r(6) * Math.PI * 2, spin: r(7) - 0.5,
+      r: 0.33, g: 0.27, b: 0.23, alpha: e.impact ? 0.63 : 0.46, drag: 1.45, lift: 0.7, near,
+    });
+  }
   private smoke(s: ShotFx, profile: MuzzleProfile, dir: V3) {
     // Hotter barrels and longer strings of fire leave more smoke hanging.
     const count = Math.round(profile.smoke * (this.sparse ? 0.5 : 1) * (1 + s.heat * 0.8) + this.random() * 0.6);
@@ -290,6 +317,7 @@ export class WeaponFx {
   forget(key: string) { this.heatCarry.delete(key); }
   clear() {
     this.flashes = [];
+    this.flames.clear();
     this.particles = [];
     this.casings = [];
     this.nextParticle = this.nextCasing = 0;
@@ -313,6 +341,12 @@ export class WeaponFx {
         if (layer.kind === "jet") flashes.axial(x, y, z, f.dir.x, f.dir.y, f.dir.z, layer.width * f.scale * grow, layer.height * f.scale, layer.frame, r, g, b);
         else flashes.sprite(x, y, z, layer.width * f.scale * grow, layer.height * f.scale * grow, layer.roll, layer.frame, r, g, b);
       }
+    }
+    for (const [actor, jet] of this.flames) {
+      jet.age += dt;
+      jet.elapsed += dt;
+      if (jet.age >= flameVisual.release) this.flames.delete(actor);
+      else drawFlameJet(flashes, jet, this.sparse);
     }
     for (const p of this.particles) {
       if (p.age >= p.life) continue;

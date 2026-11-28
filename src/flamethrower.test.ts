@@ -85,12 +85,24 @@ test("flame burn is brief and does not add damage while the jet is hitting",()=>
  g.step({...idle(),fire:true});expect(q.hp).toBeCloseTo(99,6);
  for(let i=0;i<40;i++)g.step(idle());expect(q.hp).toBeCloseTo(93.2,6);
 });
+test.each([
+ {x:0,z:-11.5,hp:99},
+ {x:0,z:-12.1,hp:100},
+ {x:1.5,z:-11,hp:100},
+])("flame range and cone at x=$x, z=$z leave the target at $hp HP",({x,z,hp})=>{
+ const {g,enemy}=field();
+ Object.assign(enemy,{x,z});
+ g.step({...idle(),fire:true});
+ expect(enemy.hp).toBe(hp);
+ expect(g.events.find(e=>e.type==="flame")).toMatchObject({impact:false,to:{z:-12}});
+});
 test("cover clips the visible jet and the off-center damage cone, even with clear line of sight to the target",()=>{
  const {g,enemy}=field([{id:"cover",x:0,z:-2,w:.4,d:.2,h:2,kind:"concrete"}]);
  enemy.x=.8;
  expect(g.collision.ray({x:0,y:1.53,z:0},{x:enemy.x,y:1.155,z:enemy.z})).toBe(1);
  g.step({...idle(),fire:true});
  const flame=g.events.find(e=>e.type==="flame");
+ expect(flame?.impact).toBe(true);
  expect(flame?.to.z).toBeCloseTo(-1.9);
  expect(enemy.hp).toBe(100);
 });

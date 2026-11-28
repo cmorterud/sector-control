@@ -13,7 +13,7 @@ import {TrainingSession} from "./training";
 import {trainingHUD,trainingMenu} from "./training-ui";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
-import { canDropEmptyFlame, nearestFlame } from "./flamethrower";
+import { canDropEmptyFlame, flameRules, nearestFlame } from "./flamethrower";
 import { equipLoadout, factionOverride, factions, factionFor, kitFor, parseFactionOverride, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
@@ -932,7 +932,7 @@ function hud(now: number) {
     emplacement: placement ? "preview" : !setsUpKit(p) || p.emplacementLost ? undefined : game.emplacements.has(p.id) ? "placed" : "carry",
     mortar: p.loadout === "mortar",
   });
-  if (!gun && !crewed && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>${p.ammo > 0 ? "HOLD FIRE" : "OUT OF FUEL"} · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
+  if (!gun && !crewed && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · ${flameRules.range}m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>${p.ammo > 0 ? "HOLD FIRE" : "OUT OF FUEL"} · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(Math.max(p.suppression * 0.22, (crewed?.splash ?? 0) * 0.55)) : "0";
   const plate = tankHit && game.tick < tankHit.until ? tankHit : undefined;

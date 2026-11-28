@@ -279,7 +279,7 @@ export class Renderer implements CollisionWorld {
   // Capture the flag's stands, drop points and flags, in their own module.
   private ctfMarkers = new CtfMarkers(this);
   private objectiveTerrainRevision = -1;
-  effects: { e: pc.Entity; life: number; velocity?: V3; size?: number; billboard?: boolean }[] = [];
+  effects: { e: pc.Entity; life: number }[] = [];
   private fallingTrees: FallingTree[] = [];
   private fragments: { entity: pc.Entity; state: Debris }[] = [];
   materials = new Map<string, pc.StandardMaterial>();
@@ -5740,21 +5740,8 @@ export class Renderer implements CollisionWorld {
     for(const [key,scorch] of this.flameScorches){scorch.life-=dt;if(scorch.life<=0){scorch.entity.destroy();this.flameScorches.delete(key);}}
     for (const fx of this.effects) {
       fx.life -= dt;
-      const size = fx.life * (fx.size ?? 0.7);
+      const size = fx.life * 0.7;
       fx.e.setLocalScale(size, size, size);
-      if(fx.billboard){fx.e.setRotation(this.camera.getRotation());fx.e.rotateLocal(90,0,0);}
-      if (fx.velocity) {
-        const position = fx.e.getPosition();
-        fx.velocity.y -= 10 * dt;
-        fx.e.setPosition(
-          position.x + fx.velocity.x * dt,
-          Math.max(
-            groundHeight(position.x, position.z, this.map) + 0.05,
-            position.y + fx.velocity.y * dt,
-          ),
-          position.z + fx.velocity.z * dt,
-        );
-      }
     }
     this.effects = this.effects.filter((fx) => {
       if (fx.life > 0) return true;
@@ -6058,19 +6045,6 @@ export class Renderer implements CollisionWorld {
       return true;
     });
   }
-  private flameSprite() {
-    const key="flame-sprite";
-    if(!this.materials.has(key)) {
-      const canvas=document.createElement("canvas");canvas.width=canvas.height=64;
-      const ctx=canvas.getContext("2d")!,gradient=ctx.createRadialGradient(32,32,0,32,32,32);
-      gradient.addColorStop(0,"rgba(255,242,163,.85)");gradient.addColorStop(.3,"rgba(255,176,54,.65)");gradient.addColorStop(.65,"rgba(232,76,22,.3)");gradient.addColorStop(1,"rgba(170,35,8,0)");
-      ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
-      const texture=new pc.Texture(this.app.graphicsDevice);texture.setSource(canvas);
-      const material=new pc.StandardMaterial();material.useLighting=false;material.diffuse=new pc.Color(0,0,0);material.emissive=new pc.Color(1,1,1);material.emissiveMap=texture;
-      material.opacityMap=texture;material.opacityMapChannel="a";material.opacity=.75;material.blendType=pc.BLEND_NORMAL;material.depthWrite=false;material.cull=pc.CULLFACE_NONE;material.update();this.materials.set(key,material);
-    }
-    return this.materials.get(key)!;
-  }
   // Period phosphorus tracers burn a warm red-orange for both sides; ball
   // rounds show only as a faint grey streak.
   private tracerMaterial(kind: "tracer" | "ball") {
@@ -6140,21 +6114,14 @@ export class Renderer implements CollisionWorld {
   }
   effect(e: Event) {
     if(e.type === "flame") {
+      const shooter = this.activeGame?.players[e.actor];
+      this.fx().flame(e, !!shooter && firstPersonView(shooter));
       const key=`${Math.round(e.to.x)},${Math.round(e.to.z)}`;
-      if(this.flameScorches.size<24 && !this.flameScorches.has(key) && Math.abs(e.to.y-groundHeight(e.to.x,e.to.z,this.map))<.5){
+      if(e.impact && this.flameScorches.size<24 && !this.flameScorches.has(key) && Math.abs(e.to.y-groundHeight(e.to.x,e.to.z,this.map))<.5){
         const mark=this.joint("charred soil",this.app.root);
         mark.addComponent("render",{type:"sphere",material:this.material("#38372e"),castShadows:false});
         mark.setPosition(e.to.x,groundHeight(e.to.x,e.to.z,this.map)+.025,e.to.z);mark.setLocalScale(.6,.025,.6);
         this.flameScorches.set(key,{entity:mark,life:12});
-      }
-      for(let i=0;i<=10 && this.effects.length<160;i++) {
-        const t=i/10, wobble=Math.sin(e.tick*2.3+i*3.1)*t*.12;
-        const at={x:e.from.x+(e.to.x-e.from.x)*t+wobble,y:e.from.y+(e.to.y-e.from.y)*t,z:e.from.z+(e.to.z-e.from.z)*t};
-        const particle=this.joint("flame plume",this.app.root);
-        particle.addComponent("render",{type:"plane",material:this.flameSprite(),castShadows:false});
-        const life=.18+t*.14;
-        this.effects.push({e:particle,life,size:(.28+t*1.05)/life,billboard:true,velocity:{x:wobble,y:.35+t*.7,z:0}});
-        particle.setPosition(at.x,at.y,at.z);
       }
     }
     if (e.type === "respawn") this.deathHits.delete(e.actor);

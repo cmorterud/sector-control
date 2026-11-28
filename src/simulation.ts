@@ -735,7 +735,7 @@ export type Event = { id: number; tick: number } & (
       action: "boltOpen" | "boltClose" | "clip" | "holster" | "draw" | "magazineOut" | "magazineIn" | "rack" | "cylinderOpen" | "cylinderClose" | "cartridges";
     }
   | { type:"flamePickup"|"flameDrop";actor:number;kit:number;fuel:number }
-  | { type:"flame";actor:number;from:V3;to:V3;fuel:number }
+  | { type:"flame";actor:number;from:V3;to:V3;fuel:number;impact:boolean }
   | { type: "damage"; actor: number; source: number; amount?:number; at?:V3; from?:V3; kind?:DamageDetails["kind"]; weapon?:string }
   | { type: "death"; actor: number; report?:DeathReport; killer?: number }
   | { type: "assist"; actor:number; target:number; damage:number }
