@@ -1,4 +1,4 @@
-name: Publish playable Pages previews
+name: Deploy production site and PR previews
 
 on:
   workflow_run:
