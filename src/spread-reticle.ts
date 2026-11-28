@@ -2,7 +2,8 @@
 // person, the cone a shot fired now lands inside (src/hip-fire.ts). It opens
 // while the player moves, tightens when they crouch, closes as the sights come
 // up and is gone once they are up. The scope hides it with the rest of the HUD.
-import { hipSpread } from "./hip-fire";
+import { maskProgress } from "./gas";
+import { hipSpread, maskBlocksAim } from "./hip-fire";
 import { firstPersonView, sighted } from "./player-view";
 import type { Soldier } from "./simulation";
 
@@ -17,7 +18,7 @@ export function coneRadius(halfAngle: number, fovDegrees: number, viewHeight: nu
 
 // The ring's radius in pixels, or 0 when it should not show.
 export function spreadRingRadius(p: Soldier, tick: number, fovDegrees: number, viewHeight: number) {
-  if (!firstPersonView(p) || sighted(p, tick)) return 0;
+  if (!firstPersonView(p) || sighted(p, tick) || maskBlocksAim(p) || maskProgress(p, tick) > 0) return 0;
   const radius = coneRadius(hipSpread(p, tick), fovDegrees, viewHeight);
   return radius >= ringMinRadius ? radius : 0;
 }
