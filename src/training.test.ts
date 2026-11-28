@@ -109,13 +109,29 @@ describe("training grounds",()=>{
     expect(p.weapon).toBe("rifle");expect(p.weaponId).toBe("AR-01");expect(p.ammo).toBe(30);
     fireAt();expect(done.has("semi")).toBe(true);expect(done.has("rifle")).toBe(false);
   });
-  it("teaches actual flame-kit pickup and firing",()=>{
+  it("credits even a single direct flame hit from the pickup on a tick without a visible plume",()=>{
     const {g,p,step,done}=exercise(1);
+    const target=g.players[7];
     Object.assign(p,g.flames.kits[0].at);
     step({interact:true});expect(p.weapon).toBe("flamethrower");
-    step({},20);step({fire:true},4);expect(done.has("flame")).toBe(false);
-    Object.assign(p,{x:g.players[4].x,z:g.players[4].z+6});step({fire:true},6);
-    expect(done.has("flame")).toBe(true);expect(p.ammo).toBeLessThan(240);
+    step({},20);step({fire:true,yaw:Math.PI},4);expect(done.has("flame")).toBe(false);
+    if((g.tick+1)%3===0)step();
+    step({fire:true});
+    expect(g.events.some(e=>e.type==="flame")).toBe(false);
+    expect(g.events).toContainEqual(expect.objectContaining({type:"damage",kind:"flame",actor:target.id}));
+    expect(done.has("flame")).toBe(true);
+  });
+  it("resupplies a dropped empty flame kit at the training pickup point",()=>{
+    const {g,p,step,session}=exercise(1);
+    const kit=g.flames.kits[0];
+    Object.assign(p,kit.at);
+    step({interact:true});expect(p.weapon).toBe("flamethrower");
+    p.ammo=0;step();step({interact:true});
+    expect(kit.at).toBeNull();expect(p.weapon).toBe("pistol");
+    expect(session.resupply(g)).toBe(true);
+    expect(kit).toMatchObject({at:kit.home,fuel:240,carrier:null});
+    step();step({interact:true});
+    expect(p.weapon).toBe("flamethrower");expect(p.ammo).toBe(240);
   });
   it("recognizes a real grenade explosion in the target area and a smoke bloom",()=>{
     const {g,step,done}=exercise(2);let explosion:unknown;
@@ -233,6 +249,22 @@ describe("training grounds",()=>{
     step({equip:"sidearm"});step({},30);
     for(let i=0;i<3 && session.nextGoal==="pistol";i++) fireAt(g.players[4].hp>0?4:5);
     expect(session.nextGoal).toBe("flame");expect(trainingCue(session,g)?.at).toEqual(g.flames.kits[0].at);
+    const kit=g.flames.kits[0];
+    Object.assign(p,kit.at);
+    step({interact:true});step({},20);
+    expect(p.weapon).toBe("flamethrower");
+    p.ammo=0;step();
+    expect(trainingPrompt(session,g,freshControls())).toContain("drop the empty kit");
+    step({interact:true});step();
+    expect(kit.at).toEqual(kit.home);
+    step({interact:true});step({},20);
+    expect(p.ammo).toBe(240);
+    step({fire:true});
+    expect(session.nextGoal).toBe("semi");
+    expect(p.weapon).toBe("rifle");
+    expect(p.flameKit).toBeUndefined();
+    expect(p.flamePrimary).toBeUndefined();
+    expect(kit.carrier).toBeNull();
   });
   it("requires a gas call on the marked sector, then a properly sealed mask and that strike landing",()=>{
     const {g,session,step,done}=exercise(6,new TrainingSession());

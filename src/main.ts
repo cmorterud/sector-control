@@ -15,7 +15,7 @@ import {TrainingMarker} from "./training-markers";
 import {trainingStations} from "./training-map";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
-import { nearestFlame } from "./flamethrower";
+import { canDropEmptyFlame, nearestFlame } from "./flamethrower";
 import { equipLoadout, factionOverride, factions, factionFor, kitFor, parseFactionOverride, riflemanWeapon, scoped, type Loadout, type WeaponSlot, type FactionId } from "./loadouts";
 import { battlefieldCard } from "./battlefield-info";
 import { loadControls, saveControls, keyLabel, SprintInput, type ControlAction } from "./controls";
@@ -108,9 +108,15 @@ const spectateLabel = document.createElement("div");
 spectateLabel.className = "spectate-label";
 spectateLabel.setAttribute("role", "status");
 let spectateNext = false;
+const fieldNotices = document.createElement("div");
+fieldNotices.className = "field-notices";
 const gasWarning = document.createElement("div");
-gasWarning.className = "gas-warning";
+gasWarning.className = "field-notice gas-warning";
 gasWarning.setAttribute("role", "status");
+const emptyFlameNotice = document.createElement("div");
+emptyFlameNotice.className = "field-notice flame-warning";
+emptyFlameNotice.setAttribute("role", "status");
+fieldNotices.append(gasWarning, emptyFlameNotice);
 // The periscope rifle's mirror shot away.
 const periscopeNotice = document.createElement("div");
 periscopeNotice.className = "periscope-notice";
@@ -121,7 +127,7 @@ const identityNotice = document.createElement("div");
 identityNotice.className = "identity-notice";
 identityNotice.setAttribute("role", "status");
 let identityNoticeUntil = 0, displayedIdentity = "";
-el("hud").append(battleSidebar, killNotice, boundaryNotice, flagNotice, reinforcementNotice, spectateLabel, gasWarning, periscopeNotice, identityNotice);
+el("hud").append(battleSidebar, killNotice, boundaryNotice, flagNotice, reinforcementNotice, spectateLabel, fieldNotices, periscopeNotice, identityNotice);
 const gasScreen = new GasScreen(el("hud")), minimapGas = new GasOverlay(), tacticalGas = new GasOverlay();
 const gasAudio = new GasAudio(() => audio);
 root.querySelector(".match")!.append(reinforcementTallyBox);
@@ -777,6 +783,9 @@ function hud(now: number) {
   const gasLine = paused ? { text: "", danger: false } : gasNotice(game, p, keyLabel(settings.bindings.mask));
   if (gasWarning.textContent !== gasLine.text) gasWarning.textContent = gasLine.text;
   gasWarning.classList.toggle("danger", gasLine.danger);
+  const canDropFlame = clearHUD && canDropEmptyFlame(game, p);
+  const emptyFlameText = canDropFlame ? `FLAME KIT EMPTY · PRESS ${keyLabel(settings.bindings.interact)} TO DROP` : "";
+  if (emptyFlameNotice.textContent !== emptyFlameText) emptyFlameNotice.textContent = emptyFlameText;
   gasScreen.update(game, p, preferredFirstPerson && !renderer.deathView, !paused && !tacticalMap.open);
   root.classList.toggle("out-of-bounds", outside);
   offensiveNotices.tick(game, now);
@@ -876,7 +885,7 @@ function hud(now: number) {
   const flagPrompt = game.ctf && !p.mantle ? ctfPrompt(game, p) : "";
   if (flagPrompt) staged.capture = flagPrompt + (ledge ? `<small>${keyLabel(settings.bindings.mantle)} · MANTLE</small>` : "");
   const gun = mountedGun(game, p);
-  const nearby = p.hp > 0 && !gun && game.emplacements.size ? nearbyGun(game, p) : undefined;
+  const nearby = p.hp > 0 && !gun && !canDropFlame && game.emplacements.size ? nearbyGun(game, p) : undefined;
   const deployKey = keyLabel(settings.bindings.emplace), useKey = keyLabel(settings.bindings.interact);
   const placement = renderer.machineGunPreview;
   if (gun?.mortar) {
@@ -921,7 +930,7 @@ function hud(now: number) {
     staged.ammo = tankPanel(game, p, { interact: useKey, forward: key("forward"), backward: key("backward"), left: key("left"), right: key("right") }) +
       (gasMap(game.map) ? `<small>${gasStatus(game, p, keyLabel(settings.bindings.mask))}</small>` : "");
     staged.capture = "";
-  } else if (!gun && !nearby && !placement && !pickup && p.hp > 0 && game.tanks.list.length) {
+  } else if (!gun && !nearby && !placement && !pickup && !canDropFlame && p.hp > 0 && game.tanks.list.length) {
     const prompt = tankPrompt(game, p, useKey);
     if (prompt) staged.capture = prompt;
   }
@@ -935,7 +944,7 @@ function hud(now: number) {
     emplacement: placement ? "preview" : !setsUpKit(p) || p.emplacementLost ? undefined : game.emplacements.has(p.id) ? "placed" : "carry",
     mortar: p.loadout === "mortar",
   });
-  if (!gun && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>HOLD FIRE · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
+  if (!gun && !crewed && p.weapon === "flamethrower") staged.ammo = `<small>WEX-INSPIRED FLAME KIT · 8m</small><strong>${(p.ammo/30).toFixed(1)}<em>s FUEL</em></strong><small>${p.ammo > 0 ? "HOLD FIRE" : "OUT OF FUEL"} · ${keyLabel(settings.bindings.sidearm)} PISTOL</small>`;
   el("suppression").style.opacity =
     p.hp > 0 ? String(Math.max(p.suppression * 0.22, (crewed?.splash ?? 0) * 0.55)) : "0";
   const plate = tankHit && game.tick < tankHit.until ? tankHit : undefined;
@@ -1050,6 +1059,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if(training&&isKey("interact",e.code)&&!e.repeat&&!tacticalMap.open &&
+     !canDropEmptyFlame(game, game.players[0]) &&
      (!training.free || (!mountedGun(game, game.players[0]) && !nearbyGun(game, game.players[0])))){
     const index=training.interaction(game);
     if(index!==null){training.select(index);start();return;}

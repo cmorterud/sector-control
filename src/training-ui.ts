@@ -2,7 +2,7 @@ import {type TrainingSession} from "./training";
 import {demolitionMarks,movementMarks,trainingStations} from "./training-map";
 import {keyLabel,type ControlSettings,type ControlAction} from "./controls";
 import {dist,type Vec} from "./map";
-import {flameRules} from "./flamethrower";
+import {canDropEmptyFlame,flameRules} from "./flamethrower";
 import {masked} from "./gas";
 import {weaponProfile} from "./weapons";
 import type {Game} from "./simulation";
@@ -73,8 +73,9 @@ export function trainingPrompt(session:TrainingSession,g:Game,settings:ControlSe
   const p=g.players[0],goal=session.nextGoal;
   if(!goal){
     const next=session.nextStation;
-    const action=next!==null ? `Press {interact} to deploy to ${trainingStations[next].name}.` :
-      "Press Escape to replay a station, enter Free practice or choose a battlefield.";
+    const action=next===null ? "Press Escape to replay a station, enter Free practice or choose a battlefield." :
+      canDropEmptyFlame(g,p) ? "Press {interact} to drop the empty kit first." :
+        `Press {interact} to deploy to ${trainingStations[next].name}.`;
     const title=session.completed===trainingStations.length ? "Training course complete" : "Station complete";
     return `<strong class="training-passed">✓ ${title}</strong><span>${controlsIn(action,settings)}</span>`;
   }
@@ -96,7 +97,8 @@ export function trainingPrompt(session:TrainingSession,g:Game,settings:ControlSe
     case "pistol": instruction=p.weapon==="pistol"?"Click LMB to hit a target with the pistol.":"Press {sidearm} to draw your pistol, then hit a target.";break;
     case "flame": {
       const kit=g.flames.kits[0];
-      instruction=kit.at ? (distance>1.7?"Move to the highlighted flame kit.":"Press {interact} to pick up the flame kit.") :
+      instruction=canDropEmptyFlame(g,p) ? "Press {interact} to drop the empty kit and try again." :
+        kit.at ? (distance>1.7?"Move to the highlighted flame kit.":"Press {interact} to pick up the flame kit.") :
         p.weapon!=="flamethrower" ? "Press {primary} to ready the flame kit." :
         distance>flameRules.range-1 ? "Move closer to the highlighted target." : "Aim at the target and hold LMB.";
       break;

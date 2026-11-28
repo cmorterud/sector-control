@@ -112,7 +112,7 @@ All keys can be remapped from **Controls** in the briefing or pause menu. The st
 | Grenade / smoke | G / F |
 | Melee or bayonet; sprint forward first for a bayonet charge (the HUD shows **V · BAYONET CHARGE**) | V |
 | Whistle: nearby riflemen go over the top with you (shared 50-second team cooldown) | Z |
-| Interact (mount / dismount or pick up a flame kit) | E |
+| Interact (mount / dismount, pick up a flame kit, or drop an empty one) | E |
 | Preview or pack an emplacement | B |
 | Tactical map and artillery (F on the map switches to gas shells, or flares at night) | Q |
 | Gas mask on / off | M |

@@ -100,11 +100,16 @@ export class TrainingSession {
     }
     this.equip(p);this.place(g,p,s);
     const combat=this.combat;
+    const kitAt={x:s.x+6,z:s.z-4};
     for(const q of g.players.slice(1)){q.hp=0;q.respawnAt=Infinity;}
     for(let n=0;n<(this.id==="movement"||this.id==="artillery"||this.id==="destruction"||this.id==="gas"?0:3);n++){
       const q=g.players[4+n];
       const at=this.lesson===3?{x:s.x+(n===2?5:0),z:s.z-[4,16,23][n]}:
         {x:s.target.x+(n-1)*5,z:this.lesson===1&&n===2?s.z-40:s.target.z+(n===1?4:0)};
+      q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
+    }
+    if(this.lesson===1){
+      const q=g.players[7],at={x:kitAt.x,z:kitAt.z-6};
       q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
     }
     if(combat)for(const [i,dx] of [[1,-4],[2,4]]){
@@ -113,8 +118,8 @@ export class TrainingSession {
     Object.assign(g.sectors[0],{x:s.target.x,z:s.target.z,owner:null,control:0,contested:false});
     // Safe targets never participate in capture; only the two combat exercises do.
     if(!combat)Object.assign(g.sectors[0],{x:40,z:-85});
-    const kit=g.flames.kits[0],at={x:s.x+6,z:s.z-4};
-    Object.assign(kit,{home:at,at,fuel:flameRules.fuel,carrier:null,readyAt:0,droppedAt:null});
+    const kit=g.flames.kits[0];
+    Object.assign(kit,{home:kitAt,at:kitAt,fuel:flameRules.fuel,carrier:null,readyAt:0,droppedAt:null});
     for(const other of g.flames.kits.slice(1)){other.at=null;other.readyAt=Infinity;}
     g.artillery.readyAt.blue=0;
     g.artillery.readyAt.red=Number.MAX_SAFE_INTEGER;
@@ -130,11 +135,18 @@ export class TrainingSession {
   resupply(g:Game){
     const p=g.players[0],profile=weaponProfile(p);
     if(p.hp<=0)return false;
-    if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
+    if(p.inventory)for(const state of [p.inventory.primary,p.inventory.sidearm,p.flamePrimary]){
+      if(!state)continue;
+      const ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;
+    }
     p.hp=soldierHealth;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=smokeRules.perSpawn;
     p.reloadAt=0;g.artillery.readyAt.blue=g.tick;
     resupplyEmplacement(g,p);
-    const kit=g.flames.kits.find(k=>k.carrier===0);if(kit)kit.fuel=flameRules.fuel;
+    const kit=g.flames.kits[0];
+    if(kit.carrier===p.id)kit.fuel=flameRules.fuel;
+    else if(kit.carrier===null && kit.fuel===0){
+      Object.assign(kit,{at:{...kit.home},fuel:flameRules.fuel,readyAt:0,droppedAt:null});
+    }
     return true;
   }
   interaction(g:Game):number|null {
@@ -151,7 +163,6 @@ export class TrainingSession {
     const credit=(action:TrainingGoal)=>{
       if((!ordered || action===goal) && this.goals.includes(action)) done.add(action);
     };
-    const flaming=events.some(e=>e.type==="flame"&&e.actor===0);
     if(this.lesson===0 && p.hp>0){
       const travelled=this.previous ? dist(p,this.previous) : 0;
       if(travelled<1){
@@ -195,7 +206,7 @@ export class TrainingSession {
         if(this.lesson===0&&input.aim&&!p.hop&&!p.fall&&p.y>-.7&&p.y<-.3&&Math.abs(p.x+48)<6&&p.z>45&&p.z<47.1&&e.from.y>.2) credit("step");
       }
       if(e.type==="impact"&&e.actor===0){if(e.hit&&e.target!==null&&g.players[e.target]?.team==="red"){const shot=this.shots.get(e.projectile);if(shot)credit(shot);}this.shots.delete(e.projectile);}
-      if(e.type==="damage"&&e.source===0&&g.players[e.actor]?.team==="red"&&p.weapon==="flamethrower"&&flaming) credit("flame");
+      if(e.type==="damage"&&e.kind==="flame"&&e.source===0&&g.players[e.actor]?.team==="red") credit("flame");
       if(e.type==="grenadeExplosion"&&e.actor===0&&dist(e.at,this.station.target)<9) credit("grenade");
       if(e.type==="smokeBloom"&&e.actor===0) credit("smoke");
       if(e.type==="melee"&&e.actor===0&&e.phase==="strike"&&e.damage&&e.target!==null&&e.kind!=="butt") credit(e.kind==="charge"?"charge":"thrust");
@@ -243,7 +254,6 @@ export class TrainingSession {
          !g.artillery.missions.some(m=>m.team==="blue") && !g.gas.clouds.length) g.artillery.readyAt.blue=g.tick;
       if(this.nextGoal==="flame"){
         const kit=g.flames.kits[0];
-        if(kit.carrier===0 && (p.weapon==="flamethrower" ? p.ammo : p.inventory?.primary.ammo)===0) this.resupply(g);
         if(kit.carrier===null && !kit.at) kit.readyAt=g.tick;
       }
     }

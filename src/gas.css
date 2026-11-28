@@ -1,22 +1,9 @@
 /* Gas shells and masks: HUD notice, map clouds, mask lens and haze (src/gas-ui.ts). */
 .gas-warning {
-  position: absolute;
-  z-index: 9;
-  top: 17%;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 70vw;
-  padding: 7px 15px;
   background: #2b2e10e6;
   border-bottom: 2px solid #c9cb5a;
   color: #f2f0c4;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-align: center;
-  pointer-events: none;
 }
-.gas-warning:empty { display: none; }
 .gas-warning.danger { background: #3a3a0ce8; border-bottom-color: #e8e35a; color: #fffbd0; }
 .gas-map { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .gas-map[hidden], .gas-map [hidden] { display: none; }
