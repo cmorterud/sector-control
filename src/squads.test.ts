@@ -424,8 +424,8 @@ describe("difficulty and callouts", () => {
     expect([recruit.overwatch, regular.overwatch, veteran.overwatch]).toEqual([false, true, true]);
     // Regular is today's tuning, including the trench maps' own aim.
     expect(regular.reactionTicks).toBe(27);
-    expect(regular.aimError).toBe(0.075);
-    expect(botSettingsFor(trenchMap).aimError).toBe(0.06);
+    expect(regular.aimError).toBe(0.05);
+    expect(botSettingsFor(trenchMap).aimError).toBe(0.04);
     expect(village({ difficulty: "veteran" }).botSettings).toMatchObject({ difficulty: "veteran", aimError: veteran.aimError });
   });
 

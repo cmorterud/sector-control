@@ -25,8 +25,8 @@ function scene() {
 }
 
 describe("bot attention", () => {
-  it("uses wider default cones and delays a newly acquired target before firing", () => {
-    expect(defaultBotSettings.aimError).toBe(0.075);
+  it("uses map-specific aim error and delays a newly acquired target before firing", () => {
+    expect(defaultBotSettings.aimError).toBe(0.05);
     const trench = new Game(
       { ray: () => 1, move: (p) => p },
       false,
@@ -35,7 +35,7 @@ describe("bot attention", () => {
       undefined,
       { map: trenchMap },
     );
-    expect(trench.botSettings.aimError).toBe(0.06);
+    expect(trench.botSettings.aimError).toBe(0.04);
     const { g, p, target } = scene();
     g.botSettings.burstPeriodTicks = g.botSettings.burstFireTicks = 1;
     g.tick = 1;
