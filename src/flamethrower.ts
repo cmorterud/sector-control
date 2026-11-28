@@ -8,7 +8,7 @@ import { viewDirection, viewMuzzle } from "./player-view";
 import { deformExplosion, type DestructionChange } from "./destruction";
 import { rayTanks } from "./tanks";
 import { carriedFlag } from "./ctf";
-export const flameRules = { fuel:240, range:8, damagePerTick:1, burnTicks:30, burnPerTick:.2, restock:3600, droppedLifetime:1800 };
+export const flameRules = { fuel:240, range:12, maxRadius:1.3, damagePerTick:1, burnTicks:30, burnPerTick:.2, restock:3600, droppedLifetime:1800 };
 export interface FlameKit { id:number; home:Vec; at:Vec|null; fuel:number; carrier:number|null; readyAt:number; droppedAt:number|null }
 export interface FlameState { kits:FlameKit[] }
 export function createFlames(map:Game["map"]):FlameState {
@@ -82,11 +82,10 @@ export function fireFlame(g:Game,p:Soldier,damage:(p:Soldier,n:number,source:num
   const target={x:q.x,y:q.y+eyeHeightOf(q)*.7,z:q.z};
   const dx=target.x-from.x,dy=target.y-from.y,dz=target.z-from.z,length=Math.hypot(dx,dy,dz);
   const along=dx*dir.x+dy*dir.y+dz*dir.z;
-  const threatened=length<12 && dist(q,to)<4;
   const inJet=length<=flameRules.range && along>=0 && along<=reach &&
-   Math.hypot(dx-dir.x*along,dy-dir.y*along,dz-dir.z*along)<=.3+along*.12;
-  if((!threatened && !inJet) || flameRay(g,from,target)<.999)continue;
-  if(threatened) {q.flameThreatUntil=g.tick+45;q.flameThreatFrom={...from};}
+   Math.hypot(dx-dir.x*along,dy-dir.y*along,dz-dir.z*along)<=Math.min(flameRules.maxRadius,.3+along*.12);
+  if((!inJet && (length>=flameRules.range+4 || dist(q,to)>=4)) || flameRay(g,from,target)<.999)continue;
+  q.flameThreatUntil=g.tick+45;q.flameThreatFrom={...from};
   if(!inJet || g.tick<q.protectedUntil)continue;
   damage(q,flameRules.damagePerTick,p.id,p.team);
   q.lastFlameHitAt=g.tick; q.burnUntil=g.tick+flameRules.burnTicks;q.burnSource=p.id;q.burnTeam=p.team;q.burnFrom={...from};
@@ -100,7 +99,7 @@ export function fireFlame(g:Game,p:Soldier,damage:(p:Soldier,n:number,source:num
   const nozzleAlong=(nozzle.x-from.x)*dir.x+(nozzle.y-from.y)*dir.y+(nozzle.z-from.z)*dir.z;
   const clear=Math.min(flameRay(g,from,nozzle),nozzleAlong>reach?reach/nozzleAlong:1);
   const visualFrom={x:from.x+(nozzle.x-from.x)*clear,y:from.y+(nozzle.y-from.y)*clear,z:from.z+(nozzle.z-from.z)*clear};
-  g.emit({type:"flame",actor:p.id,from:visualFrom,to,fuel:p.ammo});
+  g.emit({type:"flame",actor:p.id,from:visualFrom,to,fuel:p.ammo,impact:reach<flameRules.range});
  }
 }
 export function evadeFlame(g:Game,p:Soldier) {
