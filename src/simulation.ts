@@ -19,7 +19,7 @@ import { respectTarget } from "./bot-engage";
 import { advanceMortars, createMortarState, mortarMap, operateMortar, type MortarState } from "./mortar";
 import { floodAt, rainPace, supportsRain } from "./weather";
 import { advanceTanks, bulletOnTank, createTanks, crewOnRespawn, crewTank, explosionOnTanks, keepClearOfTanks, leave as leaveTank, operateTank, rayTanks, tankBotCommand, tankInteraction, type TankEvent, type TankState } from "./tanks";
-import { createFlames, pickupFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
+import { createFlames, pickupFlame, canDropEmptyFlame, dropFlame, advanceFlames, fireFlame, evadeFlame, type FlameState } from "./flamethrower";
 import { grenadeLook } from "./grenade-look";
 import { advancePeriscope, breakMirror, mirrorOnPath, periscopeEye, periscopeLift, periscopeRaised, periscopeRules, type PeriscopeState } from "./periscope";
 import { equipLoadout, kitFor, loadoutIds, switchWeapon, factionFor, factions, rosterLoadout, type FactionId, type Loadout, type WeaponSlot, type WeaponState } from "./loadouts";
@@ -412,6 +412,7 @@ export interface Soldier extends Vec {
   aimMotion?: {tick:number;from:number;to:number;duration:number};
   aimSince?: number;
   flameKit?: number;
+  flamePrimary?: WeaponState;
   burnUntil?: number;
   burnSource?: number;
   burnTeam?: Team | null;
@@ -1430,27 +1431,31 @@ export class Game {
       if (p.id !== 0) evadeFlame(this,p);
       const interactPressed = !!c.interact && !p.commandInteractHeld;
       p.commandInteractHeld = !!c.interact;
-      const tankAction = tankInteraction(this, p, interactPressed);
+      // Dropping the empty kit consumes this press, even beside another interactable.
+      const droppedFlame = interactPressed && canDropEmptyFlame(this,p);
+      if (droppedFlame) dropFlame(this,p);
+      const interact = interactPressed && !droppedFlame;
+      const tankAction = tankInteraction(this, p, interact);
       const tank = crewTank(this, p);
       if (tank) {
         operateTank(this, p, tank, c);
         continue;
       }
-      const gunAction = emplacementCommand(this, p, c, interactPressed && !tankAction);
+      const gunAction = emplacementCommand(this, p, c, interact && !tankAction);
       const gun = mountedGun(this, p);
       if (gun) {
         if (gun.mortar) operateMortar(this, p, gun, c);
         else operateGun(this, p, gun, c);
         continue;
       }
-      if (interactPressed && !gunAction && !tankAction) pickupFlame(this,p);
+      if (interact && !gunAction && !tankAction) pickupFlame(this,p);
       if (c.loadout) this.selectLoadout(p, c.loadout);
       const switched = c.equip ? switchWeapon(p, c.equip, this.tick) : false;
       if(switched)this.emit({type:"weaponAction",actor:p.id,action:"holster",weaponId:p.weaponChange?.fromId});
       if(p.weaponChange && this.tick===p.weaponChange.tick+switchRules.lowerTicks)
         this.emit({type:"weaponAction",actor:p.id,action:"draw",weaponId:p.weaponId});
       updateAimMotion(p,this.tick);
-      p.triggerPressed = !switched && c.fire && (!p.triggerHeld || (p.weapon === "machineGun" && p.id === 0) || p.weapon === "flamethrower");
+      p.triggerPressed = !droppedFlame && !switched && c.fire && (!p.triggerHeld || (p.weapon === "machineGun" && p.id === 0) || p.weapon === "flamethrower");
       p.triggerHeld = c.fire;
       recoverRecoil(p);
       if (p.melee) c.crouch = p.crouched;
