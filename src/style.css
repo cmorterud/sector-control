@@ -885,7 +885,7 @@ a.armory-link:hover { background: #3f5856; }
   z-index: 120;
   inset: 5vh auto auto 50%;
   transform: translateX(-50%);
-  width: min(500px, 90vw);
+  width: min(960px, 94vw);
   max-height: 90vh;
   overflow: auto;
   box-sizing: border-box;
@@ -894,11 +894,52 @@ a.armory-link:hover { background: #3f5856; }
   background: #1b2d2d;
   pointer-events: auto;
 }
-.binding-list { display: grid; gap: 6px; margin-bottom: 16px; }
-.binding-list label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.binding-list button { width: 110px; padding: 8px; text-align: center; }
+.controls-panel > h2 { margin: 0 0 6px; }
+.controls-keyboard-hint { margin: 0 0 14px; color: #b8c4c0; font-size: 13px; }
+.controls-keyboard {
+  overflow-x: auto;
+  padding: 5px;
+  border: 1px solid #627773;
+  border-radius: 6px;
+  background: #142222;
+}
+.keyboard-row { display: flex; gap: 4px; min-width: 720px; margin: 4px; }
+.controls-panel .keyboard-key {
+  flex: var(--units) 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 54px;
+  margin: 0;
+  padding: 4px 2px;
+  border: 1px solid #4f6460;
+  border-radius: 4px;
+  background: #233636;
+  color: #9eafaa;
+  text-align: center;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.controls-panel button.keyboard-key {
+  background: #e3d39e;
+  border-color: #b6a369;
+  color: #202b28;
+}
+.controls-panel button.keyboard-key:hover { background: #f6e7b4; }
+.controls-panel button.keyboard-key:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
+.keyboard-key kbd { font-size: 14px; font-weight: 700; }
+.keyboard-key small { font-size: 10px; line-height: 1.05; overflow-wrap: anywhere; }
+.controls-binding-status { min-height: 1.25em; margin: 6px 0 0; color: #eee0b0; font-size: 13px; }
+.controls-mechanics h3 { margin: 12px 0 10px; color: #e3d39e; }
+.mechanic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+.mechanic-grid article { padding: 12px; border: 1px solid #526460; background: #172626; }
+.mechanic-grid h4 { margin: 0 0 6px; color: #eee0b0; }
+.mechanic-grid p { margin: 0; color: #d8e0de; font-size: 13px; line-height: 1.55; }
+.mechanic-grid kbd { padding: 1px 4px; border: 1px solid #8f8260; border-radius: 3px; color: #f2e5ba; }
 .controls-panel > label { display: block; margin: 12px 0; }
-.controls-panel > p { min-height: 2em; color: #eee0b0; }
 
 :is(.map-choice, .mode-choice) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 :is(.map-choice, .mode-choice) > * { position: relative; padding: 0 0 10px; overflow: hidden; background: #172626; }
