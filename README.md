@@ -77,7 +77,7 @@ Free, no install, no sign-in.</p>
 
 | Map | Size | Objective |
 | --- | --- | --- |
-| Training grounds | Guided practice | Eight repeatable exercises covering movement, all weapons, artillery, destruction and squad combat |
+| Training grounds | Guided practice | Nine repeatable exercises covering movement, weapons, gas, artillery, destruction and squad combat |
 | Ypres | 50v50 | Frezenberg, August 1917. Four flags in opposing trench lines across no man's land, or capture the flag with three flags a side |
 | Ypres at night | 50v50 | Ypres after dark. You see about 15 m. Call flares from the tactical map (**F** switches it) to light the field; lamps mark the trenches and white tape the lanes through the wire. Also plays as capture the flag |
 | Verdun sector | 50v50 | Fleury and Thiaumont, June 1916: five flags through shell-stripped woods, craters and communication trenches, or capture the flag with three flags a side |
@@ -93,7 +93,7 @@ Ypres, Ypres at night and Verdun sector also offer **capture the flag** (choose 
 
 ## Training grounds
 
-Choose **Training grounds** in the map selector to practice the game through eight guided exercises. Escape opens the training armory, faction equipment, resupply, exercise selection and free practice. Numbered boards connect the stations; completed tasks remain checked while you experiment. See [TRAINING_GROUNDS.md](docs/TRAINING_GROUNDS.md).
+Choose **Training grounds** in the map selector to follow nine guided exercises. Gold markers show where to go or aim, and the next action appears near the center of the screen. Press the interact key after completing each station to deploy to the next. Escape opens station selection, resupply and Free practice with your choice of equipment. See [TRAINING_GROUNDS.md](docs/TRAINING_GROUNDS.md).
 
 ## Controls
 

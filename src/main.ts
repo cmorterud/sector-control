@@ -10,7 +10,9 @@ import {CombatFeedback} from "./combat-feedback";
 import {scoreboardTable} from "./scoreboard";
 import type {Entity} from "playcanvas";
 import {TrainingSession} from "./training";
-import {trainingHUD,trainingMenu} from "./training-ui";
+import {trainingCue,trainingHUD,trainingMenu,trainingPrompt} from "./training-ui";
+import {TrainingMarker} from "./training-markers";
+import {trainingStations} from "./training-map";
 import { prepareNavigation } from "./simulation";
 import { battlePerformance } from "./battle-performance";
 import { canDropEmptyFlame, nearestFlame } from "./flamethrower";
@@ -213,7 +215,10 @@ const tacticalMap = new ArtilleryMap(
     else if (kind === "gas") pendingGas = target;
     else pendingArtillery = target;
   },
-  ()=>training?.station.target,
+  ()=>{
+    const at=training?.artilleryTarget();
+    return at ? {at, mode:training?.free ? undefined : training?.id==="gas" ? "gas" : "shell"} : undefined;
+  },
   ()=>combatFeedback.marker(game),
 );
 let artilleryNotice = "",
@@ -268,7 +273,10 @@ const training=map.id==="training"?new TrainingSession():undefined;
 root.classList.toggle("training-active",!!training);
 let trainingReset=false;
 const trainingOverlay=document.createElement("aside");trainingOverlay.id="training-lesson";trainingOverlay.hidden=true;
-document.querySelector("#ui")!.append(trainingOverlay);
+const trainingAction=document.createElement("aside");trainingAction.id="training-action";trainingAction.hidden=true;
+trainingAction.setAttribute("aria-live","polite");
+if(training)root.append(trainingOverlay,trainingAction);
+const trainingMarker=training ? new TrainingMarker(root) : undefined;
 // Tanks on the maps that have them: ?tanks=1 or 0 wins, then the briefing's last choice.
 let tanksOn = params.has("tanks") ? params.get("tanks") !== "0" : params.get("tank") === "1" ? true : (() => { try { return localStorage.getItem(tankStorageKey) !== "0"; } catch { return true; } })();
 // Rain on the maps that have weather: ?rain=1 or 0 wins, then the briefing's
@@ -337,7 +345,7 @@ function menu(
     (el("training-station") as HTMLSelectElement).onchange=e=>{training.select(Number((e.target as HTMLSelectElement).value));trainingReset=true;};
     (el("training-loadout") as HTMLSelectElement).onchange=e=>{training.loadout=(e.target as HTMLSelectElement).value as Loadout;trainingReset=true;};
     (el("training-faction") as HTMLSelectElement).onchange=e=>{training.faction=(e.target as HTMLSelectElement).value as FactionId;trainingReset=true;};
-    (el("training-free") as HTMLInputElement).onchange=e=>{training.free=(e.target as HTMLInputElement).checked;};
+    (el("training-free") as HTMLInputElement).onchange=e=>{training.free=(e.target as HTMLInputElement).checked;trainingReset=true;};
     if(started){
       el("training-refill").onclick=()=>{if(trainingReset||game.players[0].hp<=0)start();else{training.resupply(game);resume();}};
       el("training-replay").onclick=()=>{training.select(training.lesson,true);start();};
@@ -446,7 +454,8 @@ function resume(fromEscape = false) {
     return;
   }
   mouseCaptureNeeded = false;
-  captureMouse();
+  if(document.pointerLockElement===renderer.canvas) unpause();
+  else captureMouse();
 }
 function start() {
   trainingReset=false;
@@ -730,7 +739,7 @@ function table() {
   return scoreboardTable(game);
 }
 const hudTargets = {
-  combat: () => combatOverlay, training: () => trainingOverlay,
+  combat: () => combatOverlay, training: () => trainingOverlay, trainingAction: () => trainingAction,
   health: () => el("health"), ammo: () => el("ammo"), capture: () => el("capture"),
   sectors: () => el("sectors"), labels: () => el("labels"),
 };
@@ -755,7 +764,7 @@ function hud(now: number) {
   if (identityText !== displayedIdentity) identityNotice.innerHTML = displayedIdentity = identityText;
   battleSidebar.hidden = !clearHUD || aimingScope || periscopeView || frontLine;
   if (!battleSidebar.hidden) {
-    minimap.update(game, game.scoring !== "eliminations" && (!training || training.lesson >= 6));
+    minimap.update(game, game.scoring !== "eliminations" && (!training || training.combat));
     minimapGas.update(game, el("minimap"));
     const feed = (game.ctf ? ctfAnnouncer.killFeed(game) : "") + combatFeedback.killFeed(game);
     if (feed !== displayedFeed) {
@@ -816,9 +825,12 @@ function hud(now: number) {
           )
           .join("");
   if(training){
-    el("blue").textContent=String(training.completed);el("red").textContent="8";
+    el("blue").textContent=String(training.completed);el("red").textContent=String(trainingStations.length);
     staged.sectors='<span class="mode-tag">FIELD EXERCISES<small>NO TIME LIMIT</small></span>';
-    trainingOverlay.hidden=paused;staged.training=trainingHUD(training,game,settings);
+    trainingOverlay.hidden=!clearHUD;
+    trainingAction.hidden=!clearHUD||p.hp<=0||training.free||params.has("overview");
+    if(!trainingOverlay.hidden)staged.training=trainingHUD(training,game);
+    if(!trainingAction.hidden)staged.trainingAction=trainingPrompt(training,game,settings);
   }
   staged.health =
     `<small>VITALS / ${factions[p.faction ?? factionFor(map,p.team)].name.toUpperCase()}</small><strong>${Math.ceil(p.hp)}<em> HP</em></strong><div class="bar"><i style="width:${p.hp}%"></i></div>${game.tick < p.protectedUntil && p.hp > 0 ? "<small>SPAWN PROTECTION</small>" : ""}`;
@@ -957,7 +969,7 @@ function hud(now: number) {
   el("labels").classList.toggle("aiming", aim);
   staged.labels =
     game.ctf ? ctfLabels(game, (v) => renderer.project(v), p)
-    : game.scoring === "eliminations" || (training&&training.lesson<6)
+    : game.scoring === "eliminations" || (training&&(!training.combat || (!training.free && training.nextGoal==="capture")))
       ? ""
       : game.sectors
           .map((s) => {
@@ -1047,7 +1059,8 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if(training&&isKey("interact",e.code)&&!e.repeat&&!tacticalMap.open &&
-     !canDropEmptyFlame(game, game.players[0]) && !mountedGun(game, game.players[0]) && !nearbyGun(game, game.players[0])){
+     !canDropEmptyFlame(game, game.players[0]) &&
+     (!training.free || (!mountedGun(game, game.players[0]) && !nearbyGun(game, game.players[0])))){
     const index=training.interaction(game);
     if(index!==null){training.select(index);start();return;}
   }
@@ -1182,6 +1195,9 @@ function stepSimulation() {
   training?.observe(game,input);
   battlePerformance.end("simulation",simStart);
   const player = game.players[0];
+  if(training && game.events.some(e=>e.type==="respawn" && e.actor===0)){
+    yaw=player.yaw;pitch=player.pitch;crouchInput.reset();
+  }
   if (player.melee || player.mountedGun !== undefined) yaw = player.yaw;
   if (player.mountedGun !== undefined) pitch = player.pitch;
   if (player.hp <= 0) placingGun = false;
@@ -1209,7 +1225,7 @@ function advanceReview(ticks:number) {
     renderer.deathView=combatFeedback.camera(game,game.tick,weaponAim(game.players[0]));
     renderer.draw(game,1,1/30,params.has("overview"));
   }
-  accumulator=0;hud(performance.now());return {tick:game.tick,frames:reviewFrames};
+  accumulator=0;hud(performance.now());updateTrainingMarker();return {tick:game.tick,frames:reviewFrames};
 }
 function combatReview(stage:string) {
   if(!renderReview||map.id!=="industrial"||!["hit","death","respawn","assist","kill"].includes(stage))throw Error("Unknown combat review");
@@ -1244,6 +1260,16 @@ function combatReview(stage:string) {
 // At most this many simulation ticks run in one frame, and navigation
 // rebuilds after explosions get this many milliseconds of each frame.
 const maxCatchUpTicks = 2, navigationFrameMs = 3;
+
+function updateTrainingMarker(){
+  if(!training)return;
+  const p=game.players[0];
+  const cue=!paused && !held("scoreboard") && !tacticalMap.open && p.hp>0 &&
+    !params.has("overview") && !(scoped(p) && sighted(p,game.tick)) && !periscopeRaised(p)
+      ? trainingCue(training,game) : undefined;
+  trainingMarker?.update(renderer,game,cue);
+}
+
 function frame(now: number) {
   battlePerformance.frame(now, game?.tick ?? 0, !started || paused);
   rawFrameMs = now - last;
@@ -1299,6 +1325,7 @@ function frame(now: number) {
       paused ? 0 : dt,
       params.has("overview"),
     );
+    updateTrainingMarker();
     battlePerformance.end("presentation",drawStart);
     if (now - uiTime > 50) {
       const hudStart = battlePerformance.begin();
@@ -1340,7 +1367,7 @@ try {
       renderer.remember(game);advanceReview(12);
       return row.map(q=>({id:q.id,faction:q.faction,loadout:q.loadout,weapon:q.weaponId}));
     },
-    training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index);start();return training.id;},
+    training:(index:number)=>{if(!training)throw Error("Not a training operation");training.select(index,true);start();return training.id;},
     advance:advanceReview,
     // Rain: show the water as it stands this many seconds into the downpour.
     flood:(seconds:number)=>{if(!game.rain)throw Error("No rain on this operation");game.rainSince=game.tick-Math.round(seconds*30);renderer.draw(game,1,0,false);return {tick:game.tick};},
@@ -1534,7 +1561,7 @@ try {
   menu(
     map.id !== "industrial" ? map.name : "Sector Control",
     training
-      ? "Learn by doing: eight resettable field exercises teach movement, every weapon, grenades, smoke, bayonets, artillery, destruction and squad combat. No match timer or random shelling. Visit the numbered boards, or use Escape to change exercise, resupply and choose faction equipment."
+      ? "Follow the highlighted markers through nine field exercises, from movement and weapons to gas drills and squad combat. Each station sends you straight to the next. Choose Free practice in the Training menu to explore the camp and pick your own kit."
       : ctfMode
       ? `Capture the flag across the trench lines. Raid any of the enemy's three flags, carry it back to your support trench and defend your own. ${teamSize} soldiers per team · first to ${ctfRules.captureLimit} captures or eight minutes.${map.night ? " After dark you see about fifteen meters." : ""}`
       : map.id === "verdun"

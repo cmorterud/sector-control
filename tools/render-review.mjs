@@ -343,6 +343,8 @@ try {
   console.log(JSON.stringify({map,combatChecks:report.combatChecks}));
  }
  if(!visualOnly&&map==='training'){
+  await client.evaluate(`(()=>{const b=window.sectorRenderReview;b.manual();b.training(0);b.advance(2);})()`);
+  await screenshot('training-guided-movement');
   report.trainingControls=await client.evaluate(`(()=>{
    const b=window.sectorRenderReview,check=(ok,text)=>{if(!ok)throw Error(text);};
    const key=(code,type='keydown')=>window.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
@@ -350,21 +352,27 @@ try {
    const select=(id,value)=>{const el=document.getElementById(id);check(!!el,'Missing '+id);el.value=String(value);el.dispatchEvent(new Event('change',{bubbles:true}));};
    b.manual();b.training(0);
    const before=b.state().player;
-   key('KeyW');b.advance(30);key('KeyW','keyup');
+   const prompt=document.getElementById('training-action'),marker=document.getElementById('training-marker');
+   check(!marker.hidden && marker.textContent.includes('Walk here'),'Missing in-world movement marker');
+   check(!prompt.hidden && prompt.textContent.includes('Hold W'),'Missing movement input at lower center');
+   key('KeyE');key('KeyE','keyup');
+   check(b.state().training.id==='movement','Interact skipped an unfinished drill');
+   key('KeyW');b.advance(48);key('KeyW','keyup');
    check(b.state().player.z<before.z-1,'W did not move the trainee');
+   check(!marker.hidden && marker.textContent.includes('Sprint here'),'The marker did not advance to the sprint checkpoint');
    press('KeyC');b.advance(1);check(b.state().player.crouched,'C did not crouch');
    press('KeyC');b.advance(1);check(!b.state().player.crouched,'C did not stand');
    const view=b.state().player.firstPerson;press('KeyT');b.advance(1);check(b.state().player.firstPerson!==view,'T did not change view');
    const stations=[];
-   for(let i=0;i<8;i++){
+   for(let i=0;i<9;i++){
     press('Escape');check(b.state().paused,'Escape did not pause');
     select('training-station',i);select('training-loadout',i===1?'marksman':'rifleman');select('training-faction',i===1?'french':'british');
-    const free=document.getElementById('training-free');free.checked=i===7;free.dispatchEvent(new Event('change',{bubbles:true}));
+    const free=document.getElementById('training-free');free.checked=true;free.dispatchEvent(new Event('change',{bubbles:true}));
     document.getElementById('primary').click();b.advance(2);
     const state=b.state();check(!state.paused,'Resume did not start the selected exercise');
     check(state.training.loadout===(i===1?'marksman':'rifleman'),'Armory loadout did not apply');
     check(state.training.faction===(i===1?'french':'british'),'Faction equipment did not apply');
-    check(state.training.free===(i===7),'Free practice did not apply');stations.push(state.training.id);
+    check(state.training.free && marker.hidden,'Free practice did not hide guided markers');stations.push(state.training.id);
     if(i===1){
      const loaded=b.state().player.ammo;
      check(loaded>=5,'Marksman loadout starts without its magazine');
@@ -385,12 +393,41 @@ try {
      check(map.classList.contains('hidden'),'RMB did not cancel the tactical map');
     }
    }
-   check(new Set(stations).size===8,'An exercise is missing');
+   check(new Set(stations).size===9,'An exercise is missing');
    press('Escape');check(document.getElementById('training-refill'),'Training resupply is missing');
    return {walk:true,crouchToggle:true,viewSwitch:true,aimAndFire:true,reload:true,tacticalMap:true,armory:true,factions:true,freePractice:true,stations};
   })()`);
   await screenshot('training-menu');
-  await client.evaluate(`(()=>{window.sectorRenderReview.training(4);window.sectorRenderReview.advance(2);window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));})()`);
+  await client.evaluate(`(()=>{
+   const b=window.sectorRenderReview;
+   const change=(id,value)=>{const el=document.getElementById(id);if(typeof value==='boolean')el.checked=value;else el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
+   change('training-station','6');change('training-free',false);
+   document.getElementById('primary').click();b.advance(2);
+   window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyQ',bubbles:true}));
+   window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyQ',bubbles:true}));
+   const map=document.getElementById('tactical-map');
+   if(!map.querySelector('.exercise-mode'))throw Error('Gas drill did not highlight the mode switch');
+   window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyF',bubbles:true}));
+   window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyF',bubbles:true}));
+   if(!map.querySelector('.exercise-sector.selected'))throw Error('Gas drill did not highlight and preselect the sector');
+  })()`);
+  await screenshot('training-gas-map');
+  report.trainingGas=await client.evaluate(`(()=>{
+   const b=window.sectorRenderReview;
+   const press=code=>{window.dispatchEvent(new KeyboardEvent('keydown',{code,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code,bubbles:true}));};
+   document.querySelector('#tactical-map .exercise-sector').click();
+   const prompt=document.getElementById('training-action');
+   b.advance(1);if(!prompt.textContent.includes('put on your gas mask'))throw Error('Gas call did not advance to the mask');
+   press('KeyM');b.advance(32);if(!prompt.textContent.includes('watch the marked sector'))throw Error('Mask seal did not advance to watching the cloud');
+   b.advance(100);if(!prompt.textContent.includes('Station complete'))throw Error('The actual gas strike did not complete the drill');
+   press('KeyE');b.advance(2);if(b.state().training.id!=='squad')throw Error('Interact did not deploy to the next station');
+   return {called:true,maskSealed:true,landed:true,nextStation:true};
+  })()`);
+  await client.evaluate(`(()=>{
+   const b=window.sectorRenderReview,press=code=>{window.dispatchEvent(new KeyboardEvent('keydown',{code,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{code,bubbles:true}));};
+   b.training(4);b.advance(2);press('KeyQ');
+   if(document.querySelector('#tactical-map .exercise-mode'))press('KeyF');
+  })()`);
   await screenshot('training-artillery-map');
   await client.send('Emulation.setDeviceMetricsOverride',{width:1280,height:600,deviceScaleFactor:1,mobile:false});
   await client.evaluate(`(()=>{const map=document.getElementById('tactical-map'),r=map.getBoundingClientRect(),c=map.querySelector(':scope > button').getBoundingClientRect();if(r.top<0||r.bottom>innerHeight||c.bottom>innerHeight)throw Error('Artillery panel is clipped at 600px height');})()`);
@@ -406,7 +443,7 @@ try {
     press('KeyQ');press('Escape');
     expect(b.state().paused,'Could not open training armory');
     select('training-station','1');select('training-loadout','emplacement');select('training-faction','british');
-    const free=document.getElementById('training-free');free.checked=false;free.dispatchEvent(new Event('change',{bubbles:true}));
+    const free=document.getElementById('training-free');free.checked=true;free.dispatchEvent(new Event('change',{bubbles:true}));
     document.getElementById('primary').click();b.advance(2);press('KeyB');
     expect(b.state().training.loadout==='emplacement','Emplacement kit selection did not apply');
     return b.state().frames;

@@ -30,13 +30,15 @@ export class ArtilleryMap {
   private mode: MapCall = "shell";
   private modeButton = document.createElement("button");
   private buttons: HTMLButtonElement[] = [];
+  private exerciseMarker?: SVGGElement;
+  private exerciseIntro = false;
   private flagMarkers: { id: string; dot: Element }[] = [];
   // Drawn over the map after each update, such as the gas front.
   decorate?: (grid: HTMLElement) => void;
   constructor(
     private game: () => Game,
     private call: (target: Vec & { area: true }, kind: MapCall) => void,
-    private exerciseTarget?: () => Vec | undefined,
+    private exerciseTarget?: () => { at: Vec; mode?: "shell" | "gas" } | undefined,
     private deathLocation?: () => Vec | undefined,
   ) {
     this.panel.id = "tactical-map";
@@ -79,6 +81,7 @@ export class ArtilleryMap {
   private describe() {
     const g = this.game(), artillery = g.map.artillery !== false, flare = this.mode === "flare", gas = this.mode === "gas";
     this.heading.textContent = !artillery ? "FORT VAUX · FLOOR PLAN" : flare ? "FLARE · CHOOSE A SECTOR" : gas ? `${gasAgent(g.map).shells} · CHOOSE A SECTOR` : "ARTILLERY · CHOOSE A SECTOR";
+    this.exerciseIntro = false;
     this.intro.textContent = !artillery ? "Barracks, cistern and east casemate. Battle continues."
       : flare ? `Lights about ${flareRules.radius} m of ground for ${flareRules.burnTicks / 30} seconds. Its own cooldown. Battle continues.`
       : gas ? `A low cloud about ${gasStrikeRules.radius * 2} m across for ${gasStrikeRules.lifetime / 30} seconds, drifting slowly along the front. It harms anyone unmasked, your own side too. Uses the artillery cooldown. Battle continues.`
@@ -149,29 +152,23 @@ export class ArtilleryMap {
         }
         this.flagMarkers.push({ id: s.id, dot });
       }
-    const exercise=this.exerciseTarget?.();
-    if(exercise){
+    if(g.map.id==="training"){
+      const mark=this.exerciseMarker=document.createElementNS("http://www.w3.org/2000/svg","g");
       const ring=document.createElementNS(svg.namespaceURI,"circle");
-      ring.setAttribute("cx",String(exercise.x+playArea(g.map).width/2));ring.setAttribute("cy",String(exercise.z+playArea(g.map).depth/2));
       ring.setAttribute("r","7");ring.setAttribute("fill","none");ring.setAttribute("stroke","#f3d16a");ring.setAttribute("stroke-width",".8");
       const label=document.createElementNS(svg.namespaceURI,"text");
-      label.setAttribute("x",String(exercise.x+playArea(g.map).width/2));label.setAttribute("y",String(exercise.z+playArea(g.map).depth/2-9));
-      label.setAttribute("text-anchor","middle");label.setAttribute("font-size","2.3");label.setAttribute("fill","#f8e9b2");label.textContent="EXERCISE AREA";
-      svg.append(ring,label);
+      label.setAttribute("y","-9");label.setAttribute("text-anchor","middle");label.setAttribute("font-size","2.3");
+      label.setAttribute("fill","#f8e9b2");label.textContent="EXERCISE AREA";
+      mark.append(ring,label);svg.append(mark);
     }
     this.grid.append(svg, this.you);
     if (artillery) this.grid.append(this.marker);
     this.grid.append(this.death);
-    this.cursor = {
-      x: Math.max(
-        0,
-        Math.min(0.999, (p.x + Math.sin(p.yaw) * 45) / playArea(g.map).width + 0.5),
-      ),
-      z: Math.max(
-        0,
-        Math.min(0.999, (p.z - Math.cos(p.yaw) * 45) / playArea(g.map).depth + 0.5),
-      ),
-    };
+    const exercise = this.exerciseTarget?.();
+    const focus = exercise?.mode ? exercise.at : { x: p.x + Math.sin(p.yaw) * 45, z: p.z - Math.cos(p.yaw) * 45 };
+    const area = playArea(g.map);
+    const normalized = (v: number, span: number) => Math.max(0, Math.min(0.999, v / span + 0.5));
+    this.cursor = { x: normalized(focus.x, area.width), z: normalized(focus.z, area.depth) };
     this.panel.classList.remove("hidden");
     this.update();
   }
@@ -228,8 +225,22 @@ export class ArtilleryMap {
       this.terrainRevision = revision;
     }
     if (g.map.artillery !== false) {
-      const sectors = artillerySectors(g.map),
-        selected = this.selected();
+      const sectors = artillerySectors(g.map), selected = this.selected();
+      const exercise = this.exerciseTarget?.();
+      const exerciseSector = exercise ? artillerySector(g.map, exercise.at).name : undefined;
+      const exerciseMode = !!exercise && exercise.mode === this.mode;
+      if(this.exerciseMarker){
+        const area=playArea(g.map);
+        this.exerciseMarker.style.display=exercise?"":"none";
+        if(exercise) this.exerciseMarker.setAttribute("transform",`translate(${exercise.at.x+area.width/2} ${exercise.at.z+area.depth/2})`);
+      }
+      this.modeButton.classList.toggle("exercise-mode", !!exercise?.mode && !exerciseMode);
+      if (exercise?.mode) {
+        const shells = exercise.mode === "gas" ? "Gas Shells" : "Artillery";
+        const intro = exerciseMode ? `Click highlighted sector ${exerciseSector} to fire.` : `Switch to ${shells} with F or the button below.`;
+        if (this.intro.textContent !== intro) this.intro.textContent = intro;
+        this.exerciseIntro = true;
+      } else if(this.exerciseIntro) this.describe();
       this.buttons.forEach((b, i) => {
         const reason = this.reason({ ...sectors[i], area: true });
         // Keep unavailable cells in the mouse event path so right-click cancel
@@ -237,6 +248,7 @@ export class ArtilleryMap {
         b.setAttribute("aria-disabled", String(!!reason));
         b.title = reason ?? (this.mode === "flare" ? "Send a flare over this sector" : this.mode === "gas" ? "Fire gas shells into this sector" : "Request broad sector");
         b.classList.toggle("selected", sectors[i].name === selected.name);
+        b.classList.toggle("exercise-sector", exerciseMode && sectors[i].name === exerciseSector);
       });
       const flare = this.mode === "flare", gas = this.mode === "gas", reason = this.reason({ ...selected, area: true });
       const ready = Math.max(

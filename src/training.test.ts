@@ -1,14 +1,20 @@
 import {describe,it,expect} from "vitest";
 import {Game,TestCollision,idle,type Command} from "./simulation";
-import {trainingMap,trainingStations} from "./training-map";
+import {trainingMap,trainingStations,movementMarks,demolitionMarks} from "./training-map";
 import {TrainingSession,trainingLessons} from "./training";
 import {blocked,dist,mantleLanding,groundHeight} from "./map";
 import {artilleryExplosionProfile} from "./destruction";
-import {trainingHUD,trainingMenu} from "./training-ui";
+import {trainingCue,trainingHUD,trainingMenu,trainingPrompt} from "./training-ui";
 import {freshControls} from "./controls";
+import {trainingMarkerPosition} from "./training-markers";
+import {gasStrikeRules,gasRules} from "./gas";
+import {artillerySector} from "./artillery-sectors";
 import {architecturePieces} from "./architecture-geometry";
 
-function exercise(index=0,session=new TrainingSession()){
+function freePractice(){
+  const session=new TrainingSession();session.free=true;return session;
+}
+function exercise(index=0,session=freePractice()){
   session.select(index);
   const g=new Game(new TestCollision(trainingMap),true,1,12345,undefined,{map:trainingMap,teamSize:4,ambientArtillery:false});
   session.begin(g);
@@ -22,8 +28,8 @@ function exercise(index=0,session=new TrainingSession()){
 }
 
 describe("training grounds",()=>{
-  it("has eight safe checkpoints, usable numbered boards and a real low wall to mantle",()=>{
-    expect(new Set(trainingStations.map(s=>s.id)).size).toBe(8);
+  it("has nine safe checkpoints, usable numbered boards and a real low wall to mantle",()=>{
+    expect(new Set(trainingStations.map(s=>s.id)).size).toBe(9);
     expect(trainingMap.boxes.length).toBeLessThan(1500);
     for(const s of trainingStations){
       expect(blocked(s.x,s.z,.6,trainingMap),s.id).toBe(false);
@@ -65,11 +71,11 @@ describe("training grounds",()=>{
     for(let n=0;n<120;n++){step();enemyShots+=g.events.filter(e=>e.type==="fire"&&e.actor!==0).length;}
     expect(enemyShots).toBe(0);expect(dist(before,g.players[6])).toBeGreaterThan(.5);
   });
-  it("spawns every active trainee clear of cover in all eight exercises",()=>{
-    for(let i=0;i<8;i++){const {g}=exercise(i);for(const p of g.players.filter(p=>p.hp>0))expect(blocked(p.x,p.z,.6,g.map),`${i}: ${p.id}`).toBe(false);}
+  it("spawns every active trainee clear of cover in every exercise",()=>{
+    for(let i=0;i<trainingStations.length;i++){const {g}=exercise(i);for(const p of g.players.filter(p=>p.hp>0))expect(blocked(p.x,p.z,.6,g.map),`${i}: ${p.id}`).toBe(false);}
   });
   it("returns a killed trainee to the selected checkpoint with the selected faction and kit",()=>{
-    const session=new TrainingSession();session.faction="french";session.loadout="marksman";
+    const session=freePractice();session.faction="french";session.loadout="marksman";
     const {g,p,step}=exercise(4,session);
     g.redeploy();session.observe(g,idle());expect(p.hp).toBe(0);expect(session.resupply(g)).toBe(false);
     step({},60);expect(p.hp).toBe(100);expect(dist(p,trainingStations[4])).toBeLessThan(.1);
@@ -83,13 +89,13 @@ describe("training grounds",()=>{
     step({reload:true});step({},66);expect(done.has("reload")).toBe(true);expect(p.ammo).toBe(10);
   });
   it.each(["marksman","support"] as const)("uses the real %s loadout and credits hits",loadout=>{
-    const session=new TrainingSession();session.loadout=loadout;
+    const session=freePractice();session.loadout=loadout;
     const {p,fireAt,done}=exercise(1,session);fireAt();
     expect(p.loadout).toBe(loadout);expect(done.has(loadout==="marksman"?"scope":"machineGun")).toBe(true);
   });
   it("offers faction-specific kit and pistol switching without changing ordinary matches",()=>{
     for(const faction of ["british","german","french"] as const){
-      const session=new TrainingSession();session.faction=faction;
+      const session=freePractice();session.faction=faction;
       const {p,step,fireAt,done}=exercise(1,session);
       expect(p.faction).toBe(faction);expect(p.inventory!.sidearm.kind).toBe("pistol");
       step({equip:"sidearm"});step({},30);fireAt();expect(done.has("pistol")).toBe(true);
@@ -98,7 +104,7 @@ describe("training grounds",()=>{
     normal.step(idle());expect(normal.phase).toBe("ended");
   });
   it("also teaches the Industrial map's actual AR-01 semiautomatic rifle",()=>{
-    const session=new TrainingSession();session.faction="trainingBlue";
+    const session=freePractice();session.faction="trainingBlue";
     const {p,fireAt,done}=exercise(1,session);
     expect(p.weapon).toBe("rifle");expect(p.weaponId).toBe("AR-01");expect(p.ammo).toBe(30);
     fireAt();expect(done.has("semi")).toBe(true);expect(done.has("rifle")).toBe(false);
@@ -142,7 +148,7 @@ describe("training grounds",()=>{
     expect(done.has("charge")).toBe(true);expect(g.players[0].kills).toBeGreaterThan(0);
   });
   it("does not count a machine-gun butt strike as a bayonet thrust",()=>{
-    const session=new TrainingSession();session.loadout="support";
+    const session=freePractice();session.loadout="support";
     const {g,p,step,done}=exercise(3,session);Object.assign(p,{x:48,z:19,yaw:0});
     step({melee:true});step({},40);expect(g.players[4].hp).toBeLessThan(100);expect(done.has("thrust")).toBe(false);
   });
@@ -157,7 +163,7 @@ describe("training grounds",()=>{
     const wall=g.map.boxes.find(b=>b.architecture?.building==="demolition-house"&&b.architecture.part==="wall")!;
     expect(wall).toBeTruthy();
     for(let i=0;i<4;i++)g.explode({x:wall.x,y:(wall.baseY??0)+1,z:wall.z-wall.d/2-.12},0,"blue",artilleryExplosionProfile);
-    for(let i=0;i<4;i++)g.explode({x:-28.4,y:.5,z:-2},0,"blue",artilleryExplosionProfile);
+    for(let i=0;i<4;i++)g.explode({...demolitionMarks.tree,x:demolitionMarks.tree.x+.6,y:.5},0,"blue",artilleryExplosionProfile);
     g.explode({x:-48,y:.1,z:10},0,"blue",artilleryExplosionProfile);
     session.observe(g,idle());
     expect([...session.progress[5]],JSON.stringify(g.events.filter(e=>e.type==="destruction").map(e=>e.type==="destruction"?e.change.objects.slice(0,4):[]))).toEqual(expect.arrayContaining(["breach","tree","crater"]));
@@ -166,13 +172,13 @@ describe("training grounds",()=>{
     expect(trainingMap.boxes.some(b=>b.id===wall.id)).toBe(true);expect(p.hp).toBeGreaterThan(0);
   });
   it("activates real friendly and enemy AI only for combat exercises",()=>{
-    const {g,step}=exercise(6);let shots=0,reactions=0;
+    const {g,step}=exercise(7);let shots=0,reactions=0;
     for(let n=0;n<240&&(!shots||!reactions);n++){step();shots+=g.events.filter(e=>e.type==="fire"&&e.actor!==0).length;reactions+=g.events.filter(e=>e.type==="combatReaction"||e.type==="reactionCover").length;}
     expect(g.players.filter(p=>p.team==="blue"&&p.id!==0&&p.hp>0).length).toBeGreaterThan(0);
     expect(shots).toBeGreaterThan(0);expect(reactions).toBeGreaterThan(0);
   });
   it("final defenders stay defeated and capture requires the player at a genuinely blue flag",()=>{
-    const {g,p,step,done}=exercise(7);
+    const {g,p,step,done}=exercise(8);
     for(const q of g.players.slice(4))if(q.hp>0)g.explode({x:q.x,y:q.y+.5,z:q.z},0,"blue",{...artilleryExplosionProfile,radius:2,damage:1000,partialCover:false,structuralRadius:0,craterRadius:0,terrainReach:0});
     step();expect(done.has("clear")).toBe(true);
     step({},100);expect(done.has("capture")).toBe(false);
@@ -187,17 +193,106 @@ describe("training grounds",()=>{
     p.inventory!.primary.ammo=0;p.inventory!.sidearm.ammo=0;step({equip:"sidearm"});session.resupply(g);
     expect(p.inventory!.primary.ammo).toBe(10);expect(p.inventory!.sidearm.ammo).toBe(6);
     Object.assign(p,{x:41,z:24});expect(session.interaction(g)).toBe(3);
-    expect(()=>session.select(-1)).toThrow();expect(()=>session.select(8)).toThrow();
+    expect(()=>session.select(-1)).toThrow();expect(()=>session.select(9)).toThrow();
+  });
+  it("guides movement through real checkpoints, then opens the next station from the finish",()=>{
+    const {g,p,session,step,done}=exercise(0,new TrainingSession());
+    const moveTo=({x,z}:{x:number;z:number},sprint=false)=>{
+      for(let i=0;i<180 && Math.hypot(x-p.x,z-p.z)>.25;i++){
+        const d=Math.hypot(x-p.x,z-p.z);
+        step({x:(x-p.x)/d,z:(z-p.z)/d,sprint});
+      }
+      step({},10);
+    };
+    expect(trainingCue(session,g)?.at).toEqual(movementMarks.walk);
+    const marker=trainingCue(session,g)!;
+    expect(trainingMarkerPosition(marker,g,()=>({x:640,y:380,z:8}),1280,720))
+      .toEqual({x:640,y:380,arrow:"▼"});
+    expect(trainingMarkerPosition(marker,g,()=>({x:2000,y:380,z:8}),1280,720)?.arrow).toBe("▶");
+    step({crouch:true});step({});
+    expect(done.size).toBe(0);
+    expect(session.interaction(g)).toBeNull();
+    moveTo(movementMarks.walk);
+    expect(session.nextGoal).toBe("sprint");
+    moveTo(movementMarks.sprint,true);
+    expect(session.nextGoal).toBe("crouch");
+    step({crouch:true});
+    expect(session.nextGoal).toBe("crouch");
+    expect(trainingPrompt(session,g,freshControls())).toContain("again to stand");
+    step();
+    expect(trainingCue(session,g)?.at).toEqual(movementMarks.hop);
+    moveTo(movementMarks.hop);
+    step({mantle:true});step({},28);
+    expect(session.nextGoal).toBe("mantle");
+    moveTo(movementMarks.mantle);
+    step({mantle:true});step({},38);
+    expect(session.nextGoal).toBe("view");
+    step({firstPerson:false});
+    expect(session.nextGoal).toBe("step");
+    expect(trainingCue(session,g)?.at).toEqual(movementMarks.trench);
+    moveTo(movementMarks.trench);
+    expect(trainingCue(session,g)?.at).toEqual(movementMarks.step);
+    step({z:-1,mantle:true});step({z:-1},12);step({},20);
+    expect(p.y).toBeCloseTo(-.5,1);
+    step({aim:true,fire:true});
+    expect(session.passed).toBe(true);
+    expect(session.interaction(g)).toBe(1);
+  });
+  it("issues the range kits as the guided drill advances",()=>{
+    const {g,p,session,step,fireAt}=exercise(1,new TrainingSession());
+    expect(session.nextGoal).toBe("rifle");
+    fireAt();step({reload:true});step({},90);
+    expect(session.nextGoal).toBe("scope");expect(p.loadout).toBe("marksman");
+    fireAt();expect(session.nextGoal).toBe("machineGun");expect(p.loadout).toBe("support");
+    for(let i=0;i<5 && session.nextGoal==="machineGun";i++) fireAt(g.players[4].hp>0?4:5);
+    expect(session.nextGoal).toBe("pistol");expect(p.loadout).toBe("rifleman");
+    step({equip:"sidearm"});step({},30);
+    for(let i=0;i<3 && session.nextGoal==="pistol";i++) fireAt(g.players[4].hp>0?4:5);
+    expect(session.nextGoal).toBe("flame");expect(trainingCue(session,g)?.at).toEqual(g.flames.kits[0].at);
+    const kit=g.flames.kits[0];
+    Object.assign(p,kit.at);
+    step({interact:true});step({},20);
+    expect(p.weapon).toBe("flamethrower");
+    p.ammo=0;step();
+    expect(trainingPrompt(session,g,freshControls())).toContain("drop the empty kit");
+    step({interact:true});step();
+    expect(kit.at).toEqual(kit.home);
+    step({interact:true});step({},20);
+    expect(p.ammo).toBe(240);
+    step({fire:true});
+    expect(session.nextGoal).toBe("semi");
+    expect(p.weapon).toBe("rifle");
+    expect(p.flameKit).toBeUndefined();
+    expect(p.flamePrimary).toBeUndefined();
+    expect(kit.carrier).toBeNull();
+  });
+  it("requires a gas call on the marked sector, then a properly sealed mask and that strike landing",()=>{
+    const {g,session,step,done}=exercise(6,new TrainingSession());
+    const target=artillerySector(g.map,session.station.target);
+    const gasStrike={...target,area:true as const};
+    step({gasMask:true});step({},gasRules.donTicks+1);
+    expect(done.size).toBe(0);
+    step({gasStrike});
+    expect(session.nextGoal).toBe("gasMask");
+    expect(done.has("gasLand")).toBe(false);
+    step();expect(done.has("gasMask")).toBe(false);
+    step({gasMask:true});step({},gasRules.doffTicks);
+    step({gasMask:true});step({},gasRules.donTicks-1);
+    expect(done.has("gasMask")).toBe(false);
+    step();expect(session.nextGoal).toBe("gasLand");
+    step({},gasStrikeRules.flightTicks);
+    expect(session.passed).toBe(true);
+    expect(session.interaction(g)).toBe(7);
   });
   it("prints remapped controls, an honest free-practice view and every station/armory choice",()=>{
-    const {g,session}=exercise();const controls=freshControls();controls.bindings.sprint="KeyP";
+    const {g,session}=exercise(0,new TrainingSession());const controls=freshControls();controls.bindings.sprint="KeyP";
     session.progress[0].add("walk");
-    expect(trainingHUD(session,g,controls)).toContain("<kbd>P</kbd>");
-    expect(trainingHUD(session,g,controls)).not.toContain("<kbd>Shift</kbd>");
-    session.free=true;expect(trainingHUD(session,g,controls)).toContain("no required order");
-    expect(trainingHUD(session,g,controls)).not.toContain('aria-label="Exercise progress"');
+    expect(trainingPrompt(session,g,controls)).toContain("<kbd>P</kbd>");
+    expect(trainingPrompt(session,g,controls)).not.toContain("<kbd>Shift</kbd>");
+    session.free=true;expect(trainingPrompt(session,g,controls)).toBe("");
+    expect(trainingHUD(session,g)).not.toContain('aria-label="Exercise progress"');
     const menu=trainingMenu(session,true);for(const s of trainingStations)expect(menu).toContain(s.name.replace("&","&amp;"));
     for(const role of ["rifleman","marksman","support"])expect(menu).toContain(`value="${role}"`);
-    expect(trainingLessons).toHaveLength(8);
+    expect(trainingLessons).toHaveLength(trainingStations.length);
   });
 });
