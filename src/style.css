@@ -963,7 +963,7 @@ a.armory-link:hover { background: #3f5856; }
   justify-content: center;
   align-items: center;
   gap: 4px;
-  min-width: 0;
+  min-width: min-content;
   min-height: 54px;
   margin: 0;
   padding: 4px 2px;
@@ -983,7 +983,7 @@ a.armory-link:hover { background: #3f5856; }
 .controls-panel button.keyboard-key:hover { background: #f6e7b4; }
 .controls-panel button.keyboard-key:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
 .keyboard-key kbd { font-size: 14px; font-weight: 700; }
-.keyboard-key small { font-size: 10px; line-height: 1.05; overflow-wrap: anywhere; }
+.keyboard-key small { font-size: 10px; line-height: 1.05; letter-spacing: normal; overflow-wrap: normal; }
 .controls-binding-status { min-height: 1.25em; margin: 6px 0 0; color: #eee0b0; font-size: 13px; }
 .controls-mechanics h3 { margin: 12px 0 10px; color: #e3d39e; }
 .mechanic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; }
