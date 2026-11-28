@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Game, idle } from "./simulation";
+import { gasRules } from "./gas";
 import { hipSpread } from "./hip-fire";
 import { coneRadius, ringMinRadius, spreadRingRadius } from "./spread-reticle";
 
@@ -25,6 +26,22 @@ describe("hip-fire ring", () => {
     expect(still).toBeGreaterThan(ringMinRadius);
     p.vx = 7;
     expect(spreadRingRadius(p, g.tick, 70, 1000)).toBeGreaterThan(still);
+  });
+
+  it("hides from the start of putting on a gas mask until it is off", () => {
+    const { g, p } = game();
+    const radiusAt = (tick: number) => spreadRingRadius(p, tick, 70, 1000);
+    const unmasked = radiusAt(g.tick);
+    expect(unmasked).toBeGreaterThan(0);
+
+    p.gasMask = { worn: true, since: g.tick, from: 0 };
+    expect(radiusAt(g.tick)).toBe(0);
+    const sealedAt = g.tick + gasRules.donTicks;
+    expect(radiusAt(sealedAt)).toBe(0);
+
+    p.gasMask = { worn: false, since: sealedAt, from: 1 };
+    expect(radiusAt(sealedAt + gasRules.doffTicks - 1)).toBe(0);
+    expect(radiusAt(sealedAt + gasRules.doffTicks)).toBe(unmasked);
   });
 
   it("hides in third person and with the sights up", () => {
