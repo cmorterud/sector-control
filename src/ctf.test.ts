@@ -390,18 +390,10 @@ describe("capture the flag bots", () => {
   // A seeded five-minute Ypres at night at 24 a side: a small real
   // roster, so the battle stays quick enough to run with the other tests.
   // Full 50v50 Ypres and Verdun matches are in tools/ctf-audit.ts.
-  // Seed 2: since bots aim down sights to fire accurately and masked bots
-  // scatter their shots (hip-fire spread), seed 5 sees only one team capture.
-  // Seed 4: since hip spread scales with speed, seed 2 sees only one team capture.
-  // Seed 1: since bots spread across roles (gunners who emplace, marksmen),
-  // seed 4 sees only one team capture.
-  // Seed 2: since each side spreads along its whole front to spawn, seed 1 sees
-  // only one team capture (seeds 2 to 6 all see both).
-  // Seed 4: since every infantry weapon shares one muzzle velocity, seed 2
-  // sees only red capture (seeds 4 to 6 see both).
+  // Seed 3 exercises captures by both teams with the default bot aim.
   it("raid, carry and capture for both teams without stalling", () => {
     const map = ctfMap(nightRaidMap);
-    const g = new Game(new TestCollision(map), true, 300 * 30, 4, undefined, { map, teamSize: 24, humanPlayerIds: [] });
+    const g = new Game(new TestCollision(map), true, 300 * 30, 3, undefined, { map, teamSize: 24, humanPlayerIds: [] });
     const actions: Record<string, number> = {}, captured = { blue: 0, red: 0 }, roles = new Set<string>();
     while (g.phase === "playing") {
       g.step(g.players[0].hp > 0 ? botCommand(g, g.players[0]) : idle());

@@ -547,7 +547,7 @@ export const difficulties = Object.keys(difficultyProfiles) as Difficulty[];
 export function botSettingsFor(map: MapDefinition, difficulty: Difficulty = "regular"): BotSettings {
   const base = {
     ...defaultBotSettings,
-    ...(map.terrain?.firingPositions ? { engagementRange: 59, aimError: 0.06 } : {}),
+    ...(map.terrain?.firingPositions ? { engagementRange: 59, aimError: 0.04 } : {}),
   };
   const profile = difficultyProfiles[difficulty] ?? difficultyProfiles.regular;
   return {
@@ -566,7 +566,7 @@ export const defaultBotSettings: BotSettings = {
   awareness: true,
   reactionTicks: 27,
   reactionJitterTicks: 18,
-  aimError: 0.075,
+  aimError: 0.05,
   engagementRange: 40,
   burstPeriodTicks: 24,
   burstFireTicks: 15,
