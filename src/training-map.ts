@@ -8,10 +8,25 @@ export const trainingStations = [
   {id:"bayonet", name:"Bayonet lane", x:48, z:22, target:{x:48,z:7}},
   {id:"artillery", name:"Fire support", x:0, z:22, target:{x:0,z:-8}},
   {id:"destruction", name:"Demolition yard", x:-48, z:22, target:{x:-48,z:-8}},
+  {id:"gas", name:"Gas drill", x:67, z:9, target:{x:67,z:-23}},
   {id:"squad", name:"Squad exercise", x:-40, z:-40, target:{x:-40,z:-65}},
   {id:"finale", name:"Capture exercise", x:40, z:-40, target:{x:40,z:-65}},
 ] as const;
 export type TrainingStationId = typeof trainingStations[number]["id"];
+// Checkpoints sit on the playable side of each obstacle.
+export const movementMarks = {
+  walk: {x:-48, z:64},
+  sprint: {x:-48, z:60},
+  hop: {x:-56, z:64},
+  mantle: {x:-48, z:57.1},
+  trench: {x:-48, z:49},
+  step: {x:-48, z:46},
+};
+export const demolitionMarks = {
+  breach: {x:-48, z:-8},
+  tree: {x:-22.5, z:-7.5},
+  crater: {x:-39, z:13},
+};
 const boxes:Box[]=[],width=180,depth=210;
 const add=(id:string,x:number,z:number,w:number,d:number,h:number,kind:Box["kind"]="wood",baseY=0)=>{
   const box:Box={id:"training-"+id,x,z,w,d,h,kind,baseY}; boxes.push(box);return box;
@@ -50,12 +65,12 @@ for(const [i,z] of [57,47,32].entries()){
   sign.architecture={building:"range-board",part:"wall",level:0,tint:"#6d755c",signBothSides:true,sign:`${[15,25,40][i]} M`};
 }
 for(const [i,x,z] of [[0,0,25],[1,48,37],[2,48,-2]])add("backstop-"+i,x,z,27,.8,4,"masonry");
-for(const s of trainingStations.slice(2,6))for(const side of [-1,1])add("safe-cover-"+s.id+side,s.x+side*5,s.z-5,3,.9,1.1,"sandbag");
+for(const s of trainingStations.slice(2,7))for(const side of [-1,1])add("safe-cover-"+s.id+side,s.x+side*5,s.z-5,3,.9,1.1,"sandbag");
 for(const [id,x,z,w,d,stories] of [["shell-house",0,-8,14,12,1],["demolition-house",-48,-8,28,22,2]] as const){
   const b={id,name:id==="shell-house"?"Fire support target":"Demolition house",x,z,w,d,stories,baseY:0,posts:[]};
   trainingMap.buildings!.push(b);buildVillageBuilding(trainingMap,b,id==="shell-house"?1:2);
 }
-trainingMap.vegetation!.push({id:"training-demo-tree",x:-29,z:-2,w:.9,d:.9,h:7,kind:"tree",treeStyle:"pine",baseY:0});
-for(const s of trainingStations.slice(6))for(const [i,dx,dz] of [[0,-7,-5],[1,6,-10],[2,-5,-17],[3,6,-25],[4,0,-32]])
+trainingMap.vegetation!.push({id:"training-demo-tree",...demolitionMarks.tree,w:.9,d:.9,h:7,kind:"tree",treeStyle:"pine",baseY:0});
+for(const s of trainingStations.slice(7))for(const [i,dx,dz] of [[0,-7,-5],[1,6,-10],[2,-5,-17],[3,6,-25],[4,0,-32]])
   add(`${s.id}-cover-${i}`,s.x+dx,s.z+dz,4,1,1.05,i%2?"masonry":"sandbag");
 for(let z=-90;z<=90;z+=12)for(const x of [-84,84])trainingMap.vegetation!.push({id:`training-edge-${x}-${z}`,x,z,w:.6,d:.6,h:5,kind:"tree",treeStyle:"pine",baseY:0});

@@ -5,20 +5,38 @@
   font-synthesis: none;
 }
 #training-lesson {
-  position:absolute;top:100px;left:24px;width:min(310px,30vw);
-  padding:14px 16px;background:#142322dd;border-left:3px solid #c7bd8d;
+  position:absolute;top:100px;left:24px;width:min(232px,31vw);
+  padding:12px 15px;background:#142322ed;border-left:3px solid #d7bc73;
   color:#eee9d9;pointer-events:none;text-shadow:0 1px 2px #000;
 }
-#training-lesson[hidden] {display:none;}
 #ui.training-active #red {color:#d4c99c;}
-#training-lesson h2 {font-size:18px;margin:8px 0;}
-#training-lesson p {font-size:13px;line-height:1.55;margin:10px 0;}
-#training-lesson small {display:block;font-size:10px;line-height:1.8;letter-spacing:.6px;}
-#training-lesson kbd {font:inherit;color:#ddcf8b;}
-.training-bearing {display:inline-block;font-size:19px;margin-right:5px;}
-.training-progress {display:flex;gap:5px;}
+#training-lesson h2 {font-size:17px;margin:4px 0 8px;}
+#training-lesson small {font-size:10px;letter-spacing:.08em;}
+#training-lesson .training-direction {margin:7px 0;color:#f8d88a;font-size:12px;letter-spacing:0;}
+.training-bearing {display:inline-block;font-size:19px;margin-right:4px;vertical-align:middle;line-height:1;}
+.training-progress {display:flex;gap:4px;margin-bottom:7px;}
 .training-progress i {height:3px;background:#67716b;flex:1;}
-.training-progress i.passed {background:#9ec8a2;}
+.training-progress i.passed {background:#b9dcab;}
+#training-action {
+  position:absolute;left:50%;bottom:clamp(74px,15vh,136px);transform:translateX(-50%);
+  width:max-content;max-width:min(540px,66vw);padding:9px 18px 12px;
+  color:#f7efdb;background:#172322f2;border-top:2px solid #e8c776;
+  text-align:center;pointer-events:none;z-index:5;font-size:clamp(13px,1.5vw,17px);
+  line-height:1.45;box-shadow:0 4px 16px #0005;
+}
+#training-action small {margin-bottom:3px;color:#e8c776;font-weight:700;}
+#training-action .training-passed {display:block;color:#b9dcab;}
+#training-action kbd {
+  color:#ffdf8f;font:inherit;font-weight:700;
+  border:1px solid #e8c77680;border-radius:3px;padding:0 4px;white-space:nowrap;
+}
+#training-marker {
+  position:absolute;top:0;left:0;z-index:4;pointer-events:none;text-align:center;
+  max-width:200px;color:#ffdd76;font-weight:750;font-size:12px;line-height:1.35;
+}
+#training-marker span {display:block;background:#192525f2;border:1px solid #e8c776;padding:3px 7px;white-space:nowrap;}
+#training-marker b {display:block;margin-top:1px;line-height:1;text-shadow:0 1px 4px #000,0 1px 4px #000;}
+#training-lesson[hidden],#training-action[hidden],#training-marker[hidden] {display:none;}
 .training-menu {margin:16px 0;padding:14px;border:1px solid #727b65;text-align:left;}
 .training-menu legend {padding:0 6px;color:#d1c69a;}
 .training-menu label {display:flex;align-items:center;gap:10px;justify-content:space-between;margin:8px 0;font-size:13px;}
@@ -817,6 +835,13 @@ a.armory-link:hover { background: #3f5856; }
   background: rgba(233, 244, 214, 0.22);
   border-color: #e9f4d6;
 }
+#tactical-map .map-mode.exercise-mode, #tactical-map .tactical-grid .exercise-sector {
+  background:#f3d16a40;
+  outline:2px solid #f3d16a;
+  outline-offset:-2px;
+  color:#fff1b7;
+  font-weight:700;
+}
 #tactical-map p {
   font-size: 12px;
   margin: 8px 0 14px;
@@ -968,10 +993,10 @@ a.armory-link:hover { background: #3f5856; }
    the full-screen effects of being hit, suppressed or masked stay. The build
    label sits outside #ui on purpose, so scoped screenshots still name their build. */
 #ui.scoped #hud > :not(#reticle, #damage, #suppression, .gas-lens, .gas-haze),
-#ui.scoped #training-lesson,
+#ui.scoped :is(#training-lesson, #training-action, #training-marker),
 /* The periscope's mirror the same way, keeping its own notice. */
 #ui.periscope #hud > :not(#reticle, #damage, #suppression, .gas-lens, .gas-haze, .periscope-notice),
-#ui.periscope #training-lesson {display:none !important;}
+#ui.periscope :is(#training-lesson, #training-action, #training-marker) {display:none !important;}
 .panel {width:min(760px,90vw);}
 :is(.map-choice, .mode-choice) {grid-template-columns:repeat(2,minmax(0,1fr));}
 @media(max-width:650px) {:is(.map-choice, .mode-choice) {grid-template-columns:1fr;}}
