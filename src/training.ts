@@ -6,6 +6,7 @@ import {weaponProfile} from "./weapons";
 import {soldierHealth} from "./weapon-stats";
 import {flagContains} from "./domination";
 import {smokeRules} from "./smoke";
+import {flameRules} from "./flamethrower";
 import {trainingStations, type TrainingStationId} from "./training-map";
 
 export const trainingLessons = [
@@ -32,7 +33,7 @@ export const trainingInstructions:Record<TrainingGoal,string>={
   reloadGun:"With the mounted gun partly empty, press {reload}. Reload progress stays with the gun when you dismount.",
   packGun:"Press {interact} to dismount, then {emplace} to pack your gun. It keeps its remaining ammunition.",
   pistol:"Press {sidearm} to draw your pistol and hit a target. {primary} returns to your primary.",
-  flame:"Collect the flame kit beside the armory table with {interact}. Fire it at close range with LMB.",
+  flame:"Collect the flame kit beside the armory table with {interact}. Use LMB to hit the nearby red target straight downrange from the kit.",
   semi:"Choose Industrial training kit and Rifleman in the armory, then hit a target with the AR-01 semiautomatic rifle.",
   grenade:"Throw with {grenade}. Land an explosion near the red group about 20 m ahead. Look higher for more distance; stay clear of the blast.",
   smoke:"Press {smoke} to throw smoke. Let the cloud bloom and observe the screen it creates.",
@@ -93,11 +94,16 @@ export class TrainingSession {
     this.active.clear();this.shots.clear();this.previous=undefined;
     const s=this.station,p=g.players[0];p.faction=this.faction;equipLoadout(p,this.loadout,this.faction==="trainingBlue"?"industrial":"service");this.place(g,p,s);
     const combat=this.lesson>=6;
+    const kitAt={x:s.x+6,z:s.z-4};
     for(const q of g.players.slice(1)){q.hp=0;q.respawnAt=Infinity;}
     for(let n=0;n<(this.lesson===0||this.lesson===4||this.lesson===5?0:3);n++){
       const q=g.players[4+n];
       const at=this.lesson===3?{x:s.x+(n===2?5:0),z:s.z-[4,16,23][n]}:
         {x:s.target.x+(n-1)*5,z:this.lesson===1&&n===2?s.z-40:s.target.z+(n===1?4:0)};
+      q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
+    }
+    if(this.lesson===1){
+      const q=g.players[7],at={x:kitAt.x,z:kitAt.z-6};
       q.hp=soldierHealth;this.place(g,q,at,Math.PI);q.protectedUntil=0;this.active.set(q.id,at);
     }
     if(combat)for(const [i,dx] of [[1,-4],[2,4]]){
@@ -106,8 +112,8 @@ export class TrainingSession {
     Object.assign(g.sectors[0],{x:s.target.x,z:s.target.z,owner:null,control:0,contested:false});
     // Safe targets never participate in capture; only the two combat exercises do.
     if(!combat)Object.assign(g.sectors[0],{x:40,z:-85});
-    const kit=g.flames.kits[0],at={x:s.x+6,z:s.z-4};
-    Object.assign(kit,{home:at,at,fuel:240,carrier:null,readyAt:0,droppedAt:null});
+    const kit=g.flames.kits[0];
+    Object.assign(kit,{home:kitAt,at:kitAt,fuel:flameRules.fuel,carrier:null,readyAt:0,droppedAt:null});
     for(const other of g.flames.kits.slice(1)){other.at=null;other.readyAt=Infinity;}
     g.artillery.readyAt.blue=0;
     g.artillery.readyAt.red=Number.MAX_SAFE_INTEGER;
@@ -123,11 +129,18 @@ export class TrainingSession {
   resupply(g:Game){
     const p=g.players[0],profile=weaponProfile(p);
     if(p.hp<=0)return false;
-    if(p.inventory)for(const slot of ["primary","sidearm"] as const){const state=p.inventory[slot],ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;}
+    if(p.inventory)for(const state of [p.inventory.primary,p.inventory.sidearm,p.flamePrimary]){
+      if(!state)continue;
+      const ammo=weaponProfile({weapon:state.kind,weaponId:state.id});state.ammo=ammo.magazine;state.reserve=ammo.reserve;
+    }
     p.hp=soldierHealth;p.recentDamage=[];p.ammo=profile.magazine;p.reserve=profile.reserve;p.grenades=3;p.smokes=smokeRules.perSpawn;
     p.reloadAt=0;g.artillery.readyAt.blue=g.tick;
     resupplyEmplacement(g,p);
-    const kit=g.flames.kits.find(k=>k.carrier===0);if(kit)kit.fuel=240;
+    const kit=g.flames.kits[0];
+    if(kit.carrier===p.id)kit.fuel=flameRules.fuel;
+    else if(kit.carrier===null && kit.fuel===0){
+      Object.assign(kit,{at:{...kit.home},fuel:flameRules.fuel,readyAt:0,droppedAt:null});
+    }
     return true;
   }
   interaction(g:Game):number|null {
@@ -137,7 +150,6 @@ export class TrainingSession {
   }
   observe(g:Game,input:Command,events:readonly Event[]=g.events){
     const p=g.players[0],done=this.progress[this.lesson];
-    const flaming=events.some(e=>e.type==="flame"&&e.actor===0);
     let travelled=0;
     if(this.previous&&p.hp>0){const d=dist(p,this.previous);if(d<1){this.walked+=d;travelled=d;}}
     this.previous={x:p.x,z:p.z};
@@ -161,7 +173,7 @@ export class TrainingSession {
         if(this.lesson===0&&input.aim&&!p.hop&&!p.fall&&p.y>-.7&&p.y<-.3&&Math.abs(p.x+48)<6&&p.z>45&&p.z<47.1&&e.from.y>.2)done.add("step");
       }
       if(e.type==="impact"&&e.actor===0){if(e.hit&&e.target!==null&&g.players[e.target]?.team==="red"){const goal=this.shots.get(e.projectile);if(goal)done.add(goal);}this.shots.delete(e.projectile);}
-      if(e.type==="damage"&&e.source===0&&g.players[e.actor]?.team==="red"&&p.weapon==="flamethrower"&&flaming)done.add("flame");
+      if(e.type==="damage"&&e.kind==="flame"&&e.source===0&&g.players[e.actor]?.team==="red")done.add("flame");
       if(e.type==="grenadeExplosion"&&e.actor===0&&dist(e.at,this.station.target)<9)done.add("grenade");
       if(e.type==="smokeBloom"&&e.actor===0)done.add("smoke");
       if(e.type==="melee"&&e.actor===0&&e.phase==="strike"&&e.damage&&e.target!==null&&e.kind!=="butt")done.add(e.kind==="charge"?"charge":"thrust");
